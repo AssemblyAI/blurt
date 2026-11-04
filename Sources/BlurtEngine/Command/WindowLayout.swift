@@ -28,8 +28,10 @@ public enum ScrollDirection: String, CaseIterable, Sendable {
   }
 
   /// The scroll-wheel event for the fallback, in lines: (vertical,
-  /// horizontal), positive up and left as `CGEvent` counts them. An end is a
-  /// wheel turned far enough to reach it.
+  /// horizontal), positive up and left as `CGEvent` counts them — whatever
+  /// the natural-scrolling setting, which a synthesized wheel doesn't go
+  /// through (measured in Preview, 2026-11-04). An end is a wheel turned far
+  /// enough to reach it.
   var wheelLines: (vertical: Int32, horizontal: Int32) {
     switch self {
     case .up: (10, 0)

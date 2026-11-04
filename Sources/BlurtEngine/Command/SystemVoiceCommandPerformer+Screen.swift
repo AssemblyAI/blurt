@@ -48,9 +48,13 @@
       appName: String?, pid: pid_t, isChromium: Bool, isElectron: Bool, into snapshot: ElementSnapshot
     ) async -> ScreenContext {
       let app = AXRead.app(pid)
-      if isElectron, snapshot.claimManualAccessibility(pid) {
+      // Switched on just now, an Electron app builds its tree after this
+      // read, as Chrome does: 1Password answered with nothing (2026-11-04).
+      let justSwitchedOn = isElectron && snapshot.claimManualAccessibility(pid)
+      if justSwitchedOn {
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
       }
+      let buildsLate = isChromium || justSwitchedOn
       guard let element = AXRead.window(of: app) else {
         snapshot.replace(pid: pid, elements: [:])
         return ScreenContext(appName: appName)
@@ -60,7 +64,7 @@
       // A Chromium browser whose page tree is still being built has no web
       // area yet: the user spoke faster than its ~2 s build. Wait for it, on
       // a fresh read of the window each time — the tree is changing.
-      if isChromium {
+      if buildsLate {
         for delay in ScreenSnapshot.webAreaWaits where webArea == nil {
           guard await pause(delay) else { return ScreenContext(appName: appName) }
           window = AXRead.Node(element)
@@ -72,24 +76,31 @@
       func walkPage(_ area: AXRead.Node) -> [ScreenSnapshot.Entry<AXRead.Node>] {
         pageIncomplete = false
         return walk(
-          area, bounds: area.frame ?? window.frame, keep: ScreenSnapshot.webShare, incomplete: &pageIncomplete)
+          area, bounds: area.frame ?? window.frame, keep: ScreenContext.maxElements, incomplete: &pageIncomplete)
       }
       var page = webArea.map(walkPage) ?? []
-      // Only a browser builds its page after the first read; an Electron
-      // app's sparse web area is just a small one, and waiting costs a second.
-      if let area = webArea?.element, isChromium {
+      // Only a browser, or an Electron app just switched on, builds its page
+      // after the first read; otherwise a sparse web area is just a small
+      // one, and waiting costs a second.
+      if let area = webArea?.element, buildsLate {
         for delay in ScreenSnapshot.webRetryDelays where page.count < ScreenSnapshot.sparseWebArea {
           guard await pause(delay) else { return ScreenContext(appName: appName) }
           page = walkPage(AXRead.Node(area))
         }
       }
+      // The window around the page is promised the slots the page's share
+      // leaves; the page then takes every slot it doesn't use. In VS Code,
+      // whose whole window is one web area, 50 sat empty while the Source
+      // Control graph went unlisted (2026-11-04).
       let around = walk(
-        window, bounds: window.frame, keep: ScreenContext.maxElements - page.count,
+        window, bounds: window.frame, keep: ScreenContext.maxElements - min(page.count, ScreenSnapshot.webShare),
         skip: { node in webArea.map { CFEqual(node.element, $0.element) } ?? false }, incomplete: &incomplete)
+      let kept = Array(page.prefix(ScreenContext.maxElements - around.count))
       guard !Task.isCancelled else { return ScreenContext(appName: appName) }
       return ScreenContext(
         appName: appName, windowTitle: window.string(kAXTitleAttribute),
-        elements: number(around + page, pid: pid, into: snapshot), incomplete: incomplete || pageIncomplete)
+        elements: number(around + kept, pid: pid, into: snapshot),
+        incomplete: incomplete || pageIncomplete || kept.count < page.count)
     }
 
     /// Sleeps `delay`, answering false — at once — when the read is cancelled:
@@ -187,15 +198,18 @@
     /// where a success can't be trusted (`checksPress`); the first reuses the
     /// node the caller read, the second reads the element again.
     static func checked(
-      _ action: String, node: AXRead.Node, pid: pid_t?, press: () -> Bool
+      _ action: String, node: AXRead.Node, pid: pid_t?, always: Bool = false, press: () -> Bool
     ) async throws -> String {
+      // Selecting is harmless to repeat, so `always` checks it in any app.
+      let checks = await checksPress(pid)
+      let verify = always || checks
       var pressed = false
       let read = {
         defer { pressed = true }
         return fingerprint(of: pressed ? AXRead.Node(node.element) : node, pid: pid)
       }
       return try await ElementActions.press(
-        action, fingerprint: await checksPress(pid) ? read : nil, press: press,
+        action, fingerprint: verify ? read : nil, press: press,
         settle: { try await Task.sleep(for: pressSettle) }, click: { try await click(node, pid: pid) })
     }
 
@@ -229,13 +243,15 @@
     /// Refuses a step on an element whose role isn't one it acts on
     /// (`ScreenSnapshot.textEntryRoles` for a focus, `selectableRoles`,
     /// `adjustableRoles`) before it could fall back to a click on, say, a
-    /// button. Answers the role it read.
+    /// button. Answers the role it read — empty when the app didn't answer
+    /// in time (Mail, just launched, 2026-11-04): the plan was already held
+    /// to the kind the element was listed under, so that's trusted rather
+    /// than the step refused over a read that timed out.
     @discardableResult
     static func require(_ node: AXRead.Node, roleIn roles: Set<String>, for step: String, what: String) throws -> String
     {
-      guard let role = node.role, roles.contains(role) else {
-        throw VoiceCommandError.couldNotPerform("\(step) that: it isn't \(what)")
-      }
+      guard let role = node.role else { return "" }
+      guard roles.contains(role) else { throw VoiceCommandError.couldNotPerform("\(step) that: it isn't \(what)") }
       return role
     }
 
@@ -252,7 +268,20 @@
         focusedElement: focused.map { Int(CFHash($0)) },
         windowTitle: window.flatMap { AXRead.string($0, kAXTitleAttribute) },
         value: AXRead.string(node.element, kAXValueAttribute),
-        onScreen: node.frame != nil)
+        onScreen: node.frame != nil, focusOnTarget: focused.map { isWithin($0, node.element) } ?? false,
+        expanded: AXRead.bool(node.element, "AXExpanded"))
+    }
+
+    /// Whether `element` is `target` or sits a few levels inside it: the
+    /// row's inner group can be what takes the focus.
+    private static func isWithin(_ element: AXUIElement, _ target: AXUIElement) -> Bool {
+      var current: AXUIElement? = element
+      for _ in 0..<4 {
+        guard let level = current else { return false }
+        if CFEqual(level, target) { return true }
+        current = AXRead.element(level, kAXParentAttribute)
+      }
+      return false
     }
 
     /// Focus through Accessibility, checked: if the app's focused element
@@ -262,6 +291,11 @@
     /// since a selection lands wherever the cursor is.
     private static func focus(_ handle: ElementSnapshot.Handle, pid: pid_t?) async throws -> String {
       let node = AXRead.Node(handle.element)
+      // A search field shown as its button (Finder's): pressing it opens the
+      // field, focused, which is what a focus on it is for.
+      if node.role == kAXButtonRole, AXRead.string(handle.element, kAXSubroleAttribute) == "AXSearchField" {
+        return try await press(handle, pid: pid) + "; a search button, opened"
+      }
       let role = try require(node, roleIn: ScreenSnapshot.textEntryRoles, for: "focus", what: "a text field")
       return try await ElementActions.focus(
         singleLine: ScreenSnapshot.singleLineEntryRoles.contains(role),
@@ -313,7 +347,12 @@
         let point = ScreenSnapshot.clickPoint(frame, within: bounds)
       else { throw VoiceCommandError.elementGone }
       let front = await frontmostPID()
-      guard pid != nil, front == pid else { throw VoiceCommandError.screenChanged }
+      guard let pid, front == pid else { throw VoiceCommandError.screenChanged }
+      // And its window must be the one on top there: in front isn't enough
+      // while another app's window still covers the spot.
+      guard WindowOrder.owner(at: point, in: onScreenWindows()) == Int(pid) else {
+        throw VoiceCommandError.screenChanged
+      }
       try await withPointer(at: point) {
         for type in [CGEventType.leftMouseDown, .leftMouseUp] {
           guard

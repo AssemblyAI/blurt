@@ -17,7 +17,8 @@ struct VoiceCommandPlannerTests {
       sent.value = request
       return (200, completion(#"{"steps": [{"action": "shortcut", "keys": "cmd+t"}]}"#))
     }
-    let screen = ScreenContext(appName: "Safari")
+    // An app with no note: the user turn is the app and the command alone.
+    let screen = ScreenContext(appName: "Calculator")
     let steps = try await planner(transport).plan("new tab", context: screen, trace: PlanTrace())
     #expect(steps == [.shortcut(KeyChord(modifiers: .command, key: .character("t")))])
 
@@ -34,7 +35,7 @@ struct VoiceCommandPlannerTests {
         ["role": "system", "content": VoiceCommandPlanner.instruction],
         [
           "role": "user",
-          "content": "<frontmost_app>\nSafari\n</frontmost_app>\n\n<spoken_command>\nnew tab\n</spoken_command>",
+          "content": "<frontmost_app>\nCalculator\n</frontmost_app>\n\n<spoken_command>\nnew tab\n</spoken_command>",
         ],
       ])
     // The plan's shape rides as a strict JSON schema the gateway enforces.
@@ -118,6 +119,21 @@ struct VoiceCommandPlannerTests {
     #expect(calls.value == 1)
   }
 
+  @Test("a plan that opens an app's website, for a command that didn't ask for the web, opens the app")
+  func appLinksOpenApps() async throws {
+    let transport = FakeHTTPTransport { _ in
+      (200, completion(#"{"steps": [{"action": "open_url", "url": "https://slack.com"}]}"#))
+    }
+    let planner = VoiceCommandPlanner(
+      gateway: GatewayConnection(apiKeyProvider: { "raw-key" }, transport: transport),
+      apps: { $0.lowercased() == "slack" ? "Slack" : nil })
+    let chrome = ScreenContext(appName: "Google Chrome")
+    #expect(try await planner.plan("Switch to Slack", context: chrome, trace: PlanTrace()) == [.openApp("Slack")])
+    #expect(
+      try await planner.plan("Go to the Slack website", context: chrome, trace: PlanTrace())
+        == [.openURL(URL(string: "https://slack.com")!)])
+  }
+
   @Test("with no app in front, only the command is sent")
   func noFrontmostApp() {
     #expect(
@@ -128,11 +144,11 @@ struct VoiceCommandPlannerTests {
   @Test("the window's elements go before the command, numbered, and a plan may name only those numbers")
   func windowElements() async throws {
     let screen = ScreenContext(
-      appName: "Mail", windowTitle: "Inbox",
+      appName: "Calculator", windowTitle: "Inbox",
       elements: [.init(id: 1, kind: "button", label: "Reply"), .init(id: 2, kind: "search field", label: "Search")])
     #expect(
       VoiceCommandPlanner.prompt("reply", context: screen, fence: "c0de")
-        == "<frontmost_app>\nMail\n</frontmost_app>\n\n<window fence=\"c0de\" title=\"Inbox\">\n"
+        == "<frontmost_app>\nCalculator\n</frontmost_app>\n\n<window fence=\"c0de\" title=\"Inbox\">\n"
         + "[1] button \"Reply\"\n[2] search field \"Search\"\n</window fence=\"c0de\">\n\n"
         + "<spoken_command>\nreply\n</spoken_command>")
 

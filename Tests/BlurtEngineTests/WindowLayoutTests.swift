@@ -69,6 +69,8 @@ struct WindowLayoutTests {
     #expect(ScrollDirection.top.pageAction == nil && ScrollDirection.bottom.pageAction == nil)
     #expect(ScrollDirection.top.scrollBarValue == 0 && ScrollDirection.bottom.scrollBarValue == 1)
     #expect(ScrollDirection.down.scrollBarValue == nil)
-    #expect(ScrollDirection.bottom.wheelLines.vertical < ScrollDirection.down.wheelLines.vertical)
+    #expect(
+      ScrollDirection.bottom.wheelLines.vertical
+        < ScrollDirection.down.wheelLines.vertical)
   }
 }

@@ -1048,7 +1048,19 @@ the model's own reply and the error (`VoiceCommandError.isRetryable`); an empty 
 own answer and is never retried. The instruction ranks a listed element first, then a known shortcut,
 then a real menu item (never an invented path), then `press_button`; lets element steps chain until the
 first step that brings another app, window or tab forward; limits refusal to the four destructive
-actions; and ends with six worked examples, one of them a refusal. A window holding a web page
+actions; and ends with seven worked examples, one of them a refusal. What one app needs — Google Docs' paragraph styles, Slack's ⌘K
+switcher, Terminal's View › Bigger — is not in that instruction but in `AppNotes`: a short note per app,
+sent in an `<app_notes>` block of the user turn only when the app is in front, is the web app in the
+front browser window (matched on its window title, " - Google Docs"), or is named in the command.
+Kept in the base instruction, each app's advice reached every other app's plans (Docs' "normal text"
+became a find-and-select, 2026-11-04); moved out, Docs went from 19 to 30 of 30 on the eval.
+`promptVersion` hashes the notes with the instruction and schema, and the planner eval reports a pass
+rate per app. After parsing, an `open_url` that is only an installed app's name — `slack.com`, a web
+search for "Slack" — on a command that never asked for the web opens the app instead (`AppLink`):
+however the instruction was worded, the model kept sending "switch to Slack" to the browser. A link
+opens in the browser in front when one is, never the default browser behind it. A plan that repeats
+one step more than its limit, or a group of different steps back to back, is a loop and is asked for
+again. A window holding a web page
 (Chrome, Safari, an Electron app) is read in two walks so the page gets 100 of the 150 slots rather
 than the tab strip and bookmarks bar (`ScreenSnapshot.webShare`); a page with fewer than five listed
 elements is read again after 300 ms and 600 ms, since Chrome builds its tree only after a client first
@@ -1101,7 +1113,10 @@ the element's value, whether it's still on screen), because Chrome answers succe
 page ignored, and Slack and VS Code take `AXSelected` on a sidebar row and open nothing. That was
 owner-directed (2026-11-03), knowing the cost there: a control that worked without visibly changing
 anything is pressed twice. A native app's success is trusted: checked everywhere, every Calculator
-key went in twice (2026-11-04). One step that doesn't parse — an unknown action or key, a link that isn't
+key went in twice (2026-11-04). A `menu` step the app's menu bar doesn't have is looked for in the page —
+a web app's own menus, such as Google Docs' File, Edit, Insert and Format — each title pressed in turn,
+its menu given 400 ms to open (`choosePageMenuItem`); an `AXExpanded` that changed counts as the press
+working, so a menu title isn't clicked shut again. One step that doesn't parse — an unknown action or key, a link that isn't
 `http`, `https` or `mailto` — refuses the whole plan, and a reply cut off at the token cap is never run.
 The router then performs the steps in order through `VoiceCommandPerforming`
 (`SystemVoiceCommandPerformer`: `NSWorkspace` to open, hide and quit apps — matched by name,

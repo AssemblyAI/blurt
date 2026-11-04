@@ -23,10 +23,11 @@
       case .select:
         try require(node, roleIn: ScreenSnapshot.selectableRoles, for: "select", what: "a row")
         // A row that won't take the attribute (a web list) takes a click; so
-        // does one in Slack or VS Code, which takes it and opens nothing.
+        // does one that takes it and opens nothing — Slack's, VS Code's, and
+        // the Finder sidebar's, in any app: selecting twice does no harm.
         try refuseIfDestructive(node)
         return try await checked(
-          "AXSelected", node: node, pid: pid,
+          "AXSelected", node: node, pid: pid, always: true,
           press: {
             AXUIElementSetAttributeValue(node.element, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
           })
@@ -59,8 +60,12 @@
       if let id {
         area = scrollArea(around: AXRead.Node(try snapshot.element(id, pid: pid).element))
       } else {
-        area = pid.map(AXRead.app).flatMap(AXRead.window).flatMap {
-          largest(role: kAXScrollAreaRole, in: AXRead.Node($0))?.element
+        // The window's largest scroll area, else its page — an Electron app's
+        // web content scrolls with none (Claude, 2026-11-04) — else the window.
+        area = pid.map(AXRead.app).flatMap(AXRead.window).map { window in
+          let node = AXRead.Node(window)
+          return largest(role: kAXScrollAreaRole, in: node)?.element
+            ?? largest(role: "AXWebArea", in: node)?.element ?? window
         }
       }
       guard let area else { throw VoiceCommandError.couldNotPerform("find anything to scroll") }
@@ -73,13 +78,18 @@
       {
         return "scroll bar"
       }
+      let lines = direction.wheelLines
       guard let frame = AXRead.frame(area),
         let event = CGEvent(
-          scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: direction.wheelLines.vertical,
-          wheel2: direction.wheelLines.horizontal, wheel3: 0)
+          scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: lines.vertical,
+          wheel2: lines.horizontal, wheel3: 0)
       else { throw VoiceCommandError.couldNotPerform("scroll") }
-      // A wheel event scrolls what's under the pointer.
-      try await withPointer(at: CGPoint(x: frame.midX, y: frame.midY)) { event.post(tap: .cghidEventTap) }
+      // A wheel event scrolls what's under the pointer: only if that's this app's window.
+      let centre = CGPoint(x: frame.midX, y: frame.midY)
+      guard let pid, WindowOrder.owner(at: centre, in: onScreenWindows()) == Int(pid) else {
+        throw VoiceCommandError.screenChanged
+      }
+      try await withPointer(at: centre) { event.post(tap: .cghidEventTap) }
       return direction.pageAction == nil ? "scroll wheel: no scroll bar" : "scroll wheel: no page action"
     }
 

@@ -84,6 +84,11 @@ struct VoiceCommandParseTests {
       try self.steps(
         #"{"action": "press_button", "name": "ruff.toml, Modified"}"#,
         listed: [.init(id: 9, kind: "row", label: "ruff.toml, Modified")]) == [.pressElement(9)])
+    // A name a listed label starts with means that label.
+    #expect(
+      try self.steps(
+        #"{"action": "press_button", "name": "Marketing"}"#,
+        listed: [.init(id: 2, kind: "row", label: "Marketing (has unread messages)")]) == [.pressElement(2)])
     // A field of that name is no button: left for the search to find one.
     #expect(try steps(#"{"action": "press_button", "name": "Search"}"#) == [.pressButton("Search")])
     // After a step that may bring another window or sheet forward, the old
@@ -105,6 +110,13 @@ struct VoiceCommandParseTests {
       try steps(#"{"action": "type", "text": "git status"}, {"action": "type", "text": "\n"}"#)
         == [.type("git status"), .shortcut(enter)])
     #expect(try steps(#"{"action": "type", "text": "a\nb"}"#) == [.type("a\nb")])
+    // A key's name typed as a whole step is the key; in a sentence it's text.
+    #expect(try steps(#"{"action": "type", "text": "Return"}"#) == [.shortcut(enter)])
+    #expect(try steps(#"{"action": "type", "text": "return the book"}"#) == [.type("return the book")])
+    // After a step that may change the window, still the key.
+    #expect(
+      try steps(#"{"action": "menu", "path": ["Edit", "Find"]}, {"action": "type", "text": "escape"}"#).last
+        == .shortcut(KeyChord(modifiers: [], key: .code(0x35))))
     // Two line breaks are a blank line, which one Return isn't.
     #expect(try steps(#"{"action": "type", "text": "\n\n"}"#) == [.type("\n\n")])
   }
@@ -133,6 +145,19 @@ struct VoiceCommandParseTests {
     #expect(try steps(#"{"action": "scroll", "direction": "top"}"#) == [.scroll(.top, element: nil)])
     #expect(try steps(#"{"action": "media", "control": "brightness_down"}"#) == [.media(.brightnessDown)])
     #expect(MediaKey.brightnessUp.systemKeyType == 2 && MediaKey.brightnessDown.systemKeyType == 3)
+  }
+
+  @Test("a group of steps planned twice over is a loop; a group that differs isn't")
+  func repeatedBlocks() throws {
+    let loop = [
+      #"{"action": "shortcut", "keys": "cmd+t"}"#, #"{"action": "type", "text": "mute"}"#,
+      #"{"action": "shortcut", "keys": "return"}"#,
+    ].joined(separator: ", ")
+    #expect(throws: VoiceCommandError.repeatedStep("shortcut, type, shortcut")) { try steps(loop + ", " + loop) }
+    let distinct =
+      #"{"action": "shortcut", "keys": "cmd+t"}, {"action": "type", "text": "a"}, "#
+      + #"{"action": "shortcut", "keys": "cmd+t"}, {"action": "type", "text": "b"}"#
+    #expect(try steps(distinct).count == 4)
   }
 
   @Test("a cell, listed as clickable, can be selected as well as pressed")

@@ -89,6 +89,9 @@
         try await run(.chooseMenuItem(["Fixture", "Move to Trash"]))
       }
       #expect(try fixture.state().menu == ["Make Noise"])
+      // A wrong path whose last title is right: that item, wherever it is.
+      try await run(.chooseMenuItem(["Edit", "Make Noise"]))
+      #expect(try await fixture.state(until: { $0.menu.count == 2 }).menu == ["Make Noise", "Make Noise"])
 
       _ = await performer.screenContext()
       let before = try fixture.state().scrollY

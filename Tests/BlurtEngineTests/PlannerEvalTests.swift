@@ -102,6 +102,12 @@ enum PlannerEval {
 
     var expectsRefusal: Bool { expect.contains([]) }
 
+    /// The app it's scored under: the web app its window is (Google Docs),
+    /// else the app in front.
+    var app: String {
+      AppNotes.notes(for: "", in: context).first?.names.first ?? context.appName ?? "-"
+    }
+
     init(
       id: String, said: String, app: String, window: String? = nil, elements: [ScreenContext.Element] = [],
       expect: [[String]], forbid: [String] = []
@@ -145,13 +151,13 @@ enum PlannerEval {
       switch planned {
       case .success(let steps): lines = steps.map { $0.logLine(in: context) }
       case .failure(VoiceCommandError.notUnderstood), .failure(VoiceCommandError.refused): lines = []
-      case .failure(let error): return Verdict(id: id, passed: false, got: ["error: \(error)"])
+      case .failure(let error): return Verdict(id: id, app: app, passed: false, got: ["error: \(error)"])
       }
       let accepted = expect.contains { plan in
         plan.count == lines.count && zip(plan, lines).allSatisfy { Self.matches($1, $0) }
       }
       let forbidden = lines.contains { line in forbid.contains { Self.matches(line, $0) } }
-      return Verdict(id: id, passed: accepted && !forbidden, got: lines)
+      return Verdict(id: id, app: app, passed: accepted && !forbidden, got: lines)
     }
 
     /// Case-insensitive, with `*` the only special character: a `?` or a
@@ -172,6 +178,8 @@ enum PlannerEval {
 
   struct Verdict: Encodable {
     let id: String
+    /// The app it's scored under: its note's, else the app in front.
+    var app = ""
     let passed: Bool
     let got: [String]
   }
@@ -187,7 +195,10 @@ enum PlannerEval {
 
     var summary: String {
       let failures = verdicts.filter { !$0.passed }.map { "  ✗ \($0.id): \($0.got.joined(separator: " ; "))" }
-      return (["planner eval \(model) prompt \(promptVersion): PASSED=\(passed)/\(total)"] + failures)
+      let apps = Dictionary(grouping: verdicts, by: \.app).sorted { $0.key < $1.key }
+        .map { "\($0.key) \($0.value.count { $0.passed })/\($0.value.count)" }.joined(separator: ", ")
+      return
+        (["planner eval \(model) prompt \(promptVersion): PASSED=\(passed)/\(total)", "  by app: \(apps)"] + failures)
         .joined(separator: "\n")
     }
 
@@ -198,6 +209,23 @@ enum PlannerEval {
     }
   }
 
+  /// One case's plan. A gateway that's throttling (429) is waited out and
+  /// asked again, up to four times: the eval measures the planner, not the
+  /// gateway's rate limit.
+  static func plan(_ item: Case, with planner: any VoiceCommandPlanning) async -> Result<[VoiceCommandStep], any Error>
+  {
+    for attempt in 1...4 {
+      do {
+        return .success(try await planner.plan(item.said, context: item.context, trace: PlanTrace()))
+      } catch ReadAloudLLMError.status(429) where attempt < 4 {
+        try? await Task.sleep(for: .seconds(5 * attempt))
+      } catch {
+        return .failure(error)
+      }
+    }
+    return .failure(ReadAloudLLMError.status(429))
+  }
+
   /// Every case planned `runs` times, four requests at a time, and scored.
   static func run(_ corpus: Corpus, runs: Int, planner: any VoiceCommandPlanning) async -> Report {
     var verdicts: [Verdict] = []
@@ -206,13 +234,7 @@ enum PlannerEval {
       func next() {
         guard let item = pending.popFirst() else { return }
         group.addTask {
-          let planned: Result<[VoiceCommandStep], any Error>
-          do {
-            planned = .success(try await planner.plan(item.said, context: item.context, trace: PlanTrace()))
-          } catch {
-            planned = .failure(error)
-          }
-          return item.score(planned)
+          return item.score(await plan(item, with: planner))
         }
       }
       for _ in 0..<4 { next() }

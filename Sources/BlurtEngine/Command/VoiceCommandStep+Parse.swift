@@ -29,9 +29,10 @@ extension VoiceCommandStep {
     // Only while the window the snapshot read is still the one in front: a
     // press may open a sheet, a shortcut a window, and a name the old window
     // listed then means a control the new one has.
+    // A typed key or line break is the key wherever it falls.
     for index in steps.indices {
-      guard steps[..<index].allSatisfy({ Self.keepsWindow.contains($0.action) }) else { break }
-      steps[index] = steps[index].canonical(among: listed)
+      let sameWindow = steps[..<index].allSatisfy { Self.keepsWindow.contains($0.action) }
+      steps[index] = steps[index].canonical(among: sameWindow ? listed : [])
     }
     let elements = Dictionary(listed.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     for step in steps {
@@ -48,27 +49,56 @@ extension VoiceCommandStep {
         throw VoiceCommandError.repeatedStep(step.action.rawValue)
       }
     }
+    // And a group of steps over again is a loop too: "cmd+w, cmd+q, cmd+t,
+    // type mute, return" twice, planned for "mute" (2026-11-04).
+    let block = Self.repeatedBlock(in: steps)
+    if !block.isEmpty {
+      throw VoiceCommandError.repeatedStep(block.map(\.action.rawValue).joined(separator: ", "))
+    }
     return steps
   }
 
+  /// The first group of two or more different steps followed at once by
+  /// itself, else none. One step over and over ("tab four times") is a run,
+  /// held to its own limit above.
+  static func repeatedBlock(in steps: [VoiceCommandStep]) -> [VoiceCommandStep] {
+    for length in stride(from: 2, through: steps.count / 2, by: 1) {
+      for start in 0...(steps.count - 2 * length) {
+        let block = steps[start..<start + length]
+        guard block.contains(where: { $0 != block.first }) else { continue }
+        if block.elementsEqual(steps[start + length..<start + 2 * length]) { return Array(block) }
+      }
+    }
+    return []
+  }
+
   /// The step as Blurt carries it out best, where the model wrote it another
-  /// way: a button by name that is listed, under exactly that name and as
-  /// something pressable, as the listed element — read already, so not
+  /// way: a button by name that is listed, under that name or one it
+  /// starts (`NameMatch`) and as something pressable, as the listed element — read already, so not
   /// searched for again; and a type of one line break as the return key,
   /// which sends a message where a pasted line break only starts a new line.
   func canonical(among listed: [ScreenContext.Element]) -> VoiceCommandStep {
     switch self {
     case .pressButton(let name):
-      let named = listed.filter {
-        Self.pressableKinds.contains($0.kind) && NameMatch.normalized($0.label) == NameMatch.normalized(name)
-      }
+      // By `NameMatch`, as the search at the step's turn would match: "Marketing"
+      // is the row "Marketing (has unread messages)". Only one listed under it.
+      let pressable = listed.filter { Self.pressableKinds.contains($0.kind) }
+      guard let match = NameMatch.best(for: name, among: pressable.map(\.label)) else { return self }
+      let named = pressable.filter { $0.label == match }
       guard named.count == 1, let only = named.first else { return self }
       return .pressElement(only.id)
     case .type(let text) where ["\n", "\r\n", "\r"].contains(text):
       return .shortcut(KeyChord(modifiers: [], key: .code(KeyChord.namedKeyCodes["return"] ?? 0x24)))
+    // A key's name typed as text: a model's slip for pressing it ("return"
+    // pasted into Slack's quick switcher, 2026-11-04).
+    case .type(let text) where Self.typedKeyNames.contains(text.lowercased()):
+      return KeyChord(text.lowercased()).map(VoiceCommandStep.shortcut) ?? self
     default: return self
     }
   }
+
+  /// The key names a `type` step means as the key: a whole step of just one.
+  static let typedKeyNames: Set<String> = ["return", "enter", "tab", "escape"]
 
   /// The actions that do the same the second time: never planned twice running.
   static let idempotent: Set<Action> = [
@@ -83,7 +113,7 @@ extension VoiceCommandStep {
   static let pressableKinds: Set<String> = ScreenSnapshot.kinds(
     of: [
       "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuButton", "AXPopUpButton", "AXDisclosureTriangle",
-      "AXRow",
+      "AXRow", "AXMenuItem",
     ]
   ).union(["clickable"])
 

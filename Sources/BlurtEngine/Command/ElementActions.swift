@@ -71,6 +71,29 @@ enum ElementActions {
     return item
   }
 
+  /// The one menu item anywhere in the menus titled `name` exactly (as
+  /// `NameMatch` folds it), breadth first and at most `limit` entries read:
+  /// a path the model got wrong but whose last title is right — "View ›
+  /// Bigger" for TextEdit's Format › Font › Bigger (2026-11-04). Nil when
+  /// none or several are, and refused when it's destructive.
+  static func menuItem<Node>(
+    named name: String, from bar: Node, entries: (Node) -> [Node], title: (Node) -> String?, limit: Int = 600
+  ) throws -> Node? {
+    let key = NameMatch.normalized(name)
+    var queue = [bar]
+    var read = 0
+    var found: [Node] = []
+    while !queue.isEmpty, read < limit {
+      let level = entries(queue.removeFirst())
+      read += level.count
+      found += level.filter { title($0).map(NameMatch.normalized) == key }
+      queue += level
+    }
+    guard found.count == 1, let only = found.first else { return nil }
+    guard !DestructiveGuard.isDestructive(label: name) else { throw VoiceCommandError.refused("choose \(name)") }
+    return only
+  }
+
   /// Runs `body` with the pointer at `point`, a beat for the app to take the
   /// event, then the pointer back `home` — however it ends: a click that
   /// throws, or a command cancelled during the beat, leaves it where it was.

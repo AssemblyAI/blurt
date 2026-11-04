@@ -142,11 +142,13 @@ public enum DictationLog {
     removeStoredLogs(dictations: defaultURL, errors: defaultErrorURL, commands: defaultCommandURL)
   }
 
-  /// The addressable half of `removeStoredLogs()`, taking both URLs for the
+  /// The addressable half of `removeStoredLogs()`, taking every URL for the
   /// reason `append` takes one: otherwise the only way to exercise this is
-  /// against the developer's real `~/Library/Logs`.
+  /// against the developer's real `~/Library/Logs`. No defaults: one on
+  /// `commands` had every test that named the other two delete the real
+  /// command log, each `swift test` (2026-11-04).
   @discardableResult
-  static func removeStoredLogs(dictations: URL, errors: URL, commands: URL = defaultCommandURL) -> Bool {
+  static func removeStoredLogs(dictations: URL, errors: URL, commands: URL) -> Bool {
     let manager = FileManager.default
     var allRemoved = true
     for url in [dictations, errors, commands] where manager.fileExists(atPath: url.path(percentEncoded: false)) {

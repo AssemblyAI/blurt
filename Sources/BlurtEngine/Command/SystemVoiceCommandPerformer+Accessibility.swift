@@ -26,14 +26,20 @@
     static func isVerifiedFrontmost(_ app: NSRunningApplication) -> Bool {
       let pid = app.processIdentifier
       guard isFrontmost(pid) else { return false }
+      return WindowOrder.isFrontmost(Int(pid), in: onScreenWindows())
+    }
+
+    /// The on-screen windows front to back, each with its owner, layer and
+    /// bounds (`WindowOrder`).
+    static func onScreenWindows() -> [WindowOrder.Window] {
       let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-      guard let windows = info as? [[String: Any]] else { return true }
-      let order = windows.map { window in
-        WindowOrder.Window(
+      return (info as? [[String: Any]] ?? []).map { window in
+        let bounds = (window[kCGWindowBounds as String] as? NSDictionary)
+          .flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) }
+        return WindowOrder.Window(
           owner: window[kCGWindowOwnerPID as String] as? Int ?? -1,
-          layer: window[kCGWindowLayer as String] as? Int ?? -1)
+          layer: window[kCGWindowLayer as String] as? Int ?? -1, bounds: bounds ?? .null)
       }
-      return WindowOrder.isFrontmost(Int(pid), in: order)
     }
 
     @MainActor
@@ -52,18 +58,76 @@
       return try await press(ElementSnapshot.Handle(element: target), pid: pid(of: app))
     }
 
-    /// Chooses the frontmost app's menu item at `path`, from the menu-bar
-    /// title down (Hammerspoon's `selectMenuItem`, MIT): an item is pressed
-    /// without its menu being opened, so nothing flashes on screen.
-    static func chooseMenuItem(_ path: [String]) async throws {
+    /// Chooses the menu item at `path`: the frontmost app's menu bar first,
+    /// else a web app's own menus in the page (Google Docs' File, Edit,
+    /// Insert and Format, which Chrome's menu bar doesn't have).
+    static func chooseMenuItem(_ path: [String]) async throws -> String? {
+      do {
+        try await chooseMenuBarItem(path)
+        return nil
+      } catch VoiceCommandError.menuItemNotFound {
+        return try await choosePageMenuItem(path)
+      }
+    }
+
+    /// A web app's menus, each title pressed in turn in the window — a menu
+    /// bar item, then each submenu — the menu it opens given a beat to show.
+    /// A title the open menu lacks closes it (escape) before failing.
+    private static func choosePageMenuItem(_ path: [String]) async throws -> String {
+      guard let app = await frontmostApp(), let pid = pid(of: app) else {
+        throw VoiceCommandError.menuItemNotFound(path)
+      }
+      for (index, title) in path.enumerated() {
+        guard let window = AXRead.window(of: app), let item = searchMenu(title, in: window) else {
+          if index > 0, let escape = KeyChord("escape") {
+            _ = KeyInjector.post(events(for: escape, keyCode: await keyCode(for: escape)))
+          }
+          throw VoiceCommandError.menuItemNotFound(path)
+        }
+        _ = try await press(ElementSnapshot.Handle(element: item), pid: pid)
+        try await Task.sleep(for: pageMenuOpens)
+      }
+      return "page menu"
+    }
+
+    /// How long a page's menu gets to open before its items are looked for.
+    static let pageMenuOpens: Duration = .milliseconds(400)
+
+    /// The roles a page's menus are made of.
+    private static let pageMenuRoles: Set<String> = ["AXMenuItem", "AXMenuBarItem", "AXMenuButton"]
+
+    /// `searchBounded` among a page's menu items only: "Format" is the menu,
+    /// never a toolbar button that mentions it.
+    private static func searchMenu(_ name: String, in window: AXUIElement) -> AXUIElement? {
+      let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
+      return ElementSearch.best(
+        named: name, from: AXRead.Node(window), children: \.children, labels: AXRead.labels,
+        pressable: { $0.role.map(pageMenuRoles.contains) == true && $0.frame != nil },
+        shouldStop: { ContinuousClock.now >= deadline })?.element
+    }
+
+    /// The frontmost app's menu item at `path`, from the menu-bar title down
+    /// (Hammerspoon's `selectMenuItem`, MIT): an item is pressed without its
+    /// menu being opened, so nothing flashes on screen.
+    private static func chooseMenuBarItem(_ path: [String]) async throws {
       guard let app = await frontmostApp(), let bar = AXRead.element(app, kAXMenuBarAttribute) else {
         throw VoiceCommandError.menuItemNotFound(path)
       }
       // Each entry's role and title come in one round trip (`Node`).
-      let item = try ElementActions.menuItem(
-        path, from: AXRead.Node(bar),
-        entries: { $0.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] } },
-        title: { $0.string(kAXTitleAttribute) })
+      let entries: (AXRead.Node) -> [AXRead.Node] = {
+        $0.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] }
+      }
+      let title: (AXRead.Node) -> String? = { $0.string(kAXTitleAttribute) }
+      let item: AXRead.Node
+      do {
+        item = try ElementActions.menuItem(path, from: AXRead.Node(bar), entries: entries, title: title)
+      } catch VoiceCommandError.menuItemNotFound {
+        // The path wrong, its last title right: that item, wherever it is.
+        guard let last = path.last,
+          let found = try ElementActions.menuItem(named: last, from: AXRead.Node(bar), entries: entries, title: title)
+        else { throw VoiceCommandError.menuItemNotFound(path) }
+        item = found
+      }
       // A dimmed item is one the app would ignore: say so rather than "Done".
       // Its enabled state and labels come from the node already read.
       guard item.attribute(kAXEnabledAttribute) as? Bool != false,

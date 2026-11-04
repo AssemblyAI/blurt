@@ -177,6 +177,18 @@ struct ElementActionsTests {
     #expect(throws: VoiceCommandError.menuItemNotFound(["Edit"])) { try item(["Edit"]) }
   }
 
+  @Test("a wrong path whose last title is right finds that one item, wherever it is")
+  func menuAnywhere() throws {
+    func anywhere(_ name: String) throws -> Menu? {
+      try ElementActions.menuItem(
+        named: name, from: bar, entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } },
+        title: \.title)
+    }
+    #expect(try anywhere("pdf…")?.title == "PDF…")
+    #expect(try anywhere("Print") == nil)
+    #expect(throws: VoiceCommandError.refused("choose Move to Trash")) { try anywhere("Move to Trash") }
+  }
+
   @Test("a destructive menu item is refused by the title it matched, not only the title asked for")
   func menuDestructive() throws {
     #expect(throws: VoiceCommandError.refused("choose File › move to trash")) {

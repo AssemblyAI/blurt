@@ -50,10 +50,20 @@ public struct ScreenContext: Equatable, Sendable {
     var text = "<frontmost_app>\n\(Self.quoted(appName))\n</frontmost_app>"
     guard windowTitle != nil || !elements.isEmpty else { return text }
     let title = windowTitle.map { " title=\"\(Self.quoted($0))\"" } ?? ""
-    var lines = elements.map { "[\($0.id)] \($0.kind) \"\(Self.quoted($0.label))\"" }
+    var lines = elements.map { "[\($0.id)] \($0.kind) \"\(Self.quoted(Self.shortened($0.label)))\"" }
     if incomplete { lines.append("(More is on screen than is listed: an element not listed may still be there.)") }
     text += "\n\n<window fence=\"\(fence)\"\(title)>\n" + lines.joined(separator: "\n") + (lines.isEmpty ? "" : "\n")
     return text + "</window fence=\"\(fence)\">"
+  }
+
+  /// The longest label the prompt carries, in characters: VS Code names a
+  /// Source Control graph row by its whole commit message, 700 characters
+  /// and more (2026-11-04). The start is what a spoken command names.
+  static let labelCap = 120
+
+  /// `label` cut to `labelCap`, an ellipsis marking the cut.
+  static func shortened(_ label: String) -> String {
+    label.count <= labelCap ? label : String(label.prefix(labelCap - 1)) + "…"
   }
 
   /// A fresh fence code for one request.
@@ -119,8 +129,9 @@ enum ScreenSnapshot {
   }
 
   /// How the 150 listed elements are shared when the window holds a web
-  /// page (Chrome, Safari, an Electron app): most go to the page, walked on
-  /// its own, or a browser's tab strip and bookmarks bar fill the list first.
+  /// page (Chrome, Safari, an Electron app): the page is promised at least
+  /// this many, walked on its own, or a browser's tab strip and bookmarks bar
+  /// fill the list first — and it takes any of the rest the window doesn't use.
   static let webShare = 100
   /// Fewer listed elements than this in a web area means the browser is still
   /// building its tree (Chrome builds it asynchronously once a client reads a
@@ -217,8 +228,10 @@ enum ScreenSnapshot {
   /// The single-line ones, whose contents a focus selects (as tabbing in does).
   static let singleLineEntryRoles: Set<String> = ["AXTextField", "AXComboBox"]
   /// The roles whose `AXValue` is their name: a link's text, a static text's
-  /// words, a pop-up's choice. Every other role's value goes unread.
-  static let valueNamedRoles: Set<String> = ["AXLink", "AXStaticText", "AXPopUpButton", "AXMenuButton"]
+  /// words, a pop-up's choice, a web list's option (1Password's items are
+  /// `AXMenuItem`s named only by their value, 2026-11-04). Every other
+  /// role's value goes unread.
+  static let valueNamedRoles: Set<String> = ["AXLink", "AXStaticText", "AXPopUpButton", "AXMenuButton", "AXMenuItem"]
   /// What a `select` step may select, and a `set_value` / `increment` /
   /// `decrement` step may change: anything else is refused before it could
   /// fall back to a click on, say, a button.
@@ -286,10 +299,17 @@ struct PressFingerprint {
   let windowTitle: String?
   let value: String?
   let onScreen: Bool
+  /// Whether the focus is on the pressed element, or inside it.
+  var focusOnTarget = false
+  /// Whether it's expanded (`AXExpanded`): a web menu's title opening its
+  /// menu changes this and nothing else.
+  var expanded: Bool?
 
-  /// Whether anything a working press would change is different from `earlier`.
+  /// Whether anything a working press would change is different from
+  /// `earlier`. Focus moving onto the pressed element itself isn't: Slack's
+  /// sidebar row takes the focus on a press and opens nothing (2026-11-04).
   func changed(since earlier: PressFingerprint) -> Bool {
-    focusedElement != earlier.focusedElement || windowTitle != earlier.windowTitle || value != earlier.value
-      || onScreen != earlier.onScreen
+    (focusedElement != earlier.focusedElement && !focusOnTarget) || windowTitle != earlier.windowTitle
+      || value != earlier.value || onScreen != earlier.onScreen || expanded != earlier.expanded
   }
 }

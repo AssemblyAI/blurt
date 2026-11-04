@@ -62,11 +62,7 @@
     public func perform(_ step: VoiceCommandStep) async throws -> String? {
       switch step {
       case .openApp, .quitApp, .hideApp: return try await performAppStep(step)
-      case .openURL(let url):
-        guard await MainActor.run(body: { NSWorkspace.shared.open(url) }) else {
-          throw VoiceCommandError.couldNotPerform("open \(url.absoluteString)")
-        }
-        return nil
+      case .openURL(let url): return try await Self.openLink(url)
       case .shortcut(let chord):
         let code = await Self.keyCode(for: chord)
         // Posted as the paste's ⌘V is (`KeyInjector.post`): the annotated
@@ -103,7 +99,7 @@
     private func performScreenStep(_ step: VoiceCommandStep) async throws -> String? {
       switch step {
       case .pressButton(let name): return try await Self.pressButton(name)
-      case .chooseMenuItem(let path): try await Self.chooseMenuItem(path)
+      case .chooseMenuItem(let path): return try await Self.chooseMenuItem(path)
       case .pressElement(let id): return try await Self.act(on: id, in: snapshot, focus: false)
       case .focusElement(let id): return try await Self.act(on: id, in: snapshot, focus: true)
       case .setValue, .increment, .decrement, .showMenu, .select: return try await Self.adjust(step, in: snapshot)
@@ -113,6 +109,30 @@
       default: break
       }
       return nil
+    }
+
+    /// A link, in the browser in front when one is — "go to wikipedia.org"
+    /// said to Safari opened in the default browser, Chrome, and every step
+    /// after it acted there (2026-11-04) — else the default one.
+    private static func openLink(_ url: URL) async throws -> String? {
+      let browser = await MainActor.run { () -> URL? in
+        let front = NSWorkspace.shared.frontmostApplication
+        return FocusCapture.isBrowserApp(front) && url.scheme != "mailto" ? front?.bundleURL : nil
+      }
+      guard let browser else {
+        guard await MainActor.run(body: { NSWorkspace.shared.open(url) }) else {
+          throw VoiceCommandError.couldNotPerform("open \(url.absoluteString)")
+        }
+        return nil
+      }
+      let configuration = NSWorkspace.OpenConfiguration()
+      configuration.activates = true
+      do {
+        _ = try await NSWorkspace.shared.open([url], withApplicationAt: browser, configuration: configuration)
+      } catch {
+        throw VoiceCommandError.couldNotPerform("open \(url.absoluteString)")
+      }
+      return "in \(browser.deletingPathExtension().lastPathComponent)"
     }
 
     // MARK: - Apps
@@ -187,6 +207,25 @@
         throw VoiceCommandError.couldNotPerform("bring \(name) to the front")
       }
       return raised ? how : how + "; frontmost but its window wasn't on top"
+    }
+
+    /// The running or installed app named `name` — exactly, as `NameMatch`
+    /// folds names, never by a prefix: a link only becomes an app that is
+    /// called just that (`AppLink`). Its own name, as `openApp` takes it.
+    static func installedApp(named name: String) -> String? {
+      let key = NameMatch.normalized(name)
+      guard !key.isEmpty else { return nil }
+      let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        .compactMap(\.localizedName)
+      let installed = applicationFolders.flatMap { folder in
+        ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
+          .filter { $0.pathExtension == "app" }.map { $0.deletingPathExtension().lastPathComponent }
+      }
+      // "zoom.us" answers to "Zoom" too: the part before a domain-style dot.
+      return (running + installed).first { name in
+        NameMatch.normalized(name) == key
+          || name.split(separator: ".").first.map { NameMatch.normalized(String($0)) } == key
+      }
     }
 
     /// The installed app `name` means, by bundle name, in `applicationFolders`.

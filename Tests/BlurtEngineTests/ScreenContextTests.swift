@@ -129,6 +129,16 @@ struct ScreenContextTests {
     #expect(ScreenContext.newFence() != ScreenContext.newFence())
   }
 
+  @Test("a label past the cap is cut, an ellipsis marking the cut")
+  func longLabels() {
+    let message = "Harden Control Your Mac and log every command for diagnosis " + String(repeating: "x", count: 700)
+    let screen = ScreenContext(appName: "Code", elements: [.init(id: 108, kind: "row", label: message)])
+    let line = screen.promptText(fence: "f")?.split(separator: "\n").first { $0.hasPrefix("[108]") }
+    #expect(line?.hasPrefix(#"[108] row "Harden Control Your Mac and log every command"#) == true)
+    #expect(ScreenContext.shortened(message).count == ScreenContext.labelCap)
+    #expect(ScreenContext.shortened("Reply") == "Reply")
+  }
+
   @Test("with no window read, only the app goes to the planner")
   func appOnly() {
     #expect(ScreenContext(appName: "Finder").promptText(fence: "f") == "<frontmost_app>\nFinder\n</frontmost_app>")
@@ -171,6 +181,19 @@ struct ScreenContextTests {
       !PressFingerprint(focusedElement: 1, windowTitle: "Inbox", value: nil, onScreen: true).changed(since: before))
     #expect(
       PressFingerprint(focusedElement: 2, windowTitle: "Inbox", value: nil, onScreen: true).changed(since: before))
+    // A web menu's title opening its menu: changed, though nothing else did.
+    #expect(
+      PressFingerprint(focusedElement: 1, windowTitle: "Inbox", value: nil, onScreen: true, expanded: true)
+        .changed(
+          since: PressFingerprint(focusedElement: 1, windowTitle: "Inbox", value: nil, onScreen: true, expanded: false))
+    )
+    // Focus moving onto the pressed row itself, and nothing else: ignored.
+    #expect(
+      !PressFingerprint(focusedElement: 2, windowTitle: "Inbox", value: nil, onScreen: true, focusOnTarget: true)
+        .changed(since: before))
+    #expect(
+      PressFingerprint(focusedElement: 2, windowTitle: "Lunch", value: nil, onScreen: true, focusOnTarget: true)
+        .changed(since: before))
     #expect(
       PressFingerprint(focusedElement: 1, windowTitle: "Reply", value: nil, onScreen: true).changed(since: before))
     #expect(
