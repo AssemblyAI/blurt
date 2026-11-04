@@ -190,6 +190,16 @@ enum ScreenSnapshot {
     return roleKinds[role]
   }
 
+  /// The kinds the snapshot lists elements of `roles` under: a text field's
+  /// search-field subrole included. A role listed only when it takes a press (`clickableRoles`: a cell, a
+  /// web page's `<div>`) is listed as "clickable".
+  static func kinds(of roles: Set<String>) -> Set<String> {
+    var kinds = Set(roles.compactMap { roleKinds[$0] })
+    if roles.contains("AXTextField") { kinds.insert("search field") }
+    if !roles.isDisjoint(with: clickableRoles) { kinds.insert("clickable") }
+    return kinds
+  }
+
   private static let roleKinds: [String: String] = [
     "AXButton": "button", "AXMenuButton": "menu button", "AXPopUpButton": "pop-up menu",
     "AXCheckBox": "checkbox", "AXRadioButton": "tab or option", "AXLink": "link",

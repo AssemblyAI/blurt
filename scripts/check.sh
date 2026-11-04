@@ -611,6 +611,10 @@ if tool_ready pytest 'brew install pytest'; then
   # DSPy lives in program.py, which these tests assert never gets imported. That
   # property is why this is cheap enough to gate on.
   run_check "pytest (evals/dictation-prompt)" pytest -q evals/dictation-prompt/test_eval.py
+  # The planner eval's log importer and corpus shape: stdlib only, no network.
+  # Its own invocation: two rootdirs' bare-name imports (`import corpus`,
+  # `import import_log`) can't share one pytest run's sys.path cleanly.
+  run_check "pytest (evals/command-planner)" pytest -q evals/command-planner/test_import.py
 fi
 
 cd "$REPO_ROOT"
@@ -717,10 +721,13 @@ else
   #                        named otherwise is counted. The policy the shell serves
   #                        — the step parse, name matching, the snapshot walk and
   #                        its role and label rules, visibility, the click point,
-  #                        window layout, the destructive guard, the key chords —
-  #                        lives in VoiceCommandStep, CommandMatching,
-  #                        ScreenContext, WindowLayout and VoiceCommandKeys, which
-  #                        ARE covered.
+  #                        window layout, the destructive guard, the key chords,
+  #                        and when a press falls back to a click or a focus
+  #                        selects — lives in VoiceCommandStep, CommandMatching,
+  #                        ScreenContext, WindowLayout, VoiceCommandKeys and
+  #                        ElementActions, which ARE covered. The shell itself
+  #                        runs against a fixture app in LivePerformerTests
+  #                        (BLURT_LIVE_AX_TESTS=1).
   #  - MeetingMicProbe.swift : the microphone-user probe — Core Audio process
   #                        objects, which only a real machine has. Same
   #                        justification as AudioInputDevices. The policy that

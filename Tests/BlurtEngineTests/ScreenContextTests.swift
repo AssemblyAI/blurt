@@ -135,65 +135,6 @@ struct ScreenContextTests {
     #expect(ScreenContext(appName: nil).promptText(fence: "f") == nil)
   }
 
-  @Test("the control steps parse, and every one naming an element is checked against the snapshot")
-  func controlSteps() throws {
-    func steps(_ json: String, ids: Set<Int> = [1, 2, 3]) throws -> [VoiceCommandStep] {
-      try VoiceCommandStep.steps(fromReply: #"{"steps": ["# + json + "]}", maxSteps: 10, elementIDs: ids)
-    }
-    #expect(try steps(#"{"action": "select", "element": 1}"#) == [.select(1)])
-    #expect(try steps(#"{"action": "show_menu", "element": 2}"#) == [.showMenu(2)])
-    #expect(try steps(#"{"action": "set_value", "element": 3, "value": 40}"#) == [.setValue(element: 3, value: "40")])
-    #expect(try steps(#"{"action": "increment", "element": 3}"#) == [.increment(3)])
-    #expect(try steps(#"{"action": "decrement", "element": 3}"#) == [.decrement(3)])
-    #expect(try steps(#"{"action": "scroll", "direction": "down"}"#) == [.scroll(.down, element: nil)])
-    #expect(try steps(#"{"action": "scroll", "direction": "up", "element": 2}"#) == [.scroll(.up, element: 2)])
-    #expect(try steps(#"{"action": "window", "operation": "left_half"}"#) == [.window(.leftHalf)])
-    #expect(throws: VoiceCommandError.unknownElement(9)) { try steps(#"{"action": "select", "element": 9}"#) }
-    #expect(throws: VoiceCommandError.unknownElement(9)) {
-      try steps(#"{"action": "scroll", "direction": "down", "element": 9}"#)
-    }
-    #expect(throws: VoiceCommandError.malformedReply) { try steps(#"{"action": "scroll", "direction": "sideways"}"#) }
-    #expect(throws: VoiceCommandError.unsupportedAction("window")) {
-      try steps(#"{"action": "window", "operation": "spin"}"#)
-    }
-    #expect(throws: VoiceCommandError.malformedReply) { try steps(#"{"action": "set_value", "element": 3}"#) }
-  }
-
-  @Test("a step's public log name is its action alone, never what it names or types")
-  func logNames() {
-    #expect(VoiceCommandStep.type("my password").action.rawValue == "type")
-    #expect(VoiceCommandStep.openURL(URL(string: "https://example.com/a?q=secret")!).action.rawValue == "open_url")
-    #expect(VoiceCommandStep.chooseMenuItem(["File", "Secret Project"]).action.rawValue == "menu")
-    #expect(VoiceCommandStep.select(4).action == .select)
-  }
-
-  @Test("the planner's schema offers exactly the actions the parser reads")
-  func actionsAgree() {
-    let names = Set(VoiceCommandStep.Action.allCases.map(\.rawValue))
-    #expect(names.count == VoiceCommandStep.Action.allCases.count)
-    #expect(names.contains("press_button") && names.contains("set_value") && names.contains("window"))
-  }
-
-  @Test("press and focus name an element by number")
-  func elementSteps() throws {
-    let reply =
-      #"{"steps": [{"action": "focus", "element": 2}, {"action": "type", "text": "x"}, {"action": "press", "element": 1}]}"#
-    #expect(
-      try VoiceCommandStep.steps(fromReply: reply, maxSteps: 10, elementIDs: [1, 2])
-        == [.focusElement(2), .type("x"), .pressElement(1)])
-    // The schema makes it an integer: a string is a reply off-schema, refused.
-    #expect(throws: VoiceCommandError.malformedReply) {
-      try VoiceCommandStep.steps(
-        fromReply: #"{"steps": [{"action": "press", "element": "12"}]}"#, maxSteps: 10, elementIDs: [12])
-    }
-    #expect(throws: VoiceCommandError.unknownElement(2)) {
-      try VoiceCommandStep.steps(fromReply: reply, maxSteps: 10, elementIDs: [1])
-    }
-    #expect(throws: VoiceCommandError.malformedReply) {
-      try VoiceCommandStep.steps(fromReply: #"{"steps": [{"action": "press"}]}"#, maxSteps: 10, elementIDs: [1])
-    }
-  }
-
   #if os(macOS)
     @Test("a numbered element is handed out only for its own snapshot's app, and only if it was listed")
     func elementSnapshot() throws {

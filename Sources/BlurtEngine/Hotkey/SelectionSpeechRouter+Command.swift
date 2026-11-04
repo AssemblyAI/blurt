@@ -6,6 +6,51 @@ import Foundation
   // pill and in the log: the parts of the router's job handling that touch
   // none of its state.
   extension SelectionSpeechRouter {
+    /// One command from start to end — the screen read `screen` started, the
+    /// plan, each step — as the record the developer-mode log keeps: what the
+    /// model saw and answered, how each step ran, and how it ended. Its
+    /// outcome is nil only when it ended by being cancelled — a press, or a
+    /// newer command — partway: one that failed, or finished, first is logged
+    /// as that, however late the cancel came.
+    static func execute(
+      _ command: String, screen: Task<ScreenContext, Never>?, planner: any VoiceCommandPlanning,
+      performer: any VoiceCommandPerforming, session: DictationSession
+    ) async -> DictationLog.CommandRecord {
+      let began = ContinuousClock.now
+      let trace = PlanTrace()
+      let ran = StepLog()
+      var context = ScreenContext(appName: nil)
+      var steps: [VoiceCommandStep] = []
+      var failure: (kind: String, text: String)?
+      var outcome: OverlayUIState?
+      do {
+        context = await screen?.value ?? ScreenContext(appName: nil)
+        steps = try await planner.plan(command, context: context, trace: trace)
+        // The step kinds and counts in public; the command, the app and
+        // what each step names (an app, a menu path, a link) private.
+        logger.info(
+          "command with \(context.elements.count) elements planned \(steps.map(\.action.rawValue).joined(separator: ", "), privacy: .public): \(command, privacy: .private) in \(context.appName ?? "no app", privacy: .private) as \(String(describing: steps), privacy: .private)"
+        )
+        outcome = try await perform(steps, in: context, performer: performer, session: session, recording: ran)
+      } catch  where !(isCancellation(error) && Task.isCancelled) {
+        // A cancellation-shaped error on a task nobody cancelled (a request
+        // the system dropped) is a failure like any other, and says so.
+        // The kind in public, the words private: a command's errors carry
+        // what the plan named — a refused link's whole URL, an app, a label.
+        logger.error(
+          "command failed (\(logName(of: error), privacy: .public)): \(error.localizedDescription, privacy: .private)"
+        )
+        failure = (logName(of: error), error.localizedDescription)
+        outcome = Self.failure(error)
+      } catch {
+        // A cancelled request answers `URLError.cancelled`, not
+        // `CancellationError`: a command a press abandoned, not a failure.
+      }
+      return DictationLog.CommandRecord(
+        command: command, context: context, steps: steps, outcome: outcome,
+        failure: failure, duration: ContinuousClock.now - began, ran: ran.records, trace: trace.snapshot)
+    }
+
     /// The steps in order, checking for a press's cancel before each, each
     /// recorded into `ran` as it goes — how it was carried out, how long it
     /// took, the error that stopped it — for the developer-mode log. A typed

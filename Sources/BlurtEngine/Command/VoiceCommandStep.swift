@@ -117,6 +117,8 @@ public enum MediaKey: String, CaseIterable, Sendable {
   case playPause = "play_pause"
   case nextTrack = "next_track"
   case previousTrack = "previous_track"
+  case brightnessUp = "brightness_up"
+  case brightnessDown = "brightness_down"
 
   /// The `NX_KEYTYPE_*` code the system-defined event carries.
   var systemKeyType: Int {
@@ -127,6 +129,8 @@ public enum MediaKey: String, CaseIterable, Sendable {
     case .playPause: 16
     case .nextTrack: 17
     case .previousTrack: 18
+    case .brightnessUp: 2
+    case .brightnessDown: 3
     }
   }
 }
@@ -233,6 +237,11 @@ public struct KeyChord: Equatable, Sendable {
     "f1": 0x7A, "f2": 0x78, "f3": 0x63, "f4": 0x76, "f5": 0x60, "f6": 0x61,
     "f7": 0x62, "f8": 0x64, "f9": 0x65, "f10": 0x6D, "f11": 0x67, "f12": 0x6F,
   ]
+
+  /// The other names a plan may use for a key above, accepted but never
+  /// written back: the log and the eval corpus spell a key as the
+  /// instruction does ("return", not "enter").
+  static let keyAliases: Set<String> = ["enter", "backspace", "esc"]
 }
 
 /// Carries out the steps a command planned, other than `type` (which pastes
@@ -284,6 +293,10 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
   case menuItemNotFound([String])
   /// A `press` or `focus` step named a number the snapshot didn't list.
   case unknownElement(Int)
+  /// An element step on an element whose kind doesn't take it (`select` on a button).
+  case wrongKind(action: String, id: Int, kind: String)
+  /// The same step planned twice running, where repeating it isn't the point.
+  case repeatedStep(String)
   /// The app in front changed between the snapshot and an element step.
   case screenChanged
   /// The listed element went away, or doesn't take the step (focus on a button).
@@ -309,6 +322,11 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
     case .couldNotPerform(let what): "Blurt couldn’t \(what)."
     case .refused(let what): "Blurt won’t \(what)."
     case .unknownElement(let id): "The plan named element \(id), which isn’t on screen."
+    case .wrongKind(let action, let id, let kind):
+      "The plan used \(action) on element \(id), a \(kind); \(action) takes "
+        + (VoiceCommandStep.Action(rawValue: action).flatMap { VoiceCommandStep.kinds[$0] }?.sorted()
+          .joined(separator: ", ") ?? "another kind") + "."
+    case .repeatedStep(let action): "The plan repeated a \(action) step."
     case .screenChanged: "The window changed before Blurt got to it."
     case .elementGone: "That control isn’t there any more."
     }
@@ -330,6 +348,8 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
     case .buttonNotFound: "buttonNotFound"
     case .menuItemNotFound: "menuItemNotFound"
     case .unknownElement: "unknownElement"
+    case .wrongKind: "wrongKind"
+    case .repeatedStep: "repeatedStep"
     case .screenChanged: "screenChanged"
     case .elementGone: "elementGone"
     case .refused: "refused"
@@ -343,7 +363,8 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
   /// unknown action — the schema's enum rules that out, so it can't recur.
   var isRetryable: Bool {
     switch self {
-    case .malformedReply, .unsafeURL, .unknownShortcut, .tooManySteps, .unknownElement: true
+    case .malformedReply, .unsafeURL, .unknownShortcut, .tooManySteps, .unknownElement, .wrongKind, .repeatedStep:
+      true
     default: false
     }
   }

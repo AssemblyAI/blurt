@@ -11,10 +11,11 @@ import Foundation
 /// stranded the sound setting outside every reset — the exact bug the roster was
 /// created to prevent, twice.
 public struct SoundPackStore {
-  /// Which cues a store holds: dictation's, or read-aloud's — its own pair, so
-  /// a read never sounds like a recording starting.
+  /// Which cues a store holds: dictation's, read-aloud's, or Control Your
+  /// Mac's — each its own pair, so a read or a command never sounds like a
+  /// dictation starting.
   public enum Cue: Sendable {
-    case dictation, readAloud
+    case dictation, readAloud, command
   }
 
   /// UserDefaults key holding dictation's pack id. Public so SwiftUI views can
@@ -22,6 +23,8 @@ public struct SoundPackStore {
   public static var defaultsKey: String { DefaultsKey.soundPack.key }
   /// Read-aloud's pack id, the same way.
   public static var readAloudDefaultsKey: String { DefaultsKey.readAloudSoundPack.key }
+  /// Control Your Mac's pack id, the same way.
+  public static var commandDefaultsKey: String { DefaultsKey.commandSoundPack.key }
 
   private let catalog: SoundPackCatalog
   private let defaults: UserDefaults
@@ -33,7 +36,12 @@ public struct SoundPackStore {
   public init(catalog: SoundPackCatalog, cue: Cue = .dictation, defaults: UserDefaults = .standard) {
     self.catalog = catalog
     self.defaults = defaults
-    self.key = cue == .dictation ? Self.defaultsKey : Self.readAloudDefaultsKey
+    self.key =
+      switch cue {
+      case .dictation: Self.defaultsKey
+      case .readAloud: Self.readAloudDefaultsKey
+      case .command: Self.commandDefaultsKey
+      }
   }
 
   public var soundPack: SoundPack {

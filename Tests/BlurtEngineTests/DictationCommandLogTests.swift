@@ -44,6 +44,18 @@ struct DictationCommandLogTests {
     #expect(entry.milliseconds == 1_234)
   }
 
+  @Test("a command a press abandoned is logged as abandoned, with the steps that ran before it stopped")
+  func abandoned() {
+    let entry = DictationLog.makeCommandEntry(
+      .init(
+        command: "open slack and search for budget", context: screen, steps: [.openApp("Slack"), .type("budget")],
+        outcome: nil, failure: nil, duration: .milliseconds(700),
+        ran: [StepRecord(step: "open_app Slack", how: "already running", milliseconds: 40, error: nil)]), now: Date())
+    #expect(entry.outcome == "abandoned")
+    #expect(entry.errorKind == nil)
+    #expect(entry.ran.map { $0.step } == ["open_app Slack"])
+  }
+
   @Test("a failure is written to the command log and to the error log, beside the dictations' failures")
   func failureWritesBoth() throws {
     let directory = temporaryDirectory()
@@ -150,6 +162,7 @@ struct DictationCommandLogTests {
   func complaints() {
     for said in [
       "That last command didn't work.", "that didn’t work", "That's wrong", "it failed", "not what I wanted",
+      "Nothing works.", "Nothing happened.", "That didn't do anything.",
     ] {
       #expect(CommandFeedback.isComplaint(said), "\(said)")
     }

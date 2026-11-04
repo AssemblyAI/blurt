@@ -61,7 +61,8 @@ extension DictationLog {
     public let command: String
     public let context: ScreenContext
     public let steps: [VoiceCommandStep]
-    public let outcome: OverlayUIState
+    /// How it ended on the pill; nil for a command a press abandoned.
+    public let outcome: OverlayUIState?
     /// The error's stable name and full text, for a command that failed.
     public let failure: (kind: String, text: String)?
     public let duration: Duration
@@ -70,7 +71,7 @@ extension DictationLog {
 
     public init(
       id: String = UUID().uuidString, command: String, context: ScreenContext, steps: [VoiceCommandStep],
-      outcome: OverlayUIState, failure: (kind: String, text: String)?, duration: Duration, ran: [StepRecord] = [],
+      outcome: OverlayUIState?, failure: (kind: String, text: String)?, duration: Duration, ran: [StepRecord] = [],
       trace: PlanTrace.Snapshot = .init()
     ) {
       self.id = id
@@ -161,8 +162,9 @@ extension DictationLog {
     }
   }
 
-  private static func outcomeName(_ outcome: OverlayUIState) -> String {
-    switch outcome {
+  private static func outcomeName(_ outcome: OverlayUIState?) -> String {
+    guard let outcome else { return "abandoned" }
+    return switch outcome {
     case .done: "done"
     case .pasted: "pasted"
     case .noTarget: "copied"
@@ -216,7 +218,8 @@ extension KeyChord {
     switch key {
     case .character(let character): parts.append(String(character))
     case .code(let code):
-      parts.append(Self.namedKeyCodes.filter { $0.value == code }.map(\.key).min() ?? "key \(code)")
+      let name = Self.namedKeyCodes.first { $0.value == code && !Self.keyAliases.contains($0.key) }?.key
+      parts.append(name ?? "key \(code)")
     }
     return parts.joined(separator: "+")
   }

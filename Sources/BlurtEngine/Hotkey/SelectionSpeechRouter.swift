@@ -21,7 +21,7 @@ import Foundation
   /// the compiler prove single-threaded access to the routing state.
   @MainActor
   public final class SelectionSpeechRouter {
-    private static let logger = HostIdentity.current.logger("SelectionSpeech")
+    static let logger = HostIdentity.current.logger("SelectionSpeech")
 
     private let session: DictationSession
     private let speaker: any ReadAloudSpeaker
@@ -268,46 +268,15 @@ import Foundation
       }
       jobPill(.commanding)
       job = Task { [weak self, planner, performer, session] in
-        let began = ContinuousClock.now
-        let trace = PlanTrace()
-        let ran = StepLog()
-        var context = ScreenContext(appName: nil)
-        var steps: [VoiceCommandStep] = []
-        var failure: (kind: String, text: String)?
-        let outcome: OverlayUIState
-        do {
-          context = await started?.value ?? ScreenContext(appName: nil)
-          steps = try await planner.plan(command, context: context, trace: trace)
-          // The step kinds and counts in public; the command, the app and
-          // what each step names (an app, a menu path, a link) private.
-          Self.logger.info(
-            "command with \(context.elements.count) elements planned \(steps.map(\.action.rawValue).joined(separator: ", "), privacy: .public): \(command, privacy: .private) in \(context.appName ?? "no app", privacy: .private) as \(String(describing: steps), privacy: .private)"
-          )
-          outcome = try await Self.perform(
-            steps, in: context, performer: performer, session: session, recording: ran)
-        } catch {
-          // A cancelled request answers `URLError.cancelled`, not
-          // `CancellationError`: a command a press abandoned, not a failure.
-          if Self.isCancellation(error) { return }
-          // The kind in public, the words private: a command's errors carry
-          // what the plan named — a refused link's whole URL, an app, a label.
-          Self.logger.error(
-            "command failed (\(Self.logName(of: error), privacy: .public)): \(error.localizedDescription, privacy: .private)"
-          )
-          failure = (Self.logName(of: error), error.localizedDescription)
-          outcome = Self.failure(error)
-        }
+        let record = await Self.execute(
+          command, screen: started, planner: planner, performer: performer, session: session)
+        // In full, to the developer-mode log (`DictationLog+Commands`), an
+        // abandoned command too.
+        DictationLog.appendCommand(record)
         // A command a press abandoned ends through `.stopJob`, never here: a
         // late end from it — a cancelled request can throw a URLError rather
         // than a CancellationError — must not undo a newer command's start.
-        guard !Task.isCancelled else { return }
-        // In full, to the developer-mode log (`DictationLog+Commands`): what was
-        // said, what the model saw and answered, the plan, how each step ran,
-        // and how it ended.
-        let record = DictationLog.CommandRecord(
-          command: command, context: context, steps: steps, outcome: outcome, failure: failure,
-          duration: ContinuousClock.now - began, ran: ran.records, trace: trace.snapshot)
-        DictationLog.appendCommand(record)
+        guard !Task.isCancelled, let outcome = record.outcome else { return }
         await performer.commandEnded()
         guard !Task.isCancelled, let self else { return }
         self.lastCommand = record

@@ -9,24 +9,115 @@ extension VoiceCommandStep {
   /// fence, prose or shape around it to forgive. Every step must parse, or
   /// none run: half a plan is a different command. What's checked here is
   /// what no schema can say: a link's scheme, a chord's keys, the destructive
-  /// guard, an element's number, a path's depth, a text's length.
+  /// guard, an element's number and kind, a path's depth, a text's length, a
+  /// step looping.
   ///
-  /// `elementIDs`: the numbers the snapshot the planner saw listed. A step
-  /// naming any other refuses the plan, as an unknown action does.
+  /// `listed`: the elements the snapshot the planner saw listed. A step
+  /// naming any other refuses the plan, as an unknown action does; one
+  /// naming an element of the wrong kind (`select` on a button) or a
+  /// destructive label ("Delete") is refused before any step runs, rather
+  /// than at its turn, after the steps before it have.
   static func steps(
-    fromReply reply: String, maxSteps: Int, elementIDs: Set<Int> = []
+    fromReply reply: String, maxSteps: Int, listed: [ScreenContext.Element] = []
   ) throws -> [VoiceCommandStep] {
     guard let plan = try? JSONDecoder().decode(Plan.self, from: Data(reply.utf8)) else {
       throw VoiceCommandError.malformedReply
     }
     guard !plan.steps.isEmpty else { throw VoiceCommandError.notUnderstood }
     guard plan.steps.count <= maxSteps else { throw VoiceCommandError.tooManySteps }
-    let steps = try plan.steps.map(Self.init(raw:))
-    for id in steps.compactMap(\.elementID) where !elementIDs.contains(id) {
-      throw VoiceCommandError.unknownElement(id)
+    var steps = try plan.steps.map(Self.init(raw:))
+    // Only while the window the snapshot read is still the one in front: a
+    // press may open a sheet, a shortcut a window, and a name the old window
+    // listed then means a control the new one has.
+    for index in steps.indices {
+      guard steps[..<index].allSatisfy({ Self.keepsWindow.contains($0.action) }) else { break }
+      steps[index] = steps[index].canonical(among: listed)
+    }
+    let elements = Dictionary(listed.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    for step in steps {
+      try step.check(against: elements)
+    }
+    // The same step again and again is a model looping ("open_app Safari"
+    // ten times over a remark, return ten times). A step that does the same
+    // the second time never repeats; another can, up to five times running
+    // ("click Next twice", "tab four times").
+    var run = 1
+    for (step, next) in zip(steps, steps.dropFirst()) {
+      run = step == next ? run + 1 : 1
+      if run > (Self.idempotent.contains(step.action) ? 1 : 5) {
+        throw VoiceCommandError.repeatedStep(step.action.rawValue)
+      }
     }
     return steps
   }
+
+  /// The step as Blurt carries it out best, where the model wrote it another
+  /// way: a button by name that is listed, under exactly that name and as
+  /// something pressable, as the listed element — read already, so not
+  /// searched for again; and a type of one line break as the return key,
+  /// which sends a message where a pasted line break only starts a new line.
+  func canonical(among listed: [ScreenContext.Element]) -> VoiceCommandStep {
+    switch self {
+    case .pressButton(let name):
+      let named = listed.filter {
+        Self.pressableKinds.contains($0.kind) && NameMatch.normalized($0.label) == NameMatch.normalized(name)
+      }
+      guard named.count == 1, let only = named.first else { return self }
+      return .pressElement(only.id)
+    case .type(let text) where ["\n", "\r\n", "\r"].contains(text):
+      return .shortcut(KeyChord(modifiers: [], key: .code(KeyChord.namedKeyCodes["return"] ?? 0x24)))
+    default: return self
+    }
+  }
+
+  /// The actions that do the same the second time: never planned twice running.
+  static let idempotent: Set<Action> = [
+    .openApp, .quitApp, .hideApp, .openURL, .window, .focus, .select, .setValue,
+  ]
+
+  /// The actions that leave the window the snapshot read in front.
+  static let keepsWindow: Set<Action> = [.focus, .type, .select, .scroll, .setValue, .increment, .decrement, .media]
+
+  /// The kinds a `press_button` may mean: anything pressable — a row by its
+  /// name included — never a field or a slider.
+  static let pressableKinds: Set<String> = ScreenSnapshot.kinds(
+    of: [
+      "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuButton", "AXPopUpButton", "AXDisclosureTriangle",
+      "AXRow",
+    ]
+  ).union(["clickable"])
+
+  /// The checks a step needs the listed elements for: the number is listed,
+  /// its kind takes the action, and nothing it would press is named as
+  /// destructive — a listed element's label, a button's or a menu item's name.
+  private func check(against listed: [Int: ScreenContext.Element]) throws {
+    switch self {
+    case .pressButton(let name) where DestructiveGuard.isDestructive(label: name):
+      throw VoiceCommandError.refused("press \(name)")
+    case .chooseMenuItem(let path) where path.contains(where: DestructiveGuard.isDestructive(label:)):
+      throw VoiceCommandError.refused("choose \(path.joined(separator: " › "))")
+    default: break
+    }
+    guard let id = elementID else { return }
+    guard let element = listed[id] else { throw VoiceCommandError.unknownElement(id) }
+    if let kinds = Self.kinds[action], !kinds.contains(element.kind) {
+      throw VoiceCommandError.wrongKind(action: action.rawValue, id: id, kind: element.kind)
+    }
+    if action == .press || action == .showMenu, DestructiveGuard.isDestructive(label: element.label) {
+      throw VoiceCommandError.refused("press \(element.label)")
+    }
+  }
+
+  /// The kinds of listed element each element action takes, as the snapshot
+  /// names them (`ScreenSnapshot.kinds(of:)`), from the same role lists the
+  /// performer checks at the step's turn. An action absent takes any kind.
+  static let kinds: [Action: Set<String>] = [
+    .focus: ScreenSnapshot.kinds(of: ScreenSnapshot.textEntryRoles),
+    .select: ScreenSnapshot.kinds(of: ScreenSnapshot.selectableRoles),
+    .setValue: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
+    .increment: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
+    .decrement: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
+  ]
 
   /// Every field a step can carry, by its name on the wire: the keys this
   /// parser decodes and the planner's schema spells (`VoiceCommandPlanner.fields`),

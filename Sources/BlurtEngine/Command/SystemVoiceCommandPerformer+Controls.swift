@@ -22,12 +22,14 @@
         }
       case .select:
         try require(node, roleIn: ScreenSnapshot.selectableRoles, for: "select", what: "a row")
-        // A row that won't take the attribute (a web list) takes a click.
-        if AXUIElementSetAttributeValue(node.element, kAXSelectedAttribute as CFString, kCFBooleanTrue) != .success {
-          try await click(node, pid: pid)
-          return "click: AXSelected refused"
-        }
-        return "AXSelected"
+        // A row that won't take the attribute (a web list) takes a click; so
+        // does one in Slack or VS Code, which takes it and opens nothing.
+        try refuseIfDestructive(node)
+        return try await checked(
+          "AXSelected", node: node, pid: pid,
+          press: {
+            AXUIElementSetAttributeValue(node.element, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
+          })
       default: break
       }
       return nil
@@ -45,9 +47,10 @@
       guard try performAction(action, on: node) == .success else { throw VoiceCommandError.elementGone }
     }
 
-    /// A page up, down, left or right: the scroll area holding the listed
-    /// element, else the window's largest. Its own page action first, then a
-    /// scroll-wheel event over its centre for an area that has none.
+    /// A page up, down, left or right, or to the top or the bottom: the
+    /// scroll area holding the listed element, else the window's largest. Its
+    /// own page action (or for an end, its scroll bar) first, then a
+    /// scroll-wheel event over its centre for an area that has neither.
     static func scroll(
       _ direction: ScrollDirection, element id: Int?, in snapshot: ElementSnapshot
     ) async throws -> String {
@@ -61,7 +64,15 @@
         }
       }
       guard let area else { throw VoiceCommandError.couldNotPerform("find anything to scroll") }
-      if AXUIElementPerformAction(area, direction.pageAction as CFString) == .success { return "page action" }
+      if let action = direction.pageAction, AXUIElementPerformAction(area, action as CFString) == .success {
+        return "page action"
+      }
+      // An end: the scroll bar's own value, as dragging its thumb all the way.
+      if let end = direction.scrollBarValue, let bar = AXRead.element(area, kAXVerticalScrollBarAttribute),
+        AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, NSNumber(value: end)) == .success
+      {
+        return "scroll bar"
+      }
       guard let frame = AXRead.frame(area),
         let event = CGEvent(
           scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: direction.wheelLines.vertical,
@@ -69,7 +80,7 @@
       else { throw VoiceCommandError.couldNotPerform("scroll") }
       // A wheel event scrolls what's under the pointer.
       try await withPointer(at: CGPoint(x: frame.midX, y: frame.midY)) { event.post(tap: .cghidEventTap) }
-      return "scroll wheel: no page action"
+      return direction.pageAction == nil ? "scroll wheel: no scroll bar" : "scroll wheel: no page action"
     }
 
     /// The nearest scroll area at or above `node`: each level's role and

@@ -39,6 +39,18 @@ struct SoundPackStoreTests {
     #expect(Self.catalog.defaulting(to: "missing").fromPersisted(nil) == .none)
   }
 
+  @Test("Control Your Mac's cues are a third setting, apart from dictation's and read-aloud's")
+  func commandIsSeparate() {
+    let defaults = freshDefaults()
+    let command = SoundPackStore(catalog: Self.catalog.defaulting(to: "rom1a-19"), cue: .command, defaults: defaults)
+    let readAloud = SoundPackStore(catalog: Self.catalog, cue: .readAloud, defaults: defaults)
+    #expect(command.soundPack == Self.clav)
+    command.soundPack = .none
+    #expect(command.soundPack == .none)
+    #expect(readAloud.soundPack == Self.brass)
+    #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == Self.brass)
+  }
+
   @Test("none is a storable, distinct value")
   func storesNone() {
     let defaults = freshDefaults()

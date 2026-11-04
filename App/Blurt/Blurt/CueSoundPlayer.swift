@@ -1,8 +1,8 @@
 import AVFoundation
 import BlurtEngine
 
-/// Owns the cue chimes — dictation's start/stop pair and read-aloud's own, each
-/// a `CuePair` from its own setting: loading the selected pack, pre-rolling so
+/// Owns the cue chimes — dictation's start/stop pair, read-aloud's and Control
+/// Your Mac's, each a `CuePair` from its own setting: loading the selected pack, pre-rolling so
 /// the first chime never stalls the pill, previewing on a pack change, and
 /// firing on the recording edge or a read's start and end. Kept out of
 /// `AppCoordinator`'s body so chime behavior can change without churning the
@@ -10,6 +10,8 @@ import BlurtEngine
 final class CueSoundPlayer {
   private let dictation = CuePair(store: .dictation)
   private let readAloud = CuePair(store: .readAloud)
+  /// A command key's recording: the same edges as a dictation's, its own voice.
+  private let command = CuePair(store: .command)
   /// Edge-detector deciding when the start/stop chimes fire. The mapping from a
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
@@ -44,6 +46,7 @@ final class CueSoundPlayer {
     Task {
       await dictation.load()
       await readAloud.load()
+      await command.load()
     }
     startObservingRoute()
   }
@@ -104,13 +107,20 @@ final class CueSoundPlayer {
     Task { await readAloud.preview() }
   }
 
+  /// Previews a newly selected Control Your Mac pack.
+  func commandPackChanged() {
+    Task { await command.preview() }
+  }
+
   /// Fires the start/stop cue on the recording edge. Call once per rendered
   /// phase; only the idle↔recording transitions make a sound (the edge logic is
-  /// the engine's `RecordingCueGate`).
-  func transition(for phase: PipelinePhase) {
+  /// the engine's `RecordingCueGate`). `commanding`: the recording is a Control
+  /// Your Mac press's spoken command, which plays that setting's voice.
+  func transition(for phase: PipelinePhase, commanding: Bool = false) {
+    let pair = commanding ? command : dictation
     switch cueGate.cue(for: phase) {
-    case .start: dictation.playStart()
-    case .stop: dictation.playStop()
+    case .start: pair.playStart()
+    case .stop: pair.playStop()
     case nil: break
     }
     // A pending route re-prime is acted on at exactly two points.
@@ -144,7 +154,14 @@ final class CueSoundPlayer {
 
   /// Reloads the pairs `reloads` names, each against the current route.
   private func reload(_ reloads: CueReprimeSchedule.Reloads) {
-    if reloads.dictation { Task { await dictation.load(force: true) } }
+    // The command pair plays on the same capture edges, so it is re-primed
+    // with dictation's.
+    if reloads.dictation {
+      Task {
+        await dictation.load(force: true)
+        await command.load(force: true)
+      }
+    }
     if reloads.readAloud { Task { await readAloud.load(force: true) } }
   }
 

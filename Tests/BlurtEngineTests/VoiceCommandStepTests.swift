@@ -92,7 +92,8 @@ struct VoiceCommandStepTests {
   func plainNumbers() throws {
     let steps = try VoiceCommandStep.steps(
       fromReply: #"{"steps": [{"action": "set_value", "element": 1, "value": 0.5}, "#
-        + #"{"action": "set_value", "element": 1, "value": 40}]}"#, maxSteps: 10, elementIDs: [1])
+        + #"{"action": "set_value", "element": 1, "value": 40}]}"#, maxSteps: 10,
+      listed: [.init(id: 1, kind: "slider", label: "Volume")])
     #expect(steps == [.setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40")])
     #expect(Double("0.5") == 0.5)
   }

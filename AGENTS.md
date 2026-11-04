@@ -1048,7 +1048,7 @@ the model's own reply and the error (`VoiceCommandError.isRetryable`); an empty 
 own answer and is never retried. The instruction ranks a listed element first, then a known shortcut,
 then a real menu item (never an invented path), then `press_button`; lets element steps chain until the
 first step that brings another app, window or tab forward; limits refusal to the four destructive
-actions; and ends with five worked examples, one of them a refusal. A window holding a web page
+actions; and ends with six worked examples, one of them a refusal. A window holding a web page
 (Chrome, Safari, an Electron app) is read in two walks so the page gets 100 of the 150 slots rather
 than the tab strip and bookmarks bar (`ScreenSnapshot.webShare`); a page with fewer than five listed
 elements is read again after 300 ms and 600 ms, since Chrome builds its tree only after a client first
@@ -1094,11 +1094,14 @@ frontmost but never owns the top window (its window on another Space) is in fron
 that never comes forward fails the command. Each plan is logged at info level — the app, the element
 count and the steps by kind (`VoiceCommandStep.logName`), the command itself private. A press that `AXPress` refuses,
 or a focus the app doesn't take, falls back to a real click at the element's centre (scrolled into
-view, inside its window, its app still in front, the pointer put back). So does a press that reports
-success but changes nothing Blurt can see 250 ms later (`PressFingerprint`: the focused element, the
-window title, the element's value, whether it's still on screen), because Chrome answers success for a
-press its page ignored. That was owner-directed (2026-11-03), knowing the cost: a control that worked
-without visibly changing anything is pressed twice. One step that doesn't parse — an unknown action or key, a link that isn't
+view, inside its window, its app still in front, the pointer put back). In a Chromium browser or an
+Electron app (`checksPress`) so does a press — or a row's `AXSelected` — that reports success but
+changes nothing Blurt can see 250 ms later (`PressFingerprint`: the focused element, the window title,
+the element's value, whether it's still on screen), because Chrome answers success for a press its
+page ignored, and Slack and VS Code take `AXSelected` on a sidebar row and open nothing. That was
+owner-directed (2026-11-03), knowing the cost there: a control that worked without visibly changing
+anything is pressed twice. A native app's success is trusted: checked everywhere, every Calculator
+key went in twice (2026-11-04). One step that doesn't parse — an unknown action or key, a link that isn't
 `http`, `https` or `mailto` — refuses the whole plan, and a reply cut off at the token cap is never run.
 The router then performs the steps in order through `VoiceCommandPerforming`
 (`SystemVoiceCommandPerformer`: `NSWorkspace` to open, hide and quit apps — matched by name,
@@ -1365,9 +1368,9 @@ under); **what actually ran**, step by step — how each was carried out ("AXPre
 visibly changed", "AX focus; selected 18 characters", "key code 40"), how long it took, and the error
 that stopped the rest (`StepRecord`, from `VoiceCommandPerforming.perform`'s note); the outcome; the
 error's stable name and full text; and the total time. A failed command also goes to `errors.jsonl`
-as `command.<name>`, so one file holds every failure. A command a press abandoned isn't logged — and a
-request a cancel reached first answers `URLError.cancelled`, which is treated as the cancellation it
-is. **Saying a complaint to the key** ("that last command didn't work", "that's wrong" —
+as `command.<name>`, so one file holds every failure. A command a press abandoned is logged with the
+outcome `abandoned` and the steps that ran before it stopped, never as a failure — a request a cancel
+reached first answers `URLError.cancelled`, which is treated as the cancellation it is. **Saying a complaint to the key** ("that last command didn't work", "that's wrong" —
 `CommandFeedback`, short utterances only) isn't planned: it's logged as a feedback entry naming the
 last command's id, and as `command.userReported` in `errors.jsonl`, and the pill says "Noted". The
 reset sweep (`removeStoredLogs`, `scripts/reset-lib.sh`) removes all three files.
@@ -1539,6 +1542,31 @@ which is the same rule as "don't touch the real Keychain in tests". Retain-cycle
 weak-reference assertions in `MemoryLeakTests.swift` (`expectNoLeak`) — LeakSanitizer is unsupported
 on Darwin, so AddressSanitizer catches memory _corruption_ but not leaks; `scripts/leaks.sh` covers
 the whole app under the Darwin leak detector.
+
+**Control Your Mac** is tested in three tiers, the way other computer-use projects (Peekaboo,
+OpenAdapt, browser-use) split theirs: fast and offline on every run, live only when asked.
+
+- **Policy and decisions, every run.** The step parse and its checks — an element's kind, a
+  destructive label, a looping step, all refused before any step runs — name matching, the snapshot
+  walk, and the router with a stub planner and performer. What the real performer decides is
+  covered too, apart from the Accessibility calls it makes: `ElementActions` holds when a press falls
+  back to a click, when a focused field is selected, the menu walk and the pointer's round trip, each
+  driven in `ElementActionsTests` with fake reads and writes. The `SystemVoiceCommandPerformer*`
+  shell files stay outside the coverage gate.
+- **The live performer, `BLURT_LIVE_AX_TESTS=1`.** `LivePerformerTests` launches
+  `Tests/CommandFixture` (a SwiftPM executable the test target depends on, never a product): a window
+  with one of each control. It runs real steps against that window and judges each one by the state
+  the fixture writes to a JSON file — the presses it saw, the slider's value, the selected row, the
+  field's selection — never a screenshot. It needs Accessibility trust for the process running it,
+  and it stops before any step unless the fixture is the app in front, so input meant for it can't
+  land elsewhere. A process spawned by the test can't take the front by itself, so the test process
+  registers as an accessory app and activates the fixture. It pins a native app's press as trusted:
+  Reply, which visibly answers, and Send, which changes nothing, are each pressed once.
+- **The planner, `BLURT_PLANNER_EVAL=1`.** `PlannerEvalTests` scores the real planner — instruction,
+  schema, retry, parser — on `evals/command-planner/cases.json`, and fails below the corpus's
+  `passFloor`. It costs paid gateway calls, and one run is noise (the model varies even at
+  temperature 0), so it runs each case three times. The corpus's shape is checked on every run. Its
+  README says how to read a result and how to draft cases from `commands.jsonl`.
 
 **Mutation testing** — `scripts/mutate.sh`, opt-in and **not** part of `check.sh`. It flips one
 operator in a source file, re-runs the suite, and reports whether anything noticed. Reach for it

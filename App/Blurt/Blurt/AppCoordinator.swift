@@ -334,6 +334,11 @@ final class AppCoordinator {
     cues.readPackChanged()
   }
 
+  /// Control Your Mac's cue pack changed in Settings: reload and preview it.
+  func commandSoundPackChanged() {
+    cues.commandPackChanged()
+  }
+
   /// The Read Aloud tab picked a voice or a speed: play a sample in it, as a cue
   /// sound plays when it's picked.
   func readAloudStyleChanged() {
@@ -370,7 +375,7 @@ final class AppCoordinator {
     // both follow the same stream the pill renders, never a second source.
     isCapturing = phase.isCapturing
 
-    cues.transition(for: phase)
+    cues.transition(for: phase, commanding: speechRouter?.processingState == .commanding)
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the

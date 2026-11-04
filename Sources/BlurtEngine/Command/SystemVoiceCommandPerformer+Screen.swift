@@ -168,25 +168,45 @@
     }
 
     /// `AXPress`, then a real click at its centre when the element refuses
-    /// the press (a web element exposed with no action) or the press reports
-    /// success but nothing changed (`PressFingerprint`): Chrome answers
-    /// success for a press its page ignored. Owner-directed (2026-11-03),
-    /// knowing the cost: a control that worked without changing anything
-    /// Blurt can see — a Send whose window stays put — is pressed twice.
-    /// Refused, either way, when its label marks it as destructive — checked
-    /// once, on one read of the element, for the press and the click both.
+    /// the press (a web element exposed with no action) — and, in Chromium
+    /// and Electron (`checksPress`), when the press reports success but
+    /// nothing changed (`PressFingerprint`): Chrome answers success for a
+    /// press its page ignored. Owner-directed (2026-11-03), knowing the cost
+    /// there: a control that worked without changing anything Blurt can see
+    /// — a Send whose window stays put — is pressed twice. Refused, either
+    /// way, when its label marks it as destructive.
     static func press(_ handle: ElementSnapshot.Handle, pid: pid_t?) async throws -> String {
       let node = AXRead.Node(handle.element)
       try refuseIfDestructive(node)
-      let before = fingerprint(of: node, pid: pid)
-      guard AXUIElementPerformAction(handle.element, kAXPressAction as CFString) == .success else {
-        try await click(node, pid: pid)
-        return "click: AXPress refused"
+      return try await checked(
+        "AXPress", node: node, pid: pid,
+        press: { AXUIElementPerformAction(handle.element, kAXPressAction as CFString) == .success })
+    }
+
+    /// `ElementActions.press` with this app's reads: the fingerprint only
+    /// where a success can't be trusted (`checksPress`); the first reuses the
+    /// node the caller read, the second reads the element again.
+    static func checked(
+      _ action: String, node: AXRead.Node, pid: pid_t?, press: () -> Bool
+    ) async throws -> String {
+      var pressed = false
+      let read = {
+        defer { pressed = true }
+        return fingerprint(of: pressed ? AXRead.Node(node.element) : node, pid: pid)
       }
-      try await Task.sleep(for: pressSettle)
-      guard !fingerprint(of: AXRead.Node(handle.element), pid: pid).changed(since: before) else { return "AXPress" }
-      try await click(node, pid: pid)
-      return "AXPress, then click: nothing visibly changed"
+      return try await ElementActions.press(
+        action, fingerprint: await checksPress(pid) ? read : nil, press: press,
+        settle: { try await Task.sleep(for: pressSettle) }, click: { try await click(node, pid: pid) })
+    }
+
+    /// Whether an action's success needs checking for: Chromium browsers and
+    /// Electron apps, whose web content can answer success and do nothing.
+    static func checksPress(_ pid: pid_t?) async -> Bool {
+      await MainActor.run {
+        guard let app = pid.flatMap(NSRunningApplication.init(processIdentifier:)) else { return false }
+        return app.bundleIdentifier.map(ScreenSnapshot.chromiumBrowsers.contains) == true
+          || FocusCapture.isElectronBundle(app.bundleURL)
+      }
     }
 
     /// Every Accessibility action Blurt performs on an element on screen — a
@@ -243,16 +263,15 @@
     private static func focus(_ handle: ElementSnapshot.Handle, pid: pid_t?) async throws -> String {
       let node = AXRead.Node(handle.element)
       let role = try require(node, roleIn: ScreenSnapshot.textEntryRoles, for: "focus", what: "a text field")
-      AXUIElementSetAttributeValue(handle.element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-      try await Task.sleep(for: .milliseconds(100))
-      var how = "AX focus"
-      if !isFocused(handle.element, pid: pid) {
-        try await click(node, pid: pid)
-        how = "click: AX focus not taken"
-      }
-      guard ScreenSnapshot.singleLineEntryRoles.contains(role) else { return how + "; a text area keeps its cursor" }
-      guard isFocused(handle.element, pid: pid) else { return how + "; still not focused, nothing selected" }
-      return how + "; " + selectAll(handle.element)
+      return try await ElementActions.focus(
+        singleLine: ScreenSnapshot.singleLineEntryRoles.contains(role),
+        setFocus: {
+          AXUIElementSetAttributeValue(handle.element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+          try await Task.sleep(for: .milliseconds(100))
+        },
+        isFocused: { isFocused(handle.element, pid: pid) },
+        click: { try await click(node, pid: pid) },
+        selectAll: { selectAll(handle.element) })
     }
 
     private static func isFocused(_ element: AXUIElement, pid: pid_t?) -> Bool {

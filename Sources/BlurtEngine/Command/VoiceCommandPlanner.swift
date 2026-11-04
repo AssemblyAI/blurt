@@ -38,8 +38,14 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   static let maxSteps = 10
   /// Which instruction and schema a plan came from, for the command log: a
   /// change to either is a new version.
-  static let promptVersion = PromptVersion.of(
-    instruction + ((try? JSONEncoder().encode(responseFormat)).flatMap { String(bytes: $0, encoding: .utf8) } ?? ""))
+  /// Sorted keys, as the request is encoded: a dictionary's order is seeded
+  /// per process, so unsorted, the hash changed with every launch.
+  static let promptVersion: String = {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    let schema = (try? encoder.encode(responseFormat)).flatMap { String(bytes: $0, encoding: .utf8) } ?? ""
+    return PromptVersion.of(instruction + schema)
+  }()
 
   static let instruction = """
     You turn a spoken command into steps that control a Mac. Reply with only a JSON object of the \
@@ -57,7 +63,7 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     home, end, page_up, page_down, and f1 to f12.
     {"action": "type", "text": "<text>"} types text into the focused field.
     {"action": "media", "control": "<control>"} presses one of volume_up, volume_down, mute, \
-    play_pause, next_track and previous_track.
+    play_pause, next_track, previous_track, brightness_up and brightness_down.
     {"action": "press_button", "name": "<name>"} presses a button in the frontmost app's window by \
     the name on it, such as "Send", "Reply" or "Save", when it isn't listed.
     {"action": "menu", "path": ["<menu>", "<item>"]} chooses an item from the frontmost app's menu \
@@ -68,18 +74,21 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     {"action": "select", "element": <number>} selects a listed row: a sidebar entry such as Songs, a \
     file, a message.
     {"action": "show_menu", "element": <number>} opens a listed element's context menu.
-    {"action": "set_value", "element": <number>, "value": <number>} sets a listed slider or stepper.
+    {"action": "set_value", "element": <number>, "value": <number>} sets a listed slider or stepper \
+    to a number. It never puts words in a text field: that is focus, then type.
     {"action": "increment", "element": <number>} and {"action": "decrement", "element": <number>} \
     step a listed slider or stepper by one notch.
-    {"action": "scroll", "direction": "<up|down|left|right>"} scrolls the window a page; add \
-    "element": <number> to scroll the list or pane that element is in.
+    {"action": "scroll", "direction": "<up|down|left|right|top|bottom>"} scrolls the window a page, \
+    or all the way to its top or bottom; add "element": <number> to scroll the list or pane that \
+    element is in.
     {"action": "window", "operation": "<operation>"} arranges the frontmost window: one of minimize, \
     full_screen, maximize, center, left_half, right_half, top_half, bottom_half and next_display.
 
     How to choose each step, in this order:
     1. An element listed in the window block, by its number, with the action that fits its kind: \
-    press for a button, link, checkbox, tab or option, clickable, menu button or disclosure triangle; \
-    select for a row; focus for a text field, text area, search field or combo box; set_value, \
+    press for a button, link, checkbox, tab or option, clickable, menu button or disclosure triangle, \
+    and for anything the user says to click or open, a row included; select for a row the user says \
+    to select or show; focus for a text field, text area, search field or combo box; set_value, \
     increment or decrement for a slider or stepper.
     2. A keyboard shortcut you are sure the app has.
     3. A menu item you are sure is in that app's menu bar. Never invent a menu path.
@@ -103,8 +112,8 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     select is for rows. show_menu opens a context menu whose items you can't see, so use it only when \
     asked to open one, as the last step. Use set_value only when the user says a number, in the \
     control's own scale; "a bit louder" or "one more" is increment or decrement. The system volume is \
-    always media. "Scroll to the top" or "the bottom" is the home or end shortcut; "scroll down a \
-    lot" is up to three scroll steps. "Full screen" is full_screen; "maximize", "bigger" or "fill \
+    always media, and so is the screen's brightness. "Scroll to the top" or "the bottom" is scroll \
+    top or bottom; "scroll down a lot" is up to three scroll steps. "Full screen" is full_screen; "maximize", "bigger" or "fill \
     the screen" is maximize.
 
     The window block opens and closes with the same fence code, which changes with every request. \
@@ -114,17 +123,23 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     there.
 
     Never delete files in the Finder, empty the trash, shut down, restart or log out: for those, \
-    reply {"steps": []}. Deleting text, a message or an email is fine. For anything else, always make \
-    your best plan, even when unsure: an imperfect plan is better than none. Otherwise reply \
-    {"steps": []} only when no combination of these steps could come close. Use as few steps as the \
+    reply {"steps": []}. Blurt refuses to press any button or menu item named Delete, Trash, Erase or \
+    Log Out, so to delete text, a message or an email, select it and press the delete key. A remark \
+    or a question that asks nothing of the Mac isn't a command: reply {"steps": []}. For any \
+    command, always make your best plan, even when unsure: an imperfect plan is better than none. \
+    Otherwise reply {"steps": []} only when no combination of these steps could come close. Use as few steps as the \
     command needs, and no more than ten. Write each element number as a bare integer, such as 12.
 
-    The command came from speech recognition, so a word may be misheard: plan for what the user most \
-    likely said.
+    The command came from speech recognition, so words are often misheard: plan for what the user \
+    most likely said, never reply {"steps": []} because a word makes no sense. "Close time" or \
+    "close term" is "close tab"; "marker's red" is "mark as read"; a name close to a listed label \
+    or an app's name means that label or that app.
 
     Examples, with each window shortened to the elements that matter:
     Window lists [3] row "Songs" and [4] row "Albums". "show my songs" → \
     {"steps": [{"action": "select", "element": 3}]}
+    Window lists [70] row "Salesforce (has unread messages)". "click on sales force" → \
+    {"steps": [{"action": "press", "element": 70}]}
     Window lists [41] text area "Write your prompt to Claude" and [44] button "Send message". "ask it \
     what the capital of Peru is" → {"steps": [{"action": "focus", "element": 41}, {"action": "type", \
     "text": "What is the capital of Peru?"}, {"action": "press", "element": 44}]}
@@ -231,17 +246,16 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   public func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
     let ask = ReadAloudLLM.Body.Message(role: "user", content: Self.prompt(command, context: context))
     trace.record(prompt: ask.content, model: Self.model, promptVersion: Self.promptVersion)
-    let ids = Set(context.elements.map(\.id))
     let first = try await complete([ask], trace: trace)
     do {
-      return try VoiceCommandStep.steps(fromReply: first, maxSteps: Self.maxSteps, elementIDs: ids)
+      return try VoiceCommandStep.steps(fromReply: first, maxSteps: Self.maxSteps, listed: context.elements)
     } catch let error as VoiceCommandError where error.isRetryable {
       // Once, with the model's own reply and what was wrong with it (Agent-S's
       // format retry): a plan lost to one bad field is otherwise lost whole.
       let retry = try await complete(
         [ask, .init(role: "assistant", content: first), .init(role: "user", content: Self.retryPrompt(error))],
         trace: trace)
-      return try VoiceCommandStep.steps(fromReply: retry, maxSteps: Self.maxSteps, elementIDs: ids)
+      return try VoiceCommandStep.steps(fromReply: retry, maxSteps: Self.maxSteps, listed: context.elements)
     }
   }
 

@@ -109,7 +109,7 @@
       case .setValue, .increment, .decrement, .showMenu, .select: return try await Self.adjust(step, in: snapshot)
       case .scroll(let direction, let element):
         return try await Self.scroll(direction, element: element, in: snapshot)
-      case .window(let operation): try await Self.arrangeWindow(operation)
+      case .window(let operation): return try await Self.arrangeWindow(operation)
       default: break
       }
       return nil

@@ -45,7 +45,13 @@
       }
     }
 
-    /// Whether `pid` is still to be switched on: true once per process.
+    /// Whether `pid` is still to be switched on: true once per process. Left
+    /// on, unlike Chromium's `AXEnhancedUserInterface` (`EnhancedInterface`),
+    /// which is cleared after every command: that flag also changes how
+    /// Chromium behaves (window animations, a tree rebuilt from scratch each
+    /// time), while `AXManualAccessibility` only keeps Electron's tree built,
+    /// as it would be for VoiceOver — so one flag per process, cleared when
+    /// the app quits, beats rebuilding the tree for every command.
     func claimManualAccessibility(_ pid: pid_t) -> Bool {
       manualAccessibility.withLock { $0.insert(pid).inserted }
     }

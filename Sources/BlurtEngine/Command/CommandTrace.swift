@@ -71,6 +71,7 @@ enum CommandFeedback {
   static let complaints = [
     "didn't work", "did not work", "doesn't work", "does not work", "not working", "that's wrong", "that was wrong",
     "that is wrong", "wrong thing", "not what i", "that failed", "it failed", "broken", "you got it wrong",
+    "nothing works", "nothing happened", "didn't do anything", "did nothing",
   ]
 
   /// Whether `utterance` is a complaint about the last command: short, and

@@ -83,6 +83,7 @@ enum UITestIdentifiers {
   static let micPicker = "settings.mic.picker"
   static let soundPicker = "settings.sound.picker"
   static let readAloudSoundPicker = "settings.readAloudSound.picker"
+  static let commandSoundPicker = "settings.commandSound.picker"
   static let developerToggle = "settings.developer.toggle"
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"

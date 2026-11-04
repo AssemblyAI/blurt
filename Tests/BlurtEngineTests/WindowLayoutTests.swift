@@ -64,5 +64,11 @@ struct WindowLayoutTests {
     #expect(ScrollDirection.down.wheelLines.vertical < 0)
     #expect(ScrollDirection.up.wheelLines.vertical > 0)
     #expect(ScrollDirection.right.wheelLines.horizontal < 0)
+    // The ends go by the scroll bar: 0 at the top, 1 at the bottom, with no
+    // page action, and a wheel far enough to reach them.
+    #expect(ScrollDirection.top.pageAction == nil && ScrollDirection.bottom.pageAction == nil)
+    #expect(ScrollDirection.top.scrollBarValue == 0 && ScrollDirection.bottom.scrollBarValue == 1)
+    #expect(ScrollDirection.down.scrollBarValue == nil)
+    #expect(ScrollDirection.bottom.wheelLines.vertical < ScrollDirection.down.wheelLines.vertical)
   }
 }

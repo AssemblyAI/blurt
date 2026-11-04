@@ -35,6 +35,8 @@ enum DefaultsKey: String, CaseIterable {
   case soundPack = "SoundPack"
   /// Read-aloud's start/stop cue voice (`SoundPackStore`, `.readAloud`).
   case readAloudSoundPack = "ReadAloudSoundPack"
+  /// Control Your Mac's start/stop cue voice (`SoundPackStore`, `.command`).
+  case commandSoundPack = "CommandSoundPack"
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"
   case enhancedTranscripts = "EnhancedTranscripts"

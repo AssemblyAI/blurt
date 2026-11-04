@@ -158,12 +158,38 @@ struct VoiceCommandRouterTests {
     }
     #expect(failed.records.map(\.step) == ["open_app Figma"])
     #expect(failed.records.first?.error == "No app named Figma is installed.")
+
+    // Failing partway: the steps before it ran and are recorded as they ran,
+    // the one that failed carries its error, and the rest never start.
+    let partway = SelectionSpeechRouter.StepLog()
+    let performer = StubPerformer(error: VoiceCommandError.elementGone, failingAt: 1)
+    await #expect(throws: VoiceCommandError.elementGone) {
+      try await SelectionSpeechRouter.perform(
+        [.media(.mute), .pressElement(4), .media(.playPause)], in: screen, performer: performer,
+        session: fixture.session, recording: partway)
+    }
+    #expect(performer.performed == [.media(.mute)])
+    #expect(partway.records.map(\.step) == ["media mute", "press #4 (button \"Reply\")"])
+    #expect(partway.records.map(\.error) == [nil, "That control isn’t there any more."])
   }
 
   @Test("a missing key is a setup state, as it is for a dictation: the pill goes calm, not red")
   func missingKeyIsCalm() async throws {
     let rig = try await command(StubPlanner(error: BlurtError.apiKeyMissing))
     #expect(try await rig.outcomes() == [.idle])
+  }
+
+  @Test("a cancelled-looking error on a command nobody cancelled fails it, rather than leaving the pill on Working")
+  func strayCancellation() async throws {
+    let rig = try await command(StubPlanner(error: URLError(.cancelled)))
+    let outcomes = try await rig.outcomes()
+    #expect(outcomes.count == 1)
+    guard case .error = outcomes.first else {
+      Issue.record("expected a failure, got \(outcomes)")
+      return
+    }
+    #expect(!rig.router.ownsPill)
+    #expect(rig.performer.events.last == "ended")
   }
 
   @Test("a press while the command is planning abandons it: nothing run, one end, no late one")
@@ -215,13 +241,18 @@ final class StubPlanner: VoiceCommandPlanning {
 final class StubPerformer: VoiceCommandPerforming {
   private let screen: ScreenContext
   private let error: (any Error & Sendable)?
+  /// Which step `error` is thrown at, by index; every step when nil.
+  private let failingAt: Int?
   private let recorded = Mutex<[VoiceCommandStep]>([])
   private let lifecycle = Mutex<[String]>([])
   private let reads = Mutex(0)
 
-  init(screen: ScreenContext = ScreenContext(appName: nil), error: (any Error & Sendable)? = nil) {
+  init(
+    screen: ScreenContext = ScreenContext(appName: nil), error: (any Error & Sendable)? = nil, failingAt: Int? = nil
+  ) {
     self.screen = screen
     self.error = error
+    self.failingAt = failingAt
   }
 
   var performed: [VoiceCommandStep] { recorded.withLock { $0 } }
@@ -240,7 +271,7 @@ final class StubPerformer: VoiceCommandPerforming {
   }
 
   func perform(_ step: VoiceCommandStep) async throws -> String? {
-    if let error { throw error }
+    if let error, failingAt == nil || failingAt == performed.count { throw error }
     recorded.withLock { $0.append(step) }
     return "stubbed"
   }

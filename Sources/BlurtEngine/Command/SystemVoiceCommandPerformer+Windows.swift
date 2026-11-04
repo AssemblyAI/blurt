@@ -7,17 +7,20 @@
   // minimized or made full screen through its Accessibility attributes — the
   // same ones Rectangle and Hammerspoon set. Where it goes is `WindowLayout`.
   extension SystemVoiceCommandPerformer {
-    static func arrangeWindow(_ operation: WindowOperation) async throws {
+    static func arrangeWindow(_ operation: WindowOperation) async throws -> String? {
       guard let window = await frontmostApp().flatMap(AXRead.window)
       else { throw VoiceCommandError.couldNotPerform("find a window to arrange") }
       switch operation {
       case .minimize: try set(window, kAXMinimizedAttribute, kCFBooleanTrue)
       case .fullScreen: try set(window, "AXFullScreen", kCFBooleanTrue)
-      default: try await move(window, operation)
+      default: return try await move(window, operation)
       }
+      return nil
     }
 
-    private static func move(_ window: AXUIElement, _ operation: WindowOperation) async throws {
+    /// A window that can't be resized (Calculator) is moved to where the
+    /// arrangement puts it, keeping its size, and says so.
+    private static func move(_ window: AXUIElement, _ operation: WindowOperation) async throws -> String? {
       guard let frame = AXRead.frame(window) else { throw VoiceCommandError.couldNotPerform("read the window") }
       let displays = await MainActor.run { () -> [CGRect] in
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
@@ -33,9 +36,19 @@
       // Position, size, then position again: an app that clamps a window to
       // its display can refuse the size until the window has moved, and
       // refuse the position until it has shrunk.
+      guard isSettable(window, kAXSizeAttribute) else {
+        try setFrameOrigin(window, target.origin)
+        return "can't be resized: moved only"
+      }
       try setFrameOrigin(window, target.origin)
       try setFrameSize(window, target.size)
       try setFrameOrigin(window, target.origin)
+      return nil
+    }
+
+    private static func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
+      var settable: DarwinBoolean = false
+      return AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
     }
 
     private static func setFrameOrigin(_ window: AXUIElement, _ origin: CGPoint) throws {

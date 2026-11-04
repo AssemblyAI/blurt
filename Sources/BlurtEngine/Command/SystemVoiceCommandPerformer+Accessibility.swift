@@ -59,20 +59,11 @@
       guard let app = await frontmostApp(), let bar = AXRead.element(app, kAXMenuBarAttribute) else {
         throw VoiceCommandError.menuItemNotFound(path)
       }
-      var item = AXRead.Node(bar)
-      for title in path {
-        // A bar item's or a submenu item's entries sit inside its one AXMenu
-        // child. Each entry's role and title come in one round trip (`Node`).
-        let entries = item.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] }
-        let titled = entries.compactMap { entry in entry.string(kAXTitleAttribute).map { (title: $0, entry: entry) } }
-        guard let match = NameMatch.best(for: title, among: titled.map(\.title)),
-          let next = titled.first(where: { $0.title == match })?.entry
-        else { throw VoiceCommandError.menuItemNotFound(path) }
-        guard !DestructiveGuard.isDestructive(label: match) else {
-          throw VoiceCommandError.refused("choose \(path.joined(separator: " › "))")
-        }
-        item = next
-      }
+      // Each entry's role and title come in one round trip (`Node`).
+      let item = try ElementActions.menuItem(
+        path, from: AXRead.Node(bar),
+        entries: { $0.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] } },
+        title: { $0.string(kAXTitleAttribute) })
       // A dimmed item is one the app would ignore: say so rather than "Done".
       // Its enabled state and labels come from the node already read.
       guard item.attribute(kAXEnabledAttribute) as? Bool != false,
@@ -108,11 +99,9 @@
     /// click or wheel event goes to what's under the pointer, and the user's
     /// pointer shouldn't stay where Blurt left it.
     static func withPointer(at point: CGPoint, _ body: () throws -> Void) async throws {
-      let home = CGEvent(source: nil)?.location
-      CGWarpMouseCursorPosition(point)
-      try body()
-      try await Task.sleep(for: .milliseconds(50))
-      if let home { CGWarpMouseCursorPosition(home) }
+      try await ElementActions.withPointer(
+        at: point, home: CGEvent(source: nil)?.location, warp: { CGWarpMouseCursorPosition($0) },
+        beat: { try await Task.sleep(for: .milliseconds(50)) }, body)
     }
   }
 
@@ -136,8 +125,11 @@
 
     /// The app's focused window, else its main one: an app whose main window
     /// isn't key still has one to act in.
+    /// The focused window, else the main one, else the first the app lists:
+    /// Calculator answered neither of the first two (2026-11-04).
     static func window(of app: AXUIElement) -> AXUIElement? {
       element(app, kAXFocusedWindowAttribute) ?? element(app, kAXMainWindowAttribute)
+        ?? (value(app, kAXWindowsAttribute) as? [AXUIElement])?.first.map(capped)
     }
 
     /// `element` with its calls capped at `ScreenSnapshot.callTimeout`. The
