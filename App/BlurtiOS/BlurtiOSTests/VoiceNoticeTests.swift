@@ -35,12 +35,13 @@ struct VoiceNoticeTests {
 
   private func line(
     fullAccess: Bool = true, state: ListeningState? = VoiceNoticeTests.ready, snapshot: PhaseSnapshot = .idle,
-    handshake: VoiceNotice.Handshake = .idle, autoRelease: TimeInterval = SyncSTTLimits.autoReleaseSeconds
+    heldError: PhaseSnapshot? = nil, handshake: VoiceNotice.Handshake = .idle,
+    autoRelease: TimeInterval = SyncSTTLimits.autoReleaseSeconds
   ) -> VoiceNotice.Line? {
     VoiceNotice.line(
       for: VoiceNotice.Input(
-        hasFullAccess: fullAccess, state: state, snapshot: snapshot, handshake: handshake, now: now,
-        autoReleaseSeconds: autoRelease))
+        hasFullAccess: fullAccess, state: state, snapshot: snapshot, heldError: heldError, handshake: handshake,
+        now: now, autoReleaseSeconds: autoRelease))
   }
 
   private func expected(_ text: String, _ tap: VoiceNotice.Tap) -> VoiceNotice.Line {
@@ -113,26 +114,80 @@ struct VoiceNoticeTests {
     #expect(line(snapshot: phase(.recording)) == nil)
   }
 
-  @Test("a press in flight is the deadline's business, however old; so are an owned dictation and a stop")
+  @Test("a press in flight is the deadline's business; so are an owned dictation, a foreign one and a stop")
   func inFlight() {
-    #expect(line(handshake: .pressing(since: now.addingTimeInterval(-0.5))) == nil)
-    #expect(line(handshake: .pressing(since: now.addingTimeInterval(-(BlurtShared.pressDeadline + 1)))) == nil)
-    #expect(line(state: record(window: .closed), handshake: .pressing(since: now)) == nil)
+    #expect(line(handshake: .pressing) == nil)
+    #expect(line(state: record(window: .closed), handshake: .pressing) == nil)
     #expect(line(state: nil, handshake: .owned) == nil)
-    #expect(
-      line(state: nil, handshake: .stopping(since: now.addingTimeInterval(-(BlurtShared.stopDeadline + 1)))) == nil)
+    #expect(line(state: nil, handshake: .foreign) == nil)
+    #expect(line(state: record(window: .closed, reason: .noKey), handshake: .foreign) == nil)
+    #expect(line(state: nil, handshake: .stopping) == nil)
   }
 
   @Test("still transcribing after 3 s of processing, not at 3 s, and whoever is pressing or lapsed")
   func processing() {
-    let still = expected("Still transcribing…", VoiceNotice.Tap.none)
+    let still = expected("Still transcribing…", .buzz)
     let patience = VoiceNotice.transcribingPatience
     #expect(line(snapshot: phase(.processing, age: patience)) == nil)
     #expect(line(snapshot: phase(.processing, age: patience + 0.01)) == still)
     #expect(line(snapshot: phase(.processing, age: 60)) == still)
-    #expect(
-      line(snapshot: phase(.processing, age: 4), handshake: .stopping(since: now.addingTimeInterval(-4))) == still)
+    #expect(line(snapshot: phase(.processing, age: 4), handshake: .stopping) == still)
     #expect(line(state: nil, snapshot: phase(.processing, age: 4)) == still)
+  }
+
+  @Test(
+    "a notice beats the handshake: an error over an unanswered press, the countdown over a refusal, an error mid-press"
+  )
+  func noticeOverHandshake() {
+    let silent = expected("The mic went silent — tap to open Blurt", .hop(.micSilent))
+    #expect(line(snapshot: phase(.error, reason: .micSilent), handshake: .unready(.unanswered)) == silent)
+    #expect(
+      line(state: nil, snapshot: phase(.error, reason: .micSilent), handshake: .unready(.unanswered)) == silent)
+    let tenLeft = expected("10 s left", .press)
+    let nearRelease = phase(.recording, recordingFor: 50)
+    #expect(line(snapshot: nearRelease, handshake: .unready(.unanswered), autoRelease: 60) == tenLeft)
+    #expect(line(snapshot: nearRelease, handshake: .unready(.sessionOff), autoRelease: 60) == tenLeft)
+    #expect(line(snapshot: nearRelease, handshake: .unready(.suspended), autoRelease: 60) == tenLeft)
+    #expect(line(snapshot: phase(.error, reason: .micSilent), handshake: .pressing) == silent)
+    #expect(
+      line(snapshot: phase(.error, reason: .micBusy), handshake: .pressing)
+        == expected("Another app has the mic — tap to open Blurt", .hop(.micBusy)))
+    #expect(
+      line(snapshot: phase(.error, reason: .network), handshake: .pressing)
+        == expected("No connection — tap to try again", .press))
+  }
+
+  @Test("the held error: its row over an idle snapshot until the next press, never over a phase in flight")
+  func heldError() {
+    let held = phase(.error, reason: .micSilent, age: 5)
+    let silent = expected("The mic went silent — tap to open Blurt", .hop(.micSilent))
+    #expect(line(heldError: held) == silent)
+    #expect(line(snapshot: phase(.idle, age: 1), heldError: held) == silent)
+    #expect(line(state: nil, heldError: held) == silent)
+    #expect(line(state: record(window: .closed), heldError: held) == silent)
+    #expect(line(heldError: held, handshake: .unready(.unanswered)) == silent)
+    let words = "Audio capture failed: the input went away."
+    #expect(line(heldError: phase(.error, message: words)) == expected(words, .press))
+    #expect(line(state: nil, heldError: phase(.error, message: words)) == expected(words, .hop(.sessionOff)))
+    #expect(line(heldError: phase(.error)) == nil)
+    #expect(line(state: nil, heldError: phase(.error)) == tapToOpen)
+    #expect(line(fullAccess: false, heldError: held) == expected("Allow Full Access in Settings", .setup))
+    // A held snapshot that is not an error is nothing to hold.
+    #expect(line(heldError: phase(.copied)) == nil)
+    // In flight, the live phase is the line's business.
+    #expect(line(snapshot: phase(.connecting), heldError: held) == nil)
+    #expect(line(snapshot: phase(.recording, recordingFor: 10), heldError: held) == nil)
+    #expect(
+      line(snapshot: phase(.recording, recordingFor: 50), heldError: held, autoRelease: 60)
+        == expected("10 s left", .press))
+    #expect(line(snapshot: phase(.processing, age: 1), heldError: held) == nil)
+    #expect(
+      line(snapshot: phase(.processing, age: 4), heldError: held) == expected("Still transcribing…", .buzz))
+    #expect(line(snapshot: phase(.pasted), heldError: held) == nil)
+    #expect(line(snapshot: phase(.copied), heldError: held) == expected("Copied to the clipboard", .press))
+    #expect(
+      line(snapshot: phase(.error, reason: .network), heldError: held)
+        == expected("No connection — tap to try again", .press))
   }
 
   @Test("the countdown: from 30 s before the auto-release, up to the second, never below zero")
@@ -202,5 +257,6 @@ struct VoiceNoticeTests {
     #expect(VoiceNotice.countdownWindow == 30)
     let input = VoiceNotice.Input(hasFullAccess: true, state: nil, snapshot: .idle, handshake: .idle, now: now)
     #expect(input.autoReleaseSeconds == SyncSTTLimits.autoReleaseSeconds)
+    #expect(input.heldError == nil)
   }
 }
