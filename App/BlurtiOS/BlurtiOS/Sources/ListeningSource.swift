@@ -3,17 +3,28 @@ import Foundation
 import Synchronization
 
 /// What the listening window needs from a microphone: opened once for the
-/// window, closed with it, and feeding the engine per utterance in between.
-/// `WindowedAudioSource` is the phone's; `SimulatorAudioSource` stands in
+/// window, closed with it, and feeding the engine per utterance in between —
+/// held open the whole time, or, once parked, open only while an utterance
+/// is. `WindowedAudioSource` is the phone's; `SimulatorAudioSource` stands in
 /// where the simulator has no capture session.
 nonisolated protocol ListeningSource: MicCaptureProtocol {
   var isOpen: Bool { get }
   /// The 0…1 meter the orb and the home screen render, one value per chunk
   /// of an open utterance.
   var levels: AsyncStream<Float> { get }
-  /// Opens the microphone. Async because opening a capture session blocks for
-  /// hundreds of milliseconds on a phone and must not do so on the main actor.
+  /// One element each time a parked source couldn't bring the microphone
+  /// back for a press — iOS refusing a start from the background, as far as
+  /// the window can tell (`MicParking`).
+  var failedStarts: AsyncStream<Void> { get }
+  /// Opens the microphone and holds it open. Async because opening a capture
+  /// session blocks for hundreds of milliseconds on a phone and must not do
+  /// so on the main actor.
   func open() async throws
+  /// From now until `close`, releases the microphone between utterances and
+  /// reopens it on each press.
+  func park() async
+  /// Back to holding the microphone open between utterances. Foreground only.
+  func hold() async throws
   func close() async
 }
 
@@ -92,6 +103,12 @@ nonisolated final class UtteranceFeed: Sendable {
       return true
     }
     if delivered { levelsContinuation.yield(Self.level(of: chunk)) }
+  }
+
+  /// Every sample exactly zero: what a microphone route delivers while it is
+  /// still coming up, never what a live one hears in a quiet room.
+  static func isDigitalSilence(_ pcm: Data) -> Bool {
+    pcm.withUnsafeBytes { raw in raw.bindMemory(to: Int16.self).allSatisfy { $0 == 0 } }
   }
 
   /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 by the Mac meter's own

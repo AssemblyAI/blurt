@@ -1,4 +1,5 @@
 import BlurtEngine
+import BlurtiOSCore
 import SwiftUI
 
 @main
@@ -24,6 +25,14 @@ struct BlurtiOSApp: App {
         // Styles live in a scrolling list here, not the Mac's five-button
         // switcher, so the phone allows far more than its four.
         styleProfileLimit: 100))
+    #if DEBUG
+      // `BLURT_DEBUG_API_KEY` (through simctl as `SIMCTL_CHILD_BLURT_DEBUG_API_KEY`)
+      // puts a key in a simulator's Keychain without typing it, so a fresh
+      // simulator can open the listening window from a script; debug builds only.
+      if let key = ProcessInfo.processInfo.environment["BLURT_DEBUG_API_KEY"], !key.isEmpty, !Self.isTestHost {
+        _ = APIKeyStore.save(key)
+      }
+    #endif
     // The unit tests are hosted by this app: they get a coordinator that
     // touches neither the Keychain nor the App Group (the Mac's UITestSupport
     // does the same for its harness), and `start()` below never runs.

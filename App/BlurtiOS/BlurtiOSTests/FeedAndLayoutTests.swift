@@ -21,6 +21,13 @@ struct UtteranceFeedTests {
     #expect(mid > 0 && mid < 1)
   }
 
+  @Test("digital silence is all zeros; a quiet room's noise floor is not")
+  func digitalSilence() {
+    #expect(UtteranceFeed.isDigitalSilence(pcm([0, 0, 0, 0])))
+    #expect(!UtteranceFeed.isDigitalSilence(pcm([0, 1, 0, 0])))
+    #expect(!UtteranceFeed.isDigitalSilence(pcm([3, -3, 2, -2])))
+  }
+
   @Test("chunks reach the utterance between begin and end, the tally counts them, and nothing outside")
   func tally() async {
     let feed = UtteranceFeed()
