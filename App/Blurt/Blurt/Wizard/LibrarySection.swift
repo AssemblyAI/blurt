@@ -122,12 +122,18 @@ struct LibrarySection: View {
       if !model.history.isEmpty {
         filterPicker
       }
-      list
-        .frame(height: Self.listHeight(for: model.history))
-        // The grouped form's section look, so the Library matches the panels
-        // above it: a plain list on the form's fill, clipped to its radius.
-        .background(Color(nsColor: .quaternarySystemFill), in: FormPanel.shape)
-        .clipShape(FormPanel.shape)
+      // The panel is always drawn so the window keeps one shape, but the list
+      // only while it has rows: a plain list emptied of every section keeps
+      // drawing its old rows, under the empty message laid over them.
+      Group {
+        if days.isEmpty { Color.clear } else { list }
+      }
+      .overlay { emptyMessage }
+      .frame(height: Self.listHeight(for: model.history))
+      // The grouped form's section look, so the Library matches the panels
+      // above it: a plain list on the form's fill, clipped to its radius.
+      .background(Color(nsColor: .quaternarySystemFill), in: FormPanel.shape)
+      .clipShape(FormPanel.shape)
     }
     .onChange(of: model.history, initial: true) {
       updateDetails()
@@ -169,8 +175,7 @@ struct LibrarySection: View {
     .fixedSize()
   }
 
-  /// The list, always drawn so the window keeps one shape; an empty one
-  /// carries its message over it.
+  /// The list of entries, under their day headings.
   private var list: some View {
     List(selection: $selection) {
       ForEach(days) { day in
@@ -193,7 +198,6 @@ struct LibrarySection: View {
     .listSectionSeparator(.hidden)
     .scrollContentBackground(.hidden)
     .accessibilityIdentifier(UITestIdentifiers.recentList)
-    .overlay { emptyMessage }
     .contextMenu(forSelectionType: SavedTranscript.ID.self) { ids in
       if let entry = entry(id: ids.first) {
         EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
