@@ -43,6 +43,10 @@ package nonisolated enum BlurtShared {
     package static let keyboardEverSeen = "keyboardEverSeen"
     package static let lexicon = "lexicon"
     package static let lexiconRefreshedAt = "lexiconRefreshedAt"
+    /// The session contract (`SessionContract.swift`).
+    package static let listeningState = "listeningState"
+    package static let ack = "commandAck"
+    package static let keyboardPresence = "keyboardPresence"
   }
 
   /// Darwin notification names. Reverse-DNS so they can't collide with another
@@ -52,6 +56,12 @@ package nonisolated enum BlurtShared {
     package static let phase = "com.assemblyai.blurt.iphone.phase"
     package static let result = "com.assemblyai.blurt.iphone.result"
     package static let lexicon = "com.assemblyai.blurt.iphone.lexicon"
+    /// The app's `ListeningState` changed: opened, closed, interrupted, relaunched.
+    package static let state = "com.assemblyai.blurt.iphone.state"
+    /// The app answered a command (`CommandAck`).
+    package static let ack = "com.assemblyai.blurt.iphone.ack"
+    /// A keyboard appeared or left (`KeyboardPresenceRecord`).
+    package static let keyboard = "com.assemblyai.blurt.iphone.keyboard"
   }
 }
 
@@ -108,9 +118,35 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   package let priorText: String?
   package let selectedText: String?
   package let sentAt: Date
-  /// The keyboard process that sent it (`KeyboardModel.instanceID`): the
-  /// words come back to the field the press was made in, not whichever is up.
+  /// The keyboard process that sent it (`KeyboardProcess.id`): the words
+  /// come back to the field the press was made in, not whichever is up.
   package let keyboard: String?
+  /// Per-process sequence number, so the app can tell a resend from a new
+  /// press even if the id were reused.
+  package let seq: UInt64?
+  /// The controller (one per host field) within the process.
+  package let controllerID: String?
+  /// For a release or cancel: the dictation it ends (`CommandAck.started`),
+  /// so an ending can't land on a later dictation.
+  package let dictationID: UUID?
+  /// The `ListeningState.sequence` the keyboard decided on, for the log.
+  package let stateSequence: UInt64?
+
+  package init(
+    id: UUID, kind: Kind, priorText: String?, selectedText: String?, sentAt: Date, keyboard: String?,
+    seq: UInt64? = nil, controllerID: String? = nil, dictationID: UUID? = nil, stateSequence: UInt64? = nil
+  ) {
+    self.id = id
+    self.kind = kind
+    self.priorText = priorText
+    self.selectedText = selectedText
+    self.sentAt = sentAt
+    self.keyboard = keyboard
+    self.seq = seq
+    self.controllerID = controllerID
+    self.dictationID = dictationID
+    self.stateSequence = stateSequence
+  }
 
   /// Young enough for the app to act on. A notification held while the app
   /// was suspended can deliver one from minutes ago, which the app drops
@@ -156,13 +192,33 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   /// from the *previous* dictation landing a moment after a new press must
   /// not read as that press being over.
   package let command: UUID?
+  /// Why an `.error` happened, typed, so the keyboard can show one line and
+  /// decide whether the next tap hops.
+  package let reason: FailureReason?
+  /// The press this in-flight phase answers (set when the session accepts
+  /// it): a lost ack can't time out a dictation the keyboard can see running.
+  package let answers: UUID?
+  /// The dictation in flight and its owner.
+  package let dictation: DictationRef?
+  /// The app process that published this.
+  package let launchID: UUID?
+  /// When the recording in flight started, for the keyboard's countdown.
+  package let recordingSince: Date?
 
-  package init(state: State, message: String?, level: Double, at: Date, command: UUID? = nil) {
+  package init(
+    state: State, message: String?, level: Double, at: Date, command: UUID? = nil, reason: FailureReason? = nil,
+    answers: UUID? = nil, dictation: DictationRef? = nil, launchID: UUID? = nil, recordingSince: Date? = nil
+  ) {
     self.state = state
     self.message = message
     self.level = level
     self.at = at
     self.command = command
+    self.reason = reason
+    self.answers = answers
+    self.dictation = dictation
+    self.launchID = launchID
+    self.recordingSince = recordingSince
   }
 
   package static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
@@ -324,6 +380,9 @@ package nonisolated enum SharedStore {
   package static var isListening: Bool { isListening(now: Date()) }
 
   package static func isListening(now: Date) -> Bool {
+    // The session record decides when there is one (`ListeningState`); the
+    // older keys below answer for a build that has not written one yet.
+    if let state = listeningState { return state.isReady(now: now) }
     guard (listeningUntil ?? .distantPast) > now else { return false }
     return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
   }
