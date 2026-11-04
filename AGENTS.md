@@ -134,7 +134,9 @@ scripts/                     check.sh, check-portability.sh, check-invariants.sh
                              with BlurtiOSCore's line-coverage gate; BLURT_IOS_SANITIZER=thread|address
                              runs them under a sanitizer instead),
                              ios-check.sh (the iPhone's check.sh: ios-test, then swiftlint analyze
-                             and periphery over App/BlurtiOS — CI's ios-build and a local check.sh)
+                             and periphery over App/BlurtiOS — CI's ios-build and a local check.sh),
+                             ios-device.sh (a real iPhone, no Xcode window: preflight, install,
+                             launch, kill, pull the logs, read the system log — the device gate)
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
                              screenshot.swift + beautify.swift (window imagery, capture
@@ -166,6 +168,7 @@ swift test --filter happyPath               # single test case by name
 scripts/check.sh                            # full health check — the same script CI runs
 scripts/check.sh --portable                 # platform-independent subset (no macOS toolchain)
 scripts/dev-build.sh                        # signed Debug build + install to /Applications
+scripts/ios-device.sh preflight             # a real iPhone: ready? then install → launch → pull → syslog --negative
 ```
 
 ### What `check.sh` runs
@@ -243,6 +246,13 @@ tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer
     over the iPhone project. Locally only, and only when an iPhone simulator on this Xcode's iOS
     runtime exists (`xcodebuild -downloadPlatform iOS`); otherwise skipped with a note in the
     closing `ok` line. On CI the `ios-build` job runs it instead.
+
+The phone is outside `check.sh`: a change under the iPhone's capture, window, coordinator or App
+Group contract files is verified on a real iPhone with `scripts/ios-device.sh` — `preflight`,
+`install`, `launch`, dictate, `pull <dir> --syslog`, then `syslog <dir>/device.logarchive --negative`,
+the system predicate every run asserts (iOS never refused Blurt a recording started from the
+background). `App/BlurtiOS/README.md` › Testing on a phone is the protocol; `check.sh` only lints
+the script (shellcheck, shfmt, portability).
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
 script, so a clean local `check.sh` matches CI by construction. One more job **is** required, because

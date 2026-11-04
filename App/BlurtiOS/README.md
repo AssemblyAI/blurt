@@ -133,33 +133,55 @@ the moment the session turns on; the app's log lines for them say `(simulated)`.
 
 ## Testing on a phone
 
-1. Install Xcode 26.6 or newer — CI's runner has 26.6 (`xcodes install 26.6 --select`, or
-   the Mac App Store). A phone on iOS 27 needs Xcode 27, which needs macOS 26.6. Then once:
+`scripts/ios-device.sh` is the whole loop on a real iPhone, with Xcode's command-line tools
+only — no Xcode window, no debugger — and the device gate a capture change runs before it
+lands: `preflight → install → launch → dictate → pull → syslog --negative`.
 
-   ```bash
-   sudo xcode-select -s /Applications/Xcode.app
-   sudo xcodebuild -license accept
-   sudo xcodebuild -runFirstLaunch
-   xcodebuild -downloadPlatform iOS      # only for the simulator; a phone needs no download
-   ```
+Once: Xcode 26.6 or newer (a phone on iOS 27 needs Xcode 27, which needs macOS 26.6; see
+Getting Xcode), then `sudo xcode-select -s /Applications/Xcode.app`,
+`sudo xcodebuild -license accept`, `sudo xcodebuild -runFirstLaunch` (a phone needs no
+`-downloadPlatform`), and `scripts/bootstrap.sh` for xcodegen. Sign in to Xcode with an Apple ID on
+the org's team (Settings → Accounts): the App Group needs a paid team, a free Personal Team cannot
+register one. The build signs on AssemblyAI's (`BLURT_TEAM`, default `B2VQF7Q2QY`); automatic
+signing registers `com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard` and
+`group.com.assemblyai.blurt.iphone` under it on the first build, and fails if another team already
+owns them. The phone: plugged in, unlocked, "Trust This Computer" accepted, Developer Mode on
+(Settings › Privacy & Security). `BLURT_DEVICE` names it by UDID or name; the default is Neil's
+iPhone 13.
 
-   `scripts/bootstrap.sh` from the repo root installs xcodegen and the linters if `brew` has not.
+1. `scripts/ios-device.sh preflight` — the phone is `available` in `xcrun devicectl list devices`,
+   Developer Mode is on, it has been unlocked since it booted, whether Blurt is installed; then the
+   checklist of what no script can see: Settings › Developer › Enable UI Automation, the Blurt
+   keyboard on with Full Access (Settings › Apps › Blurt › Keyboards), an API key in Blurt. Exits
+   non-zero naming what is missing.
+2. `scripts/ios-device.sh install` — `xcodegen`, a Debug build for the phone with automatic signing
+   (derived data in `$TMPDIR/blurt-device-dd-<checkout hash>`, one per checkout), then
+   `devicectl device install app`. It replaces whatever Blurt is on the phone (same bundle id). On
+   the phone, trust the developer app once (Settings › General › VPN & Device Management).
+3. `scripts/ios-device.sh launch` — Blurt with `-BlurtDeveloperMode YES` (the engine then logs to
+   `Library/Logs/Blurt`); any arguments you pass replace that. A locked phone is reported plainly:
+   unlock it and run `launch` again. On a fresh install: **Paste your key** (or
+   `DEVICECTL_CHILD_BLURT_DEBUG_API_KEY=<key> scripts/ios-device.sh launch`, which a Debug build
+   takes from its environment), **Allow** sending your voice to AssemblyAI, **Allow** the microphone,
+   then **Open Settings** › **Apps › Blurt › Keyboards** (a phone may open straight on Blurt's page):
+   Blurt on, **Allow Full Access**.
+4. Dictate: turn the **session** on, go to Messages or Notes, hold the globe key, pick Blurt, tap
+   the mic — tap again to stop, or hold it while you talk; the words land in the field. Repeat at
+   the waits the flow asks for, and try the other two layouts from the app's Keyboard picker (the
+   keyboard reads the choice the next time it comes up). `scripts/ios-device.sh kill blurt` or
+   `kill keyboard` ends either process mid-dictation (the relaunch and dead-keyboard flows).
+5. `scripts/ios-device.sh pull <dir> --syslog` — Blurt's own logs under `<dir>/Logs` (none on the
+   phone yet is not a failure) and the phone's system log into `<dir>/device.logarchive`
+   (`--last 15m` by default). `log collect` needs root, so macOS asks for an administrator
+   password: the one way to run it from a script without typing a password into the terminal.
+6. `scripts/ios-device.sh syslog <dir>/device.logarchive --negative` — the negative system
+   predicate every run asserts: no `start recording in the background` / `561145187` / `!rec` line
+   naming Blurt; exit 1 with the lines when there is one. Without `--negative` it prints Blurt's
+   own lines, the system's lines about it (SpringBoard, runningboardd, audiomxd) and any refusal,
+   minus the usual noise; `--last` counts back from the archive's end.
 
-2. Sign in to Xcode with your Apple ID (Settings → Accounts) and note your team ID (the ten
-   characters after the team's name). The App Group needs a paid team — a free Personal Team
-   cannot register one, so use the org's team, not your own.
-3. `cd App/BlurtiOS && BLURT_TEAM=<your team id> xcodegen generate && open BlurtiOS.xcodeproj`.
-   Automatic signing registers `com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard` and
-   `group.com.assemblyai.blurt.iphone` under that team on the first build; it fails if another team already
-   owns them.
-4. Plug the phone in (Developer Mode on: Settings → Privacy & Security), pick it as the run
-   destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →
-   General → VPN & Device Management). In the app: **Paste your key**, **Allow** sending your voice to AssemblyAI, **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
-   (a phone may open straight on Blurt's page): turn on Blurt and **Allow Full Access**.
-5. Back in the app, turn the **session** on, then go to Messages, hold the globe key, pick Blurt,
-   and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.
-6. Try the other two layouts from the app's Keyboard picker; the keyboard reads the choice the
-   next time it comes up.
+`flows` and `check` — the scripted G1–G9 flows and their per-flow predicates — are stubs until
+`DeviceFlows` lands with the device gate.
 
 ## What is still a stub
 
