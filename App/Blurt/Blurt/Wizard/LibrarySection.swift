@@ -13,9 +13,27 @@ struct LibrarySection: View {
   let triggerKey: TriggerKey
   let activation: TriggerActivation
 
-  /// The list's height: about six two-line rows and their day headings,
+  /// The list's tallest: about six two-line rows and their day headings,
   /// then it scrolls.
-  private static let listHeight: CGFloat = 300
+  private static let maxListHeight: CGFloat = 300
+  /// The list's shortest: room for the empty prompt or a no-results message.
+  private static let minListHeight: CGFloat = 132
+  /// A two-line row and a day heading, as a plain list draws them.
+  private static let rowHeight: CGFloat = 44
+  private static let headingHeight: CGFloat = 28
+
+  /// The list's height: fitted to the whole library — its rows and day
+  /// headings — between `minListHeight` and `maxListHeight`, so a short
+  /// library doesn't sit atop an empty panel. Sized from the history rather
+  /// than what the filter or search shows, so the panel keeps one shape while
+  /// they change. Only the entries that could fit are walked.
+  static func listHeight(for history: [SavedTranscript]) -> CGFloat {
+    let calendar = Calendar.current
+    let visible = history.prefix(Int(maxListHeight / rowHeight) + 1)
+    let headings = Set(visible.map { calendar.startOfDay(for: $0.date) }).count
+    let content = CGFloat(visible.count) * rowHeight + CGFloat(headings) * headingHeight
+    return min(max(content, minListHeight), maxListHeight)
+  }
 
   @State private var query = ""
   @State private var filter = LibraryFilter.all
@@ -105,7 +123,7 @@ struct LibrarySection: View {
         filterPicker
       }
       list
-        .frame(height: Self.listHeight)
+        .frame(height: Self.listHeight(for: model.history))
         // The grouped form's section look, so the Library matches the panels
         // above it: a plain list on the form's fill, clipped to its radius.
         .background(Color(nsColor: .quaternarySystemFill), in: FormPanel.shape)
