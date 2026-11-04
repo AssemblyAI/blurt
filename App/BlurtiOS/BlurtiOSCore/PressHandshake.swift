@@ -16,6 +16,13 @@ import Foundation
 /// performs. Nothing here reads the store, the clock or the gate, so every row
 /// is a unit test. `DictationKeyGate` keeps deciding tap against hold; the
 /// handshake agrees with it by being fed the same `holdThreshold` and stamps.
+///
+/// The gate is the model's, and the handshake says when a touch is the gate's:
+/// `KeyboardModel` calls `gate.modifierDown` only on `armGate`, resets it on
+/// `resetGate`, and on `latch` does the synthetic `modifierDown` + `modifierUp`
+/// only if `gate.isIdle`; no other action touches it, so it holds exactly the
+/// presses that press or stop. The lift half of the table — `micUp`, the ×,
+/// the stop and its answers — is in `PressHandshake+Stop.swift`.
 package nonisolated struct PressHandshake: Sendable, Equatable {
   package nonisolated enum State: Sendable, Equatable {
     case idle
@@ -31,8 +38,12 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// before the press was answered.
     case stopping(id: UUID, dictation: UUID?, sentAt: Date, resent: Bool)
     /// A dictation another keyboard, or hands-free, started: the gate is
-    /// latched over it so one lift stops it.
-    case foreign(dictation: UUID)
+    /// latched over it. `liftStops`: whether the next lift releases it —
+    /// false when the app answered our press with `busy` (the tap latched
+    /// onto it; its own lift leaves it running, the next tap stops it), true
+    /// from a finger down over a dictation visibly running. A hold's lift
+    /// releases it either way.
+    case foreign(dictation: UUID, liftStops: Bool)
     /// A press would not record; the next lift hops with the reason.
     case unready(FailureReason)
   }
@@ -44,7 +55,7 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// Finger up: whether the press began from an idle gate, and how long it
     /// was held — the same stamps the gate got.
     case micUp(armedFromIdle: Bool, heldFor: TimeInterval)
-    /// The × key, or a flip recognised before recording.
+    /// The × key, and only that: a flip over the orb is `undoBeforeRecording`.
     case cancelTapped
     /// The model wrote the press; the id and stamp start its deadline.
     case pressSent(id: UUID, at: Date)
@@ -55,23 +66,31 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     case cancelSent(id: UUID, at: Date)
     /// The clock, on the same scale as the stamps above.
     case tick(now: Date)
-    /// The app's readiness record changed, or is gone.
+    /// The app's readiness record changed, or is gone. `KeyboardModel` also
+    /// feeds the current record in on its 4 s heartbeat
+    /// (`SharedStore.keyboardHeartbeatInterval`), so a dead app is noticed.
     case stateChanged(ListeningState?)
   }
 
   package nonisolated enum Action: Sendable, Equatable {
+    /// This touch is the gate's: `KeyboardModel` calls `gate.modifierDown` on
+    /// this and nothing else. A press from rest, or a finger down over a
+    /// latched dictation the lift may stop; never unready, a buzz, or a press
+    /// or stop still out.
+    case armGate
     case sendPress
     /// The same press again, same id: a Darwin notification can be missed.
     case resendPress(id: UUID)
     /// The same release or cancel again, same id.
     case resendStop(id: UUID)
+    /// `gate.reset()`: nothing for the gate to hold.
     case resetGate
     /// A release; nil when the dictation has no name yet.
     case sendRelease(dictation: UUID?)
     case sendCancel(dictation: UUID?)
-    /// Latch the gate, if idle, over a dictation this keyboard didn't start, so
-    /// the lift stops it. Never over an armed or latched gate: the finger may
-    /// still be down, or a tap may already have latched it.
+    /// Latch the gate over a dictation this keyboard didn't start, so the lift
+    /// stops it: the synthetic `modifierDown` + `modifierUp`, only if
+    /// `gate.isIdle` — the finger may be down, or a tap may have latched it.
     case latch
     case showConnecting
     case show(FailureReason)
@@ -91,7 +110,8 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   package let pressDeadline: TimeInterval
   package let stopDeadline: TimeInterval
   package let holdThreshold: TimeInterval
-  package private(set) var state: State = .idle
+  // Set from the rows alone, which `PressHandshake+Stop.swift` also holds.
+  package internal(set) var state: State = .idle
 
   package init(
     retryDelay: TimeInterval = PressHandshake.defaultRetryDelay,
@@ -118,7 +138,7 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   /// The dictation a lift or a × would end.
   package var dictationID: UUID? {
     switch state {
-    case .owned(let dictation, _), .foreign(let dictation): dictation
+    case .owned(let dictation, _), .foreign(let dictation, _): dictation
     case .stopping(_, let dictation, _, _): dictation
     case .idle, .pressing, .unready: nil
     }
@@ -135,6 +155,24 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     if case .unready(let reason) = state { reason } else { nil }
   }
 
+  /// Whether a flip — a swipe that began on the orb after its press went out
+  /// — can still undo that press: it is unanswered, or the dictation it
+  /// started is still connecting. Over a recording the words are kept.
+  package var canUndoBeforeRecording: Bool {
+    switch state {
+    case .pressing: true
+    case .owned(_, let phase): phase == .connecting
+    case .idle, .stopping, .foreign, .unready: false
+    }
+  }
+
+  /// The flip: the ×, but only while `canUndoBeforeRecording`; flipping to
+  /// the keys over a recording sends nothing.
+  package mutating func undoBeforeRecording(now: Date) -> [Action] {
+    guard canUndoBeforeRecording else { return [.none] }
+    return handle(.cancelTapped, now: now)
+  }
+
   package mutating func handle(_ event: Event, now: Date) -> [Action] {
     switch event {
     case .micDown(let ready, let reason, let phase, let inFlight):
@@ -146,9 +184,9 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     case .pressSent(let id, let at):
       return pressSent(id: id, at: at)
     case .ack(let ack):
-      return answered(by: ack)
+      return answered(by: ack, now: now)
     case .phase(let snapshot):
-      return phased(snapshot)
+      return phased(snapshot, now: now)
     case .stopSent(let id, let at), .cancelSent(let id, let at):
       return stopSent(id: id, at: at)
     case .tick(let at):
@@ -159,7 +197,7 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   }
 }
 
-// MARK: - The rows
+// MARK: - The press half of the table
 
 nonisolated extension PressHandshake {
   private mutating func micDown(
@@ -172,14 +210,14 @@ nonisolated extension PressHandshake {
         return [.none]
       }
       return pressFromRest(phase: phase, inFlight: inFlight)
-    case .owned(let dictation, _), .foreign(let dictation):
-      return micDownOverLatch(dictation: dictation, phase: phase, inFlight: inFlight)
+    case .owned(let dictation, _), .foreign(let dictation, _):
+      return micDownOverLatch(dictation: dictation, ready: ready, reason: reason, phase: phase, inFlight: inFlight)
     case .pressing, .stopping:
       return [.none]
     }
   }
 
-  /// The record says a press records now. The phase says whether there is
+  /// The record says a press records now; the phase says whether there is
   /// anything to press: the words still being made, a dictation already
   /// running that this touch latches onto instead, or nothing.
   private mutating func pressFromRest(phase: PhaseSnapshot.State, inFlight: DictationRef?) -> [Action] {
@@ -190,58 +228,35 @@ nonisolated extension PressHandshake {
     case .connecting, .recording:
       // A running dictation the app has not named can't be stopped by id.
       guard let inFlight else { return [.buzz] }
-      state = .foreign(dictation: inFlight.id)
+      state = .foreign(dictation: inFlight.id, liftStops: true)
       return [.latch]
     case .idle, .pasted, .copied, .error:
-      return [.sendPress, .showConnecting]
+      return [.armGate, .sendPress, .showConnecting]
     }
   }
 
-  /// A finger down over a latched gate: the lift is the stop, unless the
-  /// phase shows the dictation ended unseen, in which case this touch
-  /// begins a fresh press over a cleared gate.
+  /// A finger down over a latched gate. A dictation still running — ours, or
+  /// the one that took its place — is the gate's to stop on the lift, unless
+  /// its words are being made. A settled phase means it ended unseen: a fresh
+  /// press over a cleared gate, if the record still says a press records; a
+  /// closed or lapsed window takes none, and the lift hops.
   private mutating func micDownOverLatch(
-    dictation: UUID, phase: PhaseSnapshot.State, inFlight: DictationRef?
+    dictation: UUID, ready: Bool, reason: FailureReason?, phase: PhaseSnapshot.State, inFlight: DictationRef?
   ) -> [Action] {
     let named = inFlight?.id
     guard phase.isSettled else {
-      // Ours gave way to another dictation: the latch now covers that one.
-      if let named, named != dictation { state = .foreign(dictation: named) }
-      return [.none]
+      let stoppable = phase != .processing
+      if let named, named != dictation {
+        state = .foreign(dictation: named, liftStops: stoppable)
+      } else if case .foreign(let latched, _) = state {
+        state = .foreign(dictation: latched, liftStops: stoppable)
+      }
+      return stoppable ? [.armGate] : [.buzz]
     }
     // A notice naming another dictation is the previous one's, still up.
     if let named, named != dictation { return [.none] }
+    guard ready else { return refuse(reason ?? .sessionOff) }
     return settle() + pressFromRest(phase: phase, inFlight: nil)
-  }
-
-  private mutating func micUp(armedFromIdle: Bool, heldFor: TimeInterval) -> [Action] {
-    let isTap = armedFromIdle && heldFor < holdThreshold
-    switch state {
-    case .unready(let reason):
-      return [.hop(reason)]
-    case .idle, .stopping:
-      return [.none]
-    case .pressing(let id, let sentAt, let resent, _):
-      // A tap latched the gate and the answer decides what it holds. A hold's
-      // lift is a stop, sent the moment the dictation has an id.
-      if !isTap { state = .pressing(id: id, sentAt: sentAt, resent: resent, stopWanted: true) }
-      return [.none]
-    case .owned(let dictation, _):
-      return isTap ? [.none] : [.sendRelease(dictation: dictation)]
-    case .foreign(let dictation):
-      return [.sendRelease(dictation: dictation)]
-    }
-  }
-
-  private func cancelTapped() -> [Action] {
-    switch state {
-    case .idle, .unready: [.none]
-    case .pressing: [.sendCancel(dictation: nil)]
-    case .owned(let dictation, _), .foreign(let dictation): [.sendCancel(dictation: dictation)]
-    // Over a release already out: the user wants the words gone, and a
-    // cancel landing on either side of the release ends it that way.
-    case .stopping(_, let dictation, _, _): [.sendCancel(dictation: dictation)]
-    }
   }
 
   private mutating func pressSent(id: UUID, at: Date) -> [Action] {
@@ -249,37 +264,22 @@ nonisolated extension PressHandshake {
     return [.none]
   }
 
-  private mutating func stopSent(id: UUID, at: Date) -> [Action] {
+  private mutating func answered(by ack: CommandAck, now: Date) -> [Action] {
     switch state {
-    case .owned(let dictation, _), .foreign(let dictation):
-      state = .stopping(id: id, dictation: dictation, sentAt: at, resent: false)
-    case .pressing:
-      state = .stopping(id: id, dictation: nil, sentAt: at, resent: false)
-    case .stopping(_, let dictation, _, _):
-      // A × over a release: the newer command is the one awaited.
-      state = .stopping(id: id, dictation: dictation, sentAt: at, resent: false)
-    case .idle, .unready:
-      break
-    }
-    return [.none]
-  }
-
-  private mutating func answered(by ack: CommandAck) -> [Action] {
-    switch state {
-    case .pressing(let id, _, _, let stopWanted):
+    case .pressing(let id, let sentAt, _, let stopWanted):
       guard ack.commandID == id else { return [.none] }
+      guard isInTime(sentAt: sentAt, now: now) else { return refuse(.unanswered) }
       return pressAnswered(ack.outcome, stopWanted: stopWanted)
-    case .stopping(let id, let dictation, let sentAt, let resent):
-      if ack.commandID == id { return settle() }
-      // The press's own answer, landing after a cancel sent ahead of it:
-      // the dictation has a name now, for the resend to carry.
-      if dictation == nil, case .started(let named) = ack.outcome {
-        state = .stopping(id: id, dictation: named, sentAt: sentAt, resent: resent)
-      }
-      return [.none]
+    case .stopping:
+      return stopAnswered(by: ack)
     case .idle, .owned, .foreign, .unready:
       return [.none]
     }
+  }
+
+  /// The deadline holds whether or not a tick has said so.
+  private func isInTime(sentAt: Date, now: Date) -> Bool {
+    now.timeIntervalSince(sentAt) < pressDeadline
   }
 
   private mutating func pressAnswered(_ outcome: CommandAck.Outcome, stopWanted: Bool) -> [Action] {
@@ -288,30 +288,30 @@ nonisolated extension PressHandshake {
       state = .owned(dictation: dictation, phase: .connecting)
       return stopWanted ? [.sendRelease(dictation: dictation)] : [.none]
     case .busy(let dictation):
-      state = .foreign(dictation: dictation)
+      // The tap latched onto it; a hold's lift already asked for the stop.
+      state = .foreign(dictation: dictation, liftStops: false)
       return stopWanted ? [.sendRelease(dictation: dictation)] : [.latch]
     case .notListening(let reason):
       return refuse(reason)
     case .stopped, .cancelled, .notOwner, .nothingInFlight, .stale, .duplicate:
-      // Dropped as too old, answered before we asked again, or not a press's
-      // answer at all: nothing started for it.
-      return refuse(.unanswered)
+      // Not a press's answer: the router answers a resend with the press's
+      // original outcome. The deadline settles a press that gets nothing else.
+      return [.none]
     }
   }
 
-  private mutating func phased(_ snapshot: PhaseSnapshot) -> [Action] {
+  private mutating func phased(_ snapshot: PhaseSnapshot, now: Date) -> [Action] {
     switch state {
-    case .pressing(let id, _, _, let stopWanted):
+    case .pressing(let id, let sentAt, _, let stopWanted):
       // Only a phase that answers our press may settle it: the previous
       // dictation's notice can land a moment after a new press.
       guard snapshot.answers == id else { return [.none] }
+      guard isInTime(sentAt: sentAt, now: now) else { return refuse(.unanswered) }
       return pressAnswered(by: snapshot, stopWanted: stopWanted)
-    case .owned(let dictation, _), .foreign(let dictation):
+    case .owned(let dictation, _), .foreign(let dictation, _):
       return follow(snapshot, dictation: dictation)
-    case .stopping(_, let dictation, _, _):
-      guard snapshot.state.isSettled else { return [.none] }
-      let named = snapshot.dictation?.id
-      return named == nil || dictation == nil || named == dictation ? settle() : [.none]
+    case .stopping:
+      return stopPhased(snapshot)
     case .idle, .unready:
       return [.none]
     }
@@ -332,11 +332,11 @@ nonisolated extension PressHandshake {
   }
 
   /// An owned or latched dictation follows the phases that name it, or name
-  /// nothing. One naming another dictation is either its late notice, ignored,
-  /// or the next dictation already running in ours' place, now under the latch.
+  /// nothing. One naming another is its late notice, ignored, or the next
+  /// dictation already running in ours' place, now under the latch.
   private mutating func follow(_ snapshot: PhaseSnapshot, dictation: UUID) -> [Action] {
     if let named = snapshot.dictation?.id, named != dictation {
-      if !snapshot.state.isSettled { state = .foreign(dictation: named) }
+      if !snapshot.state.isSettled { state = .foreign(dictation: named, liftStops: true) }
       return [.none]
     }
     guard !snapshot.state.isSettled else { return settle() }
@@ -352,47 +352,46 @@ nonisolated extension PressHandshake {
       guard !resent, age >= retryDelay else { return [.none] }
       state = .pressing(id: id, sentAt: sentAt, resent: true, stopWanted: stopWanted)
       return [.resendPress(id: id)]
-    case .stopping(let id, let dictation, let sentAt, let resent):
-      let age = now.timeIntervalSince(sentAt)
-      // Past the deadline the app's watchdog ends the dictation; the line
-      // for a transcription still running is `VoiceNotice`'s to show.
-      if age >= stopDeadline { return settle() }
-      guard !resent, age >= retryDelay else { return [.none] }
-      state = .stopping(id: id, dictation: dictation, sentAt: sentAt, resent: true)
-      return [.resendStop(id: id)]
+    case .stopping:
+      return stopTicked(at: now)
     case .idle, .owned, .foreign, .unready:
       return [.none]
     }
   }
 
+  /// A lapsed lease, or no record, ends trust in the phase: the app is
+  /// suspended or dead. A record merely not ready (interrupted, closed) while
+  /// our dictation is in flight is an app alive to publish its end itself.
   private mutating func stateChanged(_ record: ListeningState?, now: Date) -> [Action] {
     if let record, record.isReady(now: now) {
       if case .unready = state { state = .idle }
       return [.none]
     }
+    let lapsed = record.map { $0.leaseUntil <= now } ?? true
     let reason = record?.notReady(now: now) ?? .sessionOff
     switch state {
-    case .owned, .stopping:
-      // A phase carrying our dictation is trusted over the record until it
-      // is stale, and a stop already out has its own deadline.
+    case .stopping:
+      // A stop already out has its own deadline.
       return [.none]
+    case .owned:
+      return lapsed ? refuse(.suspended) : [.none]
     case .pressing, .foreign:
-      return refuse(reason)
+      return refuse(lapsed ? .suspended : reason)
     case .idle, .unready:
       state = .unready(reason)
       return [.show(reason)]
     }
   }
 
-  /// The press is over without a dictation: the gate comes up, the line
-  /// says why, and the next lift hops. No haptic — the line is the answer.
-  private mutating func refuse(_ reason: FailureReason) -> [Action] {
+  /// The press is over without a dictation: the gate comes up, the line says
+  /// why, and the next lift hops. No haptic — the line is the answer.
+  mutating func refuse(_ reason: FailureReason) -> [Action] {
     state = .unready(reason)
     return [.resetGate, .show(reason)]
   }
 
   /// The dictation is over, however it ended: nothing for the gate to hold.
-  private mutating func settle() -> [Action] {
+  mutating func settle() -> [Action] {
     state = .idle
     return [.resetGate]
   }
