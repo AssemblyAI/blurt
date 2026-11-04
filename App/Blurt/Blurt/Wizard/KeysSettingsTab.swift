@@ -63,27 +63,23 @@ struct KeysSettingsTab: View {
             .frame(width: Self.activationWidth, alignment: .trailing)
         }
       } footer: {
-        Text("Dictate uses your current writing style. Choose No custom style to use only Blurt’s standard cleanup.")
+        Text("Dictate uses your current style. No custom style uses Blurt’s standard cleanup.")
         // The only dictating key's other choices are disabled; say why.
         if let only = dictating.first, dictating.count == 1 {
-          Text("To reassign \(only.spokenName), set another key to Dictate first.")
+          Text("To change \(only.spokenName), set another key to Dictate first.")
         }
         if !enhancedTranscripts {
           Text(StylesInertNotice.settingsText)
         }
         if bindings.rewrites {
           Text(
-            "Select text, then use a \(KeyActionName.rewrite) key and say how to change it. Your selection and "
-              + "spoken request are sent to AssemblyAI’s LLM Gateway, and the rewrite replaces the selection.")
+            "\(KeyActionName.rewrite): select text and say how to change it. Your selection and request are sent "
+              + "to AssemblyAI.")
         }
         if bindings.commands {
           Text(
-            "Use a \(KeyActionName.command) key and say what to do, like “open Safari and start a new tab.” What "
-              + "you say, the app in front, and its window’s title and the names of the buttons, links and fields in "
-              + "it, including list rows (never what’s typed in a field) are sent to AssemblyAI’s LLM Gateway. "
-              + "Blurt then carries it out: it opens, hides or quits apps, opens links, presses shortcuts, buttons "
-              + "and media keys, chooses menu items, types, selects rows, moves sliders, scrolls, arranges windows, "
-              + "and clicks a control that won’t respond any other way.")
+            "\(KeyActionName.command): say what to do, like “open Safari and start a new tab.” Your request and the "
+              + "names of the controls on screen (never what you’ve typed) are sent to AssemblyAI.")
         }
         // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn does
         // anything, but that write only lands at the next log-in, so until then
@@ -91,9 +87,8 @@ struct KeysSettingsTab: View {
         // and link to the pane that applies the change now.
         if bindings.enabledKeys.contains(.function) {
           Text(
-            "Until you next log in, pressing fn may also open the emoji picker or Apple "
-              + "Dictation. To fix that now, open Keyboard Settings and set “Press 🌐 key to” "
-              + "to Do Nothing.")
+            "Until you next log in, fn may also open the emoji picker. To fix it now, set "
+              + "“Press 🌐 key to” to Do Nothing in Keyboard Settings.")
           if let url = Self.keyboardSettingsURL {
             Link("Open Keyboard Settings…", destination: url)
           }
