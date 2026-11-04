@@ -772,7 +772,7 @@
         [24, "button", "zoom in"]
       ],
       "expect": [
-        ["menu Go › Go to Page…", "type \"3\"", "shortcut return"],
+        ["menu Go › Go to Page*", "type \"3\"", "shortcut return"],
         ["shortcut option+cmd+g", "type \"3\"", "shortcut return"]
       ]
     },
@@ -784,8 +784,92 @@
       "elements": [[22, "button", "zoom out"]],
       "expect": [
         ["shortcut home"],
-        ["menu Go › Go to Page…", "type \"1\"", "shortcut return"],
+        ["menu Go › Go to Page*", "type \"1\"", "shortcut return"],
         ["shortcut option+cmd+g", "type \"1\"", "shortcut return"]
+      ]
+    },
+    {
+      "id": "screen-chrome-close-tab",
+      "said": "Close this tab",
+      "screen": "Chrome",
+      "expect": [["shortcut cmd+w"]],
+      "forbid": ["press*"]
+    },
+    {
+      "id": "screen-chrome-back",
+      "said": "Go back",
+      "screen": "Chrome",
+      "expect": [["press #* (button \"Back\")"], ["shortcut cmd+["]]
+    },
+    {
+      "id": "screen-safari-web-search",
+      "said": "Search the web for flights to Lima",
+      "screen": "Safari",
+      "expect": [
+        ["open_url https://www.google.com/search?q=flights*"],
+        ["shortcut cmd+l", "type \"flights to Lima\"", "shortcut return"]
+      ]
+    },
+    {
+      "id": "screen-code-palette",
+      "said": "Open the command palette",
+      "screen": "Code",
+      "expect": [["shortcut shift+cmd+p"]]
+    },
+    {
+      "id": "screen-slack-unreads",
+      "said": "Show my unreads",
+      "screen": "Slack",
+      "expect": [["press #* (* \"Unreads\")"], ["select #* (* \"Unreads\")"]]
+    },
+    {
+      "id": "screen-slack-switch-channel",
+      "said": "Go to the design channel",
+      "screen": "Slack",
+      "expect": [["shortcut cmd+k", "type \"design\"", "shortcut return"]],
+      "forbid": ["open_url*", "open_app*"]
+    },
+    {
+      "id": "screen-mail-new-mail",
+      "said": "Get new mail",
+      "screen": "Mail",
+      "expect": [["shortcut shift+cmd+n"], ["menu Mailbox › Get New Mail"]]
+    },
+    {
+      "id": "screen-finder-downloads",
+      "said": "Go to Downloads",
+      "screen": "Finder",
+      "expect": [
+        ["press #* (* \"Downloads\")"],
+        ["select #* (* \"Downloads\")"]
+      ]
+    },
+    {
+      "id": "screen-finder-empty-trash",
+      "said": "Empty the trash",
+      "screen": "Finder",
+      "expect": [[]]
+    },
+    {
+      "id": "screen-1password-favorites",
+      "said": "Show my favorites",
+      "screen": "1Password",
+      "expect": [
+        ["press #* (* \"Favorites\")"],
+        ["select #* (* \"Favorites\")"]
+      ]
+    },
+    {
+      "id": "screen-obsidian-search",
+      "said": "Search my notes for roadmap",
+      "screen": "Obsidian",
+      "expect": [
+        ["shortcut cmd+o", "type \"roadmap\"*"],
+        ["shortcut cmd+o", "type \"roadmap\"*", "shortcut return"],
+        ["shortcut shift+cmd+f", "type \"roadmap\"*"],
+        ["shortcut shift+cmd+f", "type \"roadmap\"*", "shortcut return"],
+        ["press *", "type \"roadmap\"*"],
+        ["press *", "type \"roadmap\"*", "shortcut return"]
       ]
     }
   ]

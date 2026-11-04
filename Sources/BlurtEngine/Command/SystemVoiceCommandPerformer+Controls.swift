@@ -21,7 +21,11 @@
           throw VoiceCommandError.couldNotPerform("open that menu")
         }
       case .select:
-        try require(node, roleIn: ScreenSnapshot.selectableRoles, for: "select", what: "a row")
+        // Something listed that isn't a row (a clickable group, a cell's
+        // text): what "select it" means there is a click, so it's pressed.
+        if let role = node.role, !ScreenSnapshot.selectableRoles.contains(role) {
+          return try await press(handle, pid: pid)
+        }
         // A row that won't take the attribute (a web list) takes a click; so
         // does one that takes it and opens nothing — Slack's, VS Code's, and
         // the Finder sidebar's, in any app: selecting twice does no harm.
@@ -86,7 +90,7 @@
       else { throw VoiceCommandError.couldNotPerform("scroll") }
       // A wheel event scrolls what's under the pointer: only if that's this app's window.
       let centre = CGPoint(x: frame.midX, y: frame.midY)
-      guard let pid, WindowOrder.owner(at: centre, in: onScreenWindows()) == Int(pid) else {
+      guard let pid, let owner = WindowOrder.owner(at: centre, in: onScreenWindows()), isOwn(owner, of: pid) else {
         throw VoiceCommandError.screenChanged
       }
       try await withPointer(at: centre) { event.post(tap: .cghidEventTap) }

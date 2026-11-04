@@ -107,6 +107,10 @@ public enum VoiceCommandStep: Equatable, Sendable {
   static let maxTypedCharacters = 2_000
   /// The deepest a menu path goes: a menu, a submenu, its item.
   static let maxMenuDepth = 4
+  /// The most words a spoken command may have. Commands are short; a key
+  /// held near a TV took a 90-second election broadcast as one (2026-11-04),
+  /// and anything said near the Mac is otherwise instructions Blurt acts on.
+  static let maxCommandWords = 40
 }
 
 /// The media keys a command can press: what the keyboard's top row does.
@@ -276,6 +280,9 @@ extension VoiceCommandPerforming {
 enum VoiceCommandError: Error, Equatable, LocalizedError {
   /// The model planned nothing: the command isn't one these steps can do.
   case notUnderstood
+  /// What was said is longer than any command (`VoiceCommandStep.maxCommandWords`):
+  /// a key held while a video or a call played, never sent to plan.
+  case commandTooLong
   /// The reply wasn't the JSON the instruction asks for.
   case malformedReply
   /// The reply stopped at the token cap, part-way through the plan.
@@ -309,6 +316,7 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
   var errorDescription: String? {
     switch self {
     case .notUnderstood: "Blurt can’t do that command."
+    case .commandTooLong: "That was too long to be a command."
     case .malformedReply: "The LLM Gateway’s plan for that command couldn’t be read."
     case .truncatedReply: "The LLM Gateway’s plan for that command was cut short."
     case .unsupportedAction(let action): "The command needed an action Blurt doesn’t have (\(action))."
@@ -326,6 +334,9 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
       "The plan used \(action) on element \(id), a \(kind); \(action) takes "
         + (VoiceCommandStep.Action(rawValue: action).flatMap { VoiceCommandStep.kinds[$0] }?.sorted()
           .joined(separator: ", ") ?? "another kind") + "."
+        // The mistake the model makes most: words into a field by set_value.
+        + (ScreenSnapshot.kinds(of: ScreenSnapshot.textEntryRoles).contains(kind)
+          ? " To put words in a \(kind), focus it, then type them." : "")
     case .repeatedStep(let action): "The plan repeated a \(action) step."
     case .screenChanged: "The window changed before Blurt got to it."
     case .elementGone: "That control isn’t there any more."
@@ -337,6 +348,7 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
   var logName: String {
     switch self {
     case .notUnderstood: "notUnderstood"
+    case .commandTooLong: "commandTooLong"
     case .malformedReply: "malformedReply"
     case .truncatedReply: "truncatedReply"
     case .unsupportedAction: "unsupportedAction"
@@ -374,6 +386,7 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
   var pillNotice: PillNotice? {
     switch self {
     case .notUnderstood: PillNotice(subject: "Blurt can’t", predicate: "do that")
+    case .commandTooLong: PillNotice(subject: "Too long", predicate: "for a command")
     case .refused: PillNotice(subject: "Blurt won’t", predicate: "do that")
     case .appNotFound(let name): PillNotice(subject: name, predicate: "isn’t installed")
     case .appNotRunning(let name): PillNotice(subject: name, predicate: "isn’t open")

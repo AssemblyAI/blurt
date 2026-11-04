@@ -23,6 +23,23 @@ A run costs one or two gateway calls per case per run: 25 cases × 3 runs is abo
 completions. It prints `PASSED=n/total`, the model, and `promptVersion`, followed by every failing
 plan. The JSON written to `BLURT_PLANNER_EVAL_OUT` has a verdict for each case.
 
+## Recorded screens
+
+A written case lists the handful of elements it needs. A real window lists up to 150, in the app's
+own order, with its clutter. Two kinds of case use real windows, recorded from real apps
+(`Tests/ScreenTrees`, every string swapped for fake text — see AGENTS.md):
+
+- **Written over a recording.** A case with `"screen": "Slack"` instead of `app` and `elements` is
+  planned over that recording's listing, made by the screen read's own code (`ScreenRead`). Name a
+  target by its label in a pattern, `press #* (* "Unreads")`, since its number is the recording's.
+- **Generated from every recording** (`PlannerEval+Screens.swift`). For each recording: a click on
+  every generic interface word it lists once ("Click Activity"), a click on three elements picked by
+  their fake names ("Click on Lorem 47", seeded by the recording's name, so the same every run), and a
+  search when it lists a search field. 65 cases from the eight recordings.
+
+`BLURT_PLANNER_EVAL_SET` picks what runs: `corpus` (this directory's `cases.json`), `screens` (the
+generated cases), or `all`, the default. A run of all is about 140 cases × 3 runs.
+
 ## Reading a result
 
 - **One run is noise.** The gateway's model doesn't give the same answer twice, even at

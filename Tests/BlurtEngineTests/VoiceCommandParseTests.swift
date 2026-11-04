@@ -48,6 +48,10 @@ struct VoiceCommandParseTests {
       try steps(#"{"action": "focus", "element": 2}"#)
     }
     #expect(VoiceCommandError.wrongKind(action: "select", id: 2, kind: "button").isRetryable)
+    // The retry for words put in a field by set_value says how to type there.
+    #expect(
+      VoiceCommandError.wrongKind(action: "set_value", id: 3, kind: "search field").errorDescription?
+        .hasSuffix("To put words in a search field, focus it, then type them.") == true)
   }
 
   @Test("a plan that would press something destructive is refused whole, before its first step runs")
@@ -58,6 +62,11 @@ struct VoiceCommandParseTests {
     func steps(_ json: String) throws -> [VoiceCommandStep] { try self.steps(json, listed: listed) }
     #expect(throws: VoiceCommandError.refused("press Delete")) {
       try steps(#"{"action": "shortcut", "keys": "cmd+a"}, {"action": "press", "element": 1}"#)
+    }
+    // A select of a destructive row too, before the steps ahead of it run.
+    let trashRow: [ScreenContext.Element] = [.init(id: 9, kind: "row", label: "Trash")]
+    #expect(throws: VoiceCommandError.refused("press Trash")) {
+      try self.steps(#"{"action": "type", "text": "x"}, {"action": "select", "element": 9}"#, listed: trashRow)
     }
     #expect(throws: VoiceCommandError.refused("press Move to Trash")) {
       try steps(#"{"action": "press_button", "name": "Move to Trash"}"#)
@@ -102,6 +111,10 @@ struct VoiceCommandParseTests {
     #expect(
       try steps(#"{"action": "focus", "element": 5}, {"action": "press_button", "name": "Save"}"#).last
         == .pressElement(6))
+    // Typing changes what a search lists: a name after it is searched for afresh.
+    #expect(
+      try steps(#"{"action": "type", "text": "Save"}, {"action": "press_button", "name": "Save"}"#).last
+        == .pressButton("Save"))
     // Two listed under that name: left for the search to decide.
     #expect(try steps(#"{"action": "press_button", "name": "Docs"}"#) == [.pressButton("Docs")])
     #expect(try steps(#"{"action": "press_button", "name": "Send"}"#) == [.pressButton("Send")])
@@ -158,6 +171,19 @@ struct VoiceCommandParseTests {
       #"{"action": "shortcut", "keys": "cmd+t"}, {"action": "type", "text": "a"}, "#
       + #"{"action": "shortcut", "keys": "cmd+t"}, {"action": "type", "text": "b"}"#
     #expect(try steps(distinct).count == 4)
+  }
+
+  @Test("one step back three times among others is a loop; twice is a plan")
+  func cyclingSteps() throws {
+    let find = #"{"action": "shortcut", "keys": "cmd+f"}"#
+    let esc = #"{"action": "shortcut", "keys": "escape"}"#
+    let open = #"{"action": "shortcut", "keys": "cmd+o"}"#
+    #expect(throws: VoiceCommandError.repeatedStep("shortcut")) {
+      try steps([find, esc, open, find, open, esc, find].joined(separator: ", "))
+    }
+    // Find, type, escape, then find again: a second search, fine.
+    let typed = #"{"action": "type", "text": "fox"}"#
+    #expect(try steps([find, typed, esc, find, typed].joined(separator: ", ")).count == 5)
   }
 
   @Test("a cell, listed as clickable, can be selected as well as pressed")

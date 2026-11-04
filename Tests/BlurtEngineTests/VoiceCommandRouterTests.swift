@@ -192,6 +192,19 @@ struct VoiceCommandRouterTests {
     #expect(rig.performer.events.last == "ended")
   }
 
+  @Test("a command longer than any command is never planned: something overheard, not said to Blurt")
+  func overheardIsNotPlanned() async throws {
+    let planner = StubPlanner(steps: [.media(.mute)])
+    let broadcast = String(repeating: "and the results are coming in tonight ", count: 10)
+    let rig = try await press(saying: broadcast, planner)
+    let outcomes = try await rig.outcomes()
+    #expect(planner.calls.isEmpty)
+    guard case .error = outcomes.first else {
+      Issue.record("expected a refusal, got \(outcomes)")
+      return
+    }
+  }
+
   @Test("a press while the command is planning abandons it: nothing run, one end, no late one")
   func pressAbandons() async throws {
     let rig = try await command(StubPlanner(steps: Self.slackSearch, hangs: true))

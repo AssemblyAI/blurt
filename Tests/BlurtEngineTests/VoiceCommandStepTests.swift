@@ -303,6 +303,10 @@ struct AppLinkTests {
     let preview: (String) -> String? = { $0.lowercased() == "preview" ? "Preview" : nil }
     let cmdTab = VoiceCommandStep.shortcut(KeyChord(modifiers: .command, key: .code(0x30)))
     #expect(AppLink.preferApps([cmdTab], said: "Open Preview", app: preview) == [.openApp("Preview")])
+    // "Go to home" in Finder is ⇧⌘H, not the Home app.
+    let home: (String) -> String? = { $0.lowercased() == "home" ? "Home" : nil }
+    let goHome = VoiceCommandStep.shortcut(KeyChord(modifiers: [.command, .shift], key: .character("h")))
+    #expect(AppLink.preferApps([goHome], said: "Go to home", app: home) == [goHome])
     #expect(AppLink.openedName("Switch to the Slack app") == "slack")
     #expect(AppLink.openedName("click on Salesforce") == nil)
     let notAnApp: [VoiceCommandStep] = [.openURL(url("https://github.com"))]

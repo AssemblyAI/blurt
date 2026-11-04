@@ -7,7 +7,8 @@ import Testing
 /// each a spoken command and the screen it was said over, scored on the plan
 /// the real planner — instruction, schema, parser — makes of it. The corpus
 /// and the scoring are checked on every run; the planning itself costs model
-/// calls, so it runs only when asked (`BLURT_PLANNER_EVAL=1`) — each case
+/// calls, so it runs only when asked (`BLURT_PLANNER_EVAL=1`; which cases,
+/// `BLURT_PLANNER_EVAL_SET=corpus|screens|all`, all by default) — each case
 /// `BLURT_PLANNER_EVAL_RUNS` times (3 unless set), since the gateway's model
 /// doesn't answer the same twice even at temperature 0.
 @Suite("Planner eval")
@@ -21,13 +22,7 @@ struct PlannerEvalTests {
     #expect(corpus.cases.contains { $0.expectsRefusal })
     for item in corpus.cases {
       #expect(!item.expect.isEmpty, "\(item.id) accepts no plan")
-      let listed = Set(item.context.elements.map(\.id))
-      for line in item.expect.joined() {
-        let named = line.split(separator: " ").compactMap {
-          $0.hasPrefix("#") ? Int($0.dropFirst().prefix { $0.isNumber }) : nil
-        }
-        #expect(named.allSatisfy(listed.contains), "\(item.id): \(line) names an element not listed")
-      }
+      #expect(item.unlistedLines.isEmpty, "\(item.id): \(item.unlistedLines) names an element not listed")
     }
   }
 
@@ -65,7 +60,11 @@ struct PlannerEvalTests {
     let key = try #require(environment["ASSEMBLYAI_API_KEY"], "ASSEMBLYAI_API_KEY is not set")
     let corpus = try PlannerEval.Corpus.load()
     let runs = environment["BLURT_PLANNER_EVAL_RUNS"].flatMap(Int.init) ?? 3
-    let report = await PlannerEval.run(corpus, runs: runs, planner: VoiceCommandPlanner(apiKeyProvider: { key }))
+    // Which cases: the corpus, the ones generated over recorded screens, or both.
+    let set = environment["BLURT_PLANNER_EVAL_SET"] ?? "all"
+    let cases =
+      (set == "screens" ? [] : corpus.cases) + (set == "corpus" ? [] : try PlannerEval.screenCases())
+    let report = await PlannerEval.run(cases, runs: runs, planner: VoiceCommandPlanner(apiKeyProvider: { key }))
     print(report.summary)
     if let out = environment["BLURT_PLANNER_EVAL_OUT"] {
       try report.json().write(to: URL(fileURLWithPath: out))
@@ -102,6 +101,16 @@ enum PlannerEval {
 
     var expectsRefusal: Bool { expect.contains([]) }
 
+    /// The expected lines naming an element number its screen doesn't list.
+    var unlistedLines: [String] {
+      let listed = Set(context.elements.map(\.id))
+      return expect.joined().filter { line in
+        line.split(separator: " ").contains { word in
+          word.hasPrefix("#") && Int(word.dropFirst().prefix { $0.isNumber }).map { !listed.contains($0) } == true
+        }
+      }
+    }
+
     /// The app it's scored under: the web app its window is (Google Docs),
     /// else the app in front.
     var app: String {
@@ -119,18 +128,34 @@ enum PlannerEval {
       self.forbid = forbid
     }
 
-    private enum CodingKeys: String, CodingKey { case id, said, app, window, incomplete, elements, expect, forbid }
+    private enum CodingKeys: String, CodingKey {
+      case id, said, app, window, incomplete, elements, expect, forbid, screen
+    }
+
+    /// A case over a recorded screen (`RecordedNode.context`), built in code.
+    init(id: String, said: String, context: ScreenContext, expect: [[String]], forbid: [String] = []) {
+      self.id = id
+      self.said = said
+      self.context = context
+      self.expect = expect
+      self.forbid = forbid
+    }
 
     init(from decoder: any Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
       id = try container.decode(String.self, forKey: .id)
       said = try container.decode(String.self, forKey: .said)
-      let elements = try container.decodeIfPresent([Listed].self, forKey: .elements) ?? []
-      context = ScreenContext(
-        appName: try container.decode(String.self, forKey: .app),
-        windowTitle: try container.decodeIfPresent(String.self, forKey: .window),
-        elements: elements.map(\.element),
-        incomplete: try container.decodeIfPresent(Bool.self, forKey: .incomplete) ?? false)
+      // A recorded screen (`Tests/ScreenTrees`), or one written in the case.
+      if let screen = try container.decodeIfPresent(String.self, forKey: .screen) {
+        context = try RecordedNode.context(screen)
+      } else {
+        let elements = try container.decodeIfPresent([Listed].self, forKey: .elements) ?? []
+        context = ScreenContext(
+          appName: try container.decode(String.self, forKey: .app),
+          windowTitle: try container.decodeIfPresent(String.self, forKey: .window),
+          elements: elements.map(\.element),
+          incomplete: try container.decodeIfPresent(Bool.self, forKey: .incomplete) ?? false)
+      }
       expect = try container.decode([[String]].self, forKey: .expect)
       forbid = try container.decodeIfPresent([String].self, forKey: .forbid) ?? []
     }
@@ -227,10 +252,10 @@ enum PlannerEval {
   }
 
   /// Every case planned `runs` times, four requests at a time, and scored.
-  static func run(_ corpus: Corpus, runs: Int, planner: any VoiceCommandPlanning) async -> Report {
+  static func run(_ cases: [Case], runs: Int, planner: any VoiceCommandPlanning) async -> Report {
     var verdicts: [Verdict] = []
     await withTaskGroup(of: Verdict.self) { group in
-      var pending = ArraySlice(Array(repeating: corpus.cases, count: max(runs, 1)).flatMap { $0 })
+      var pending = ArraySlice(Array(repeating: cases, count: max(runs, 1)).flatMap { $0 })
       func next() {
         guard let item = pending.popFirst() else { return }
         group.addTask {
@@ -243,7 +268,7 @@ enum PlannerEval {
         next()
       }
     }
-    let order = Dictionary(uniqueKeysWithValues: corpus.cases.enumerated().map { ($1.id, $0) })
+    let order = Dictionary(cases.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
     verdicts.sort { order[$0.id, default: 0] < order[$1.id, default: 0] }
     return Report(
       model: VoiceCommandPlanner.model, promptVersion: VoiceCommandPlanner.promptVersion,

@@ -724,8 +724,10 @@ else
   #                        window layout, the destructive guard, the key chords,
   #                        and when a press falls back to a click or a focus
   #                        selects — lives in VoiceCommandStep, CommandMatching,
-  #                        ScreenContext, WindowLayout, VoiceCommandKeys and
-  #                        ElementActions, which ARE covered. The shell itself
+  #                        ScreenContext, ScreenRead, WindowLayout,
+  #                        VoiceCommandKeys and ElementActions, which ARE
+  #                        covered — ScreenRead against real apps' recorded
+  #                        trees (Tests/ScreenTrees). The shell itself
   #                        runs against a fixture app in LivePerformerTests
   #                        (BLURT_LIVE_AX_TESTS=1).
   #  - MeetingMicProbe.swift : the microphone-user probe — Core Audio process

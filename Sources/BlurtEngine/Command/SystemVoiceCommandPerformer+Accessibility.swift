@@ -213,34 +213,15 @@
       value(element, attribute) as? Bool
     }
 
-    /// What a user would call it: its title, its description (an icon
-    /// button's spoken name), and — for a role whose value is its name, a
-    /// link's text — its value.
-    static func labels(_ node: Node) -> [String] {
-      [node.string(kAXTitleAttribute), node.string(kAXDescriptionAttribute), node.nameValue].compactMap { $0 }
-    }
-
-    /// The name a web form control borrows from the `<label>` pointing at it.
-    static func borrowedLabel(_ node: Node) -> String? {
-      node.element(kAXTitleUIElementAttribute).flatMap { labels(Node($0)).first }
-    }
+    /// What a user would call it (`ScreenRead.labels`).
+    static func labels(_ node: Node) -> [String] { ScreenRead.labels(node) }
 
     /// Its labels, else the one it borrows, else the text inside it
-    /// (`ScreenSnapshot.firstText`). `deadline`: when the read's time is up —
-    /// the lookup inside one row can otherwise outrun the whole read, Music's
-    /// content rows answering at up to ~130 ms a call (measured 2026-11-03),
-    /// since the walk checks its clock only between nodes.
+    /// (`ScreenRead.names`). `deadline`: when the read's time is up — the
+    /// lookup inside one row can otherwise outrun the whole read, Music's
+    /// content rows answering at up to ~130 ms a call (measured 2026-11-03).
     static func names(_ node: Node, until deadline: ContinuousClock.Instant? = nil) -> [String] {
-      let own = labels(node)
-      if !own.isEmpty { return own }
-      return (borrowedLabel(node) ?? firstText(under: node, until: deadline)).map { [$0] } ?? []
-    }
-
-    private static func firstText(under node: Node, until deadline: ContinuousClock.Instant?) -> String? {
-      ScreenSnapshot.firstText(
-        under: node, children: \.children, role: \.role, text: \.rawValue,
-        title: { $0.string(kAXTitleAttribute) ?? $0.string(kAXDescriptionAttribute) },
-        shouldStop: { deadline.map { ContinuousClock.now >= $0 } ?? false })
+      ScreenRead.names(node, shouldStop: { deadline.map { ContinuousClock.now >= $0 } ?? false })
     }
 
     /// Its frame in global, top-left-origin coordinates — the ones a
@@ -249,31 +230,20 @@
       Node(element, batch: [kAXPositionAttribute, kAXSizeAttribute]).frame
     }
 
-    /// How a snapshot lists the node, or nil to leave it out
-    /// (`ScreenSnapshot.listedKind`), and what it's called
-    /// (`ScreenSnapshot.label`). `bounds`: the window's frame, or the page's
-    /// inside it.
-    static func describe(
-      _ node: Node, in bounds: CGRect?, until deadline: ContinuousClock.Instant? = nil
-    ) -> (kind: String, label: String)? {
-      guard let role = node.role,
-        let kind = ScreenSnapshot.listedKind(
-          role: role, subrole: node.string(kAXSubroleAttribute), frame: node.frame, bounds: bounds,
-          pressable: { isPressable(node.element) }),
-        let label = ScreenSnapshot.label(
-          role: role, own: labels(node), placeholder: node.string(kAXPlaceholderValueAttribute),
-          borrowed: { borrowedLabel(node) }, inner: { firstText(under: node, until: deadline) })
-          // A field with no name of any kind is still somewhere to type.
-          ?? (ScreenSnapshot.textEntryRoles.contains(role) ? kind : nil)
-      else { return nil }
-      return (kind, label)
-    }
-
     static func isPressable(_ element: AXUIElement) -> Bool {
       var names: CFArray?
       guard AXUIElementCopyActionNames(element, &names) == .success else { return false }
       return (names as? [String])?.contains(kAXPressAction) ?? false
     }
+  }
+
+  extension AXRead.Node: ScreenNode {
+    var subrole: String? { string(kAXSubroleAttribute) }
+    var title: String? { string(kAXTitleAttribute) }
+    var nodeDescription: String? { string(kAXDescriptionAttribute) }
+    var placeholder: String? { string(kAXPlaceholderValueAttribute) }
+    var isPressable: Bool { AXRead.isPressable(element) }
+    var titleElement: AXRead.Node? { element(kAXTitleUIElementAttribute).map { AXRead.Node($0) } }
   }
 
   extension AXRead {
@@ -331,14 +301,6 @@
       /// (`nameValue`) or a row's text inside it (`ScreenSnapshot.firstText`):
       /// never a text entry's contents.
       lazy var rawValue: String? = AXRead.string(element, kAXValueAttribute)
-
-      /// Its value when that's its name (`ScreenSnapshot.valueNamedRoles`),
-      /// and nil, without the call, for every other role: in a slow app each
-      /// read costs ~90 ms, and a text entry's value is what was typed.
-      var nameValue: String? {
-        guard let role, ScreenSnapshot.valueNamedRoles.contains(role) else { return nil }
-        return rawValue
-      }
 
       /// `batch` in one call. An attribute the element doesn't have comes back
       /// as an `AXValue` holding an `AXError`, and is left out.

@@ -167,22 +167,30 @@ enum AppLink {
     // A command that's only "open Mail" means the app, whatever single step
     // was planned for it: a link (`mailto:` opened a new message), or a
     // press on something listed by that name.
-    if let named = openedName(said), let installed = app(named), steps.count == 1, let only = steps.first {
-      // A press on something else that's listed (not named that) is a
-      // different command the model understood better: left alone.
-      if let id = only.elementID, let label = listed.first(where: { $0.id == id })?.label,
-        NameMatch.normalized(label) != NameMatch.normalized(named)
-      {
-        return steps
-      }
-      // Anything else — a link, a press on that name, ⌘Tab (Preview,
-      // 2026-11-04) — opens the app.
+    if let named = openedName(said), let installed = app(named), steps.count == 1, let only = steps.first,
+      Self.standsForApp(only, named: named, listed: listed)
+    {
       return [.openApp(installed)]
     }
     guard !asksForWeb(said) else { return steps }
     return steps.map { step in
       guard case .openURL(let url) = step, let name = name(in: url), let installed = app(name) else { return step }
       return .openApp(installed)
+    }
+  }
+
+  /// Whether a bare "open X"'s one step can only have meant the app: a link,
+  /// ⌘Tab (Preview, 2026-11-04), or a press or select of something listed
+  /// under X's own name (Mail's mailbox "Zoom"). Never another shortcut or
+  /// a menu item — "go to home" in Finder is ⇧⌘H, not the Home app — nor a
+  /// press of something else that's listed.
+  static func standsForApp(_ step: VoiceCommandStep, named: String, listed: [ScreenContext.Element]) -> Bool {
+    switch step {
+    case .openURL: return true
+    case .shortcut(let chord): return chord.spelled == "cmd+tab"
+    case .pressElement(let id), .select(let id):
+      return listed.first { $0.id == id }.map { NameMatch.normalized($0.label) == NameMatch.normalized(named) } ?? false
+    default: return false
     }
   }
 

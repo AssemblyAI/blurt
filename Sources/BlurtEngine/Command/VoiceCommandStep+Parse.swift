@@ -51,6 +51,13 @@ extension VoiceCommandStep {
     }
     // And a group of steps over again is a loop too: "cmd+w, cmd+q, cmd+t,
     // type mute, return" twice, planned for "mute" (2026-11-04).
+    // Or one step back again and again among others: Obsidian's plan cycled
+    // through cmd+f, return, escape, cmd+o (2026-11-04). Three separate runs
+    // of the same step is a loop, whatever is between them.
+    let starts = steps.indices.filter { $0 == 0 || steps[$0 - 1] != steps[$0] }.map { steps[$0] }
+    if let looping = starts.first(where: { step in starts.count { $0 == step } > 2 }) {
+      throw VoiceCommandError.repeatedStep(looping.action.rawValue)
+    }
     let block = Self.repeatedBlock(in: steps)
     if !block.isEmpty {
       throw VoiceCommandError.repeatedStep(block.map(\.action.rawValue).joined(separator: ", "))
@@ -105,8 +112,11 @@ extension VoiceCommandStep {
     .openApp, .quitApp, .hideApp, .openURL, .window, .focus, .select, .setValue,
   ]
 
-  /// The actions that leave the window the snapshot read in front.
-  static let keepsWindow: Set<Action> = [.focus, .type, .select, .scroll, .setValue, .increment, .decrement, .media]
+  /// The actions after which the window the snapshot read is surely still
+  /// the one listed — the condition for rewriting a later `press_button` to
+  /// a listed element. Not typing, which changes what a search or a
+  /// switcher lists, nor selecting, which changes the pane a row opens.
+  static let keepsWindow: Set<Action> = [.focus, .scroll, .setValue, .increment, .decrement, .media]
 
   /// The kinds a `press_button` may mean: anything pressable — a row by its
   /// name included — never a field or a slider.
@@ -133,7 +143,7 @@ extension VoiceCommandStep {
     if let kinds = Self.kinds[action], !kinds.contains(element.kind) {
       throw VoiceCommandError.wrongKind(action: action.rawValue, id: id, kind: element.kind)
     }
-    if action == .press || action == .showMenu, DestructiveGuard.isDestructive(label: element.label) {
+    if [.press, .showMenu, .select].contains(action), DestructiveGuard.isDestructive(label: element.label) {
       throw VoiceCommandError.refused("press \(element.label)")
     }
   }

@@ -1568,6 +1568,20 @@ OpenAdapt, browser-use) split theirs: fast and offline on every run, live only w
   back to a click, when a focused field is selected, the menu walk and the pointer's round trip, each
   driven in `ElementActionsTests` with fake reads and writes. The `SystemVoiceCommandPerformer*`
   shell files stay outside the coverage gate.
+- **Recorded screens, every run.** `Tests/ScreenTrees/` holds real apps' windows — 1Password, Chrome,
+  Finder, Mail, Obsidian, Safari, Slack and VS Code — recorded from a Mac by `ScreenTreeRecorder` (`BLURT_RECORD_TREE=1`,
+  `BLURT_RECORD_APPS=Slack,Mail` for some) with **every string swapped for fake text** ("Lorem 12"), but
+  a short list of generic interface words (Inbox, Search, Home). `RecordedScreenTests` replays them
+  through the screen read's own code (`ScreenRead`, which the live read calls with real Accessibility
+  nodes through the `ScreenNode` protocol), so what a window lists is checked with no app running: 1Password's
+  value-named items, VS Code's page past its share, Finder's search button, Slack's sidebar rows, a browser page never crowded out by its tab strip. A
+  re-recording needs a look before it's committed: grep it for names and addresses, as every string
+  should be fake or on the keep list.
+- **The reply parser, fuzzed, every run.** `ReplyParserFuzzTests` throws 20,000 seeded replies — well
+  formed, missing fields, wrong types, cut short, wrapped in prose — and 5,000 byte strings at
+  `VoiceCommandStep.steps`: each must be refused with a `VoiceCommandError` or parse to a plan that keeps
+  every rule (listed elements only, no destructive chord or label, allowed schemes, typed-text and menu
+  limits, no loop). Seeded, so a failure replays.
 - **The live performer, `BLURT_LIVE_AX_TESTS=1`.** `LivePerformerTests` launches
   `Tests/CommandFixture` (a SwiftPM executable the test target depends on, never a product): a window
   with one of each control. It runs real steps against that window and judges each one by the state
@@ -1581,7 +1595,10 @@ OpenAdapt, browser-use) split theirs: fast and offline on every run, live only w
   schema, retry, parser — on `evals/command-planner/cases.json`, and fails below the corpus's
   `passFloor`. It costs paid gateway calls, and one run is noise (the model varies even at
   temperature 0), so it runs each case three times. The corpus's shape is checked on every run. Its
-  README says how to read a result and how to draft cases from `commands.jsonl`.
+  README says how to read a result and how to draft cases from `commands.jsonl`. Cases can also run over the
+  recorded screens — written with `"screen"`, or generated from each recording
+  (`BLURT_PLANNER_EVAL_SET=corpus|screens|all`) — so the planner is scored on full 150-element windows,
+  not only the handful of elements a written case lists.
 
 **Mutation testing** — `scripts/mutate.sh`, opt-in and **not** part of `check.sh`. It flips one
 operator in a source file, re-runs the suite, and reports whether anything noticed. Reach for it

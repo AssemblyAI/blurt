@@ -71,12 +71,10 @@
           webArea = largest(role: "AXWebArea", in: window)
         }
       }
-      var incomplete = false
       var pageIncomplete = false
       func walkPage(_ area: AXRead.Node) -> [ScreenSnapshot.Entry<AXRead.Node>] {
         pageIncomplete = false
-        return walk(
-          area, bounds: area.frame ?? window.frame, keep: ScreenContext.maxElements, incomplete: &pageIncomplete)
+        return ScreenRead.walkPage(area, window: window, shouldStop: budget(), incomplete: &pageIncomplete)
       }
       var page = webArea.map(walkPage) ?? []
       // Only a browser, or an Electron app just switched on, builds its page
@@ -88,19 +86,14 @@
           page = walkPage(AXRead.Node(area))
         }
       }
-      // The window around the page is promised the slots the page's share
-      // leaves; the page then takes every slot it doesn't use. In VS Code,
-      // whose whole window is one web area, 50 sat empty while the Source
-      // Control graph went unlisted (2026-11-04).
-      let around = walk(
-        window, bounds: window.frame, keep: ScreenContext.maxElements - min(page.count, ScreenSnapshot.webShare),
-        skip: { node in webArea.map { CFEqual(node.element, $0.element) } ?? false }, incomplete: &incomplete)
-      let kept = Array(page.prefix(ScreenContext.maxElements - around.count))
+      // The page's share and the window's, shared as `ScreenRead.listing` says.
+      let listing = ScreenRead.listing(
+        window: window, webArea: webArea, page: (page, pageIncomplete), same: { CFEqual($0.element, $1.element) },
+        shouldStop: budget())
       guard !Task.isCancelled else { return ScreenContext(appName: appName) }
       return ScreenContext(
         appName: appName, windowTitle: window.string(kAXTitleAttribute),
-        elements: number(around + kept, pid: pid, into: snapshot),
-        incomplete: incomplete || pageIncomplete || kept.count < page.count)
+        elements: number(listing.entries, pid: pid, into: snapshot), incomplete: listing.incomplete)
     }
 
     /// Sleeps `delay`, answering false — at once — when the read is cancelled:
@@ -115,41 +108,19 @@
       }
     }
 
-    /// The largest element with `role` under `root`, by area, breadth first
-    /// and bounded by `ScreenSnapshot.webAreaSearchBudget` — a window with none
-    /// (Music has no web area) is otherwise searched node by node, and Music
-    /// answers at ~15 ms a call. An element with no frame doesn't count. The
-    /// window's web area (the page, not an Electron app's title-bar web view:
-    /// Claude's holds two), or its main scroll area.
+    /// `ScreenRead.largest`, bounded by `ScreenSnapshot.webAreaSearchBudget`
+    /// — a window with none (Music has no web area) is otherwise searched node
+    /// by node, and Music answers at ~15 ms a call.
     static func largest(role: String, in root: AXRead.Node) -> AXRead.Node? {
-      var best: (node: AXRead.Node, area: CGFloat)?
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.webAreaSearchBudget)
-      _ = ScreenSnapshot.entries(
-        from: root, children: \.children,
-        describe: { node in
-          if node.role == role, let frame = node.frame, frame.width * frame.height > best?.area ?? 0 {
-            best = (node, frame.width * frame.height)
-          }
-          return nil
-        }, visitLimit: 800, shouldStop: { ContinuousClock.now >= deadline || Task.isCancelled })
-      return best?.node
+      return ScreenRead.largest(
+        role: role, in: root, shouldStop: { ContinuousClock.now >= deadline || Task.isCancelled })
     }
 
-    /// One bounded breadth-first walk: each call capped at
-    /// `ScreenSnapshot.callTimeout`, the whole at `ScreenSnapshot.readBudget`.
-    /// Each node's attributes come in one round trip (`AXRead.Node`).
-    private static func walk(
-      _ root: AXRead.Node, bounds: CGRect?, keep: Int, skip: (AXRead.Node) -> Bool = { _ in false },
-      incomplete: inout Bool
-    ) -> [ScreenSnapshot.Entry<AXRead.Node>] {
+    /// Stops a walk at `ScreenSnapshot.readBudget`, or when the read is cancelled.
+    private static func budget() -> () -> Bool {
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
-      var stopped = false
-      let entries = ScreenSnapshot.entries(
-        from: root, children: \.children, describe: { AXRead.describe($0, in: bounds, until: deadline) },
-        keepLimit: keep, skip: skip, shouldStop: { ContinuousClock.now >= deadline || Task.isCancelled },
-        onIncomplete: { stopped = true })
-      incomplete = incomplete || stopped
-      return entries
+      return { ContinuousClock.now >= deadline || Task.isCancelled }
     }
 
     /// Numbers the entries from 1, keeping each one's element in `snapshot`
@@ -272,6 +243,15 @@
         expanded: AXRead.bool(node.element, "AXExpanded"))
     }
 
+    /// Whether a window owned by `owner` is `pid`'s own: its own, or an
+    /// Open or Save panel AppKit draws for it from a service process — a
+    /// sandboxed app's panels are owned there, not by the app.
+    static func isOwn(_ owner: Int, of pid: pid_t) -> Bool {
+      owner == Int(pid)
+        || NSRunningApplication(processIdentifier: pid_t(owner))?.bundleIdentifier?.hasPrefix("com.apple.appkit.xpc.")
+          == true
+    }
+
     /// Whether `element` is `target` or sits a few levels inside it: the
     /// row's inner group can be what takes the focus.
     private static func isWithin(_ element: AXUIElement, _ target: AXUIElement) -> Bool {
@@ -350,7 +330,7 @@
       guard let pid, front == pid else { throw VoiceCommandError.screenChanged }
       // And its window must be the one on top there: in front isn't enough
       // while another app's window still covers the spot.
-      guard WindowOrder.owner(at: point, in: onScreenWindows()) == Int(pid) else {
+      guard let owner = WindowOrder.owner(at: point, in: onScreenWindows()), isOwn(owner, of: pid) else {
         throw VoiceCommandError.screenChanged
       }
       try await withPointer(at: point) {

@@ -24,6 +24,12 @@ import Foundation
       var failure: (kind: String, text: String)?
       var outcome: OverlayUIState?
       do {
+        // Never planned, nor its screen read waited for: a command that long
+        // is something overheard.
+        guard command.split(whereSeparator: \.isWhitespace).count <= VoiceCommandStep.maxCommandWords else {
+          screen?.cancel()
+          throw VoiceCommandError.commandTooLong
+        }
         context = await screen?.value ?? ScreenContext(appName: nil)
         steps = try await planner.plan(command, context: context, trace: trace)
         // The step kinds and counts in public; the command, the app and
