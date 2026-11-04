@@ -261,6 +261,26 @@ struct KeyboardModelProtocolTests {
     #expect(proxy.before == "H again moved chose OK by")
   }
 
+  @Test("with delete whole dictation off, delete after a dictation is one character")
+  func deleteAfterDictationIsOneCharacterWhenOff() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.deleteWholeDictation = false
+    let rig = KeyboardRig()
+    let model = rig.model
+    let proxy = rig.proxy
+    proxy.before = "Hi"
+    SharedStore.write(
+      DictationResult(id: UUID(), text: "there friend", deliveredAt: Date(), recipient: nil),
+      forKey: BlurtShared.Key.result)
+    model.resultArrived()
+    #expect(proxy.before == "Hi there friend")
+    model.deleteBackward()
+    #expect(proxy.before == "Hi there frien")
+    model.deleteBackward()
+    #expect(proxy.before == "Hi there frie")
+  }
+
   @Test("the term field never claims a cursor move or a selection")
   func termFieldIgnoresCursorMoves() {
     let suite = ScratchSuite()
