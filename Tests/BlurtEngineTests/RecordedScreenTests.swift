@@ -21,7 +21,7 @@ struct RecordedScreenTests {
 
   @Test("every recording lists at most 150 elements, each named, and never a password field")
   func invariants() throws {
-    for name in RecordedNode.recordings {
+    for name in RecordedNode.names {
       let listed = try listing(name)
       #expect(!listed.isEmpty, "\(name) lists nothing")
       #expect(listed.count <= ScreenContext.maxElements, "\(name)")
@@ -44,6 +44,47 @@ struct RecordedScreenTests {
     let found = kinds(try listing("Obsidian"))
     #expect(found["clickable", default: 0] >= 10)
     #expect(found["text area", default: 0] >= 1)
+  }
+
+  @Test("the recordings on disk are exactly the ones listed: none unlisted, none missing")
+  func everyRecordingOnDisk() throws {
+    let files = try FileManager.default.contentsOfDirectory(atPath: RecordedNode.directory.path)
+      .filter { $0.hasSuffix(".json") }.map { String($0.dropLast(5)) }
+    #expect(Set(files) == Set(RecordedNode.names))
+  }
+
+  @Test("no recording holds real text: every string fake or a kept interface word, no value a user typed")
+  func noRealText() throws {
+    for name in RecordedNode.names {
+      let url = RecordedNode.directory.appendingPathComponent("\(name).json")
+      let raw = try String(contentsOf: url, encoding: .utf8)
+      // No personal shapes, and only the fields the recorder writes.
+      let found = try TestFixtures.audit(
+        raw, shapes: TestFixtures.personalShapes + TestFixtures.webShapes, allowedKeys: RecordedNode.keys)
+      #expect(found.isEmpty, "\(name): \(found)")
+      var problems: [String] = []
+      Self.audit(try RecordedNode.load(name), into: &problems)
+      #expect(problems.isEmpty, "\(name): \(problems.prefix(5))")
+    }
+  }
+
+  /// The recorder's fake text, "Lorem 12" — checked without a regex, which
+  /// would be compiled again for each of a few thousand strings.
+  private static func isFake(_ text: String) -> Bool {
+    let number = text.dropFirst("Lorem ".count)
+    return text.hasPrefix("Lorem ") && !number.isEmpty && number.allSatisfy(\.isASCII) && number.allSatisfy(\.isNumber)
+  }
+
+  private static func audit(_ node: RecordedNode, into problems: inout [String]) {
+    for text in [node.title, node.nodeDescription, node.placeholder, node.rawValue].compactMap({ $0 })
+    where !isFake(text) && !RecordedNode.keptWords.contains(text) {
+      problems.append("real text: \(text)")
+    }
+    if node.rawValue != nil, !RecordedNode.valueRoles.contains(node.role ?? "") {
+      problems.append("a value on \(node.role ?? "no role")")
+    }
+    for child in node.children { audit(child, into: &problems) }
+    if let label = node.label { audit(label, into: &problems) }
   }
 
   @Test("1Password's items — menu items named only by their value — are listed")
@@ -70,115 +111,5 @@ struct RecordedScreenTests {
   @Test("Finder's search — a button with the search-field subrole — is listed as a search field")
   func finderSearch() throws {
     #expect(try listing("Finder").contains { $0.kind == "search field" })
-  }
-}
-
-/// A recorded element: the attributes `ScreenNode` asks for, and its children.
-/// A class, so a tree can hold itself and a test can tell two apart (`===`).
-final class RecordedNode: ScreenNode, Codable {
-  let role: String?
-  let subrole: String?
-  let title: String?
-  let nodeDescription: String?
-  let placeholder: String?
-  /// Its frame as `[x, y, width, height]`; empty when it has none.
-  let rect: [Double]
-  let pressable: Bool?
-  let rawValue: String?
-  let children: [RecordedNode]
-  let label: RecordedNode?
-
-  var frame: CGRect? { rect.count == 4 ? CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]) : nil }
-  var isPressable: Bool { pressable ?? false }
-  var titleElement: RecordedNode? { label }
-
-  private enum CodingKeys: String, CodingKey {
-    case role = "r"
-    case subrole = "s"
-    case title = "t"
-    case nodeDescription = "d"
-    case placeholder = "p"
-    case rect = "f"
-    case pressable = "a"
-    case rawValue = "v"
-    case children = "c"
-    case label = "l"
-  }
-
-  init(
-    role: String?, subrole: String?, title: String?, nodeDescription: String?, placeholder: String?,
-    frame: CGRect?, pressable: Bool, rawValue: String?, children: [RecordedNode], label: RecordedNode?
-  ) {
-    self.role = role
-    self.subrole = subrole
-    self.title = title
-    self.nodeDescription = nodeDescription
-    self.placeholder = placeholder
-    // To a tenth of a point: the walk compares frames, never finer.
-    let rounded: (CGFloat) -> Double = { (Double($0) * 10).rounded() / 10 }
-    rect = frame.map { [rounded($0.minX), rounded($0.minY), rounded($0.width), rounded($0.height)] } ?? []
-    self.pressable = pressable ? true : nil
-    self.rawValue = rawValue
-    self.children = children
-    self.label = label
-  }
-
-  required init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    role = try container.decodeIfPresent(String.self, forKey: .role)
-    subrole = try container.decodeIfPresent(String.self, forKey: .subrole)
-    title = try container.decodeIfPresent(String.self, forKey: .title)
-    nodeDescription = try container.decodeIfPresent(String.self, forKey: .nodeDescription)
-    placeholder = try container.decodeIfPresent(String.self, forKey: .placeholder)
-    rect = try container.decodeIfPresent([Double].self, forKey: .rect) ?? []
-    pressable = try container.decodeIfPresent(Bool.self, forKey: .pressable)
-    rawValue = try container.decodeIfPresent(String.self, forKey: .rawValue)
-    children = try container.decodeIfPresent([RecordedNode].self, forKey: .children) ?? []
-    label = try container.decodeIfPresent(RecordedNode.self, forKey: .label)
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfPresent(role, forKey: .role)
-    try container.encodeIfPresent(subrole, forKey: .subrole)
-    try container.encodeIfPresent(title, forKey: .title)
-    try container.encodeIfPresent(nodeDescription, forKey: .nodeDescription)
-    try container.encodeIfPresent(placeholder, forKey: .placeholder)
-    if !rect.isEmpty { try container.encode(rect, forKey: .rect) }
-    try container.encodeIfPresent(pressable, forKey: .pressable)
-    try container.encodeIfPresent(rawValue, forKey: .rawValue)
-    if !children.isEmpty { try container.encode(children, forKey: .children) }
-    try container.encodeIfPresent(label, forKey: .label)
-  }
-
-  /// A recording as the planner would be shown it: the listing the screen
-  /// read's own code (`ScreenRead`) makes of it, under the app's name.
-  static func context(_ name: String) throws -> ScreenContext {
-    let window = try load(name)
-    let webArea = ScreenRead.largest(role: "AXWebArea", in: window)
-    var pageIncomplete = false
-    let page =
-      webArea.map { ScreenRead.walkPage($0, window: window, shouldStop: { false }, incomplete: &pageIncomplete) } ?? []
-    let result = ScreenRead.listing(
-      window: window, webArea: webArea, page: (page, pageIncomplete), same: { $0 === $1 }, shouldStop: { false })
-    let elements = result.entries.enumerated().map { ScreenContext.Element(id: $0 + 1, kind: $1.kind, label: $1.label) }
-    return ScreenContext(appName: appNames[name] ?? name, elements: elements, incomplete: result.incomplete)
-  }
-
-  /// Each recording's app, as the screen read names it.
-  static let appNames = [
-    "1Password": "1Password", "Chrome": "Google Chrome", "Code": "Code", "Finder": "Finder", "Mail": "Mail",
-    "Obsidian": "Obsidian", "Safari": "Safari", "Slack": "Slack",
-  ]
-
-  /// The apps recorded, by file name in `Tests/ScreenTrees`.
-  static let recordings = ["1Password", "Chrome", "Code", "Finder", "Mail", "Obsidian", "Safari", "Slack"]
-
-  static let directory = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("ScreenTrees")
-
-  static func load(_ name: String) throws -> RecordedNode {
-    try JSONDecoder().decode(
-      RecordedNode.self, from: Data(contentsOf: directory.appendingPathComponent("\(name).json")))
   }
 }

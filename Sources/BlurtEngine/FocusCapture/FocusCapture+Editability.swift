@@ -34,9 +34,27 @@
     /// returns false for them too. The injector still pastes into those via a
     /// separate app-identity check (see `isAXOpaqueApp` / `KeyInjector.insert`),
     /// so the user's words aren't dropped to copy-only there.
-    static func isEditableTarget(role: String?, valueSettable: Bool, hasInsertionPoint: Bool) -> Bool {
+    /// `inWebArea`: the element sits inside a web view's page, where the page's
+    /// own markup decides what's editable — Meta's Muse reports its reply box,
+    /// a content-editable area, as an `AXButton` (2026-11-04). That's web content
+    /// as a browser's is, so it's pasted into as a browser's is, whatever app
+    /// hosts the web view — apart from a focused link, which a page never edits.
+    static func isEditableTarget(
+      role: String?, valueSettable: Bool, hasInsertionPoint: Bool, inWebArea: Bool = false
+    ) -> Bool {
       if let role, editableRoles.contains(role) { return true }
-      return valueSettable || hasInsertionPoint
+      return valueSettable || hasInsertionPoint || (inWebArea && role != "AXLink")
+    }
+
+    /// Whether `element` sits inside a web area, a few levels up at most.
+    nonisolated static func isInWebArea(_ element: AXUIElement) -> Bool {
+      var current: AXUIElement? = element
+      for _ in 0..<12 {
+        guard let level = current else { return false }
+        if stringValue(level, kAXRoleAttribute) == "AXWebArea" { return true }
+        current = elementValue(level, kAXParentAttribute)
+      }
+      return false
     }
 
     /// Whether `app` is an Electron/Chromium-based app, detected by the bundled
@@ -117,19 +135,15 @@
       "dev.zed.Zed",  // Zed + Preview/Nightly
     ]
 
-    /// Pure decision behind `isCustomDrawnEditorApp`, split out for the same reason
-    /// as `isBrowserBundleID`.
+    /// Whether a bundle id is a known custom-drawn editor (Sublime Text, Sublime
+    /// Merge, Zed). Neither a browser nor Electron, yet just as invisible to
+    /// Accessibility — so without this it would read as "nothing editable
+    /// focused" and every dictation would land on the clipboard instead of in
+    /// the buffer. A pure check, split out for the same reason as
+    /// `isBrowserBundleID`.
     static func isCustomDrawnEditorBundleID(_ bundleID: String?) -> Bool {
       guard let bundleID else { return false }
       return customDrawnEditorBundleIDPrefixes.contains { bundleID.hasPrefix($0) }
-    }
-
-    /// Whether `app` is a known custom-drawn editor (Sublime Text, Sublime Merge,
-    /// Zed). Neither a browser nor Electron, yet just as invisible to Accessibility
-    /// — so without this it would read as "nothing editable focused" and every
-    /// dictation would land on the clipboard instead of in the buffer.
-    static func isCustomDrawnEditorApp(_ app: NSRunningApplication?) -> Bool {
-      isCustomDrawnEditorBundleID(app?.bundleIdentifier)
     }
 
     /// Whether `app` is AX-opaque — an Electron editor, a web browser, or a
@@ -139,9 +153,15 @@
     /// the worse mistake. The accepted trade-off is a rare ⌘V beep when such an
     /// app truly has nothing editable focused.
     static func isAXOpaqueApp(_ app: NSRunningApplication?) -> Bool {
-      // String prefix checks first, whereas isElectronApp probes the disk
+      // The bundle-id checks first, whereas isElectronApp probes the disk
       // (FileManager.fileExists) — skip that I/O for the common case.
-      isBrowserApp(app) || isCustomDrawnEditorApp(app) || isElectronApp(app)
+      isAXOpaqueBundleID(app?.bundleIdentifier) || isElectronApp(app)
+    }
+
+    /// `isAXOpaqueApp`'s half that a bundle id settles: a browser or a
+    /// custom-drawn editor.
+    static func isAXOpaqueBundleID(_ bundleID: String?) -> Bool {
+      isBrowserBundleID(bundleID) || isCustomDrawnEditorBundleID(bundleID)
     }
 
     /// Whether the system-wide focused element can accept pasted text right now.
@@ -152,29 +172,35 @@
     /// attempts the paste — the injector's own trust check then handles the
     /// missing-permission case.
     nonisolated static func hasEditableFocusedElement() -> Bool {
-      guard AXIsProcessTrusted() else { return true }
+      guard let facts = focusFacts() else { return true }
+      // AX trusted but nothing focused — a native app with nothing editable
+      // (Finder, the desktop, a button-only window) — reads false: ⌘V there
+      // only beeps. AX-opaque apps (Electron editors, browsers before
+      // Chromium's lazy tree is built) can report the same, but the injector's
+      // app-identity check still pastes into those (`isAXOpaqueApp`).
+      return PasteTarget.fieldTakesPaste(facts)
+    }
 
-      guard let element = systemFocusedElement() else {
-        // AX is trusted but reports no focused element — e.g. a native app frontmost
-        // with nothing editable focused (Finder, the desktop, a button-only window).
-        // Posting ⌘V there only beeps, so treat it as non-editable and copy instead.
-        // AX-opaque apps (Electron editors like VS Code/Slack, and browsers before
-        // Chromium's lazy accessibility tree is built) also expose no focused
-        // element here, but the injector's app-identity check still pastes into
-        // those (see `KeyInjector.insert` / `isAXOpaqueApp`).
-        return false
-      }
-
+    /// The system-wide focused element's paste facts (`PasteFacts`), its app's
+    /// half left empty; nil when Accessibility can't be consulted (not trusted).
+    /// What `hasEditableFocusedElement` decides on, and what the paste fixtures
+    /// record.
+    ///
+    /// On the paste path only what decides is read: the web-area walk — up to
+    /// a dozen parent reads — runs only when nothing cheaper settled the
+    /// answer, and the subrole (no part of the decision) not at all. The
+    /// fixture recorder (`forRecording`) asks for every fact.
+    nonisolated static func focusFacts(forRecording: Bool = false) -> PasteFacts? {
+      guard AXIsProcessTrusted() else { return nil }
+      guard let element = systemFocusedElement() else { return PasteFacts(focused: false) }
       // Same checked reader `captureFieldContext` uses for this attribute, so the
       // editability path and the secure-field path can't disagree about what a
       // misbehaving app's role reads as.
       let role = stringValue(element, kAXRoleAttribute)
-
       var settable = DarwinBoolean(false)
       let valueSettable =
         AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success
         && settable.boolValue
-
       // A readable selected-text *range* means the element has an insertion point —
       // the hallmark of a text input even when its value isn't reported settable.
       // Require the range to actually decode, not merely that the read succeeded: a
@@ -182,12 +208,13 @@
       // signal is one of the two that can green-light a ⌘V on an unknown role.
       var rangeRef: CFTypeRef?
       let hasInsertionPoint =
-        AXUIElementCopyAttributeValue(
-          element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
+        AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
         && rangeRef.flatMap(axRange) != nil
-
-      return isEditableTarget(
-        role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
+      let settled = isEditableTarget(role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
+      return PasteFacts(
+        focused: true, role: role, subrole: forRecording ? stringValue(element, kAXSubroleAttribute) : nil,
+        valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint,
+        inWebArea: (forRecording || !settled) && isInWebArea(element))
     }
   }
 #endif

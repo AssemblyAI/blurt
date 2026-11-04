@@ -36,6 +36,22 @@
           role: nil, valueSettable: false, hasInsertionPoint: true))
     }
 
+    @Test("anything focused inside a web view's page but a link is web content, pasted into as a browser's is")
+    func webAreaContent() {
+      // Meta's Muse: its reply box reports as a button, inside its web view.
+      #expect(
+        FocusCapture.isEditableTarget(
+          role: "AXButton", valueSettable: false, hasInsertionPoint: false, inWebArea: true))
+      // The same button in a native window is still not a paste target.
+      #expect(
+        !FocusCapture.isEditableTarget(
+          role: "AXButton", valueSettable: false, hasInsertionPoint: false, inWebArea: false))
+      // A focused link is a page's, and never edited.
+      #expect(
+        !FocusCapture.isEditableTarget(
+          role: "AXLink", valueSettable: false, hasInsertionPoint: false, inWebArea: true))
+    }
+
     @Test("a non-text control with no editable signal is not editable")
     func nonEditableControl() {
       #expect(

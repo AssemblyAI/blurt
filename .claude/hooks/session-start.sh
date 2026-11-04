@@ -26,9 +26,9 @@ fi
 
 note() { echo "session-start: $*"; }
 
-# markdownlint (npm) — check.sh's Markdown structural lint.
-if ! command -v markdownlint >/dev/null 2>&1; then
-  npm install -g markdownlint-cli >/dev/null 2>&1 || note "markdownlint install failed (npm)"
+# markdownlint-cli2 (npm) — check.sh's Markdown structural lint.
+if ! command -v markdownlint-cli2 >/dev/null 2>&1; then
+  npm install -g markdownlint-cli2 >/dev/null 2>&1 || note "markdownlint-cli2 install failed (npm)"
 fi
 
 # prettier (npm) — formatting authority for yml/yaml/md/html/css. Usually
@@ -81,7 +81,7 @@ fi
 
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint shellcheck actionlint zizmor shfmt; do
+for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 [ -x "$jscpd_dir/node_modules/.bin/jscpd" ] || missing="$missing jscpd"

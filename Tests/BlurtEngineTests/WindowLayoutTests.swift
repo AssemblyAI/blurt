@@ -50,6 +50,29 @@ struct WindowLayoutTests {
     #expect(WindowLayout.onNextDisplay(window, displays: [left]) == nil)
   }
 
+  @Test("next display keeps a window's height on its display too, clamped to the bottom")
+  func nextDisplayVertical() {
+    let left = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+    let right = CGRect(x: 1000, y: 0, width: 2000, height: 2000)
+    // Halfway down the room it has to move in stays halfway down.
+    let halfway = WindowLayout.onNextDisplay(CGRect(x: 0, y: 400, width: 200, height: 200), displays: [left, right])
+    #expect(halfway == CGRect(x: 1000, y: 900, width: 200, height: 200))
+    // Hanging off the bottom lands flush with the next display's bottom.
+    let below = WindowLayout.onNextDisplay(CGRect(x: 0, y: 900, width: 200, height: 200), displays: [left, right])
+    #expect(below == CGRect(x: 1000, y: 1800, width: 200, height: 200))
+  }
+
+  @Test("with overlapping frames the first display listed that holds the window's centre is the one it leaves")
+  func nextDisplayOverlap() {
+    let first = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+    let overlapping = CGRect(x: 500, y: 0, width: 1000, height: 1000)
+    let third = CGRect(x: 2000, y: 0, width: 1000, height: 1000)
+    // Centre (700, 200) is on both of the first two.
+    let moved = WindowLayout.onNextDisplay(
+      CGRect(x: 600, y: 100, width: 200, height: 200), displays: [first, overlapping, third])
+    #expect(moved == CGRect(x: 1100, y: 100, width: 200, height: 200))
+  }
+
   @Test("an AppKit display frame flips to Accessibility's top-left coordinates")
   func flip() {
     let primaryHeight: CGFloat = 982

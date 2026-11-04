@@ -544,14 +544,15 @@ fi
 
 # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
 # prose-wrapping rules are off there since prettier owns Markdown formatting).
-# CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
-# lint the canonical doc once and skip the alias file. docs/ (plans + marketing
-# drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
-# filtered here as well since the file list is passed to markdownlint as args).
+# What it skips — CLAUDE.md (a shim pointing at AGENTS.md), docs/ (plans and
+# drafts), local scratch — is .markdownlint-cli2.jsonc's `ignores`, which
+# markdownlint-cli2 applies to the files passed here too. markdownlint-cli2,
+# the engine the VS Code extension bundles, so the editor, the pre-commit hook
+# (.githooks/pre-commit) and this gate apply one rule set and one scope.
 check_markdownlint() {
-  git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
+  git ls-files '*.md' | xargs markdownlint-cli2
 }
-if tool_ready markdownlint 'brew install markdownlint-cli'; then
+if tool_ready markdownlint-cli2 'brew install markdownlint-cli2'; then
   run_check "markdownlint" check_markdownlint
 fi
 
@@ -565,7 +566,7 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
   # resolve instead of raising SC1091. (shfmt below deliberately still covers only
   # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
-  run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh
+  run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit
 fi
 
 if tool_ready shfmt 'brew install shfmt'; then

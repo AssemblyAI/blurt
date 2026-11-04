@@ -6,7 +6,7 @@ import Testing
 /// Reading a planner reply into steps: what each action needs, and the checks
 /// that refuse a plan — or put a step into the form Blurt carries out best —
 /// before any of it runs.
-@Suite("VoiceCommandStep · parse")
+@Suite("VoiceCommandStep · Parse")
 struct VoiceCommandParseTests {
   private func steps(_ json: String, listed: [ScreenContext.Element] = []) throws -> [VoiceCommandStep] {
     try VoiceCommandStep.steps(fromReply: #"{"steps": ["# + json + "]}", maxSteps: 10, listed: listed)

@@ -26,6 +26,13 @@ struct PlannerEvalTests {
     }
   }
 
+  @Test("the corpus — drafted from real command logs — holds nothing personal, under only the fields it decodes")
+  func corpusIsAnonymous() throws {
+    let raw = try String(contentsOf: PlannerEval.Corpus.url, encoding: .utf8)
+    let found = try TestFixtures.audit(raw, shapes: TestFixtures.personalShapes, allowedKeys: PlannerEval.Corpus.keys)
+    #expect(found.isEmpty, "\(found)")
+  }
+
   @Test("a plan passes when it matches an accepted one line for line, and nothing it does is forbidden")
   func scoring() throws {
     let item = PlannerEval.Case(
@@ -79,9 +86,16 @@ enum PlannerEval {
     let passFloor: Double
     let cases: [Case]
 
-    static let url = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-      .appendingPathComponent("evals/command-planner/cases.json")
+    enum CodingKeys: String, CodingKey, CaseIterable {
+      case passFloor, cases
+    }
+
+    /// Every key the corpus file may hold, at any depth: what it and its cases decode.
+    static var keys: Set<String> {
+      Set(CodingKeys.allCases.map(\.stringValue)).union(Case.CodingKeys.allCases.map(\.stringValue))
+    }
+
+    static let url = TestFixtures.url("evals/command-planner/cases.json")
 
     static func load() throws -> Corpus {
       try JSONDecoder().decode(Corpus.self, from: Data(contentsOf: url))
@@ -128,7 +142,7 @@ enum PlannerEval {
       self.forbid = forbid
     }
 
-    private enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey, CaseIterable {
       case id, said, app, window, incomplete, elements, expect, forbid, screen
     }
 

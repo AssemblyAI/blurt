@@ -61,7 +61,7 @@ func testSeams(
   DictationSession.Seams(
     captureFrontmost: { frontmost },
     captureFieldContext: { field },
-    logTranscript: { log.recordTranscript($0, context: $1) },
+    logTranscript: { log.recordTranscript($0, context: $1, outcome: $2) },
     logFailure: { log.recordFailure($0, context: $1) })
 }
 
@@ -127,6 +127,8 @@ final class RecordedLog: Sendable {
   struct Transcript: Sendable, Equatable {
     let text: String
     let context: TranscriptionContext?
+    /// The phase the dictation ended in, which the log names.
+    let outcome: PipelinePhase
   }
 
   struct Failure: Sendable {
@@ -147,8 +149,8 @@ final class RecordedLog: Sendable {
   /// aggregate on, and the readable form for an assertion.
   var failureNames: [String] { failures.map { $0.error.diagnosticName } }
 
-  func recordTranscript(_ text: String, context: TranscriptionContext?) {
-    state.withLock { $0.transcripts.append(Transcript(text: text, context: context)) }
+  func recordTranscript(_ text: String, context: TranscriptionContext?, outcome: PipelinePhase) {
+    state.withLock { $0.transcripts.append(Transcript(text: text, context: context, outcome: outcome)) }
   }
 
   func recordFailure(_ error: BlurtError, context: TranscriptionContext?) {

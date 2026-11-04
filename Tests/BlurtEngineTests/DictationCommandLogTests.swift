@@ -12,13 +12,6 @@ struct DictationCommandLogTests {
     elements: [.init(id: 4, kind: "button", label: "Reply"), .init(id: 7, kind: "row", label: "Lunch")],
     incomplete: true)
 
-  private func temporaryDirectory() -> URL {
-    let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("BlurtCommandLogTests-\(UUID().uuidString)", isDirectory: true)
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    return directory
-  }
-
   @Test("an entry holds what was said, the screen, the plan with each element's label, and how it ended")
   func entry() {
     let steps: [VoiceCommandStep] = [
@@ -58,7 +51,7 @@ struct DictationCommandLogTests {
 
   @Test("a failure is written to the command log and to the error log, beside the dictations' failures")
   func failureWritesBoth() throws {
-    let directory = temporaryDirectory()
+    let directory = makeTempLogDirectory()
     let commands = directory.appendingPathComponent("commands.jsonl")
     let errors = directory.appendingPathComponent("errors.jsonl")
     DictationLog.appendCommand(
@@ -66,7 +59,7 @@ struct DictationCommandLogTests {
         command: "open figma", context: screen, steps: [.openApp("Figma")],
         outcome: .error(message: "No app named Figma is installed."),
         failure: ("VoiceCommandError.appNotFound", "No app named Figma is installed."), duration: .milliseconds(900)),
-      store: DeveloperModeStore(defaults: enabledDefaults()), to: commands, errorsTo: errors)
+      store: developerModeStore(enabled: true), to: commands, errorsTo: errors)
     DictationLog.queue.sync {}
     let command = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
     #expect(command?["outcome"] as? String == "failed")
@@ -80,7 +73,7 @@ struct DictationCommandLogTests {
 
   @Test("with developer mode off nothing is written; a command that worked adds nothing to the error log")
   func gated() {
-    let directory = temporaryDirectory()
+    let directory = makeTempLogDirectory()
     let commands = directory.appendingPathComponent("commands.jsonl")
     let errors = directory.appendingPathComponent("errors.jsonl")
     let mute = DictationLog.CommandRecord(
@@ -91,7 +84,7 @@ struct DictationCommandLogTests {
     #expect(!FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
 
     DictationLog.appendCommand(
-      mute, store: DeveloperModeStore(defaults: enabledDefaults()), to: commands, errorsTo: errors)
+      mute, store: developerModeStore(enabled: true), to: commands, errorsTo: errors)
     DictationLog.queue.sync {}
     #expect(FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
     #expect(!FileManager.default.fileExists(atPath: errors.path(percentEncoded: false)))
@@ -99,7 +92,7 @@ struct DictationCommandLogTests {
 
   @Test("the reset sweep removes the command log with the other two")
   func reset() {
-    let directory = temporaryDirectory()
+    let directory = makeTempLogDirectory()
     let urls = ["dictations", "errors", "commands"].map { directory.appendingPathComponent("\($0).jsonl") }
     for url in urls { FileManager.default.createFile(atPath: url.path(percentEncoded: false), contents: Data()) }
     #expect(DictationLog.removeStoredLogs(dictations: urls[0], errors: urls[1], commands: urls[2]))
@@ -116,12 +109,6 @@ struct DictationCommandLogTests {
       #expect(SelectionSpeechRouter.logName(of: URLError(.timedOut)) == "URLError(-1001)")
     }
   #endif
-
-  private func enabledDefaults() -> UserDefaults {
-    let defaults = freshDefaults()
-    defaults.set(true, forKey: DeveloperModeStore.defaultsKey)
-    return defaults
-  }
 
   @Test("an entry carries what the model saw and answered, and how each step ran")
   func entryTrace() {
@@ -140,14 +127,14 @@ struct DictationCommandLogTests {
 
   @Test("a complaint is logged against the command it's about, and as a reported failure")
   func feedback() throws {
-    let directory = temporaryDirectory()
+    let directory = makeTempLogDirectory()
     let commands = directory.appendingPathComponent("commands.jsonl")
     let errors = directory.appendingPathComponent("errors.jsonl")
     let last = DictationLog.CommandRecord(
       id: "cmd-1", command: "go to github.com", context: screen, steps: [], outcome: .done, failure: nil,
       duration: .zero)
     DictationLog.appendFeedback(
-      "that didn't work", about: last, store: DeveloperModeStore(defaults: enabledDefaults()), to: commands,
+      "that didn't work", about: last, store: developerModeStore(enabled: true), to: commands,
       errorsTo: errors)
     DictationLog.queue.sync {}
     let entry = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]

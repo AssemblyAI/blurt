@@ -165,7 +165,7 @@ enum TextShortcutExpander {
   private static func shortcutIndex(
     in match: NSTextCheckingResult, groupOffset: Int, count: Int
   ) -> Int? {
-    (0..<count).first { match.range(at: $0 + groupOffset).location != NSNotFound }
+    (0..<count).first { match.range(at: $0 + groupOffset).location != NSNotFound }  // mutate-ok: one branch matches
   }
 
   private static func regex(_ pattern: String) -> NSRegularExpression? {

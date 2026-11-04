@@ -64,6 +64,10 @@ public enum DictationLog {
     /// ends, not threaded from the request. Unlike `config.rewrite_mode`, which
     /// leaves Fast out, Fast is written.
     let rewriteMode: String?
+    /// How the dictation ended, as `outcomeName` names its last phase. Without
+    /// it a paste that fell back to the clipboard — Muse's reply box,
+    /// 2026-11-04 — looked in the log exactly like one that landed.
+    var outcome: String?
 
     /// Spelled out because a hand-written `encode(to:)` means the compiler no
     /// longer derives this — the key names are the on-disk contract for anything
@@ -73,6 +77,7 @@ public enum DictationLog {
       case transcript, ts, app, window, field, prior, selected, keyterms
       case sttPrompt = "stt_prompt"
       case rewriteMode = "rewrite_mode"
+      case outcome
     }
 
     /// Hand-written for two fields: `sttPrompt` is a plain string and
@@ -99,6 +104,7 @@ public enum DictationLog {
         try container.encode(keyterms, forKey: .keyterms)
       }
       try container.encodeIfPresent(rewriteMode, forKey: .rewriteMode)
+      try container.encodeIfPresent(outcome, forKey: .outcome)
     }
   }
 
@@ -117,7 +123,7 @@ public enum DictationLog {
   /// actually uses, so the displayed path can't drift from where the log lands —
   /// and so the `NSString` bridge this needs stays out of a SwiftUI view.
   public static var defaultDisplayPath: String {
-    (defaultURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+    displayPath(of: defaultURL)
   }
 
   /// Deletes both halves of the developer-mode log — the transcript corpus and
@@ -201,13 +207,14 @@ public enum DictationLog {
   static func append(
     transcript: String,
     context: TranscriptionContext? = nil,
+    outcome: PipelinePhase? = nil,
     store: DeveloperModeStore = DeveloperModeStore(),
     rewriteMode: @escaping @Sendable () -> RewriteMode? = { requestedRewriteMode() },
     to url: URL = defaultURL
   ) {
     // The settings are read behind the gate, like everything else the entry carries.
     gated(store: store) { now in
-      write(transcript: transcript, context: context, rewriteMode: rewriteMode(), to: url, now: now)
+      write(transcript: transcript, context: context, rewriteMode: rewriteMode(), outcome: outcome, to: url, now: now)
     }
   }
 
@@ -238,18 +245,43 @@ public enum DictationLog {
   /// so all of that is assertable directly rather than through a temp file and a
   /// substring search over the encoded line — a search that read the same whether
   /// a field was correctly absent or the write had failed outright.
+  ///
+  /// A transcript dictated into a password field is the password, so it is
+  /// never written: the entry says only that it was withheld. The same rule
+  /// keeps it out of the recent-dictations ring (`DictationSession`), and
+  /// `FocusCapture.mustRedactContents` already keeps the field's own text out.
   static func makeEntry(
-    transcript: String, context: TranscriptionContext?, rewriteMode: RewriteMode? = nil, now: Date
+    transcript: String, context: TranscriptionContext?, rewriteMode: RewriteMode? = nil, outcome: PipelinePhase? = nil,
+    now: Date
   ) -> Entry {
     Entry(
-      transcript: transcript, ts: now.formatted(timestampFormat),
+      transcript: context?.targetIsSecure == true ? withheldTranscript : transcript, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
       sttPrompt: STTPrompt.text(context: context),
       keyterms: KeyTerms.fitted(context?.keyTerms ?? []),
-      rewriteMode: rewriteMode.map { $0.rawValue.lowercased() }
+      rewriteMode: rewriteMode.map { $0.rawValue.lowercased() }, outcome: outcome.map(outcomeName)
     )
   }
+
+  /// How a dictation that ended in `phase` is named in its entry: "pasted",
+  /// "copied" (nothing editable was focused, so the words were left on the
+  /// clipboard), "handed back" (an ask, rewrite or command took the words),
+  /// "cancelled", or "failed: <error>". The command log's words are
+  /// `outcomeName(_: OverlayUIState?)`'s, beside it.
+  static func outcomeName(_ phase: PipelinePhase) -> String {
+    switch phase {
+    case .pasted: "pasted"
+    case .noTarget: "copied"
+    case .handedBack: "handed back"
+    case .cancelled: "cancelled"
+    case .failed(let error): "failed: \(error.diagnosticName)"
+    case .idle, .connecting, .recording, .transcribing, .injecting: "unfinished"
+    }
+  }
+
+  /// What an entry holds in place of a transcript dictated into a password field.
+  static let withheldTranscript = "(withheld: dictated into a password field)"
 
   /// The rewrite the settings ask for: the chosen mode while enhanced
   /// transcripts are on, nil while the verbatim text is pasted. The same two
@@ -262,10 +294,12 @@ public enum DictationLog {
   /// rather than an `append` overload so the gated entry point above can't be
   /// bypassed by accidentally satisfying a different signature.
   static func write(
-    transcript: String, context: TranscriptionContext? = nil, rewriteMode: RewriteMode? = nil, to url: URL,
-    now: Date
+    transcript: String, context: TranscriptionContext? = nil, rewriteMode: RewriteMode? = nil,
+    outcome: PipelinePhase? = nil, to url: URL, now: Date
   ) {
-    appendLine(makeEntry(transcript: transcript, context: context, rewriteMode: rewriteMode, now: now), to: url)
+    appendLine(
+      makeEntry(transcript: transcript, context: context, rewriteMode: rewriteMode, outcome: outcome, now: now),
+      to: url)
   }
 
   /// Encodes one entry and appends it as a JSONL line, creating the file (and

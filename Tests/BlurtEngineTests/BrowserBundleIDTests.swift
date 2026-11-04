@@ -187,7 +187,7 @@
       let current = NSRunningApplication.current
       #expect(!FocusCapture.isBrowserApp(current))
       #expect(!FocusCapture.isElectronApp(current))
-      #expect(!FocusCapture.isCustomDrawnEditorApp(current))
+      #expect(!FocusCapture.isCustomDrawnEditorBundleID(current.bundleIdentifier))
       #expect(!FocusCapture.isAXOpaqueApp(current))
     }
 
@@ -198,7 +198,6 @@
       // target would be attempted anyway.
       #expect(!FocusCapture.isBrowserApp(nil))
       #expect(!FocusCapture.isElectronApp(nil))
-      #expect(!FocusCapture.isCustomDrawnEditorApp(nil))
       #expect(!FocusCapture.isAXOpaqueApp(nil))
     }
   }

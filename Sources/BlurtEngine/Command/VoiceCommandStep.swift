@@ -201,7 +201,7 @@ public struct KeyChord: Equatable, Sendable {
 
   private static func key(named token: String) -> Key? {
     if let code = namedKeyCodes[token] { return .code(code) }
-    guard token.count == 1, let character = token.first, ansiCharacterCodes[character] != nil else { return nil }
+    guard let character = token.onlyElement, ansiCharacterCodes[character] != nil else { return nil }
     return .character(character)
   }
 

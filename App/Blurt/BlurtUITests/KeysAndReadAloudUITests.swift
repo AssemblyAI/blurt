@@ -68,8 +68,7 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
   /// the answer aloud; the request itself is never pasted.
   func testAskKeyAnswersAboutTheSelection() {
     let harness = readyHarness()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     setTranscript("Summarize this.", in: harness)
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "A held ask should record")

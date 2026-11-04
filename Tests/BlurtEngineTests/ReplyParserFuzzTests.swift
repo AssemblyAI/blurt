@@ -9,17 +9,6 @@ import Testing
 /// the parser exists for. Seeded, so a failure replays exactly.
 @Suite("Reply parser fuzz")
 struct ReplyParserFuzzTests {
-  /// xorshift64*: small, fast, and the same sequence for the same seed.
-  struct Seeded: RandomNumberGenerator {
-    var state: UInt64
-    mutating func next() -> UInt64 {
-      state ^= state >> 12
-      state ^= state << 25
-      state ^= state >> 27
-      return state &* 2_685_821_657_736_338_717
-    }
-  }
-
   static let listed: [ScreenContext.Element] = [
     .init(id: 1, kind: "button", label: "Send"), .init(id: 2, kind: "row", label: "Inbox"),
     .init(id: 3, kind: "text field", label: "Search"), .init(id: 4, kind: "slider", label: "Volume"),

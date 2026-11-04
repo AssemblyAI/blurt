@@ -77,11 +77,11 @@ extension DictationSession {
       setPhase(.idle)
       return
     }
-    seams.logTranscript(text, capturedContext)
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.
     if handsBackTranscript {
+      seams.logTranscript(text, capturedContext, .handedBack(spoken))
       setPhase(.handedBack(spoken))
       return
     }
@@ -102,7 +102,9 @@ extension DictationSession {
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed, recentDictations)
-    await inject(expanded)
+    // Logged once the paste has ended, so the log says whether it landed.
+    let outcome = await inject(expanded)
+    seams.logTranscript(text, capturedContext, outcome)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
@@ -274,7 +276,8 @@ extension DictationSession {
     return err.isQuietDegradation ? .noTarget : .failed(err)
   }
 
-  private func inject(_ text: String) async {
+  /// The paste, answering how it ended for the log (`DictationLog.Entry.outcome`).
+  private func inject(_ text: String) async -> PipelinePhase {
     setPhase(.injecting)
     do {
       try await injector.insert(
@@ -282,17 +285,20 @@ extension DictationSession {
       // A cancel() that landed in insert's final, non-cancellable stretch
       // (after its last checkCancellation) already set .cancelled — leave the
       // claimed phase alone rather than repainting it as .pasted.
-      if Task.isCancelled { return }
+      if Task.isCancelled { return .cancelled }
       // The paste landed — show the quiet "pasted" notice (the mirror of the
       // "copied" notice below) rather than snapping straight back to idle.
       setPhase(.pasted)
+      return .pasted
     } catch {
       // A cancel() landed mid-paste: it already set .cancelled (the injector
       // bails via its checkCancellation). Leave the claimed phase alone —
       // including on a late non-cancellation error — rather than relabeling
       // the user's cancel as a failure.
-      if error is CancellationError || Task.isCancelled { return }
-      setPhase(Self.pasteOutcome(error))
+      if error is CancellationError || Task.isCancelled { return .cancelled }
+      let phase = Self.pasteOutcome(error)
+      setPhase(phase)
+      return phase
     }
   }
 }

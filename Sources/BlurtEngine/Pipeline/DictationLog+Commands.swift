@@ -51,8 +51,12 @@ extension DictationLog {
   static var defaultCommandURL: URL { HostIdentity.current.logURL("commands.jsonl") }
 
   /// `defaultCommandURL` as a home-abbreviated path, for the Advanced pane.
-  public static var defaultCommandDisplayPath: String {
-    (defaultCommandURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+  public static var defaultCommandDisplayPath: String { displayPath(of: defaultCommandURL) }
+
+  /// A log file's location as the Advanced pane shows it: unescaped (a space
+  /// is a space, not `%20`) and the home directory as a tilde.
+  static func displayPath(of url: URL) -> String {
+    (url.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
   }
 
   /// One command as it ended: what the router knows by then.

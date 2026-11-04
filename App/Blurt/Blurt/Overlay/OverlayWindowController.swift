@@ -78,6 +78,8 @@ final class OverlayWindowController {
   private var errorRevertTask: Task<Void, Never>?
   /// Bumped by every `setVisible`, so a fade-out's completion can tell it was superseded.
   private var fadeGeneration = 0
+  /// Whether a fade-out is under way, so a show during it fades back in.
+  private var fadingOut = false
 
   // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
   // ramp reads as instant response — but fades out gently. Asymmetric on purpose.
@@ -226,6 +228,7 @@ final class OverlayWindowController {
   /// Shared final step of every dismiss path: order the panel out, restore full
   /// alpha for the next show, and settle the pill content back to idle.
   private func dismissPanel() {
+    fadingOut = false
     panel.orderOut(nil)
     panel.alphaValue = 1
     settleContent()
@@ -266,12 +269,17 @@ final class OverlayWindowController {
     let generation = fadeGeneration
     let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     if visible {
-      // Already up and fully opaque: nothing to ramp. Without this, each phase
-      // change during one dictation spun up an `NSAnimationContext` group animating
-      // alpha from 1 to 1 (~3 per dictation). A panel mid-fade-out is visible with
-      // alpha below 1, so it still falls through and re-targets alpha to 1 — the
-      // re-entrancy the doc comment above promises.
-      if panel.isVisible, panel.alphaValue >= 1 { return }
+      // Already up, opaque, and not fading out: nothing to ramp. Without this,
+      // each phase change during one dictation spun up an `NSAnimationContext`
+      // group animating alpha from 1 to 1 (~3 per dictation). Anything else
+      // falls through and re-targets alpha to 1 — the re-entrancy the doc
+      // comment above promises: a panel zeroed for a resize, or one fading out.
+      // The fade-out needs `fadingOut`, not its alpha: that still reads 1 the
+      // instant the fade starts, so a hide→show in one pass (any phase that
+      // hides the pill, then one that shows it) returned here and left the
+      // fade running — the pill invisible for the whole command (2026-11-04).
+      if panel.isVisible, panel.alphaValue >= 1, !fadingOut { return }
+      fadingOut = false
       if !panel.isVisible {
         reposition()
         panel.alphaValue = reduceMotion ? 1 : 0
@@ -291,6 +299,7 @@ final class OverlayWindowController {
         dismissPanel()
         return
       }
+      fadingOut = true
       NSAnimationContext.runAnimationGroup(
         { context in
           context.duration = Self.dismissFadeDuration

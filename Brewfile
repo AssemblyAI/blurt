@@ -1,5 +1,5 @@
 brew "actionlint"
-brew "markdownlint-cli"
+brew "markdownlint-cli2"
 brew "node"
 brew "periphery"
 brew "prettier"

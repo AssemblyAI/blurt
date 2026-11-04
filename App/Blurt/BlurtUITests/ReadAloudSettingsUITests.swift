@@ -60,8 +60,7 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
   /// says how to turn read-aloud on; a key that asks adds the gateway note.
   func testControlsAndNotesFollowTheKeys() {
     let harness = readyHarness()
-    pick("left ⌥", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetOff].click()
+    bind("left ⌥", with: UITestIdentifiers.harnessSetOff, in: harness)
 
     let tab = readAloudTab()
     let voice = tab.popUpButtons[UITestIdentifiers.readAloudVoicePicker]
@@ -72,8 +71,7 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
     XCTAssertTrue(tab.staticTexts.matching(assign).firstMatch.exists, "The tab should say how to turn it on")
 
     harness.click()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     let tabAgain = readAloudTab()
     let gateway = NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "spoken request", "spoken request")
     XCTAssertTrue(

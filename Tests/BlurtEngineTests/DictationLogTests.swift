@@ -36,10 +36,7 @@ private struct DecodedEntry: Decodable {
 /// directory so the host's real `~/Library/Logs/Blurt/dictations.jsonl` is never
 /// touched. File-scoped so the gate suite below shares it.
 func makeTempLogURL() -> URL {
-  let dir = FileManager.default.temporaryDirectory
-    .appendingPathComponent("BlurtDictationLogTests-\(UUID().uuidString)", isDirectory: true)
-  try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-  return dir.appendingPathComponent("dictations.jsonl")
+  makeTempLogDirectory().appendingPathComponent("dictations.jsonl")
 }
 
 private func readLog(_ url: URL) -> String {
@@ -70,6 +67,24 @@ struct DictationLogEntryTests {
       transcript: "Polished.", context: nil, now: Date(timeIntervalSince1970: 1_700_000_000))
     #expect(entry.transcript == "Polished.")
     #expect(entry.ts.hasPrefix("2023-11-14"))
+  }
+
+  @Test("an entry names how the dictation ended, by the phase it ended in")
+  func outcomeNames() {
+    let names = [PipelinePhase.pasted, .noTarget, .handedBack("x"), .cancelled, .failed(.targetAppLost)]
+      .map(DictationLog.outcomeName)
+    #expect(names == ["pasted", "copied", "handed back", "cancelled", "failed: targetAppLost"])
+    #expect(
+      DictationLog.makeEntry(transcript: "p", context: nil, outcome: .noTarget, now: Date()).outcome == "copied")
+  }
+
+  @Test("a transcript dictated into a password field is withheld: the entry says so, and holds no word of it")
+  func withholdsSecureTranscript() {
+    let secure = TranscriptionContext(appName: "1Password", priorText: nil, targetIsSecure: true)
+    let entry = DictationLog.makeEntry(transcript: "hunter2 correct horse", context: secure, now: Date())
+    #expect(entry.transcript == DictationLog.withheldTranscript)
+    #expect(entry.app == "1Password")
+    #expect(DictationLog.makeEntry(transcript: "hunter2", context: context, now: Date()).transcript == "hunter2")
   }
 
   @Test("threads every focus-context field, including the selected text")

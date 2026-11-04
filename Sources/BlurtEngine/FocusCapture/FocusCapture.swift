@@ -297,7 +297,7 @@
     }
 
     /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
-    private nonisolated static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+    nonisolated static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
       var ref: CFTypeRef?
       guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
         let ref

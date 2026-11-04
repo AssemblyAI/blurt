@@ -17,11 +17,8 @@
   /// And one guard on every step: the fixture must be the app in front, or the
   /// suite stops — input meant for it must never land in another app.
   @Suite(
-    "Live performer", .serialized,
-    .enabled(
-      if: ProcessInfo.processInfo.environment["BLURT_LIVE_AX_TESTS"] == "1",
-      "set BLURT_LIVE_AX_TESTS=1 to run (drives this Mac's UI; needs Accessibility trust)"),
-    .enabled(if: AXIsProcessTrusted(), "the process running the tests needs Accessibility trust"),
+    "Live performer", .serialized, .tags(.drivesThisMac),
+    .drivesThisMac("BLURT_LIVE_AX_TESTS", to: "run the performer against the fixture app"),
     .timeLimit(.minutes(1)))
   struct LivePerformerTests {
     @Test("every element action lands in the fixture, as the fixture records it")
@@ -145,10 +142,8 @@
         // A process spawned from the test can't take the front by itself,
         // and only a registered app may hand it over: the test process
         // becomes one (an accessory: no Dock icon), then activates it.
-        await MainActor.run {
-          NSApplication.shared.setActivationPolicy(.accessory)
-          _ = NSRunningApplication(processIdentifier: process.processIdentifier)?.activate()
-        }
+        await MacDriver.becomeAccessory()
+        _ = await MainActor.run { NSRunningApplication(processIdentifier: process.processIdentifier)?.activate() }
         for _ in 0..<50 where await fixture.isFrontmost() == false {
           try await Task.sleep(for: .milliseconds(100))
         }

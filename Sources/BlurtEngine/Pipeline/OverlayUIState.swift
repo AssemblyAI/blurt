@@ -170,6 +170,10 @@ extension PipelinePhase {
   /// reads as one step from release to the job's end.
   public func overlayState(whileSpeaking speaking: Bool, processingAs: OverlayUIState? = nil) -> OverlayUIState? {
     if speaking && !isCapturing { return nil }
+    // A rewrite's or a command's words handed back: the router shows its own
+    // state ("Rewriting", "Working") the moment it takes them, so hiding the
+    // pill here only made it blink — and, mid-fade, vanish (2026-11-04).
+    if case .handedBack = self, processingAs != nil { return nil }
     return overlayState == .processing ? processingAs ?? overlayState : overlayState
   }
 

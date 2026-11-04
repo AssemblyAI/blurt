@@ -61,6 +61,29 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/STT/STTPrompt.swift"
   "Sources/BlurtEngine/STT/SyncSTTLimits.swift"
   "Sources/BlurtEngine/StringNormalization.swift"
+  # Control Your Mac's decisions: the reply parser and its checks, name
+  # matching and the destructive guard, the screen read over any tree, the
+  # press/focus/menu choices apart from Accessibility, window layout, the
+  # per-app notes, and the complaint and trace helpers. The Accessibility
+  # shell around them (SystemVoiceCommandPerformer*) is no target: nothing
+  # unit-tests those lines, so every mutant there would survive.
+  "Sources/BlurtEngine/Command/VoiceCommandStep+Parse.swift"
+  "Sources/BlurtEngine/Command/CommandMatching.swift"
+  "Sources/BlurtEngine/Command/ScreenRead.swift"
+  "Sources/BlurtEngine/Command/ScreenContext.swift"
+  "Sources/BlurtEngine/Command/ElementActions.swift"
+  "Sources/BlurtEngine/Command/WindowLayout.swift"
+  "Sources/BlurtEngine/Command/AppNotes.swift"
+  "Sources/BlurtEngine/Command/CommandTrace.swift"
+  "Sources/BlurtEngine/Command/VoiceCommandStep.swift"
+  "Sources/BlurtEngine/Command/VoiceCommandPlanner.swift"
+  "Sources/BlurtEngine/Command/ElementSnapshot.swift"
+  # The press routing and the command log around it, and the paste decision
+  # the recorded paste fixtures replay.
+  "Sources/BlurtEngine/Hotkey/SelectionSpeechRouting.swift"
+  "Sources/BlurtEngine/Hotkey/SelectionSpeechRouting+Types.swift"
+  "Sources/BlurtEngine/Pipeline/DictationLog+Commands.swift"
+  "Sources/BlurtEngine/FocusCapture/PasteTarget.swift"
 )
 
 MAX_MUTANTS=0 # 0 = no cap
