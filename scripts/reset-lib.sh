@@ -158,8 +158,8 @@ reset_install() {
   # it, so this does too. The rmdir only succeeds once the directory is empty,
   # so every file Blurt writes there must be listed.
   local log_dir="$HOME/Library/Logs/Blurt"
-  echo "==> Removing dictation logs ($log_dir/{dictations,errors}.jsonl)"
-  rm -f "$log_dir/dictations.jsonl" "$log_dir/errors.jsonl"
+  echo "==> Removing dictation logs ($log_dir/{dictations,errors,commands}.jsonl)"
+  rm -f "$log_dir/dictations.jsonl" "$log_dir/errors.jsonl" "$log_dir/commands.jsonl"
   rmdir "$log_dir" 2>/dev/null || true
 
   if [ -n "$library_dir" ]; then

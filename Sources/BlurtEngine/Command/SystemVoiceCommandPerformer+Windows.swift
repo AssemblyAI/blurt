@@ -8,8 +8,7 @@
   // same ones Rectangle and Hammerspoon set. Where it goes is `WindowLayout`.
   extension SystemVoiceCommandPerformer {
     static func arrangeWindow(_ operation: WindowOperation) async throws {
-      guard let pid = await MainActor.run(body: { NSWorkspace.shared.frontmostApplication?.processIdentifier }),
-        let window = AXRead.element(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute)
+      guard let window = await frontmostApp().flatMap(AXRead.window)
       else { throw VoiceCommandError.couldNotPerform("find a window to arrange") }
       switch operation {
       case .minimize: try set(window, kAXMinimizedAttribute, kCFBooleanTrue)

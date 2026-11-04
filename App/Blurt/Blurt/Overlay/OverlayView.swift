@@ -176,6 +176,11 @@ struct OverlayView: View {
       StatusLineText("Done")
         .transition(.opacity)
         .help(state.accessibilityLabel)
+    case .noted:
+      // A complaint about the last command, logged against it.
+      StatusLineText("Noted")
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
     }
   }
 

@@ -181,6 +181,17 @@
     }
 
     public func insert(_ text: String, after priorText: String? = nil, windowTitle: String? = nil) async throws {
+      try await enqueue(text, after: priorText, windowTitle: windowTitle, pinned: true)
+    }
+
+    /// Pastes where focus is now rather than at the pinned target: the snapshot
+    /// `performInsert` takes is nil for this one paste, and `targetApp` is
+    /// untouched, so a press pinning its own target in the meantime keeps it.
+    public func insertAtFocus(_ text: String) async throws {
+      try await enqueue(text, after: nil, windowTitle: nil, pinned: false)
+    }
+
+    private func enqueue(_ text: String, after priorText: String?, windowTitle: String?, pinned: Bool) async throws {
       guard !text.isEmpty else { return }
       // Serialize the whole paste critical section by chaining behind the previous
       // insert's link (which includes its settle/restore — see `pendingSettle`).
@@ -192,7 +203,7 @@
       let timeout = pasteSettleDuration
       let paste = Task<(@Sendable () -> Void)?, any Error> {
         await previous?.value
-        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle)
+        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
       }
       // Strong `self` captures, deliberately: each link is bounded (one paste, one
       // settle sleep — no cycle), and a weak capture would let an injector torn
@@ -218,14 +229,14 @@
     /// insert (or its settle) is mid-flight. Returns the deferred clipboard-restore
     /// action for the settle link to run once the paste has landed.
     private func performInsert(
-      _ text: String, after priorText: String?, windowTitle: String?
+      _ text: String, after priorText: String?, windowTitle: String?, pinned: Bool
     ) async throws -> @Sendable () -> Void {
       try Task.checkCancellation()
       // Snapshot the target at entry and use only the local below: this method
       // suspends (activation settle), the actor is reentrant, and a
       // setTarget() interleaving mid-insert must not make us activate one app
       // while judging editability and recording `lastInserted` for another.
-      let target = targetApp
+      let target = pinned ? targetApp : nil
       // Our last paste only still precedes the caret if the user hasn't typed or
       // clicked since; otherwise forget it, same as a window change.
       let continuity = lastInserted.flatMap { last in

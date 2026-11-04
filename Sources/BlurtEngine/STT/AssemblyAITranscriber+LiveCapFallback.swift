@@ -89,7 +89,20 @@ extension AssemblyAITranscriber {
   ) async -> Data? {
     defer { live.finish() }
     var copy: Data? = Data()
-    for await frame in frames {
+    // Whole 16-bit samples only, for the streamed body and this copy alike,
+    // whatever the input device hands over: either route refuses audio that
+    // ends on half a sample (`400 stream ended mid-frame`, `FrameAligner`).
+    var aligner = FrameAligner()
+    defer {
+      if aligner.sawMisalignedChunk {
+        log.error(
+          "capture delivered audio off the 16-bit grid; realigned (dangling byte dropped: \(aligner.hasDanglingByte, privacy: .public))"
+        )
+      }
+    }
+    for await chunk in frames {
+      let frame = aligner.align(chunk)
+      guard !frame.isEmpty else { continue }
       live.yield(frame)
       guard let kept = copy?.count else { continue }
       if kept + frame.count > cap {

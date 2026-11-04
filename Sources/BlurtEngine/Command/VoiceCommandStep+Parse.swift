@@ -4,19 +4,21 @@ import Foundation
 // asks for, checked step by step before any of it runs.
 
 extension VoiceCommandStep {
-  /// The steps in a planner reply: a JSON object `{"steps": [...]}`, found
-  /// between its first `{` and last `}` so a code fence or a stray sentence
-  /// around it doesn't sink the command. Every step must parse, or none run:
-  /// half a plan is a different command.
+  /// The steps in a planner reply: the JSON object `{"steps": [...]}` the
+  /// schema (`VoiceCommandPlanner.responseFormat`) holds the gateway to — no
+  /// fence, prose or shape around it to forgive. Every step must parse, or
+  /// none run: half a plan is a different command. What's checked here is
+  /// what no schema can say: a link's scheme, a chord's keys, the destructive
+  /// guard, an element's number, a path's depth, a text's length.
   ///
   /// `elementIDs`: the numbers the snapshot the planner saw listed. A step
   /// naming any other refuses the plan, as an unknown action does.
   static func steps(
     fromReply reply: String, maxSteps: Int, elementIDs: Set<Int> = []
   ) throws -> [VoiceCommandStep] {
-    guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"), start < end,
-      let plan = try? JSONDecoder().decode(Plan.self, from: Data(reply[start...end].utf8))
-    else { throw VoiceCommandError.malformedReply }
+    guard let plan = try? JSONDecoder().decode(Plan.self, from: Data(reply.utf8)) else {
+      throw VoiceCommandError.malformedReply
+    }
     guard !plan.steps.isEmpty else { throw VoiceCommandError.notUnderstood }
     guard plan.steps.count <= maxSteps else { throw VoiceCommandError.tooManySteps }
     let steps = try plan.steps.map(Self.init(raw:))
@@ -24,6 +26,13 @@ extension VoiceCommandStep {
       throw VoiceCommandError.unknownElement(id)
     }
     return steps
+  }
+
+  /// Every field a step can carry, by its name on the wire: the keys this
+  /// parser decodes and the planner's schema spells (`VoiceCommandPlanner.fields`),
+  /// one list so the two can't disagree.
+  enum Field: String, CodingKey, CaseIterable {
+    case action, app, url, keys, text, control, name, path, element, direction, operation, value
   }
 
   private struct Plan: Decodable {
@@ -44,23 +53,17 @@ extension VoiceCommandStep {
     let element: Int?
     let direction: String?
     let operation: String?
-    /// A slider's or stepper's value: the model writes it as a number or a string.
+    /// A slider's or stepper's value, the schema's number written as `plain`.
     let value: String?
 
-    private enum CodingKeys: String, CodingKey {
-      case action, app, url, keys, text, control, name, path, element, direction, operation, value
-    }
-
-    /// An element number as an integer, or — the shape a model writes
-    /// without the schema — a string holding one: "12", "[12]", "#12".
-    private static func element(in container: KeyedDecodingContainer<CodingKeys>) -> Int? {
-      if let number = try? container.decodeIfPresent(Int.self, forKey: .element) { return number }
-      guard let text = try? container.decodeIfPresent(String.self, forKey: .element) else { return nil }
-      return Int(text.trimmingCharacters(in: CharacterSet(charactersIn: "[]# ")))
+    /// A number as `Double(_:)` reads it back: "40", "0.5" — never the
+    /// user's locale's "0,5", which it can't.
+    static func plain(_ number: Double) -> String {
+      number == number.rounded() && abs(number) < 1e15 ? String(Int(number)) : String(number)
     }
 
     init(from decoder: any Decoder) throws {
-      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let container = try decoder.container(keyedBy: Field.self)
       action = try container.decode(String.self, forKey: .action)
       app = try container.decodeIfPresent(String.self, forKey: .app)
       url = try container.decodeIfPresent(String.self, forKey: .url)
@@ -69,51 +72,49 @@ extension VoiceCommandStep {
       control = try container.decodeIfPresent(String.self, forKey: .control)
       name = try container.decodeIfPresent(String.self, forKey: .name)
       path = try container.decodeIfPresent([String].self, forKey: .path) ?? []
-      element = Self.element(in: container)
+      element = try container.decodeIfPresent(Int.self, forKey: .element)
       direction = try container.decodeIfPresent(String.self, forKey: .direction)
       operation = try container.decodeIfPresent(String.self, forKey: .operation)
-      value =
-        (try? container.decodeIfPresent(String.self, forKey: .value))
-        ?? (try? container.decodeIfPresent(Double.self, forKey: .value)).map { $0.formatted(.number.grouping(.never)) }
+      value = try container.decodeIfPresent(Double.self, forKey: .value).map(Self.plain)
     }
   }
 
   /// The app, link and keyboard steps, then the ones aimed at what's on screen.
   private init(raw: RawStep) throws {
-    switch raw.action {
-    case "open_app": self = .openApp(try Self.field(raw.app))
-    case "quit_app": self = .quitApp(try Self.field(raw.app))
-    case "hide_app": self = .hideApp(try Self.field(raw.app))
-    case "open_url": self = .openURL(try Self.url(raw.url))
-    case "shortcut": self = .shortcut(try Self.chord(raw.keys))
-    case "type": self = .type(try Self.typed(raw.text))
-    case "media": self = .media(try Self.mediaKey(raw.control))
-    default: self = try Self.screenStep(raw)
+    guard let action = Action(rawValue: raw.action) else { throw VoiceCommandError.unsupportedAction(raw.action) }
+    switch action {
+    case .openApp: self = .openApp(try Self.field(raw.app))
+    case .quitApp: self = .quitApp(try Self.field(raw.app))
+    case .hideApp: self = .hideApp(try Self.field(raw.app))
+    case .openURL: self = .openURL(try Self.url(raw.url))
+    case .shortcut: self = .shortcut(try Self.chord(raw.keys))
+    case .type: self = .type(try Self.typed(raw.text))
+    case .media: self = .media(try Self.mediaKey(raw.control))
+    default: self = try Self.screenStep(action, raw)
     }
   }
 
-  private static func screenStep(_ raw: RawStep) throws -> VoiceCommandStep {
-    switch raw.action {
-    case "press_button": .pressButton(try field(raw.name))
-    case "menu": .chooseMenuItem(try menuPath(raw.path))
-    case "press": .pressElement(try element(raw.element))
-    case "focus": .focusElement(try element(raw.element))
-    case "select": .select(try element(raw.element))
-    case "show_menu": .showMenu(try element(raw.element))
-    default: try controlStep(raw)
+  private static func screenStep(_ action: Action, _ raw: RawStep) throws -> VoiceCommandStep {
+    switch action {
+    case .pressButton: .pressButton(try field(raw.name))
+    case .menu: .chooseMenuItem(try menuPath(raw.path))
+    case .press: .pressElement(try element(raw.element))
+    case .focus: .focusElement(try element(raw.element))
+    case .select: .select(try element(raw.element))
+    case .showMenu: .showMenu(try element(raw.element))
+    default: try controlStep(action, raw)
     }
   }
 
   /// The steps that adjust a control, scroll, or move a window.
-  private static func controlStep(_ raw: RawStep) throws -> VoiceCommandStep {
-    switch raw.action {
-    case "set_value": .setValue(element: try element(raw.element), value: try field(raw.value))
-    case "increment": .increment(try element(raw.element))
-    case "decrement": .decrement(try element(raw.element))
-    case "scroll":
-      .scroll(
-        try ScrollDirection(rawValue: field(raw.direction)).orThrow(.malformedReply), element: raw.element)
-    case "window":
+  private static func controlStep(_ action: Action, _ raw: RawStep) throws -> VoiceCommandStep {
+    switch action {
+    case .setValue: .setValue(element: try element(raw.element), value: try field(raw.value))
+    case .increment: .increment(try element(raw.element))
+    case .decrement: .decrement(try element(raw.element))
+    case .scroll:
+      .scroll(try ScrollDirection(rawValue: field(raw.direction)).orThrow(.malformedReply), element: raw.element)
+    case .window:
       .window(try WindowOperation(rawValue: field(raw.operation)).orThrow(.unsupportedAction("window")))
     default: throw VoiceCommandError.unsupportedAction(raw.action)
     }

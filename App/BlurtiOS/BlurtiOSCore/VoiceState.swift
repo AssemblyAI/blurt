@@ -123,7 +123,7 @@ extension PhaseSnapshot.State {
     self =
       switch overlay {
       // Reading aloud, rewriting and commands are the Mac's alone, so the iPhone never sees them.
-      case .idle, .speaking, .rewriting, .commanding, .done: .idle
+      case .idle, .speaking, .rewriting, .commanding, .done, .noted: .idle
       case .connecting: .connecting
       case .recording: .recording
       case .processing: .processing
@@ -141,7 +141,7 @@ extension PhaseSnapshot {
     switch overlay {
     case .error(let message, _): message
     case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .commanding, .pasted, .noTarget,
-      .done:
+      .done, .noted:
       nil
     }
   }

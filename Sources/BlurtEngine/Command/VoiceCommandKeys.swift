@@ -16,21 +16,10 @@
       return KeyboardLayout.current()[character] ?? chord.ansiKeyCode
     }
 
-    /// The chord's key-down/key-up pair on `keyCode`, or nil when CoreGraphics
-    /// refuses to build them. Split from `post` for the reason
-    /// `KeyInjector.cmdVEvents` is: building an event is testable, posting
-    /// one types into the machine.
+    /// The chord's key-down/key-up pair on `keyCode`: `KeyInjector`'s, which
+    /// the paste's ⌘V is built by too, with every modifier on both events.
     static func events(for chord: KeyChord, keyCode: UInt16) -> (down: CGEvent, up: CGEvent)? {
-      guard let source = CGEventSource(stateID: .combinedSessionState),
-        let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-        let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
-      else { return nil }
-      // On both, as `KeyInjector`'s ⌘V sets them: a key-up without its
-      // modifiers reads as the chord released part-way.
-      let flags = flags(for: chord.modifiers)
-      down.flags = flags
-      up.flags = flags
-      return (down, up)
+      KeyInjector.keyEvents(virtualKey: keyCode, flags: flags(for: chord.modifiers))
     }
 
     static func flags(for modifiers: KeyChord.Modifiers) -> CGEventFlags {
@@ -40,17 +29,6 @@
       if modifiers.contains(.option) { flags.insert(.maskAlternate) }
       if modifiers.contains(.control) { flags.insert(.maskControl) }
       return flags
-    }
-
-    /// Posted to the annotated session tap, as the paste's ⌘V is: it honours
-    /// exactly these flags rather than OR-ing in a trigger modifier still held,
-    /// and it sits after the trigger's own tap, so `DictationKeyTap` never
-    /// reads the shortcut as a combo.
-    static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
-      guard let (down, up) = events else { return false }
-      down.post(tap: .cgAnnotatedSessionEventTap)
-      up.post(tap: .cgAnnotatedSessionEventTap)
-      return true
     }
   }
 

@@ -706,25 +706,28 @@ else
   #                        CaptureSessionRecorder. The mix, the 16 kHz conversion
   #                        and the file and PCM output live in SystemAudioMix.swift,
   #                        which IS covered.
-  #  - Command/SystemVoiceCommandPerformer(+Accessibility|+Screen|+Controls|+Windows).swift : the
-  #                        Control Your Mac key's system shell — launching and
-  #                        raising other apps, Accessibility reads and presses
-  #                        against a live target process, and synthesized clicks.
-  #                        It needs Accessibility trust and a real app to act on,
-  #                        and run under `swift test` it would click and type into
-  #                        the machine. Same justification as AudioRoute. The
-  #                        policy it serves — the step parse, name matching, the
-  #                        snapshot walk, visibility, the click point, the
-  #                        destructive guard — lives in VoiceCommandStep,
-  #                        CommandMatching, ScreenContext and WindowLayout, which ARE covered,
-  #                        as is +Keys (the chord events and the layout read).
+  #  - Command/SystemVoiceCommandPerformer*.swift : the Control Your Mac
+  #                        key's system shell — launching and raising other apps,
+  #                        Accessibility reads and presses against a live target
+  #                        process, and synthesized clicks. It needs Accessibility
+  #                        trust and a real app to act on, and run under `swift
+  #                        test` it would click and type into the machine. Same
+  #                        justification as AudioRoute. A pattern, not a list: a
+  #                        new shell extension needs no edit here, and anything
+  #                        named otherwise is counted. The policy the shell serves
+  #                        — the step parse, name matching, the snapshot walk and
+  #                        its role and label rules, visibility, the click point,
+  #                        window layout, the destructive guard, the key chords —
+  #                        lives in VoiceCommandStep, CommandMatching,
+  #                        ScreenContext, WindowLayout and VoiceCommandKeys, which
+  #                        ARE covered.
   #  - MeetingMicProbe.swift : the microphone-user probe — Core Audio process
   #                        objects, which only a real machine has. Same
   #                        justification as AudioInputDevices. The policy that
   #                        turns its answer into start and stop (MeetingAutoRecord)
   #                        IS covered.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift|Command/SystemVoiceCommandPerformer(\+Accessibility|\+Screen|\+Controls|\+Windows)?\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift|Command/SystemVoiceCommandPerformer[^/]*\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

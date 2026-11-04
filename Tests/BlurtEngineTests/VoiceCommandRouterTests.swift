@@ -18,34 +18,40 @@ struct VoiceCommandRouterTests {
     _ planner: StubPlanner, performer: StubPerformer = StubPerformer(),
     injectorError: (any Error & Sendable)? = nil
   ) async throws -> Rig {
-    let fixture = makeSession(mode: .transcript("Open Slack and search for budget."))
+    let rig = try await press(
+      saying: "Open Slack and search for budget.", planner, performer: performer, injectorError: injectorError)
+    try await waitUntil { !planner.calls.isEmpty }
+    return rig
+  }
+
+  /// One held command press of right ⌥ transcribed as `said`, returned as
+  /// soon as the key is up.
+  private func press(
+    saying said: String, _ planner: StubPlanner, performer: StubPerformer = StubPerformer(),
+    injectorError: (any Error & Sendable)? = nil
+  ) async throws -> Rig {
+    let fixture = makeSession(mode: .transcript(said))
     await fixture.injector.setError(injectorError)
     let router = SelectionSpeechRouter(
       session: fixture.session, speaker: GatedSpeaker(), planner: planner, performer: performer,
       readSelection: { nil }, defaults: defaults)
     TriggerKeyStyleStore(defaults: defaults).setChoice(.command, for: .rightOption)
-    let events = CommandEvents()
-    router.commandPill = { events.pills.append($0) }
-    router.resetGate = { events.resets += 1 }
+    let events = JobEvents(watching: router)
     let phases = try await speakHeldPress(router, on: fixture)
-    try await waitUntil { !planner.calls.isEmpty }
     return Rig(router: router, events: events, injector: fixture.injector, performer: performer, phases: phases)
   }
 
   @MainActor
   private struct Rig {
     let router: SelectionSpeechRouter
-    let events: CommandEvents
+    let events: JobEvents
     let injector: StubInjector
     let performer: StubPerformer
     let phases: Task<Void, Never>
 
     /// What the pill showed after "Working", once the command has ended.
     func outcomes() async throws -> [OverlayUIState?] {
-      defer { phases.cancel() }
-      try await waitUntil { events.pills.count > 1 }
-      #expect(events.pills.first == .commanding)
-      return Array(events.pills.dropFirst())
+      try await events.outcomes(after: .commanding, stopping: phases)
     }
   }
 
@@ -61,11 +67,15 @@ struct VoiceCommandRouterTests {
     let rig = try await command(planner, performer: StubPerformer(screen: screen))
     #expect(try await rig.outcomes() == [.done])
     #expect(planner.calls == [StubPlanner.Call(command: "Open Slack and search for budget.", context: screen)])
+    // Read once, at the release, while the command transcribed: not again to plan.
+    #expect(rig.performer.screenReads == 1)
     #expect(rig.performer.performed == Array(Self.slackSearch.prefix(2)))
-    // Typed where focus is now — in Slack — not back in the app the press captured.
-    #expect(await rig.injector.inserted == ["budget"])
-    #expect(await rig.injector.targets.last == .some(nil))
-    #expect(await rig.injector.insertedPrior == [nil])
+    // Typed where focus is now — in Slack — not back in the app the press
+    // captured, and without touching the target the next press will pin.
+    #expect(await rig.injector.insertedAtFocus == ["budget"])
+    #expect(await rig.injector.inserted.isEmpty)
+    // One pin, the press's own: the typed step set none.
+    #expect(await rig.injector.targets.count == 1)
   }
 
   @Test("a typed step with nothing editable focused ends the command there, as a quiet Copied")
@@ -110,6 +120,46 @@ struct VoiceCommandRouterTests {
     #expect(performer.events == ["starting", "ended"])
   }
 
+  @Test("a failure's public log kind names the error's case, never what it carries")
+  func logKind() {
+    #expect(
+      SelectionSpeechRouter.logName(of: VoiceCommandError.unsafeURL("https://evil.example/?q=secret"))
+        == "VoiceCommandError.unsafeURL")
+    #expect(SelectionSpeechRouter.logName(of: VoiceCommandError.notUnderstood) == "VoiceCommandError.notUnderstood")
+  }
+
+  @Test("a complaint about the last command is noted, not planned")
+  func complaintIsNoted() async throws {
+    let planner = StubPlanner(steps: [.media(.mute)])
+    let rig = try await press(saying: "That last command didn't work.", planner)
+    try await waitUntil { rig.events.pills.contains(.noted) }
+    rig.phases.cancel()
+    #expect(planner.calls.isEmpty)
+    #expect(!rig.router.ownsPill)
+  }
+
+  @Test("each step is recorded as it runs: how it ran, and the error that stopped the rest")
+  func stepRecords() async throws {
+    let fixture = makeSession(mode: .transcript("x"))
+    let ran = SelectionSpeechRouter.StepLog()
+    let screen = ScreenContext(appName: "Mail", elements: [.init(id: 4, kind: "button", label: "Reply")])
+    _ = try await SelectionSpeechRouter.perform(
+      [.pressElement(4), .type("hi")], in: screen, performer: StubPerformer(), session: fixture.session, recording: ran)
+    #expect(ran.records.map(\.step) == ["press #4 (button \"Reply\")", "type \"hi\""])
+    #expect(ran.records.map(\.how) == ["stubbed", "pasted"])
+    #expect(ran.records.allSatisfy { $0.error == nil })
+
+    let failed = SelectionSpeechRouter.StepLog()
+    await #expect(throws: VoiceCommandError.self) {
+      try await SelectionSpeechRouter.perform(
+        [.openApp("Figma"), .media(.mute)], in: screen,
+        performer: StubPerformer(error: VoiceCommandError.appNotFound("Figma")), session: fixture.session,
+        recording: failed)
+    }
+    #expect(failed.records.map(\.step) == ["open_app Figma"])
+    #expect(failed.records.first?.error == "No app named Figma is installed.")
+  }
+
   @Test("a missing key is a setup state, as it is for a dictation: the pill goes calm, not red")
   func missingKeyIsCalm() async throws {
     let rig = try await command(StubPlanner(error: BlurtError.apiKeyMissing))
@@ -130,13 +180,6 @@ struct VoiceCommandRouterTests {
     #expect(rig.performer.performed.isEmpty)
     #expect(await rig.injector.inserted.isEmpty)
   }
-}
-
-/// What a command press reported.
-@MainActor
-private final class CommandEvents {
-  var pills: [OverlayUIState?] = []
-  var resets = 0
 }
 
 /// A planner that records each call and answers with `steps`, or throws
@@ -160,7 +203,7 @@ final class StubPlanner: VoiceCommandPlanning {
 
   var calls: [Call] { recorded.withLock { $0 } }
 
-  func plan(_ command: String, context: ScreenContext) async throws -> [VoiceCommandStep] {
+  func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
     recorded.withLock { $0.append(Call(command: command, context: context)) }
     if hangs { try await Task.sleep(for: .seconds(60)) }
     if let error { throw error }
@@ -174,6 +217,7 @@ final class StubPerformer: VoiceCommandPerforming {
   private let error: (any Error & Sendable)?
   private let recorded = Mutex<[VoiceCommandStep]>([])
   private let lifecycle = Mutex<[String]>([])
+  private let reads = Mutex(0)
 
   init(screen: ScreenContext = ScreenContext(appName: nil), error: (any Error & Sendable)? = nil) {
     self.screen = screen
@@ -187,10 +231,17 @@ final class StubPerformer: VoiceCommandPerforming {
   func commandStarting() async { lifecycle.withLock { $0.append("starting") } }
   func commandEnded() async { lifecycle.withLock { $0.append("ended") } }
 
-  func screenContext() async -> ScreenContext { screen }
+  /// How many times the screen was read.
+  var screenReads: Int { reads.withLock { $0 } }
 
-  func perform(_ step: VoiceCommandStep) async throws {
+  func screenContext() async -> ScreenContext {
+    reads.withLock { $0 += 1 }
+    return screen
+  }
+
+  func perform(_ step: VoiceCommandStep) async throws -> String? {
     if let error { throw error }
     recorded.withLock { $0.append(step) }
+    return "stubbed"
   }
 }

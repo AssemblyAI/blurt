@@ -19,6 +19,12 @@ actor StubInjector: InjectorProtocol {
     insertedPrior.append(priorText)
     insertedWindowTitles.append(windowTitle)
   }
+  /// What each `insertAtFocus` pasted: a voice command's typed step.
+  var insertedAtFocus: [String] = []
+  func insertAtFocus(_ text: String) async throws {
+    if let error { throw error }
+    insertedAtFocus.append(text)
+  }
   /// The pid of each `setTarget`, nil for "wherever focus is now".
   var targets: [pid_t?] = []
   func setTarget(_ focus: CapturedFocus?) async { targets.append(focus?.pid) }

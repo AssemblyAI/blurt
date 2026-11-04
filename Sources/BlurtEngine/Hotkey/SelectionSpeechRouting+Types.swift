@@ -16,12 +16,17 @@ extension SelectionSpeechRouting {
     /// Rewrite `selection` as the spoken `request` asks, and paste it over the selection.
     case rewrite(request: String, selection: String)
     case stopSpeech
-    /// Abandon the rewrite in flight, before it pastes.
-    case stopRewrite
     /// Carry out the spoken `command`.
     case runCommand(String)
-    /// Abandon the command in flight, before its next step.
-    case stopCommand
+    /// A command press proved itself: get the screen ready to read while the
+    /// command is spoken (`VoiceCommandPerforming.commandStarting`).
+    case prepareCommand
+    /// A command's recording ended: read the screen while it transcribes, for
+    /// `.runCommand` to plan with.
+    case readScreen
+    /// Abandon the job in flight — a rewrite before it pastes, a command
+    /// before its next step.
+    case stopJob
     /// A dictation ended without a key event: `DictationKeyTap.syncAfterTerminalPhase`.
     case syncGateAfterSession
     /// The gate is latched or armed by a key press that holds no recording: a read
@@ -63,11 +68,8 @@ extension SelectionSpeechRouting {
     /// was let go of before the mic ever opened).
     case transcribing(Intent, String, started: Bool)
     case speaking
-    /// The selection is being rewritten and pasted. Like `.speaking`, the gate
-    /// is free under it, and any press abandons it.
-    case rewriting
-    /// A spoken command is being carried out, gate free and abandoned by any
-    /// press, as a rewrite is.
-    case commanding
+    /// A rewrite or a command is under way: the router's one job. Like
+    /// `.speaking`, the gate is free under it, and any press abandons it.
+    case working
   }
 }

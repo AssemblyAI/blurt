@@ -1,4 +1,3 @@
-import AssemblyAI
 import Foundation
 
 /// The stock transforms the transcript sheet offers, plus a custom one.
@@ -99,7 +98,7 @@ public enum TranscriptTransform: Hashable, Sendable {
 /// A file transcript comes from the async API, which has no rewrite to ask
 /// for, and can run for hours — past anything the dictation request accepts.
 /// `check-invariants.sh` exempts this file and `ReadAloudLLM.swift`, no other.
-public struct TranscriptLLM: Sendable {
+public struct TranscriptLLM: GatewayClient, Sendable {
   /// Gemma 4 (31B), the owner's pick (2026-10-30): $0.14 in / $0.40
   /// out per million tokens on the docs' list, with a 256k-token context — some
   /// twenty hours of speech, so a recording fits whole. An hour of speech is
@@ -112,15 +111,10 @@ public struct TranscriptLLM: Sendable {
   /// A long transcript takes a while to read even for a fast model.
   static let timeout: TimeInterval = 180
 
-  private let apiKeyProvider: @Sendable () -> String?
-  private let transport: any HTTPTransport
+  private let gateway: GatewayConnection
 
-  public init(
-    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
-    transport: any HTTPTransport = URLSession.shared
-  ) {
-    self.apiKeyProvider = apiKeyProvider
-    self.transport = transport
+  public init(gateway: GatewayConnection) {
+    self.gateway = gateway
   }
 
   /// `transform` applied to `transcript` (the speaker-labelled text).
@@ -164,9 +158,8 @@ public struct TranscriptLLM: Sendable {
   }
 
   private func complete(system: String, user: String, maxTokens: Int) async throws -> String {
-    try await ReadAloudLLM.send(
-      ReadAloudLLM.chat(system: system, user: user, maxTokens: maxTokens, model: Self.model),
-      apiKey: apiKeyProvider(), transport: transport, timeout: Self.timeout
+    try await gateway.send(
+      ReadAloudLLM.chat(system: system, user: user, maxTokens: maxTokens, model: Self.model), timeout: Self.timeout
     ).text
   }
 

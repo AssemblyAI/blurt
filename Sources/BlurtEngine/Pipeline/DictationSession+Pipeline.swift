@@ -246,19 +246,19 @@ extension DictationSession {
     }
   }
 
-  /// Pastes `text` wherever focus is now: a voice command's `type` step. It
-  /// drops the press's captured target first, unlike `replaceSelection`,
-  /// because the command's earlier steps may have brought another app forward
-  /// and the words belong there. Reactivating the app the press captured would
-  /// undo them. The next press pins its own target again. Answers as
-  /// `replaceSelection` does.
-  ///
-  /// Checks for cancellation first: a press that abandoned the command is
-  /// about to pin its own target, and a late nil here could land after it.
+  /// Pastes `text` wherever focus is now: a voice command's `type` step,
+  /// after its earlier steps may have brought another app forward
+  /// (`InjectorProtocol.insertAtFocus`). The press's pinned target is left as
+  /// it is, so nothing here can race the next press pinning its own. Answers
+  /// as `replaceSelection` does.
   public func typeText(_ text: String) async throws -> PipelinePhase {
-    try Task.checkCancellation()
-    await injector.setTarget(nil)
-    return try await replaceSelection(with: text)
+    do {
+      try await injector.insertAtFocus(text)
+      return .pasted
+    } catch {
+      if error is CancellationError || Task.isCancelled { throw CancellationError() }
+      return Self.pasteOutcome(error)
+    }
   }
 
   /// The phase a failed paste ends in. Which injector errors are a quiet

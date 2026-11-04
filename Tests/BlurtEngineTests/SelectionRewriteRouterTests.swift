@@ -24,9 +24,7 @@ struct SelectionRewriteRouterTests {
       session: fixture.session, speaker: GatedSpeaker(), rewriter: rewriter, readSelection: { "hey all" },
       defaults: defaults)
     TriggerKeyStyleStore(defaults: defaults).setChoice(.rewrite, for: .rightOption)
-    let events = RewriteEvents()
-    router.rewritePill = { events.pills.append($0) }
-    router.resetGate = { events.resets += 1 }
+    let events = JobEvents(watching: router)
     let phases = try await speakHeldPress(router, on: fixture)
     try await waitUntil { !rewriter.calls.isEmpty }
     return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
@@ -36,16 +34,13 @@ struct SelectionRewriteRouterTests {
   @MainActor
   private struct Rig {
     let router: SelectionSpeechRouter
-    let events: RewriteEvents
+    let events: JobEvents
     let injector: StubInjector
     let phases: Task<Void, Never>
 
     /// What the pill showed after "Rewriting", once the rewrite has ended.
     func outcomes() async throws -> [OverlayUIState?] {
-      defer { phases.cancel() }
-      try await waitUntil { events.pills.count > 1 }
-      #expect(events.pills.first == .rewriting)
-      return Array(events.pills.dropFirst())
+      try await events.outcomes(after: .rewriting, stopping: phases)
     }
   }
 
@@ -94,13 +89,6 @@ struct SelectionRewriteRouterTests {
     #expect(rig.events.resets == resetsBefore)
     #expect(await rig.injector.inserted.isEmpty)
   }
-}
-
-/// What a rewrite press reported.
-@MainActor
-private final class RewriteEvents {
-  var pills: [OverlayUIState?] = []
-  var resets = 0
 }
 
 /// A rewriter that records each call and answers with `reply`, or throws

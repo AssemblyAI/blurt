@@ -82,18 +82,20 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   dictation path and nothing it writes is pasted: it runs only on a history
   entry the user opens and asks for a task, past dictations included. The
   third is the Rewrite Selection key's (`Rewrite/SelectionRewriter.swift`,
-  through `ReadAloudLLM.send`): highlighted text rewritten as a spoken
+  through `GatewayConnection.send`): highlighted text rewritten as a spoken
   instruction asks, and pasted over the selection — the one gateway output
   that is pasted, owner-directed (2026-11-03). It never touches a dictation's
   words; the instruction it is given is a hand-back press's, never pasted.
   The fourth is the Control Your Mac key's (`Command/VoiceCommandPlanner.swift`,
-  through `ReadAloudLLM.send`): a spoken command turned into steps from a
+  through `GatewayConnection.send`): a spoken command turned into steps from a
   closed list (`VoiceCommandStep`) that Blurt carries out itself — the one
   gateway output acted on, owner-directed (2026-11-03). Keep it data, never
   script: no AppleScript, shell or arbitrary URL schemes, and a typed step
-  still pastes through the injector. Its Accessibility steps (a named button,
-  a menu path) press what's on screen, never a coordinate, and the
-  destructive-action ban stays in code (`DestructiveGuard`), not only the
+  still pastes through the injector. Its steps target elements on screen —
+  a listed element, a named button, a menu path — never a coordinate the model
+  chose; a click at an element's centre is only the fallback for one that
+  refuses `AXPress`, and the destructive-action ban stays in code
+  (`DestructiveGuard`, checked on every action and click), not only the
   prompt. It sees the screen through the Accessibility tree (`ScreenContext`:
   labels of actionable elements), owner-directed: no screenshots, so no Screen
   Recording permission, and never a field's contents or a password field. It

@@ -22,7 +22,7 @@ import Foundation
 /// small model that answers a question in the selection, rather than passing it
 /// through, would otherwise read out an answer nobody asked for. An answer has
 /// no such fallback, since there is nothing else to say.
-struct ReadAloudLLM: Sendable {
+struct ReadAloudLLM: GatewayClient, Sendable {
   static let endpoint = URL(staticString: "https://llm-gateway.assemblyai.com/v1/chat/completions")
 
   /// AssemblyAI's own hosted small model: the docs' quickstart model, the
@@ -93,15 +93,10 @@ struct ReadAloudLLM: Sendable {
     Reply with the answer only, with no preamble such as "Sure" or "Here is a summary".
     """
 
-  private let apiKeyProvider: @Sendable () -> String?
-  private let transport: any HTTPTransport
+  private let gateway: GatewayConnection
 
-  init(
-    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
-    transport: any HTTPTransport = URLSession.shared
-  ) {
-    self.apiKeyProvider = apiKeyProvider
-    self.transport = transport
+  init(gateway: GatewayConnection) {
+    self.gateway = gateway
   }
 
   func rewriteForListening(_ text: String) async throws -> String {
@@ -131,39 +126,7 @@ struct ReadAloudLLM: Sendable {
   }
 
   private func complete(_ body: Body, timeout: TimeInterval) async throws -> Reply {
-    try await Self.send(body, apiKey: apiKeyProvider(), transport: transport, timeout: timeout)
-  }
-
-  /// One gateway chat completion: the key check, the request, the status and
-  /// the reply. Shared with `TranscriptLLM` and `SelectionRewriter`, the other
-  /// gateway clients, so the call is spelled once.
-  static func send(
-    _ body: Body, apiKey: String?, transport: any HTTPTransport, timeout: TimeInterval
-  ) async throws -> Reply {
-    guard let apiKey, !apiKey.isEmpty else { throw BlurtError.apiKeyMissing }
-    let request = try request(for: body, apiKey: apiKey, timeout: timeout)
-    let (data, response) = try await transport.data(for: request)
-    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-    guard (200..<300).contains(status) else { throw ReadAloudLLMError.status(status) }
-    return try reply(from: data)
-  }
-
-  /// `send` with the key, transport and timeout bound in: the one-call
-  /// closure `SelectionRewriter` keeps.
-  static func sender(
-    apiKeyProvider: @escaping @Sendable () -> String?, transport: any HTTPTransport, timeout: TimeInterval
-  ) -> @Sendable (Body) async throws -> Reply {
-    { body in try await send(body, apiKey: apiKeyProvider(), transport: transport, timeout: timeout) }
-  }
-
-  /// The key and transport a gateway client sends with, kept as one value.
-  struct Connection: Sendable {
-    let apiKeyProvider: @Sendable () -> String?
-    let transport: any HTTPTransport
-
-    func send(_ body: Body, timeout: TimeInterval) async throws -> Reply {
-      try await ReadAloudLLM.send(body, apiKey: apiKeyProvider(), transport: transport, timeout: timeout)
-    }
+    try await gateway.send(body, timeout: timeout)
   }
 
   // MARK: - Wire format
@@ -192,7 +155,7 @@ struct ReadAloudLLM: Sendable {
   /// A JSON value built in code: a response format's schema.
   indirect enum JSONValue: Encodable, Equatable, Sendable {
     case string(String)
-    case integer(Int)
+    case number(Double)
     case bool(Bool)
     case array([JSONValue])
     case object([String: JSONValue])
@@ -201,7 +164,7 @@ struct ReadAloudLLM: Sendable {
       var container = encoder.singleValueContainer()
       switch self {
       case .string(let value): try container.encode(value)
-      case .integer(let value): try container.encode(value)
+      case .number(let value): try container.encode(value)
       case .bool(let value): try container.encode(value)
       case .array(let value): try container.encode(value)
       case .object(let value): try container.encode(value)
@@ -223,10 +186,6 @@ struct ReadAloudLLM: Sendable {
       // Copying or answering, not composing: the same input should come back
       // the same way twice.
       temperature: 0)
-  }
-
-  static func request(for body: Body, apiKey: String, timeout: TimeInterval) throws -> URLRequest {
-    try URLRequest.assemblyAIJSONPost(to: endpoint, apiKey: apiKey, timeout: timeout, body: body)
   }
 
   private struct Completion: Decodable {
@@ -285,5 +244,43 @@ enum ReadAloudLLMError: Error, Equatable, LocalizedError {
     case .truncated: "The LLM Gateway's rewrite was cut short."
     case .implausible: "The LLM Gateway's rewrite didn't match the selection."
     }
+  }
+}
+
+/// The key and transport a gateway client sends with, as one value: what
+/// `ReadAloudLLM`, `TranscriptLLM`, `SelectionRewriter` and
+/// `VoiceCommandPlanner` each hold.
+/// Public so a client's public `init(gateway:)` can take it; everything it
+/// does stays inside the engine.
+public struct GatewayConnection: Sendable {
+  let apiKeyProvider: @Sendable () -> String?
+  let transport: any HTTPTransport
+
+  /// One gateway chat completion: the key check, the request, the status and
+  /// the reply — the one place every gateway client's call is spelled.
+  func send(_ body: ReadAloudLLM.Body, timeout: TimeInterval) async throws -> ReadAloudLLM.Reply {
+    guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else { throw BlurtError.apiKeyMissing }
+    let request = try URLRequest.assemblyAIJSONPost(
+      to: ReadAloudLLM.endpoint, apiKey: apiKey, timeout: timeout, body: body)
+    let (data, response) = try await transport.data(for: request)
+    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+    guard (200..<300).contains(status) else { throw ReadAloudLLMError.status(status) }
+    return try ReadAloudLLM.reply(from: data)
+  }
+}
+
+/// A gateway client built from a `GatewayConnection`. The extension gives
+/// every one the same public `init(apiKeyProvider:transport:)` — the stored
+/// key, `URLSession.shared` — written once rather than per client.
+public protocol GatewayClient {
+  init(gateway: GatewayConnection)
+}
+
+extension GatewayClient {
+  public init(
+    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
+    transport: any HTTPTransport = URLSession.shared
+  ) {
+    self.init(gateway: GatewayConnection(apiKeyProvider: apiKeyProvider, transport: transport))
   }
 }

@@ -80,9 +80,10 @@ struct KeysSettingsTab: View {
           Text(
             "Use a \(KeyActionName.command) key and say what to do, like “open Safari and start a new tab.” What "
               + "you say, the app in front, and its window’s title and the names of the buttons, links and fields in "
-              + "it, including list rows (never what’s typed in a field) are sent to AssemblyAI’s LLM Gateway. Blurt then opens, "
-              + "hides or quits apps, opens links, presses shortcuts and buttons, chooses menu items, types and uses "
-              + "the media keys to carry it out.")
+              + "it, including list rows (never what’s typed in a field) are sent to AssemblyAI’s LLM Gateway. "
+              + "Blurt then carries it out: it opens, hides or quits apps, opens links, presses shortcuts, buttons "
+              + "and media keys, chooses menu items, types, selects rows, moves sliders, scrolls, arranges windows, "
+              + "and clicks a control that won’t respond any other way.")
         }
         // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn does
         // anything, but that write only lands at the next log-in, so until then

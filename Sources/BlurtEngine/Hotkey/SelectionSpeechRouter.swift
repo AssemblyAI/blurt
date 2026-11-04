@@ -35,10 +35,15 @@ import Foundation
     private let clock: any Clock<Duration>
     private var routing = SelectionSpeechRouting()
     private var speech: Task<Void, Never>?
-    /// The rewrite in flight, until it pastes. Cancelled by any press.
-    private var rewriting: Task<Void, Never>?
-    /// The command in flight, until its last step. Cancelled by any press.
-    private var commanding: Task<Void, Never>?
+    /// The job in flight — a rewrite until it pastes, a command until its
+    /// last step. Cancelled by any press.
+    private var job: Task<Void, Never>?
+    /// The screen read a command's release started (`.readScreen`), running
+    /// while the command transcribes; `.runCommand` plans with its result.
+    private var screenRead: Task<ScreenContext, Never>?
+    /// The last command logged, for a complaint about it ("that didn't work")
+    /// to name (`DictationLog.appendFeedback`).
+    private var lastCommand: DictationLog.CommandRecord?
     /// The pending `holdElapsed`, restarted by each press that may ask or rewrite.
     private var holdTimer: Task<Void, Never>?
     /// A voice sample playing from Settings. Apart from `speech`, so it never
@@ -58,14 +63,11 @@ import Foundation
     /// A read, answer or voice sample failed (it's already logged): the app
     /// beeps, since the pill just goes away.
     public var speechFailed: (any Error) -> Void = { _ in }
-    /// What the pill shows for a rewrite: `.rewriting` as it starts, then its
-    /// outcome — Pasted, Copied, or the error — or nil when a press abandoned
-    /// it, and the pill goes back to what the session is doing.
-    public var rewritePill: (OverlayUIState?) -> Void = { _ in }
-    /// What the pill shows for a command: `.commanding` as it starts, then
-    /// `.done`, Copied (a typed step with nothing editable focused) or the
-    /// error — or nil when a press abandoned it.
-    public var commandPill: (OverlayUIState?) -> Void = { _ in }
+    /// What the pill shows for a job: `.rewriting` or `.commanding` as it
+    /// starts, then its outcome — Pasted (Done, for a command), Copied, or the
+    /// error — or nil when a press abandoned it, and the pill goes back to
+    /// what the session is doing.
+    public var jobPill: (OverlayUIState?) -> Void = { _ in }
     /// Counts reads, so a stopped read's late end can't take down a newer read's pill.
     private var speechGeneration = 0
     /// The read the pill is showing, or nil once it ended: a level still on its
@@ -147,13 +149,11 @@ import Foundation
     private func perform(_ actions: [SelectionSpeechRouting.Action]) {
       for action in actions {
         switch action {
-        case .forward(let command):
-          // A command press proving itself: the performer gets the screen
-          // ready to read while the command is spoken.
-          if case .pressHandingBack = command, routing.recordsCommand {
-            Task { [performer] in await performer.commandStarting() }
-          }
-          session.submit(command)
+        case .forward(let command): session.submit(command)
+        case .prepareCommand: Task { [performer] in await performer.commandStarting() }
+        case .readScreen:
+          screenRead?.cancel()
+          screenRead = Task { [performer] in await performer.screenContext() }
         case .readSelection:
           Task { [weak self] in
             let selection = await self?.readSelection()
@@ -163,7 +163,7 @@ import Foundation
         case .startHoldTimer: startHoldTimer()
         case .syncGateAfterSession: syncGateAfterSession()
         case .resetGate: resetGate()
-        case .speak, .answer, .stopSpeech, .rewrite, .stopRewrite, .runCommand, .stopCommand: performTask(action)
+        case .speak, .answer, .stopSpeech, .rewrite, .runCommand, .stopJob: performTask(action)
         }
       }
     }
@@ -190,21 +190,22 @@ import Foundation
         // by this read's late end.
         endSpeech()
       case .rewrite(let request, let selection): rewrite(selection, as: request)
-      case .stopRewrite:
-        guard let task = rewriting else { return }
-        task.cancel()
-        rewriting = nil
-        // Ended now, as a stopped read is, so the press that stopped it
-        // shows its own state rather than this rewrite's late end.
-        rewritePill(nil)
       case .runCommand(let command): run(command)
-      case .stopCommand:
-        guard let task = commanding else { return }
-        task.cancel()
-        commanding = nil
-        commandPill(nil)
+      case .stopJob:
+        // A stopped command's own end never runs, so stop its screen read and
+        // undo its preparation here — before it ran, too; for a rewrite
+        // there's neither, and this does nothing.
+        screenRead?.cancel()
+        screenRead = nil
         Task { [performer] in await performer.commandEnded() }
-      case .forward, .readSelection, .startHoldTimer, .syncGateAfterSession, .resetGate: break
+        guard let task = job else { return }
+        task.cancel()
+        job = nil
+        // Ended now, as a stopped read is, so the press that stopped it
+        // shows its own state rather than this job's late end.
+        jobPill(nil)
+      case .forward, .prepareCommand, .readScreen, .readSelection, .startHoldTimer, .syncGateAfterSession, .resetGate:
+        break
       }
     }
 
@@ -223,26 +224,26 @@ import Foundation
     /// Rewrites `selection` as `request` asks and pastes it over the
     /// selection, through the session's injector, reporting the outcome to the
     /// pill as a dictation's paste would be (`PipelinePhase.overlayState`). A
-    /// rewrite this router stopped reports nothing more: `.stopRewrite` already
+    /// rewrite this router stopped reports nothing more: `.stopJob` already
     /// ended it.
     private func rewrite(_ selection: String, as request: String) {
-      rewritePill(.rewriting)
-      rewriting = Task { [weak self, rewriter, session] in
+      jobPill(.rewriting)
+      job = Task { [weak self, rewriter, session] in
         let outcome: OverlayUIState
         do {
           let text = try await rewriter.rewrite(selection, as: request)
           try Task.checkCancellation()
           outcome = try await session.replaceSelection(with: text).overlayState
-        } catch is CancellationError {
-          return
         } catch {
+          // A cancelled request answers `URLError.cancelled`: abandoned, not failed.
+          if Self.isCancellation(error) { return }
           Self.logger.error("rewrite failed: \(error.localizedDescription, privacy: .public)")
           outcome = Self.failure(error)
         }
         guard !Task.isCancelled, let self else { return }
-        self.rewriting = nil
-        self.rewritePill(outcome)
-        self.perform(self.routing.rewriteFinished())
+        self.job = nil
+        self.jobPill(outcome)
+        self.perform(self.routing.jobFinished())
       }
     }
 
@@ -251,73 +252,80 @@ import Foundation
     /// the outcome to the pill. The first step that fails ends it, and a
     /// command this router stopped reports nothing more, as a rewrite doesn't.
     private func run(_ command: String) {
-      commandPill(.commanding)
-      commanding = Task { [weak self, planner, performer, session] in
+      // The read `.readScreen` started — at the release, or just now for a
+      // command the recording cap handed back — mostly or wholly done.
+      let started = screenRead
+      screenRead = nil
+      // "That didn't work": not a command to plan, but a report about the
+      // last one, logged against it for whoever reads the log to act on.
+      if CommandFeedback.isComplaint(command) {
+        started?.cancel()
+        DictationLog.appendFeedback(command, about: lastCommand)
+        Task { [performer] in await performer.commandEnded() }
+        jobPill(.noted)
+        perform(routing.jobFinished())
+        return
+      }
+      jobPill(.commanding)
+      job = Task { [weak self, planner, performer, session] in
+        let began = ContinuousClock.now
+        let trace = PlanTrace()
+        let ran = StepLog()
+        var context = ScreenContext(appName: nil)
+        var steps: [VoiceCommandStep] = []
+        var failure: (kind: String, text: String)?
         let outcome: OverlayUIState
         do {
-          let context = await performer.screenContext()
-          let steps = try await planner.plan(command, context: context)
+          context = await started?.value ?? ScreenContext(appName: nil)
+          steps = try await planner.plan(command, context: context, trace: trace)
+          // The step kinds and counts in public; the command, the app and
+          // what each step names (an app, a menu path, a link) private.
           Self.logger.info(
-            "command \(command, privacy: .private) in \(context.appName ?? "no app", privacy: .public) with \(context.elements.count) elements planned: \(steps.map(\.logName).joined(separator: ", "), privacy: .public)"
+            "command with \(context.elements.count) elements planned \(steps.map(\.action.rawValue).joined(separator: ", "), privacy: .public): \(command, privacy: .private) in \(context.appName ?? "no app", privacy: .private) as \(String(describing: steps), privacy: .private)"
           )
-          outcome = try await Self.perform(steps, performer: performer, session: session)
-        } catch is CancellationError {
-          return
+          outcome = try await Self.perform(
+            steps, in: context, performer: performer, session: session, recording: ran)
         } catch {
-          Self.logger.error("command failed: \(error.localizedDescription, privacy: .public)")
+          // A cancelled request answers `URLError.cancelled`, not
+          // `CancellationError`: a command a press abandoned, not a failure.
+          if Self.isCancellation(error) { return }
+          // The kind in public, the words private: a command's errors carry
+          // what the plan named — a refused link's whole URL, an app, a label.
+          Self.logger.error(
+            "command failed (\(Self.logName(of: error), privacy: .public)): \(error.localizedDescription, privacy: .private)"
+          )
+          failure = (Self.logName(of: error), error.localizedDescription)
           outcome = Self.failure(error)
         }
+        // A command a press abandoned ends through `.stopJob`, never here: a
+        // late end from it — a cancelled request can throw a URLError rather
+        // than a CancellationError — must not undo a newer command's start.
+        guard !Task.isCancelled else { return }
+        // In full, to the developer-mode log (`DictationLog+Commands`): what was
+        // said, what the model saw and answered, the plan, how each step ran,
+        // and how it ended.
+        let record = DictationLog.CommandRecord(
+          command: command, context: context, steps: steps, outcome: outcome, failure: failure,
+          duration: ContinuousClock.now - began, ran: ran.records, trace: trace.snapshot)
+        DictationLog.appendCommand(record)
         await performer.commandEnded()
         guard !Task.isCancelled, let self else { return }
-        self.commanding = nil
-        self.commandPill(outcome)
-        self.perform(self.routing.commandFinished())
+        self.lastCommand = record
+        self.job = nil
+        self.jobPill(outcome)
+        self.perform(self.routing.jobFinished())
       }
-    }
-
-    /// The steps in order, checking for a press's cancel before each. A typed
-    /// step that only reached the clipboard ends the command there, as Copied:
-    /// the steps after it assumed the words were in the field.
-    private static func perform(
-      _ steps: [VoiceCommandStep], performer: any VoiceCommandPerforming, session: DictationSession
-    ) async throws -> OverlayUIState {
-      for step in steps {
-        try Task.checkCancellation()
-        guard case .type(let text) = step else {
-          try await performer.perform(step)
-          continue
-        }
-        let pasted = try await session.typeText(text)
-        guard case .pasted = pasted else { return pasted.overlayState }
-      }
-      return .done
-    }
-
-    /// What the pill shows for a failed rewrite or command. A `BlurtError` (a
-    /// missing key) reads as a dictation's would; a command's own errors name
-    /// the app on the pill where that's the diagnosis; the rest (the rewriter's,
-    /// the gateway's) say what went wrong behind the hover.
-    private static func failure(_ error: any Error) -> OverlayUIState {
-      if let error = error as? BlurtError { return PipelinePhase.failed(error).overlayState }
-      if let error = error as? VoiceCommandError {
-        return .error(message: error.errorDescription ?? "The command failed.", notice: error.pillNotice)
-      }
-      return .error(message: error.localizedDescription)
     }
 
     /// Whether a read, answer, rewrite or command is wearing the pill — what
     /// `PipelinePhase.overlayState(whileSpeaking:)` asks, so a session phase
     /// arriving under any of them can't cover it.
-    public var ownsPill: Bool { activeGeneration != nil || rewriting != nil || commanding != nil }
+    public var ownsPill: Bool { activeGeneration != nil || job != nil }
 
-    /// Whether the session is busy with a rewrite press's instruction — what
-    /// `PipelinePhase.overlayState(whileSpeaking:rewriting:)` asks, so its
-    /// transcription reads "Rewriting".
-    public var recordsRewrite: Bool { routing.recordsRewrite }
-
-    /// Whether the session is busy with a command press's spoken command, so
-    /// its transcription shows as working on it.
-    public var recordsCommand: Bool { routing.recordsCommand }
+    /// What the session's transcription shows as when it's a job's spoken
+    /// words — "Rewriting", "Working" — or nil for a dictation's "Transcribing":
+    /// what `PipelinePhase.overlayState(whileSpeaking:processingAs:)` asks.
+    public var processingState: OverlayUIState? { routing.processingState }
 
     /// Reports the read the pill is showing as over, once: the meter to 0, then
     /// `speechEnded`.

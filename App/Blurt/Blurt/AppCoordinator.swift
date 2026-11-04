@@ -203,12 +203,10 @@ final class AppCoordinator {
     // outcome: Pasted (Done, for a command), Copied or the error, the notices a
     // dictation ends with. Abandoned by a press, the pill goes back to what the
     // session is doing.
-    let showJob: (OverlayUIState?) -> Void = { [weak self] state in
+    router.jobPill = { [weak self] state in
       guard let self else { return }
       self.overlay?.show(state: state ?? self.lastPhase.overlayStateAfterSpeech)
     }
-    router.rewritePill = showJob
-    router.commandPill = showJob
     router.speechLevel = { [weak self] level in self?.overlay?.pushLevel(level) }
     // The pill just goes away on a failed read, so say something went wrong.
     router.speechFailed = { _ in NSSound.beep() }
@@ -361,8 +359,7 @@ final class AppCoordinator {
     // A rewrite press's instruction transcribes as "Rewriting", and a command
     // press's as "Working", not "Transcribing".
     if let state = phase.overlayState(
-      whileSpeaking: speechRouter?.ownsPill ?? false, rewriting: speechRouter?.recordsRewrite ?? false,
-      commanding: speechRouter?.recordsCommand ?? false)
+      whileSpeaking: speechRouter?.ownsPill ?? false, processingAs: speechRouter?.processingState)
     {
       overlay?.show(state: state)
     }

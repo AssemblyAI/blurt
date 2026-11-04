@@ -99,11 +99,17 @@ final class ChunkedRequestBody: @unchecked Sendable {
   /// run loop and waiting for `.hasSpaceAvailable`) keeps this a plain async
   /// function: it suspends the task instead of parking a thread, so a stalled
   /// uplink costs nothing but the retry ticks.
+  ///
+  /// Cancellation is checked before the chunk starts rather than between its
+  /// partial writes, so a chunk the pipe is taking is finished, not cut part
+  /// way through a sample. Only a wait for space (a stalled uplink) still ends
+  /// on a cancel mid-chunk, and the writer is only cancelled once the request's
+  /// outcome no longer depends on the body (`send`).
   private func write(_ chunk: Data) async throws {
+    try Task.checkCancellation()
     var remaining = chunk
     var retry = Self.minSpaceRetry
     while !remaining.isEmpty {
-      try Task.checkCancellation()
       guard output.hasSpaceAvailable else {
         // A pipe that has been torn down — `URLSession` abandoned the body after
         // an early response, or asked for a replay it cannot have — can stop

@@ -37,23 +37,25 @@ enum ElementSearch {
   static let maxElements = 3_000
 
   /// The pressable node whose label best matches `name` (`NameMatch`),
-  /// visiting breadth first, so of two the same label the one nearer the
-  /// window's top level wins.
+  /// visiting breadth first (`ScreenSnapshot.entries`), so of two the same
+  /// label the one nearer the window's top level wins. An exact match ends the
+  /// search there; `shouldStop` ends it early otherwise (the read's deadline).
   static func best<Node>(
     named name: String, from root: Node, children: (Node) -> [Node], labels: (Node) -> [String],
-    pressable: (Node) -> Bool, limit: Int = maxElements
+    pressable: (Node) -> Bool, limit: Int = maxElements, shouldStop: () -> Bool = { false }
   ) -> Node? {
-    var queue = [root]
-    var index = 0
-    var candidates: [(label: String, node: Node)] = []
-    while index < queue.count, index < limit {
-      let node = queue[index]
-      index += 1
-      if pressable(node) {
-        candidates += labels(node).map { (label: $0, node: node) }
-      }
-      queue += children(node)
-    }
+    let query = NameMatch.normalized(name)
+    var exact = false
+    let candidates = ScreenSnapshot.entries(
+      from: root, children: children,
+      describe: { node -> (kind: String, label: String)? in
+        // One entry per node: its label that matches best. Labels first — they
+        // mostly come from a read already made — and `pressable`, a round trip
+        // of its own, only for a node whose name matches at all.
+        guard let label = NameMatch.best(for: name, among: labels(node)), pressable(node) else { return nil }
+        exact = exact || NameMatch.normalized(label) == query
+        return ("", label)
+      }, visitLimit: limit, keepLimit: .max, shouldStop: { exact || shouldStop() })
     guard let label = NameMatch.best(for: name, among: candidates.map(\.label)) else { return nil }
     return candidates.first { $0.label == label }?.node
   }
@@ -85,17 +87,26 @@ enum WindowOrder {
 /// matched on screen (a request for "Empty" can match "Empty Trash…").
 enum DestructiveGuard {
   /// ⌘ with delete or forward delete: Move to Trash, Empty Trash and Delete
-  /// Immediately in the Finder, and the same family elsewhere.
+  /// Immediately in the Finder, and the same family elsewhere. And ⌘⇧Q, with
+  /// or without ⌥: Log Out — the ⌥ form skips the confirmation. The power
+  /// and eject chords need no entry: neither key is one a plan can name
+  /// (`KeyChord`'s tables), so they're refused as unknown.
   static func isDestructive(_ chord: KeyChord) -> Bool {
-    let deletes: Set<UInt16> = [0x33, 0x75]
-    guard case .code(let code) = chord.key else { return false }
-    return chord.modifiers.contains(.command) && deletes.contains(code)
+    switch chord.key {
+    case .code(let code): chord.modifiers.contains(.command) && [0x33, 0x75].contains(code)
+    case .character(let character): character == "q" && chord.modifiers.isSuperset(of: [.command, .shift])
+    }
   }
 
   /// Phrases that mark a button or menu item as deleting, erasing or powering
   /// off, matched as whole words of its folded label: "Log Out" is refused,
   /// "Show Log" isn't.
-  static let phrases = ["delete", "trash", "erase", "shut down", "restart", "log out"]
+  /// English only, US and British ("Move to Bin", "Sign Out"): a Mac set to
+  /// another language names these its own way, and the guard won't see them —
+  /// the planner's instruction still forbids them there.
+  static let phrases = [
+    "delete", "trash", "bin", "erase", "shut down", "restart", "log out", "logout", "log off", "sign out",
+  ]
 
   static func isDestructive(label: String) -> Bool {
     let words = NameMatch.normalized(label).split { !$0.isLetter }.joined(separator: " ")

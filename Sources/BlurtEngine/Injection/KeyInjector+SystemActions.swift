@@ -84,23 +84,25 @@
     /// paste) is asserted in `KeyInjectorSystemActionsTests`, and only the two
     /// `.post` calls below stay covered by running the app.
     static func cmdVEvents() -> (down: CGEvent, up: CGEvent)? {
-      commandEvents(virtualKey: 0x09)  // kVK_ANSI_V
+      keyEvents(virtualKey: 0x09, flags: .maskCommand)  // kVK_ANSI_V
     }
 
     /// The Cmd-C pair, for the read-aloud press's copy fallback (`SelectionCopy`).
     static func cmdCEvents() -> (down: CGEvent, up: CGEvent)? {
-      commandEvents(virtualKey: 0x08)  // kVK_ANSI_C
+      keyEvents(virtualKey: 0x08, flags: .maskCommand)  // kVK_ANSI_C
     }
 
-    private static func commandEvents(virtualKey: CGKeyCode) -> (down: CGEvent, up: CGEvent)? {
+    /// A key-down/key-up pair for `virtualKey` with `flags` on both — the
+    /// paste's ⌘V, the copy's ⌘C, a voice command's shortcut.
+    static func keyEvents(virtualKey: CGKeyCode, flags: CGEventFlags) -> (down: CGEvent, up: CGEvent)? {
       guard let source = CGEventSource(stateID: .combinedSessionState),
         let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
         let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
       else { return nil }
       // Set on both: a key-up carrying no ⌘ reads as the modifier having been
       // released mid-chord, which some apps treat as cancelling the shortcut.
-      down.flags = .maskCommand
-      up.flags = .maskCommand
+      down.flags = flags
+      up.flags = flags
       return (down, up)
     }
 
@@ -119,7 +121,7 @@
       post(cmdCEvents())
     }
 
-    private static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
+    static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
       guard let (down, up) = events else { return false }
       // Post to the annotated session tap rather than the HID tap: the session tap
       // honors exactly the flags set above instead of OR-ing in the live hardware

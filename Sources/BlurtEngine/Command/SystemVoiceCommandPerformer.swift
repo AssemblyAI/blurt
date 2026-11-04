@@ -5,7 +5,7 @@
 
   /// The production `VoiceCommandPerforming`: each step through the system
   /// API that does that one thing — `NSWorkspace` for apps and links, a
-  /// synthesized key chord for a shortcut (`+Keys`), a system-defined event
+  /// synthesized key chord for a shortcut (`VoiceCommandKeys`), a system-defined event
   /// for a media key, Accessibility for a button or a menu item
   /// (`+Accessibility`). Nothing here runs script, and nothing needs a
   /// permission beyond the Accessibility trust the paste already has.
@@ -19,9 +19,9 @@
     /// How long an opened app gets to come frontmost before the next step,
     /// which is aimed at it, goes ahead anyway.
     static let launchBudget: Duration = .seconds(5)
-    /// The beat after each step, so the app has handled it before the next
-    /// lands: ⌘K's palette has to be open before its search is typed.
-    static let settle: Duration = .milliseconds(300)
+    /// The beat between steps (`VoiceCommandPerforming.settle`): ⌘K's palette
+    /// has to be open before its search is typed.
+    public var settle: Duration { .milliseconds(300) }
 
     /// Where `openApp` looks for an app that isn't running, one level deep.
     static let applicationFolders: [URL] = {
@@ -37,11 +37,14 @@
     public func screenContext() async -> ScreenContext {
       let front = await MainActor.run {
         NSWorkspace.shared.frontmostApplication.map {
-          (name: $0.localizedName, pid: $0.processIdentifier, bundle: $0.bundleURL)
+          (name: $0.localizedName, pid: $0.processIdentifier, id: $0.bundleIdentifier, bundle: $0.bundleURL)
         }
       }
       guard let front else { return ScreenContext(appName: nil) }
-      return await Self.readScreen(appName: front.name, pid: front.pid, bundleURL: front.bundle, into: snapshot)
+      return await Self.readScreen(
+        appName: front.name, pid: front.pid,
+        isChromium: front.id.map(ScreenSnapshot.chromiumBrowsers.contains) ?? false,
+        isElectron: FocusCapture.isElectronBundle(front.bundle), into: snapshot)
     }
 
     public func commandStarting() async {
@@ -56,20 +59,26 @@
       Self.endEnhancedInterface(in: enhancedInterface)
     }
 
-    public func perform(_ step: VoiceCommandStep) async throws {
+    public func perform(_ step: VoiceCommandStep) async throws -> String? {
       switch step {
-      case .openApp, .quitApp, .hideApp: try await performAppStep(step)
+      case .openApp, .quitApp, .hideApp: return try await performAppStep(step)
       case .openURL(let url):
         guard await MainActor.run(body: { NSWorkspace.shared.open(url) }) else {
           throw VoiceCommandError.couldNotPerform("open \(url.absoluteString)")
         }
+        return nil
       case .shortcut(let chord):
         let code = await Self.keyCode(for: chord)
-        guard Self.post(Self.events(for: chord, keyCode: code)) else {
+        // Posted as the paste's ⌘V is (`KeyInjector.post`): the annotated
+        // session tap, after the trigger's own, so it never reads as a combo.
+        guard KeyInjector.post(Self.events(for: chord, keyCode: code)) else {
           throw VoiceCommandError.couldNotPerform("press that shortcut")
         }
+        // The key it landed on, on this layout: what a wrong-key report needs.
+        return "key code \(code)"
       case .media(let key):
         guard await Self.post(key) else { throw VoiceCommandError.couldNotPerform("press that key") }
+        return nil
       case .type:
         // Pasted through the session's injector, never here
         // (`DictationSession.typeText`), so a paste can't skip its clipboard
@@ -77,33 +86,33 @@
         throw VoiceCommandError.couldNotPerform("type outside a paste")
       case .pressButton, .chooseMenuItem, .pressElement, .focusElement, .setValue, .increment, .decrement,
         .showMenu, .select, .scroll, .window:
-        try await performScreenStep(step)
+        return try await performScreenStep(step)
       }
-      try await Task.sleep(for: Self.settle)
     }
 
-    private func performAppStep(_ step: VoiceCommandStep) async throws {
+    private func performAppStep(_ step: VoiceCommandStep) async throws -> String? {
       switch step {
-      // The folders are listed here, off the main actor: a slow home volume
-      // must not stall the key tap and the pill.
-      case .openApp(let name): try await Self.open(name, installed: Self.installedApp(name))
+      case .openApp(let name): return try await Self.open(name)
       case .quitApp(let name): try await Self.running(name).terminate()
       case .hideApp(let name): try await Self.running(name).hide()
       default: break
       }
+      return nil
     }
 
-    private func performScreenStep(_ step: VoiceCommandStep) async throws {
+    private func performScreenStep(_ step: VoiceCommandStep) async throws -> String? {
       switch step {
-      case .pressButton(let name): try await Self.pressButton(name)
+      case .pressButton(let name): return try await Self.pressButton(name)
       case .chooseMenuItem(let path): try await Self.chooseMenuItem(path)
-      case .pressElement(let id): try await Self.act(on: id, in: snapshot, focus: false)
-      case .focusElement(let id): try await Self.act(on: id, in: snapshot, focus: true)
-      case .setValue, .increment, .decrement, .showMenu, .select: try await Self.adjust(step, in: snapshot)
-      case .scroll(let direction, let element): try await Self.scroll(direction, element: element, in: snapshot)
+      case .pressElement(let id): return try await Self.act(on: id, in: snapshot, focus: false)
+      case .focusElement(let id): return try await Self.act(on: id, in: snapshot, focus: true)
+      case .setValue, .increment, .decrement, .showMenu, .select: return try await Self.adjust(step, in: snapshot)
+      case .scroll(let direction, let element):
+        return try await Self.scroll(direction, element: element, in: snapshot)
       case .window(let operation): try await Self.arrangeWindow(operation)
       default: break
       }
+      return nil
     }
 
     // MARK: - Apps
@@ -123,18 +132,33 @@
     /// never comes forward: a shortcut or typing meant for it would otherwise
     /// land in whatever app is in front.
     @MainActor
-    private static func open(_ name: String, installed: URL?) async throws {
+    private static func open(_ name: String) async throws -> String {
+      // Blurt itself: activated by its own `NSApp`, not raised through
+      // Accessibility — an AX call to its own process from its own main thread
+      // waits on that thread, and timed out every time ("couldn't bring Blurt
+      // to the front", 2026-11-03).
+      if let me = try? running(name), me == NSRunningApplication.current {
+        NSApp.unhide(nil)
+        NSApp.activate()
+        return "Blurt itself, by NSApp"
+      }
       let app: NSRunningApplication
+      let how: String
       if let running = try? running(name) {
         running.unhide()
         running.activate()
         app = running
+        how = "already running"
       } else {
+        // Only now list the folders, off the main actor: a slow home volume
+        // must not stall the key tap and the pill, and a running app needs none.
+        let installed = await Task.detached { installedApp(name) }.value
         guard let url = installed else { throw VoiceCommandError.appNotFound(name) }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         do {
           app = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+          how = "launched from \(url.deletingLastPathComponent().path(percentEncoded: false))"
         } catch {
           throw VoiceCommandError.couldNotPerform("open \(name)")
         }
@@ -162,6 +186,7 @@
       guard raised || isFrontmost(app.processIdentifier) else {
         throw VoiceCommandError.couldNotPerform("bring \(name) to the front")
       }
+      return raised ? how : how + "; frontmost but its window wasn't on top"
     }
 
     /// The installed app `name` means, by bundle name, in `applicationFolders`.

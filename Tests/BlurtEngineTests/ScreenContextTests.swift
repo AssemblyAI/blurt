@@ -4,6 +4,10 @@ import Testing
 
 @testable import BlurtEngine
 
+#if os(macOS)
+  import ApplicationServices
+#endif
+
 @Suite("ScreenContext")
 struct ScreenContextTests {
   private struct Node {
@@ -91,13 +95,6 @@ struct ScreenContextTests {
     #expect(ScreenSnapshot.clickPoint(CGRect(x: 200, y: 200, width: 0, height: 40), within: window) == nil)
   }
 
-  @Test("an Electron app is known by its Info.plist's asar integrity key")
-  func electron() {
-    #expect(ScreenSnapshot.isElectron(infoDictionary: ["ElectronAsarIntegrity": ["Resources/app.asar": [:]]]))
-    #expect(!ScreenSnapshot.isElectron(infoDictionary: ["CFBundleName": "Safari"]))
-    #expect(!ScreenSnapshot.isElectron(infoDictionary: [:]))
-  }
-
   @Test("a label stays on its line inside its quotes, so page text can't pose as another element")
   func quoting() {
     let screen = ScreenContext(
@@ -146,8 +143,6 @@ struct ScreenContextTests {
     #expect(try steps(#"{"action": "select", "element": 1}"#) == [.select(1)])
     #expect(try steps(#"{"action": "show_menu", "element": 2}"#) == [.showMenu(2)])
     #expect(try steps(#"{"action": "set_value", "element": 3, "value": 40}"#) == [.setValue(element: 3, value: "40")])
-    #expect(
-      try steps(#"{"action": "set_value", "element": 3, "value": "0.5"}"#) == [.setValue(element: 3, value: "0.5")])
     #expect(try steps(#"{"action": "increment", "element": 3}"#) == [.increment(3)])
     #expect(try steps(#"{"action": "decrement", "element": 3}"#) == [.decrement(3)])
     #expect(try steps(#"{"action": "scroll", "direction": "down"}"#) == [.scroll(.down, element: nil)])
@@ -164,11 +159,19 @@ struct ScreenContextTests {
     #expect(throws: VoiceCommandError.malformedReply) { try steps(#"{"action": "set_value", "element": 3}"#) }
   }
 
-  @Test("a plan's log line names its actions, never what it types")
+  @Test("a step's public log name is its action alone, never what it names or types")
   func logNames() {
-    #expect(VoiceCommandStep.type("my password").logName == "type (11 characters)")
-    #expect(VoiceCommandStep.openURL(URL(string: "https://example.com/a?q=secret")!).logName == "open_url example.com")
-    #expect(VoiceCommandStep.select(4).logName == "element step #4")
+    #expect(VoiceCommandStep.type("my password").action.rawValue == "type")
+    #expect(VoiceCommandStep.openURL(URL(string: "https://example.com/a?q=secret")!).action.rawValue == "open_url")
+    #expect(VoiceCommandStep.chooseMenuItem(["File", "Secret Project"]).action.rawValue == "menu")
+    #expect(VoiceCommandStep.select(4).action == .select)
+  }
+
+  @Test("the planner's schema offers exactly the actions the parser reads")
+  func actionsAgree() {
+    let names = Set(VoiceCommandStep.Action.allCases.map(\.rawValue))
+    #expect(names.count == VoiceCommandStep.Action.allCases.count)
+    #expect(names.contains("press_button") && names.contains("set_value") && names.contains("window"))
   }
 
   @Test("press and focus name an element by number")
@@ -178,12 +181,10 @@ struct ScreenContextTests {
     #expect(
       try VoiceCommandStep.steps(fromReply: reply, maxSteps: 10, elementIDs: [1, 2])
         == [.focusElement(2), .type("x"), .pressElement(1)])
-    // A number written as a string, as a model does without the schema.
-    for written in ["\"12\"", "\"[12]\"", "\"#12\""] {
-      #expect(
-        try VoiceCommandStep.steps(
-          fromReply: #"{"steps": [{"action": "press", "element": "# + written + "}]}", maxSteps: 10, elementIDs: [12])
-          == [.pressElement(12)])
+    // The schema makes it an integer: a string is a reply off-schema, refused.
+    #expect(throws: VoiceCommandError.malformedReply) {
+      try VoiceCommandStep.steps(
+        fromReply: #"{"steps": [{"action": "press", "element": "12"}]}"#, maxSteps: 10, elementIDs: [12])
     }
     #expect(throws: VoiceCommandError.unknownElement(2)) {
       try VoiceCommandStep.steps(fromReply: reply, maxSteps: 10, elementIDs: [1])
@@ -194,6 +195,20 @@ struct ScreenContextTests {
   }
 
   #if os(macOS)
+    @Test("a numbered element is handed out only for its own snapshot's app, and only if it was listed")
+    func elementSnapshot() throws {
+      let snapshot = ElementSnapshot()
+      #expect(throws: VoiceCommandError.unknownElement(1)) { try snapshot.element(1, pid: 42) }
+      let handle = ElementSnapshot.Handle(element: AXUIElementCreateApplication(getpid()))
+      snapshot.replace(pid: 42, elements: [1: handle])
+      #expect(CFEqual(try snapshot.element(1, pid: 42).element, handle.element))
+      #expect(throws: VoiceCommandError.unknownElement(2)) { try snapshot.element(2, pid: 42) }
+      // Another app in front since the snapshot: its numbers aren't this one's.
+      #expect(throws: VoiceCommandError.screenChanged) { try snapshot.element(1, pid: 7) }
+      #expect(snapshot.claimManualAccessibility(42))
+      #expect(!snapshot.claimManualAccessibility(42))
+    }
+
     @Test("the enhanced-interface flag is cleared only by its latest claim, and only once")
     func enhancedInterfaceOwnership() {
       let owner = EnhancedInterface()
@@ -228,6 +243,5 @@ struct ScreenContextTests {
     #expect(ScreenSnapshot.chromiumBrowsers.contains("com.google.Chrome"))
     #expect(ScreenSnapshot.chromiumBrowsers.contains("company.thebrowser.Browser"))
     #expect(!ScreenSnapshot.chromiumBrowsers.contains("com.apple.Safari"))
-    #expect(!ScreenSnapshot.isChromium(bundleURL: nil))
   }
 }

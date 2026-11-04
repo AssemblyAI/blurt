@@ -139,17 +139,17 @@ public enum DictationLog {
   /// the shell uses, so this needs no more reach than the engine itself.
   @discardableResult
   static func removeStoredLogs() -> Bool {
-    removeStoredLogs(dictations: defaultURL, errors: defaultErrorURL)
+    removeStoredLogs(dictations: defaultURL, errors: defaultErrorURL, commands: defaultCommandURL)
   }
 
   /// The addressable half of `removeStoredLogs()`, taking both URLs for the
   /// reason `append` takes one: otherwise the only way to exercise this is
   /// against the developer's real `~/Library/Logs`.
   @discardableResult
-  static func removeStoredLogs(dictations: URL, errors: URL) -> Bool {
+  static func removeStoredLogs(dictations: URL, errors: URL, commands: URL = defaultCommandURL) -> Bool {
     let manager = FileManager.default
     var allRemoved = true
-    for url in [dictations, errors] where manager.fileExists(atPath: url.path(percentEncoded: false)) {
+    for url in [dictations, errors, commands] where manager.fileExists(atPath: url.path(percentEncoded: false)) {
       do {
         try manager.removeItem(at: url)
       } catch {

@@ -12,7 +12,7 @@
     /// is what drops `activate()` from an app that isn't active itself.
     @MainActor
     static func raise(_ pid: pid_t) {
-      AXUIElementSetAttributeValue(AXUIElementCreateApplication(pid), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+      AXUIElementSetAttributeValue(AXRead.app(pid), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     }
 
     /// Whether `app` is really in front, and not only on its way (after
@@ -44,33 +44,27 @@
     /// Presses the element named `name` in the frontmost app's focused window
     /// (`ElementSearch` over its Accessibility tree). Off the main actor: each
     /// read is a round trip to the app, and a busy window takes thousands.
-    static func pressButton(_ name: String) async throws {
-      guard let app = await frontmostElement(),
-        let window = AXRead.element(app, kAXFocusedWindowAttribute) ?? AXRead.element(app, kAXMainWindowAttribute),
-        let target = ElementSearch.best(
-          named: name, from: window, children: AXRead.children, labels: AXRead.labels, pressable: AXRead.isPressable)
+    static func pressButton(_ name: String) async throws -> String {
+      guard let app = await frontmostApp(),
+        let window = AXRead.window(of: app),
+        let target = searchBounded(name, in: window)
       else { throw VoiceCommandError.buttonNotFound(name) }
-      guard !AXRead.labels(target).contains(where: DestructiveGuard.isDestructive(label:)) else {
-        throw VoiceCommandError.refused("press \(name)")
-      }
-      try await press(ElementSnapshot.Handle(element: target), pid: pid(of: app))
+      return try await press(ElementSnapshot.Handle(element: target), pid: pid(of: app))
     }
 
     /// Chooses the frontmost app's menu item at `path`, from the menu-bar
     /// title down (Hammerspoon's `selectMenuItem`, MIT): an item is pressed
     /// without its menu being opened, so nothing flashes on screen.
     static func chooseMenuItem(_ path: [String]) async throws {
-      guard let app = await frontmostElement(), var item = AXRead.element(app, kAXMenuBarAttribute) else {
+      guard let app = await frontmostApp(), let bar = AXRead.element(app, kAXMenuBarAttribute) else {
         throw VoiceCommandError.menuItemNotFound(path)
       }
+      var item = AXRead.Node(bar)
       for title in path {
-        // A bar item's or a submenu item's entries sit inside its one AXMenu child.
-        let entries = AXRead.children(item).flatMap {
-          AXRead.string($0, kAXRoleAttribute) == kAXMenuRole ? AXRead.children($0) : [$0]
-        }
-        let titled = entries.compactMap { entry in
-          AXRead.string(entry, kAXTitleAttribute).map { (title: $0, entry: entry) }
-        }
+        // A bar item's or a submenu item's entries sit inside its one AXMenu
+        // child. Each entry's role and title come in one round trip (`Node`).
+        let entries = item.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] }
+        let titled = entries.compactMap { entry in entry.string(kAXTitleAttribute).map { (title: $0, entry: entry) } }
         guard let match = NameMatch.best(for: title, among: titled.map(\.title)),
           let next = titled.first(where: { $0.title == match })?.entry
         else { throw VoiceCommandError.menuItemNotFound(path) }
@@ -80,9 +74,19 @@
         item = next
       }
       // A dimmed item is one the app would ignore: say so rather than "Done".
-      guard AXRead.bool(item, kAXEnabledAttribute) != false,
-        AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+      // Its enabled state and labels come from the node already read.
+      guard item.attribute(kAXEnabledAttribute) as? Bool != false,
+        try performAction(kAXPressAction, on: item) == .success
       else { throw VoiceCommandError.couldNotPerform("choose \(path.joined(separator: " › "))") }
+    }
+
+    /// `ElementSearch` over the window within `ScreenSnapshot.readBudget`: in a
+    /// slow app (Music, ~15 ms a call) a search of every node runs for minutes.
+    private static func searchBounded(_ name: String, in window: AXUIElement) -> AXUIElement? {
+      let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
+      return ElementSearch.best(
+        named: name, from: AXRead.Node(window), children: \.children, labels: AXRead.labels,
+        pressable: { AXRead.isPressable($0.element) }, shouldStop: { ContinuousClock.now >= deadline })?.element
     }
 
     static func pid(of element: AXUIElement) -> pid_t? {
@@ -90,11 +94,25 @@
       return AXUIElementGetPid(element, &pid) == .success ? pid : nil
     }
 
-    private static func frontmostElement() async -> AXUIElement? {
-      guard let pid = await MainActor.run(body: { NSWorkspace.shared.frontmostApplication?.processIdentifier }) else {
-        return nil
-      }
-      return AXUIElementCreateApplication(pid)
+    /// The frontmost app's pid, read on the main actor where `NSWorkspace` lives.
+    static func frontmostPID() async -> pid_t? {
+      await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier }
+    }
+
+    /// The frontmost app's element, its calls capped.
+    static func frontmostApp() async -> AXUIElement? {
+      await frontmostPID().map(AXRead.app)
+    }
+
+    /// Runs `body` with the pointer at `point`, then puts it back: a synthesized
+    /// click or wheel event goes to what's under the pointer, and the user's
+    /// pointer shouldn't stay where Blurt left it.
+    static func withPointer(at point: CGPoint, _ body: () throws -> Void) async throws {
+      let home = CGEvent(source: nil)?.location
+      CGWarpMouseCursorPosition(point)
+      try body()
+      try await Task.sleep(for: .milliseconds(50))
+      if let home { CGWarpMouseCursorPosition(home) }
     }
   }
 
@@ -108,13 +126,18 @@
     }
 
     static func element(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
-      guard let value = value(element, attribute), CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-      // The type ID was just checked.
-      return capped(value as! AXUIElement)  // swiftlint:disable:this force_cast
+      value(element, attribute).flatMap(FocusCapture.axElement).map(capped)
     }
 
-    static func children(_ element: AXUIElement) -> [AXUIElement] {
-      (value(element, kAXChildrenAttribute) as? [AXUIElement] ?? []).map(capped)
+    /// `pid`'s application element, its calls capped.
+    static func app(_ pid: pid_t) -> AXUIElement {
+      capped(AXUIElementCreateApplication(pid))
+    }
+
+    /// The app's focused window, else its main one: an app whose main window
+    /// isn't key still has one to act in.
+    static func window(of app: AXUIElement) -> AXUIElement? {
+      element(app, kAXFocusedWindowAttribute) ?? element(app, kAXMainWindowAttribute)
     }
 
     /// `element` with its calls capped at `ScreenSnapshot.callTimeout`. The
@@ -127,101 +150,155 @@
     }
 
     static func string(_ element: AXUIElement, _ attribute: String) -> String? {
-      (value(element, attribute) as? String)?.trimmedNonEmpty()
+      FocusCapture.stringValue(element, attribute)
     }
 
     static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {
       value(element, attribute) as? Bool
     }
 
-    /// What a user would call it: its title, else its description (an icon
-    /// button's spoken name), else a link's text.
-    static func labels(_ element: AXUIElement) -> [String] {
-      [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute].compactMap { string(element, $0) }
+    /// What a user would call it: its title, its description (an icon
+    /// button's spoken name), and — for a role whose value is its name, a
+    /// link's text — its value.
+    static func labels(_ node: Node) -> [String] {
+      [node.string(kAXTitleAttribute), node.string(kAXDescriptionAttribute), node.nameValue].compactMap { $0 }
     }
 
-    /// Its labels, then the names it borrows: the `<label>` a web form
-    /// control points at (`AXTitleUIElement`), and the text inside a clickable
-    /// `<div>` (its first static-text child's value).
-    static func names(_ element: AXUIElement) -> [String] {
-      let own = labels(element)
+    /// The name a web form control borrows from the `<label>` pointing at it.
+    static func borrowedLabel(_ node: Node) -> String? {
+      node.element(kAXTitleUIElementAttribute).flatMap { labels(Node($0)).first }
+    }
+
+    /// Its labels, else the one it borrows, else the text inside it
+    /// (`ScreenSnapshot.firstText`). `deadline`: when the read's time is up —
+    /// the lookup inside one row can otherwise outrun the whole read, Music's
+    /// content rows answering at up to ~130 ms a call (measured 2026-11-03),
+    /// since the walk checks its clock only between nodes.
+    static func names(_ node: Node, until deadline: ContinuousClock.Instant? = nil) -> [String] {
+      let own = labels(node)
       if !own.isEmpty { return own }
-      if let title = self.element(element, kAXTitleUIElementAttribute), let name = labels(title).first {
-        return [name]
-      }
-      return firstText(under: element).map { [$0] } ?? []
+      return (borrowedLabel(node) ?? firstText(under: node, until: deadline)).map { [$0] } ?? []
     }
 
-    /// The first text a few levels inside `element`: a clickable `<div>`'s
-    /// words, or a row's first cell (Music's "Songs", a Finder file's name, a
-    /// message's sender). A row's text field counts too — a Finder name cell
-    /// is one — since it's the row's name, not something being typed.
-    ///
-    /// Text before any title, and never an image's: a Music sidebar row's
-    /// icon is an `AXImage` described by its symbol's name ("radio", "pin"),
-    /// which comes before the row's words.
-    private static func firstText(under element: AXUIElement) -> String? {
-      var queue = children(element)
-      var index = 0
-      var title: String?
-      while index < queue.count, index < 12 {
-        let node = queue[index]
-        index += 1
-        let role = string(node, kAXRoleAttribute)
-        if role == kAXStaticTextRole || role == kAXTextFieldRole, let text = string(node, kAXValueAttribute) {
-          return text
-        }
-        if role != kAXImageRole, title == nil {
-          title = string(node, kAXTitleAttribute) ?? string(node, kAXDescriptionAttribute)
-        }
-        queue += children(node)
-      }
-      return title
+    private static func firstText(under node: Node, until deadline: ContinuousClock.Instant?) -> String? {
+      ScreenSnapshot.firstText(
+        under: node, children: \.children, role: \.role, text: \.rawValue,
+        title: { $0.string(kAXTitleAttribute) ?? $0.string(kAXDescriptionAttribute) },
+        shouldStop: { deadline.map { ContinuousClock.now >= $0 } ?? false })
     }
 
     /// Its frame in global, top-left-origin coordinates — the ones a
-    /// `CGEvent` click takes.
+    /// `CGEvent` click takes — in one round trip for the two attributes.
     static func frame(_ element: AXUIElement) -> CGRect? {
-      guard let position = value(element, kAXPositionAttribute), let size = value(element, kAXSizeAttribute),
-        CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID()
-      else { return nil }
-      var origin = CGPoint.zero
-      var extent = CGSize.zero
-      // The type IDs were just checked.
-      // swiftlint:disable force_cast
-      guard AXValueGetValue(position as! AXValue, .cgPoint, &origin),
-        AXValueGetValue(size as! AXValue, .cgSize, &extent)
-      else { return nil }
-      // swiftlint:enable force_cast
-      return CGRect(origin: origin, size: extent)
+      Node(element, batch: [kAXPositionAttribute, kAXSizeAttribute]).frame
     }
 
-    /// How a snapshot lists the element, or nil to leave it out: a role the
-    /// planner can act on (`ScreenSnapshot.kind`) with a label to call it by.
-    /// A text field with no title goes by its placeholder ("Search").
-    ///
-    /// `bounds`: the window's frame, or the page's inside it. An element
-    /// outside it is scrolled out of view, and left out.
-    static func describe(_ element: AXUIElement, in bounds: CGRect?) -> (kind: String, label: String)? {
-      guard let role = string(element, kAXRoleAttribute) else { return nil }
-      let listed = ScreenSnapshot.kind(role: role, subrole: string(element, kAXSubroleAttribute))
-      // A web page's clickable `<div>`: listed only when it takes a press.
-      guard
-        let kind = listed
-          ?? (ScreenSnapshot.clickableRoles.contains(role) && isPressable(element) ? "clickable" : nil),
-        ScreenSnapshot.isVisible(frame(element), in: bounds)
+    /// How a snapshot lists the node, or nil to leave it out
+    /// (`ScreenSnapshot.listedKind`), and what it's called
+    /// (`ScreenSnapshot.label`). `bounds`: the window's frame, or the page's
+    /// inside it.
+    static func describe(
+      _ node: Node, in bounds: CGRect?, until deadline: ContinuousClock.Instant? = nil
+    ) -> (kind: String, label: String)? {
+      guard let role = node.role,
+        let kind = ScreenSnapshot.listedKind(
+          role: role, subrole: node.string(kAXSubroleAttribute), frame: node.frame, bounds: bounds,
+          pressable: { isPressable(node.element) }),
+        let label = ScreenSnapshot.label(
+          role: role, own: labels(node), placeholder: node.string(kAXPlaceholderValueAttribute),
+          borrowed: { borrowedLabel(node) }, inner: { firstText(under: node, until: deadline) })
+          // A field with no name of any kind is still somewhere to type.
+          ?? (ScreenSnapshot.textEntryRoles.contains(role) ? kind : nil)
       else { return nil }
-      guard ScreenSnapshot.isTextEntry(kind) else { return names(element).first.map { (kind, $0) } }
-      // Never a text entry's value: that's what the user typed, not its name.
-      let label = [kAXTitleAttribute, kAXDescriptionAttribute, kAXPlaceholderValueAttribute].lazy
-        .compactMap { string(element, $0) }.first
-      return (kind, label ?? Self.element(element, kAXTitleUIElementAttribute).flatMap { labels($0).first } ?? kind)
+      return (kind, label)
     }
 
     static func isPressable(_ element: AXUIElement) -> Bool {
       var names: CFArray?
       guard AXUIElementCopyActionNames(element, &names) == .success else { return false }
       return (names as? [String])?.contains(kAXPressAction) ?? false
+    }
+  }
+
+  extension AXRead {
+    /// One element as a walk sees it: its common attributes fetched in one
+    /// round trip (`AXUIElementCopyMultipleAttributeValues`) the first time any
+    /// is asked for, rather than a call each, and its children and value kept
+    /// once read — so a walk and the row-name lookup inside it share them.
+    /// Never `AXValue` in the batch: for a text field that's what the user
+    /// typed, so it's read on its own, and only for a role whose value is its
+    /// name. One read in one task: not `Sendable`, and it needn't be.
+    final class Node {
+      let element: AXUIElement
+      private let batch: [String]
+      /// `batch`, read the first time any of it is asked for.
+      private lazy var attributes: [String: CFTypeRef] = Self.read(element, batch)
+
+      init(_ element: AXUIElement, batch: [String] = Node.batch) {
+        self.element = element
+        self.batch = batch
+      }
+
+      /// The attributes one round trip fetches: what `describe`, `names`, a
+      /// walk's children, a frame, a scroll area's parent and a menu item's
+      /// enabled state read.
+      static let batch: [String] = [
+        kAXRoleAttribute, kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXTitleAttribute,
+        kAXDescriptionAttribute, kAXPlaceholderValueAttribute, kAXChildrenAttribute, kAXTitleUIElementAttribute,
+        kAXParentAttribute, kAXEnabledAttribute,
+      ]
+
+      /// One of `batch`'s attributes, nil when the element doesn't have it.
+      func attribute(_ name: String) -> CFTypeRef? { attributes[name] }
+
+      func string(_ name: String) -> String? { (attribute(name) as? String)?.trimmedNonEmpty() }
+
+      func element(_ name: String) -> AXUIElement? {
+        attribute(name).flatMap(FocusCapture.axElement).map(AXRead.capped)
+      }
+
+      var role: String? { string(kAXRoleAttribute) }
+
+      lazy var children: [Node] = (attribute(kAXChildrenAttribute) as? [AXUIElement] ?? []).map {
+        Node(AXRead.capped($0))
+      }
+
+      var frame: CGRect? {
+        guard
+          let position = attribute(kAXPositionAttribute).flatMap({ FocusCapture.axValue($0, .cgPoint, CGPoint.zero) }),
+          let size = attribute(kAXSizeAttribute).flatMap({ FocusCapture.axValue($0, .cgSize, CGSize.zero) })
+        else { return nil }
+        return CGRect(origin: position, size: size)
+      }
+
+      /// Its `AXValue`, read once, alone. Asked only for a value-named role
+      /// (`nameValue`) or a row's text inside it (`ScreenSnapshot.firstText`):
+      /// never a text entry's contents.
+      lazy var rawValue: String? = AXRead.string(element, kAXValueAttribute)
+
+      /// Its value when that's its name (`ScreenSnapshot.valueNamedRoles`),
+      /// and nil, without the call, for every other role: in a slow app each
+      /// read costs ~90 ms, and a text entry's value is what was typed.
+      var nameValue: String? {
+        guard let role, ScreenSnapshot.valueNamedRoles.contains(role) else { return nil }
+        return rawValue
+      }
+
+      /// `batch` in one call. An attribute the element doesn't have comes back
+      /// as an `AXValue` holding an `AXError`, and is left out.
+      private static func read(_ element: AXUIElement, _ batch: [String]) -> [String: CFTypeRef] {
+        var values: CFArray?
+        guard
+          AXUIElementCopyMultipleAttributeValues(
+            element, batch as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values) == .success,
+          let array = values as? [CFTypeRef]
+        else { return [:] }
+        var read: [String: CFTypeRef] = [:]
+        for (name, value) in zip(batch, array) where FocusCapture.axValue(value, .axError, AXError.success) == nil {
+          read[name] = value
+        }
+        return read
+      }
     }
   }
 #endif

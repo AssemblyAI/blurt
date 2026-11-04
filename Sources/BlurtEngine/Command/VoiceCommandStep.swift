@@ -2,8 +2,10 @@ import Foundation
 
 /// One thing the Control Your Mac key does, as `VoiceCommandPlanner` reads it
 /// out of the model's reply. A closed set Blurt carries out itself
-/// (`VoiceCommandPerforming`), never script the model wrote: the most a
-/// mis-heard command can do is one of these.
+/// (`VoiceCommandPerforming`), never script the model wrote. That bounds what
+/// a plan can do by itself — but a `type` step into a terminal followed by
+/// return runs what it typed, so the set is only as closed as the app in
+/// front: typing into terminals is allowed, owner-directed (2026-11-03).
 public enum VoiceCommandStep: Equatable, Sendable {
   /// Open an app, or bring it forward if it is already running.
   case openApp(String)
@@ -45,21 +47,44 @@ public enum VoiceCommandStep: Equatable, Sendable {
   case select(Int)
   case window(WindowOperation)
 
-  /// The step's action name, for the log: what ran, never what was typed.
-  var logName: String {
+  /// The actions a plan names, by the names the planner's instruction and its
+  /// JSON schema use — one list, so the schema (`VoiceCommandPlanner`) and the
+  /// parse (`VoiceCommandStep+Parse`) can't drift apart.
+  enum Action: String, CaseIterable, Sendable {
+    case openApp = "open_app"
+    case quitApp = "quit_app"
+    case hideApp = "hide_app"
+    case openURL = "open_url"
+    case shortcut, type, media
+    case pressButton = "press_button"
+    case menu, press, focus, select
+    case showMenu = "show_menu"
+    case setValue = "set_value"
+    case increment, decrement, scroll, window
+  }
+
+  /// The step's action: its kind alone, which is what the public log shows —
+  /// never the app, path, link or text it names.
+  var action: Action {
     switch self {
-    case .openApp(let app): "open_app \(app)"
-    case .quitApp(let app): "quit_app \(app)"
-    case .hideApp(let app): "hide_app \(app)"
-    case .openURL(let url): "open_url \(url.host() ?? url.scheme ?? "")"
-    case .shortcut: "shortcut"
-    case .type(let text): "type (\(text.count) characters)"
-    case .media(let key): "media \(key.rawValue)"
-    case .pressButton: "press_button"
-    case .chooseMenuItem(let path): "menu \(path.joined(separator: " › "))"
-    case .window(let operation): "window \(operation.rawValue)"
-    case .scroll(let direction, let id): "scroll \(direction.rawValue)\(id.map { " #\($0)" } ?? "")"
-    default: "element step #\(elementID ?? 0)"
+    case .openApp: .openApp
+    case .quitApp: .quitApp
+    case .hideApp: .hideApp
+    case .openURL: .openURL
+    case .shortcut: .shortcut
+    case .type: .type
+    case .media: .media
+    case .pressButton: .pressButton
+    case .chooseMenuItem: .menu
+    case .pressElement: .press
+    case .focusElement: .focus
+    case .select: .select
+    case .showMenu: .showMenu
+    case .setValue: .setValue
+    case .increment: .increment
+    case .decrement: .decrement
+    case .scroll: .scroll
+    case .window: .window
     }
   }
 
@@ -218,7 +243,12 @@ public protocol VoiceCommandPerforming: Sendable {
   /// in front ("new tab" means that app's) and what its window offers to act
   /// on. The elements' numbers stay this performer's until the next snapshot.
   func screenContext() async -> ScreenContext
-  func perform(_ step: VoiceCommandStep) async throws
+  /// Carries `step` out, answering how — "AXPress, then click", "key code 40"
+  /// — for the developer-mode command log, or nil when there's nothing to say.
+  func perform(_ step: VoiceCommandStep) async throws -> String?
+  /// The beat between two steps, so the app has handled one before the next
+  /// lands (⌘K's palette open before its search is typed). None after the last.
+  var settle: Duration { get }
   /// A command press proved itself and the command is about to be spoken:
   /// time the performer can spend getting the screen ready to read (a
   /// Chromium browser takes about two seconds to build its page tree).
@@ -231,6 +261,7 @@ public protocol VoiceCommandPerforming: Sendable {
 extension VoiceCommandPerforming {
   public func commandStarting() async {}
   public func commandEnded() async {}
+  public var settle: Duration { .zero }
 }
 
 enum VoiceCommandError: Error, Equatable, LocalizedError {
@@ -283,12 +314,36 @@ enum VoiceCommandError: Error, Equatable, LocalizedError {
     }
   }
 
+  /// The case's name for the public log, never its payload: an exhaustive
+  /// switch, so a new case can't ship without one (as `BlurtError.diagnosticName`).
+  var logName: String {
+    switch self {
+    case .notUnderstood: "notUnderstood"
+    case .malformedReply: "malformedReply"
+    case .truncatedReply: "truncatedReply"
+    case .unsupportedAction: "unsupportedAction"
+    case .unsafeURL: "unsafeURL"
+    case .unknownShortcut: "unknownShortcut"
+    case .tooManySteps: "tooManySteps"
+    case .appNotFound: "appNotFound"
+    case .appNotRunning: "appNotRunning"
+    case .buttonNotFound: "buttonNotFound"
+    case .menuItemNotFound: "menuItemNotFound"
+    case .unknownElement: "unknownElement"
+    case .screenChanged: "screenChanged"
+    case .elementGone: "elementGone"
+    case .refused: "refused"
+    case .couldNotPerform: "couldNotPerform"
+    }
+  }
+
   /// Whether the planner asks again once, showing the model this error: the
   /// plan was unusable rather than deliberate. Not an empty plan (the model's
-  /// own "can't"), a refusal (the code's own "won't"), or a cut-off reply.
+  /// own "can't"), a refusal (the code's own "won't"), a cut-off reply, or an
+  /// unknown action — the schema's enum rules that out, so it can't recur.
   var isRetryable: Bool {
     switch self {
-    case .malformedReply, .unsupportedAction, .unsafeURL, .unknownShortcut, .tooManySteps, .unknownElement: true
+    case .malformedReply, .unsafeURL, .unknownShortcut, .tooManySteps, .unknownElement: true
     default: false
     }
   }

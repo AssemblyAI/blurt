@@ -34,10 +34,10 @@ struct VoiceCommandStepTests {
       ])
   }
 
-  @Test("a code fence or a sentence around the JSON doesn't sink the command")
-  func toleratesWrapping() throws {
+  @Test("a reply off the schema — fenced, or with prose — is refused, not dug out")
+  func refusesWrapping() throws {
     let reply = "Sure:\n```json\n{\"steps\": [{\"action\": \"open_app\", \"app\": \"Notes\"}]}\n```"
-    #expect(try steps(reply) == [.openApp("Notes")])
+    #expect(throws: VoiceCommandError.malformedReply) { try steps(reply) }
   }
 
   @Test("no steps is a command Blurt can't do; no JSON is an unreadable plan")
@@ -86,6 +86,15 @@ struct VoiceCommandStepTests {
     #expect(throws: VoiceCommandError.malformedReply) {
       try steps(#"{"steps": [{"action": "type", "text": "\#(long)"}]}"#)
     }
+  }
+
+  @Test("a slider's number reads back the same on every locale: 0.5, never the 0,5 a German Mac would write")
+  func plainNumbers() throws {
+    let steps = try VoiceCommandStep.steps(
+      fromReply: #"{"steps": [{"action": "set_value", "element": 1, "value": 0.5}, "#
+        + #"{"action": "set_value", "element": 1, "value": 40}]}"#, maxSteps: 10, elementIDs: [1])
+    #expect(steps == [.setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40")])
+    #expect(Double("0.5") == 0.5)
   }
 
   @Test("a chord is any modifiers and exactly one key, by any of their names")
@@ -150,13 +159,19 @@ struct VoiceCommandStepTests {
 
   @Test("⌘ with delete is refused whatever the plan says; delete alone, and other ⌘ chords, are not")
   func destructiveChords() {
-    for keys in ["cmd+delete", "cmd+shift+delete", "cmd+option+shift+backspace", "cmd+forward_delete"] {
+    for keys in [
+      "cmd+delete", "cmd+shift+delete", "cmd+option+shift+backspace", "cmd+forward_delete", "cmd+shift+q",
+      "cmd+option+shift+q",
+    ] {
       #expect(throws: VoiceCommandError.refused("press \(keys)")) {
         try steps(#"{"steps": [{"action": "shortcut", "keys": "\#(keys)"}]}"#)
       }
     }
     #expect(throws: Never.self) { try steps(#"{"steps": [{"action": "shortcut", "keys": "delete"}]}"#) }
     #expect(throws: Never.self) { try steps(#"{"steps": [{"action": "shortcut", "keys": "cmd+d"}]}"#) }
+    // Quitting an app, and locking the screen, are fine.
+    #expect(throws: Never.self) { try steps(#"{"steps": [{"action": "shortcut", "keys": "cmd+q"}]}"#) }
+    #expect(throws: Never.self) { try steps(#"{"steps": [{"action": "shortcut", "keys": "ctrl+cmd+q"}]}"#) }
   }
 
   @Test("a button or menu item that deletes, erases or powers off is refused, by whole words")

@@ -55,18 +55,18 @@ struct SelectionSpeechRouting: Sendable {
 
   init() {}
 
-  /// Whether the session's run is a rewrite press's spoken instruction, being
-  /// recorded or transcribed: the pill says "Rewriting" for it.
-  var recordsRewrite: Bool { records(.rewrite) }
-
-  /// Whether the session's run is a command press's spoken command: the pill
-  /// says it's working on it.
-  var recordsCommand: Bool { records(.command) }
-
-  private func records(_ intent: Intent) -> Bool {
+  /// What the pill shows while the session records or transcribes a job's
+  /// spoken words, in place of "Transcribing": "Rewriting" for a rewrite's
+  /// instruction, "Working" for a command. Nil for anything else.
+  var processingState: OverlayUIState? {
     switch mode {
-    case .asking(let recording, _, _, _), .transcribing(let recording, _, _): recording == intent
-    default: false
+    case .asking(let intent, _, _, _), .transcribing(let intent, _, _):
+      switch intent {
+      case .rewrite: .rewriting
+      case .command: .commanding
+      case .read, .ask: nil
+      }
+    default: nil
     }
   }
 
@@ -93,18 +93,16 @@ struct SelectionSpeechRouting: Sendable {
       // A press only arrives here when the gate was idle under the speech: an
       // answer, or a tapped read, which frees the gate as it starts.
       return interrupt(with: .stopSpeech, key: key, action: action)
-    case .rewriting:
-      // Any press abandons a rewrite before it pastes, as it stops a read:
+    case .working:
+      // Any press abandons a rewrite before it pastes, or a command before
+      // its next step, as it stops a read:
       // a paste landing in the middle of whatever the press starts would be
       // the worse surprise. The gate is free here too.
-      return interrupt(with: .stopRewrite, key: key, action: action)
-    case .commanding:
-      // Any press abandons a command between steps, for the same reason.
-      return interrupt(with: .stopCommand, key: key, action: action)
-    case .transcribing(_, _, let started):
+      return interrupt(with: .stopJob, key: key, action: action)
+    case .transcribing(let intent, _, let started):
       // A press while the request is transcribing drops it, for the same reason.
       mode = .passthrough
-      return started ? [.forward(.cancel), .resetGate] : [.resetGate]
+      return (started ? [.forward(.cancel), .resetGate] : [.resetGate]) + abandon(intent)
     case .deciding(_, trigger: _, ended: true):
       // The press is over and the gate idle, only its read still out: this is a
       // fresh press, not one riding the old. Swallowing it would leave the gate
@@ -151,15 +149,10 @@ struct SelectionSpeechRouting: Sendable {
       return command == .cancelRecording ? [.forward(command)] : []
     case .asking(let intent, let selection, let started, _):
       return asking(intent, selection, started: started, command)
-    case .transcribing(_, _, let started):
-      return transcribing(started: started, command)
-    case .speaking, .rewriting, .commanding:
-      let stop: Action =
-        switch mode {
-        case .speaking: .stopSpeech
-        case .rewriting: .stopRewrite
-        default: .stopCommand
-        }
+    case .transcribing(let intent, _, let started):
+      return transcribing(intent, started: started, command)
+    case .speaking, .working:
+      let stop: Action = mode == .speaking ? .stopSpeech : .stopJob
       mode = .passthrough
       // A recovery reset still reaches the session, where it can only cancel a
       // live recording, and there isn't one.
@@ -172,23 +165,33 @@ struct SelectionSpeechRouting: Sendable {
   ) -> [Action] {
     switch command {
     case .release:
-      mode = .transcribing(intent, selection, started: started)
-      return started ? [.forward(.release)] : []
+      return (started ? [.forward(.release)] : []) + beginTranscribing(intent, selection, started: started)
     case .cancel, .cancelRecording:
       mode = .passthrough
       // Unstarted, the session is still busy with the earlier dictation, which
       // a cancel would throw away. A recovery reset still goes through.
-      return started || command == .cancelRecording ? [.forward(command)] : []
+      return (started || command == .cancelRecording ? [.forward(command)] : []) + abandon(intent)
     case .press, .pressHandingBack:
       return []
     }
   }
 
-  private mutating func transcribing(started: Bool, _ command: DictationSession.Command) -> [Action] {
+  /// The request's recording ends and its transcription starts. A command's
+  /// screen is read now (`.readScreen`), while it transcribes: the screen as
+  /// it was when the user stopped speaking is what the command refers to,
+  /// and the read's time overlaps the transcription's rather than adding to it.
+  private mutating func beginTranscribing(_ intent: Intent, _ selection: String, started: Bool) -> [Action] {
+    mode = .transcribing(intent, selection, started: started)
+    return started && intent == .command ? [.readScreen] : []
+  }
+
+  private mutating func transcribing(
+    _ intent: Intent, started: Bool, _ command: DictationSession.Command
+  ) -> [Action] {
     switch command {
     case .cancel:
       mode = .passthrough
-      return started ? [.forward(.cancel)] : []
+      return (started ? [.forward(.cancel)] : []) + abandon(intent)
     case .release, .cancelRecording:
       // Nothing is recording, so the session treats either as a no-op.
       return [.forward(command)]
@@ -218,13 +221,13 @@ struct SelectionSpeechRouting: Sendable {
     case .asking(let intent, let selection, let started, byHold: true):
       // Letting go of a held request ends it, before the gate's hold
       // threshold too; the latch holds no recording the user knows about.
-      mode = .transcribing(intent, selection, started: started)
-      return started ? [.forward(.release), .resetGate] : [.resetGate]
+      return (started ? [.forward(.release), .resetGate] : [.resetGate])
+        + beginTranscribing(intent, selection, started: started)
     case .speaking:
       // A held read let go before the gate's threshold keeps playing, latched.
       // Free the gate, as a tapped read does, so the other keys still work.
       return [.resetGate]
-    case .passthrough, .asking, .transcribing, .rewriting, .commanding:
+    case .passthrough, .asking, .transcribing, .working:
       return []
     }
   }
@@ -238,7 +241,7 @@ struct SelectionSpeechRouting: Sendable {
       return []
     case .selected(let intent, let selection):
       return trigger(intent, selection, by: .hold)
-    case .passthrough, .deciding, .asking, .transcribing, .speaking, .rewriting, .commanding:
+    case .passthrough, .deciding, .asking, .transcribing, .speaking, .working:
       return []
     }
   }
@@ -275,7 +278,10 @@ struct SelectionSpeechRouting: Sendable {
       return trigger == .tap ? [.speak(selection), .resetGate] : [.speak(selection)]
     case .ask, .rewrite, .command:
       mode = .asking(intent, selection, started: !sessionBusy, byHold: trigger == .hold)
-      return sessionBusy ? [] : [.forward(.pressHandingBack(key: nil))]
+      // A command's screen is prepared now (`.prepareCommand`), while it's
+      // spoken — and before the session is free to record it, if it isn't yet.
+      let prepare: [Action] = intent == .command ? [.prepareCommand] : []
+      return prepare + (sessionBusy ? [] : [.forward(.pressHandingBack(key: nil))])
     }
   }
 
@@ -298,18 +304,10 @@ struct SelectionSpeechRouting: Sendable {
     return [.resetGate]
   }
 
-  /// The rewrite pasted, or failed. As with `speechFinished`, the caller must
-  /// not report a rewrite it stopped itself.
-  mutating func rewriteFinished() -> [Action] {
-    guard mode == .rewriting else { return [] }
-    mode = .passthrough
-    return [.resetGate]
-  }
-
-  /// The command was carried out, or failed. As with `speechFinished`, the
-  /// caller must not report a command it stopped itself.
-  mutating func commandFinished() -> [Action] {
-    guard mode == .commanding else { return [] }
+  /// The job — a rewrite or a command — finished or failed. As with
+  /// `speechFinished`, the caller must not report a job it stopped itself.
+  mutating func jobFinished() -> [Action] {
+    guard mode == .working else { return [] }
     mode = .passthrough
     return [.resetGate]
   }
@@ -338,7 +336,7 @@ struct SelectionSpeechRouting: Sendable {
       return requestEnded(phase, intent: intent, selection: selection, stillDown: true)
     case .transcribing(let intent, let selection, started: true):
       return requestEnded(phase, intent: intent, selection: selection, stillDown: false)
-    case .deciding, .selected, .speaking, .rewriting, .commanding:
+    case .deciding, .selected, .speaking, .working:
       return []
     }
   }
@@ -353,11 +351,13 @@ struct SelectionSpeechRouting: Sendable {
       let reset: [Action] = stillDown ? [.resetGate] : []
       switch intent {
       case .rewrite:
-        mode = .rewriting
+        mode = .working
         return [.rewrite(request: request, selection: selection)] + reset
       case .command:
-        mode = .commanding
-        return [.runCommand(request)] + reset
+        mode = .working
+        // Handed back by the recording cap, the key still down, it skipped
+        // `beginTranscribing`: read the screen now.
+        return (stillDown ? [.readScreen] : []) + [.runCommand(request)] + reset
       case .ask, .read:
         mode = .speaking
         return [.answer(request: request, selection: selection)] + reset
@@ -366,6 +366,14 @@ struct SelectionSpeechRouting: Sendable {
     // Nothing said, or the request failed or was cancelled: a dictation ending
     // without a key event, like any other.
     mode = .passthrough
-    return [.syncGateAfterSession]
+    return [.syncGateAfterSession] + abandon(intent)
+  }
+
+  /// A command dropped before it ran — nothing said, a combo, a press while
+  /// it transcribed — still has its screen read under way and, in a Chromium
+  /// browser, its page tree switched on: `.stopJob` stops one and undoes the
+  /// other. Nothing for any other request.
+  private func abandon(_ intent: Intent) -> [Action] {
+    intent == .command ? [.stopJob] : []
   }
 }
