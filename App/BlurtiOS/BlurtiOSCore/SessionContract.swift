@@ -164,7 +164,8 @@ package nonisolated struct CommandAck: Codable, Sendable, Equatable {
     case nothingInFlight
     /// Older than `commandFreshnessWindow`.
     case stale
-    /// Already answered (the keyboard's resend).
+    /// Kept so older acks still decode: the router answers a resend with the
+    /// command's original outcome instead (`CommandRouter`).
     case duplicate
   }
 
@@ -274,7 +275,9 @@ nonisolated extension SharedStore {
   package static var listeningState: ListeningState? {
     get { read(ListeningState.self, forKey: BlurtShared.Key.listeningState) }
     set {
-      if let newValue { write(newValue, forKey: BlurtShared.Key.listeningState) } else {
+      if let newValue {
+        write(newValue, forKey: BlurtShared.Key.listeningState)
+      } else {
         remove(forKey: BlurtShared.Key.listeningState)
       }
     }
@@ -289,7 +292,11 @@ nonisolated extension SharedStore {
   package static var commandAck: CommandAck? {
     get { read(CommandAck.self, forKey: BlurtShared.Key.ack) }
     set {
-      if let newValue { write(newValue, forKey: BlurtShared.Key.ack) } else { remove(forKey: BlurtShared.Key.ack) }
+      if let newValue {
+        write(newValue, forKey: BlurtShared.Key.ack)
+      } else {
+        remove(forKey: BlurtShared.Key.ack)
+      }
     }
   }
 
