@@ -10,21 +10,35 @@
   /// format outright — 16 kHz mono 16-bit — and lets Core Audio convert from
   /// the Mac's microphone. Never built for a phone; `WindowedAudioSource` is
   /// the real thing and this only has to be good enough to exercise the loop.
+  ///
+  /// Debug builds also fail on request (`BLURT_SIM_FAULT`, `Fault`,
+  /// `SimulatorAudioSource+Fault.swift`): the failures and events a phone's
+  /// microphone produces, so the app's and the keyboard's answers to each can
+  /// be seen without a phone call.
   nonisolated final class SimulatorAudioSource: ListeningSource, @unchecked Sendable {
     /// 100 ms per buffer, three in flight.
     private static let bufferBytes: UInt32 = 3200
     private static let bufferCount = 3
+    private static let log = HostIdentity.current.logger("Capture")
 
-    private let feed = UtteranceFeed()
+    private let feed: UtteranceFeed
     /// The running queue, or nil while closed or parked between utterances.
     private let queue = Mutex<AudioQueueRef?>(nil)
     private let opened = Atomic<Bool>(false)
     private let parking = Atomic<Bool>(false)
     private let failures: AsyncStream<Void>.Continuation
     let failedStarts: AsyncStream<Void>
+    private let eventSink: AsyncStream<SourceEvent>.Continuation
+    let events: AsyncStream<SourceEvent>
 
     var levels: AsyncStream<Float> { feed.levels }
-    var isOpen: Bool { opened.load(ordering: .acquiring) }
+
+    var isOpen: Bool {
+      #if DEBUG
+        guard !interrupted.load(ordering: .acquiring), !dead.load(ordering: .acquiring) else { return false }
+      #endif
+      return opened.load(ordering: .acquiring)
+    }
 
     #if DEBUG
       /// `BLURT_SIM_AUDIO_FILE`: a 16 kHz mono 16-bit WAV played into every
@@ -53,18 +67,51 @@
           return chunk
         }
       }
+
+      private let fault: Fault?
+      /// The timed fault, counting from `open` to `close`.
+      private let faultTimer = Mutex<Task<Void, Never>?>(nil)
+      /// Taken away (`interruptAfter`): no frames, no starts, not open.
+      private let interrupted = Atomic<Bool>(false)
+      /// Dead (`runtimeErrorAfter`): the queue is gone until the window closes.
+      private let dead = Atomic<Bool>(false)
+      /// Whether an Audio Queue runs on the Mac's microphone. Tests say no:
+      /// a runner has no microphone to assume, and feed `deliverForTesting`.
+      private let usesMicrophone: Bool
+
+      init(fault: Fault? = Fault.fromEnvironment, usesMicrophone: Bool = true) {
+        self.fault = fault
+        self.usesMicrophone = usesMicrophone
+        (failedStarts, failures) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let (events, sink) = AsyncStream<SourceEvent>.makeStream()
+        self.events = events
+        eventSink = sink
+        feed = UtteranceFeed(onSilence: { sink.yield(.silent) })
+      }
+    #else
+      init() {
+        (failedStarts, failures) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let (events, sink) = AsyncStream<SourceEvent>.makeStream()
+        self.events = events
+        eventSink = sink
+        feed = UtteranceFeed(onSilence: { sink.yield(.silent) })
+      }
     #endif
 
-    init() {
-      (failedStarts, failures) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+    deinit {
+      stopQueue()
+      #if DEBUG
+        faultTimer.withLock { $0?.cancel() }
+      #endif
     }
-
-    deinit { stopQueue() }
 
     func open() async throws {
       parking.store(false, ordering: .releasing)
-      try startQueue()
+      try startQueue(parked: false)
       opened.store(true, ordering: .releasing)
+      #if DEBUG
+        scheduleFault()
+      #endif
     }
 
     func park() async {
@@ -74,17 +121,26 @@
 
     func hold() async throws {
       parking.store(false, ordering: .releasing)
-      if isOpen { try startQueue() }
+      if isOpen { try startQueue(parked: false) }
     }
 
     func close() async {
       opened.store(false, ordering: .releasing)
       parking.store(false, ordering: .releasing)
+      #if DEBUG
+        faultTimer.withLock { $0?.cancel() }
+        interrupted.store(false, ordering: .releasing)
+        dead.store(false, ordering: .releasing)
+      #endif
       stopQueue()
       feed.end()
     }
 
-    private func startQueue() throws {
+    private func startQueue(parked: Bool) throws {
+      #if DEBUG
+        try refuse(parked: parked)
+        guard usesMicrophone else { return }
+      #endif
       try queue.withLock { queue in
         guard queue == nil else { return }
         var format = AudioStreamBasicDescription(
@@ -124,13 +180,14 @@
 
     func start() async throws -> AsyncStream<Data> {
       guard isOpen else {
-        throw BlurtError.audioCaptureFailed(underlying: ListeningSourceFailure.windowClosed)
+        throw BlurtError.audioCaptureFailed(underlying: closedFailure())
       }
       if parking.load(ordering: .acquiring) {
         do {
-          try startQueue()
+          try startQueue(parked: true)
         } catch {
           guard isOpen, !Task.isCancelled else { throw CancellationError() }
+          Self.log.error("capture parked start failed: \(error.localizedDescription, privacy: .public)")
           failures.yield()
           throw BlurtError.audioCaptureFailed(underlying: error)
         }
@@ -144,6 +201,16 @@
         scriptedOffset.withLock { $0 = 0 }
       #endif
       return feed.begin()
+    }
+
+    /// Why a press found no microphone: the window is closed — or, under a
+    /// fault, the microphone is taken or dead.
+    private func closedFailure() -> ListeningSourceFailure {
+      #if DEBUG
+        if interrupted.load(ordering: .acquiring) { return .interrupted(reason: Fault.interruptionReason) }
+        if dead.load(ordering: .acquiring) { return .runtimeError(code: Fault.errorCode) }
+      #endif
+      return .windowClosed
     }
 
     func stop() -> Int {
@@ -161,22 +228,81 @@
       if parking.load(ordering: .acquiring) || !isOpen { stopQueue() }
     }
 
+    /// A chunk from the Mac's microphone — or a test's — on its way to the
+    /// feed: the scripted speech or the fault's zeros in its place, nothing
+    /// while the microphone is taken or dead.
+    private func ingest(_ chunk: Data) {
+      var chunk = chunk
+      #if DEBUG
+        guard !interrupted.load(ordering: .acquiring), !dead.load(ordering: .acquiring) else { return }
+        if let speech = Self.scripted, feed.isCapturing { chunk = nextScripted(chunk.count, from: speech) }
+        if fault == .silentFrames { chunk = Data(count: chunk.count) }
+      #endif
+      feed.deliver(chunk)
+    }
+
     /// Core Audio's callback: a C function pointer, so it captures nothing and
     /// finds its way back to the source through the user-data pointer.
     private static let deliver: AudioQueueInputCallback = { userData, queue, buffer, _, _, _ in
       guard let userData else { return }
       let source = Unmanaged<SimulatorAudioSource>.fromOpaque(userData).takeUnretainedValue()
       let count = Int(buffer.pointee.mAudioDataByteSize)
-      if count > 0 {
-        var chunk = Data(bytes: buffer.pointee.mAudioData, count: count)
-        #if DEBUG
-          if let speech = SimulatorAudioSource.scripted, source.feed.isCapturing {
-            chunk = source.nextScripted(count, from: speech)
-          }
-        #endif
-        source.feed.deliver(chunk)
-      }
+      if count > 0 { source.ingest(Data(bytes: buffer.pointee.mAudioData, count: count)) }
       _ = AudioQueueEnqueueBuffer(queue, buffer, 0, nil)
     }
+
+    #if DEBUG
+      /// A test's chunk, taken the way the Audio Queue's are.
+      func deliverForTesting(_ chunk: Data) { ingest(chunk) }
+
+      /// The fault's refusal, for a start: every start, or a parked one.
+      private func refuse(parked: Bool) throws {
+        switch fault {
+        case .refuseStart:
+          throw ListeningSourceFailure.configureFailed(code: Fault.errorCode)
+        case .refuseBackgroundStart where parked:
+          throw ListeningSourceFailure.backgroundStartRefused(code: Fault.backgroundRefusalCode)
+        default:
+          return
+        }
+      }
+
+      /// Starts the timed fault's clock, from the window opening.
+      private func scheduleFault() {
+        guard let fault, let delay = fault.delay else { return }
+        let task = Task { [weak self] in
+          guard (try? await Task.sleep(for: .seconds(delay))) != nil, let self else { return }
+          self.fire(fault)
+          guard case .interruptAfter = fault, (try? await Task.sleep(for: .seconds(delay))) != nil else { return }
+          self.interrupted.store(false, ordering: .releasing)
+          Self.log.notice("capture interruptionEnded (simulated)")
+          self.eventSink.yield(.interruptionEnded)
+        }
+        faultTimer.withLock {
+          $0?.cancel()
+          $0 = task
+        }
+      }
+
+      private func fire(_ fault: Fault) {
+        switch fault {
+        case .interruptAfter:
+          interrupted.store(true, ordering: .releasing)
+          Self.log.notice("capture interrupted reason=\(Fault.interruptionReason, privacy: .public) (simulated)")
+          eventSink.yield(.interrupted(reason: Fault.interruptionReason))
+        case .runtimeErrorAfter:
+          dead.store(true, ordering: .releasing)
+          stopQueue()
+          Self.log.error("capture runtimeError code=\(Fault.errorCode) (simulated)")
+          eventSink.yield(.runtimeError(code: Fault.errorCode))
+        case .routeChangeAfter:
+          let route = "reason=\(Fault.routeChangeReason) input=\(Fault.routeInput)"
+          Self.log.notice("capture route \(route, privacy: .public) (simulated)")
+          eventSink.yield(.routeChanged(reason: Fault.routeChangeReason, input: Fault.routeInput))
+        case .refuseStart, .silentFrames, .refuseBackgroundStart:
+          break
+        }
+      }
+    #endif
   }
 #endif

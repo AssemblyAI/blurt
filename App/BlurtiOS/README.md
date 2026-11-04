@@ -112,6 +112,25 @@ mic. The keyboard's crash logs, if any, land in `~/Library/Logs/DiagnosticReport
 and `xcrun simctl spawn booted log show --last 5m --predicate 'process == "BlurtKeyboard"'`
 shows its console.
 
+Two environment variables shape the simulator's microphone in a debug build. They reach the
+app through `simctl launch`, which forwards every `SIMCTL_CHILD_*` variable it finds, so
+`SIMCTL_CHILD_BLURT_SIM_FAULT=refuseStart scripts/ios-sim.sh` sets one for the launch.
+`BLURT_SIM_AUDIO_FILE=<path>` plays a 16 kHz mono 16-bit WAV into every utterance in place of
+the Mac's microphone, so a probe dictates real speech with nobody speaking. `BLURT_SIM_FAULT`
+makes the source fail the way a phone's microphone does (`SimulatorAudioSource+Fault.swift`),
+with the same typed failures (`ListeningSourceFailure`) and events (`SourceEvent`), so the app's
+and the keyboard's answers to each can be seen without a phone call. The timed ones count from
+the moment the session turns on; the app's log lines for them say `(simulated)`.
+
+| `BLURT_SIM_FAULT`       | What the microphone does                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refuseStart`           | every start — turning the session on, a hold, a parked press — throws `configureFailed(-12782)`, the simulator's own capture error                                                |
+| `refuseBackgroundStart` | the session turns on and holds; a parked press's start throws `backgroundStartRefused(561015905)`, iOS's `!rec`                                                                   |
+| `silentFrames`          | every chunk is digital silence, so an utterance trips the 1 s silence watchdog (`silent`)                                                                                         |
+| `interruptAfter:<s>`    | after `<s>` seconds the microphone is taken (`interrupted(audioDeviceInUseByAnotherClient)`: no frames, presses refused) and given back `<s>` seconds later (`interruptionEnded`) |
+| `runtimeErrorAfter:<s>` | after `<s>` seconds the session dies (`runtimeError(-12782)`) and stays dead until the session is turned off                                                                      |
+| `routeChangeAfter:<s>`  | after `<s>` seconds the route changes (`routeChanged(newDeviceAvailable, BluetoothHFP)`); nothing else changes                                                                    |
+
 ## Testing on a phone
 
 1. Install Xcode 26.6 or newer — CI's runner has 26.6 (`xcodes install 26.6 --select`, or
