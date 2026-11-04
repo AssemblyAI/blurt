@@ -72,7 +72,7 @@ extension VoiceCommandStep {
     for length in stride(from: 2, through: steps.count / 2, by: 1) {
       for start in 0...(steps.count - 2 * length) {
         let block = steps[start..<start + length]
-        guard block.contains(where: { $0 != block.first }) else { continue }
+        guard block.contains(where: { $0 != block.first }) else { continue }  // mutate-ok: same test either end
         if block.elementsEqual(steps[start + length..<start + 2 * length]) { return Array(block) }
       }
     }
@@ -92,7 +92,7 @@ extension VoiceCommandStep {
       let pressable = listed.filter { Self.pressableKinds.contains($0.kind) }
       guard let match = NameMatch.best(for: name, among: pressable.map(\.label)) else { return self }
       let named = pressable.filter { $0.label == match }
-      guard named.count == 1, let only = named.first else { return self }
+      guard let only = named.onlyElement else { return self }
       return .pressElement(only.id)
     case .type(let text) where ["\n", "\r\n", "\r"].contains(text):
       return .shortcut(KeyChord(modifiers: [], key: .code(KeyChord.namedKeyCodes["return"] ?? 0x24)))

@@ -196,6 +196,20 @@ struct ElementActionsTests {
     }
   }
 
+  @Test("two bar items with one title: the path walks into the first, as the menu bar lists them")
+  func menuDuplicateTitle() throws {
+    let twoViews = Menu(
+      title: nil,
+      children: [
+        Menu(title: "View", children: [Menu(title: nil, children: [Menu(title: "Zoom In")])]),
+        Menu(title: "View", children: [Menu(title: nil, children: [Menu(title: "Sidebar")])]),
+      ])
+    let found = try ElementActions.menuItem(
+      ["View", "Zoom In"], from: twoViews, entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } },
+      title: \.title)
+    #expect(found.title == "Zoom In")
+  }
+
   @Test("the pointer goes home however the click ends: done, thrown, or cancelled during the beat")
   func pointerReturns() async throws {
     let home = CGPoint(x: 5, y: 5)

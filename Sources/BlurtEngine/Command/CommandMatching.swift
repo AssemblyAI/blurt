@@ -138,7 +138,11 @@ enum AppLink {
     if host.hasPrefix("www.") { host.removeFirst(4) }
     let labels = host.split(separator: ".")
     if labels.first == "google", url.path == "/search" {
-      let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value
+      let items = URLComponents(
+        url: url,
+        resolvingAgainstBaseURL: false  // mutate-ok: step URLs are absolute, nothing to resolve
+      )?.queryItems
+      let query = items?.first { $0.name == "q" }?.value
       // A form-encoded "+" is a space, which `URLComponents` leaves as it is.
       guard let query = query?.replacingOccurrences(of: "+", with: " "), query.split(separator: " ").count <= 3
       else { return nil }
@@ -167,7 +171,7 @@ enum AppLink {
     // A command that's only "open Mail" means the app, whatever single step
     // was planned for it: a link (`mailto:` opened a new message), or a
     // press on something listed by that name.
-    if let named = openedName(said), let installed = app(named), steps.count == 1, let only = steps.first,
+    if let named = openedName(said), let installed = app(named), let only = steps.onlyElement,
       Self.standsForApp(only, named: named, listed: listed)
     {
       return [.openApp(installed)]

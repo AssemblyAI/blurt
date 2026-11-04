@@ -74,6 +74,20 @@ struct TextShortcutExpanderTests {
     #expect(TextShortcutExpander.redactingExpansions(in: "com and more", using: [email]) == "com and more")
   }
 
+  @Test("a clipped expansion is redacted by its longest tail, not a shorter one it also starts with")
+  func redactsLongestClip() {
+    let song = TextShortcut(trigger: "song link", expansion: "https://example.com/la-la-la")
+    // "la-la-la" and "la-la" are both tails of the expansion the text starts with.
+    #expect(TextShortcutExpander.redactingExpansions(in: "la-la-la rest", using: [song]) == "song link rest")
+  }
+
+  @Test("redacting is one pass: a trigger put back is not re-read as a clipped expansion")
+  func redactsOnce() {
+    // The trigger heads its own expansion, so putting it back spells the expansion again.
+    let cal = TextShortcut(trigger: "cal", expansion: "cal.com/me")
+    #expect(TextShortcutExpander.redactingExpansions(in: "cal.com/me.com/me", using: [cal]) == "cal.com/me")
+  }
+
   @Test("never matches inside a longer word")
   func wholeWords() {
     let text = "That was impersonal emails, honestly."

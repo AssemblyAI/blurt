@@ -10,46 +10,22 @@
   /// its focused window written to `Tests/ScreenTrees/<name>.json` with every
   /// string swapped for fake text. Only on request (BLURT_RECORD_TREE=1),
   /// and only on a Mac with Accessibility trust: it drives this Mac's apps.
-  /// BLURT_RECORD_APPS picks some ("Slack,Mail"); all of them by default.
+  /// BLURT_RECORD_TREE_ONLY picks some ("Slack,Mail"); all of them by default.
   @Suite(
-    .serialized,
-    .enabled(if: ProcessInfo.processInfo.environment["BLURT_RECORD_TREE"] == "1", "set BLURT_RECORD_TREE=1 to record"),
-    .enabled(if: AXIsProcessTrusted(), "the process running the tests needs Accessibility trust"))
+    "Screen tree recorder", .serialized, .tags(.drivesThisMac),
+    .drivesThisMac("BLURT_RECORD_TREE", to: "record the screen trees"))
   struct ScreenTreeRecorder {
-    /// Each recording, by file name; the app to open for it; and what to
-    /// press first, so it's recorded in the view its tests expect (Slack's
-    /// Home, not Activity).
-    struct Recording {
-      let name: String
-      let app: String
-      var start: String?
-    }
-
-    static let apps: [Recording] =
-      [
-        Recording(name: "1Password", app: "1Password"), Recording(name: "Code", app: "Visual Studio Code"),
-        Recording(name: "Finder", app: "Finder"), Recording(name: "Mail", app: "Mail"),
-        Recording(name: "Slack", app: "Slack", start: "Home"), Recording(name: "Chrome", app: "Google Chrome"),
-        Recording(name: "Safari", app: "Safari"), Recording(name: "Obsidian", app: "Obsidian"),
-      ]
-
-    @Test func record() async throws {
-      await MainActor.run { _ = NSApplication.shared.setActivationPolicy(.accessory) }
-      let wanted = ProcessInfo.processInfo.environment["BLURT_RECORD_APPS"].map {
-        Set($0.split(separator: ",").map(String.init))
-      }
+    @Test("every listed app's largest window, recorded with fake text")
+    func record() async throws {
+      await MacDriver.becomeAccessory()
+      let wanted = MacDriver.picks("BLURT_RECORD_TREE_ONLY")
       let performer = SystemVoiceCommandPerformer()
-      for recording in Self.apps where wanted?.contains(recording.name) ?? true {
+      for recording in RecordedNode.recordings where wanted(recording.name) {
         let name = recording.name
-        _ = try await performer.perform(.openApp(recording.app))
-        try await Task.sleep(for: .seconds(1))
-        await performer.commandStarting()
-        let screen = await performer.screenContext()
-        if let start = recording.start, let element = screen.elements.first(where: { $0.label.hasPrefix(start) }) {
-          _ = try? await performer.perform(.pressElement(element.id))
-        }
+        try await MacDriver.bringToFront(recording.app, with: performer)
+        if let start = recording.start { await MacDriver.press(labelled: start, with: performer) }
         try await Task.sleep(for: .seconds(2))
-        let pid = try #require(await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier })
+        let pid = try #require(await KeyInjector.frontmostApp()?.processIdentifier)
         // Its largest window: Mail's front one can be a blank new message.
         let app = AXRead.app(pid)
         let windows = (AXRead.value(app, kAXWindowsAttribute) as? [AXUIElement] ?? []).map(AXRead.capped)
@@ -78,18 +54,9 @@
     private var fakes: [String: String] = [:]
     static let nodeLimit = 6_000
 
-    /// Interface words that name no person, channel, file or message.
-    static let keep: Set<String> = [
-      "Search", "Send", "Reply", "Close", "Back", "Forward", "Home", "Activity", "Settings", "Favorites",
-      "Inbox", "Sent", "Drafts", "Junk", "Archive", "Trash", "Downloads", "Documents", "Desktop", "Recents",
-      "Applications", "Explorer", "Source Control", "Run and Debug", "Extensions", "New", "Share", "Edit",
-      "File", "View", "Help", "Window", "Go", "Format", "Insert", "Tools", "Unreads", "Threads", "Later",
-      "DMs", "Direct messages", "Channels", "All Items", "Watchtower", "Profile", "Developer", "sidebar",
-    ]
-
     mutating func fake(_ text: String?) -> String? {
       guard let text, !text.isEmpty else { return nil }
-      if Self.keep.contains(text) { return text }
+      if RecordedNode.keptWords.contains(text) { return text }
       if let known = fakes[text] { return known }
       let made = "Lorem \(fakes.count + 1)"
       fakes[text] = made
@@ -100,7 +67,7 @@
       count += 1
       let role = node.role
       // A value only where it's a name or a row's text — never a field's contents.
-      let valueNamed = role.map { ScreenSnapshot.valueNamedRoles.contains($0) || $0 == "AXStaticText" } ?? false
+      let valueNamed = role.map(RecordedNode.valueRoles.contains) ?? false
       let children: [RecordedNode] =
         depth < 40 && count < Self.nodeLimit ? node.children.map { record($0, depth: depth + 1) } : []
       let label = node.titleElement.map { titled in

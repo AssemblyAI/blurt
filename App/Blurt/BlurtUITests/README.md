@@ -18,6 +18,12 @@ observable UI rather than mocking views.
   `DictationSession` press/release — via both the real key tap and the direct
   Start/Stop seam — and asserts the live status walks to `recording` and back to
   `idle`, including two back-to-back runs to prove the pipeline re-arms.
+- **Control Your Mac and Rewrite Selection** — `CommandPipelineUITests`: a command key held
+  through the real key tap, recorded and transcribed by the session, planned and carried out by the
+  router with the stub planner and performer (`UITestCommandDoubles.swift` — no gateway, nothing
+  acted on), and the pill: Working for as long as the command runs, then Done; a typed step pasted
+  through the session; a complaint noted, never planned; overheard speech refused; a command it can't
+  do failing with the key still working after; and a rewrite pasted over the canned selection.
 - **Pasting into an app** — `DictationPipelineUITests`: the stub injector records
   what it would paste, with the harness window standing in for the target app.
 

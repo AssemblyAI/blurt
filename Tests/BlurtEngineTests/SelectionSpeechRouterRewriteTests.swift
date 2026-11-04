@@ -9,7 +9,7 @@ import Testing
 /// session's own injector.
 @MainActor
 @Suite("SelectionSpeechRouter · Rewrite")
-struct SelectionRewriteRouterTests {
+struct SelectionSpeechRouterRewriteTests {
   private let defaults = freshDefaults()
 
   /// Runs one held rewrite press of right ⌥ over "hey all", the session

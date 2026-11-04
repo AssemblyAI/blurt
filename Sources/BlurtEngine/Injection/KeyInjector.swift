@@ -113,6 +113,14 @@
     /// which apps are installed (defaults to "not opaque").
     private let isAXOpaqueApp: @Sendable (NSRunningApplication?) -> Bool
 
+    /// The app in front, for a paste with no target (`insertAtFocus`, or a
+    /// capture whose app is gone): its opacity is what `isAXOpaqueApp` judges
+    /// then, since there is no captured app to ask about. A voice command's `type` step lands here,
+    /// often in an app an earlier step just opened — one whose Chromium tree
+    /// isn't built yet, so it reports nothing focused. Injectable so tests
+    /// don't depend on what's in front (defaults to nothing).
+    private let frontmostApp: @Sendable () async -> NSRunningApplication?
+
     /// The pasteboard the paste reads, writes, and restores. Behind a seam so
     /// tests exercise the save/restore + changeCount logic against an in-memory
     /// fake instead of the real system pasteboard — whose contents another process
@@ -129,6 +137,7 @@
         isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
         hasEditableTarget: FocusCapture.hasEditableFocusedElement,
         isAXOpaqueApp: FocusCapture.isAXOpaqueApp,
+        frontmostApp: KeyInjector.frontmostApp,
         secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput)
     }
 
@@ -140,6 +149,7 @@
       isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
       hasEditableTarget: @escaping @Sendable () -> Bool = { true },
       isAXOpaqueApp: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
+      frontmostApp: @escaping @Sendable () async -> NSRunningApplication? = { nil },
       secondsSinceUserInput: @escaping @Sendable () -> TimeInterval = { .infinity },
       clipboard: any ClipboardAccess = SystemClipboard()
     ) {
@@ -150,6 +160,7 @@
       self.isAccessibilityTrusted = isAccessibilityTrusted
       self.hasEditableTarget = hasEditableTarget
       self.isAXOpaqueApp = isAXOpaqueApp
+      self.frontmostApp = frontmostApp
       self.secondsSinceUserInput = secondsSinceUserInput
       self.clipboard = clipboard
     }
@@ -257,6 +268,12 @@
         clipboard.write(finalText)
         throw error
       }
+      // The app whose opacity is judged below: the target, or — when there is
+      // none (a paste at focus, or a capture whose app is gone) — the one in
+      // front, since a nil would read as "not opaque" and copy instead. Looked
+      // up ahead of the gate below, so its main-actor hop can't let a cancel
+      // slip past it.
+      let judged = if let target { target } else { await frontmostApp() }
       // Final cancellation gate before the irreversible paste: a cancel() that
       // landed during activation must not type into the focused app.
       try Task.checkCancellation()
@@ -267,7 +284,10 @@
       // app — an Electron editor (VS Code, Slack) or a web browser — which can
       // report no editable signal even for a real text field; there we still paste
       // rather than drop the user's words.
-      guard hasEditableTarget() || isAXOpaqueApp(target) else {
+      // The app check first: a string prefix, where the focus read is several
+      // cross-process calls — and the apps that check answers for (Chrome,
+      // Slack, VS Code) are the ones whose focus read is slowest.
+      guard isAXOpaqueApp(judged) || hasEditableTarget() else {
         clipboard.write(finalText)
         throw BlurtError.noEditableTarget
       }

@@ -44,7 +44,7 @@ extension DictationLog {
   /// as `defaultDisplayPath`: the displayed path can't drift from the write
   /// target.
   public static var defaultErrorDisplayPath: String {
-    (defaultErrorURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+    displayPath(of: defaultErrorURL)
   }
 
   /// Append a failed dictation to the error log. **Gated on developer mode**, so

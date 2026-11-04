@@ -16,10 +16,7 @@ private struct DecodedError: Decodable {
 /// directory so the host's real `~/Library/Logs/Blurt/errors.jsonl` is never
 /// touched.
 private func makeTempErrorLogURL() -> URL {
-  let dir = FileManager.default.temporaryDirectory
-    .appendingPathComponent("BlurtErrorLogTests-\(UUID().uuidString)", isDirectory: true)
-  try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-  return dir.appendingPathComponent("errors.jsonl")
+  makeTempLogDirectory().appendingPathComponent("errors.jsonl")
 }
 
 private func readLog(_ url: URL) -> String {

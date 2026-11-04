@@ -50,12 +50,15 @@
 
     /// Whether `pid` owns the frontmost application right now. Named rather than
     /// inlined so the poll and the post-deadline check share one expression — and so
-    /// neither needs `MainActor.run`'s explicit `body:` label, which a trailing
-    /// closure in an `if` condition can't use.
+    /// neither needs a main-actor hop of its own in an `if` condition.
     private static func isFrontmost(_ pid: pid_t) async -> Bool {
-      await MainActor.run {
-        NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
-      }
+      await frontmostApp()?.processIdentifier == pid
+    }
+
+    /// The app in front now — what a paste at focus (`insertAtFocus`, with no
+    /// pinned target) is judged against.
+    static func frontmostApp() async -> NSRunningApplication? {
+      await MainActor.run { NSWorkspace.shared.frontmostApplication }
     }
 
     static func accessibilityTrusted() -> Bool {

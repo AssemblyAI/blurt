@@ -24,15 +24,6 @@ if [ ! -f "$BREWFILE" ]; then
   exit 1
 fi
 
-# The command a formula is wanted for, when it differs from the formula name.
-# check.sh probes the *binary*, so that — not the keg — is what has to exist.
-command_for() {
-  case "$1" in
-    markdownlint-cli) echo markdownlint ;;
-    *) echo "$1" ;;
-  esac
-}
-
 # The explicit `install` subcommand: bare `brew bundle` is a legacy alias for it.
 # Its exit status is recorded rather than fatal — under errexit a failure here
 # would abort before the diagnosis below, which is the half a stuck bootstrap
@@ -62,9 +53,10 @@ installed="$(brew list --formula --versions)"
 linked_records="$(brew --prefix)/var/homebrew/linked"
 while IFS= read -r formula; do
   [ -n "$formula" ] || continue
-  binary="$(command_for "$formula")"
   on_path=0
-  command -v "$binary" >/dev/null 2>&1 && on_path=1
+  # check.sh probes the *binary*, so that — not the keg — is what has to exist
+  # (every Brewfile formula installs a command of its own name).
+  command -v "$formula" >/dev/null 2>&1 && on_path=1
   if ! printf '%s\n' "$installed" | grep -q "^$formula "; then
     absent="$absent $formula"
   elif [ ! -e "$linked_records/$formula" ]; then
@@ -74,7 +66,7 @@ while IFS= read -r formula; do
       unusable="$unusable $formula"
     fi
   elif [ "$on_path" -eq 0 ]; then
-    unreachable="$unreachable $binary"
+    unreachable="$unreachable $formula"
   fi
 done <<EOF
 $(brew bundle list --formula --file="$BREWFILE")
@@ -110,7 +102,7 @@ if [ -n "$shadowed" ]; then
   echo "      something Homebrew doesn't manage owns those names in $(brew --prefix)/bin"
   echo "      (usually a pip- or npm-installed copy), and check.sh will run that copy:"
   for formula in $shadowed; do
-    echo "        $(command -v "$(command_for "$formula")")  (Homebrew's is unlinked)"
+    echo "        $(command -v "$formula")  (Homebrew's is unlinked)"
   done
   echo "      to hand them back to Homebrew: brew link --overwrite$shadowed"
   echo "      (add --dry-run first to list the files that would be replaced)"
@@ -139,6 +131,19 @@ echo "==> npm ci --prefix tools/jscpd"
 if ! npm ci --prefix "$REPO_ROOT/tools/jscpd"; then
   echo "error: jscpd didn't install; retry with: npm ci --prefix tools/jscpd" >&2
   status=1
+fi
+
+# The repo's own git hooks (.githooks/pre-commit formats and lints staged
+# Markdown), versioned with the code rather than left in .git/hooks. Never over
+# a hooks path someone already chose: that would silently switch off their
+# hooks (a commit signer, git-lfs's pre-push).
+hooks_path="$(git -C "$REPO_ROOT" config --get core.hooksPath || true)"
+if [ -z "$hooks_path" ]; then
+  echo "==> git config core.hooksPath .githooks"
+  git -C "$REPO_ROOT" config core.hooksPath .githooks
+elif [ "$hooks_path" != ".githooks" ]; then
+  echo "note: core.hooksPath is already $hooks_path, so .githooks/pre-commit (the Markdown check) is off;"
+  echo "      run it from your own pre-commit hook, or: git config core.hooksPath .githooks"
 fi
 
 if [ "$status" -ne 0 ]; then

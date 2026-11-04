@@ -115,6 +115,12 @@ struct SelectionSpeechRoutingRewriteTests {
   @Test("a rewrite's transcription shows as Rewriting; capture and notices are untouched")
   func transcriptionReadsRewriting() {
     #expect(PipelinePhase.transcribing.overlayState(whileSpeaking: false, processingAs: .rewriting) == .rewriting)
+    // Its words handed back: no hide before the router's own state — the
+    // blink that, mid-fade, left a command's pill invisible while it worked.
+    #expect(PipelinePhase.handedBack("open Slack").overlayState(whileSpeaking: false, processingAs: .commanding) == nil)
+    #expect(PipelinePhase.handedBack("shorter").overlayState(whileSpeaking: false, processingAs: .rewriting) == nil)
+    // An ask's words still hide it: the read that answers wears its own.
+    #expect(PipelinePhase.handedBack("what is this?").overlayState(whileSpeaking: false) == .idle)
     #expect(PipelinePhase.transcribing.overlayState(whileSpeaking: false) == .processing)
     #expect(PipelinePhase.recording.overlayState(whileSpeaking: false, processingAs: .rewriting) == .recording)
     #expect(PipelinePhase.idle.overlayState(whileSpeaking: false, processingAs: .rewriting) == .idle)

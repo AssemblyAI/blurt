@@ -57,7 +57,7 @@ final class AppCoordinator {
   private(set) var isReadingAloud = false
   /// What reads aloud and how the selection is read, when not the real ones:
   /// UI tests run the whole read-aloud path offline. Nil in production.
-  @ObservationIgnored private let readAloudSeams: ReadAloudSeams?
+  @ObservationIgnored private let triggerKeySeams: TriggerKeySeams?
   /// The saved history — every dictation, dropped or browsed-for file and
   /// recording — and the transcript sheet's state for whichever is open.
   let transcripts: TranscriptsModel
@@ -73,11 +73,11 @@ final class AppCoordinator {
     components: DictationComponents? = nil,
     apiKey: APIKeyModel = APIKeyModel(),
     account: AssemblyAIAccount? = nil,
-    readAloud: ReadAloudSeams? = nil,
+    triggerKeys: TriggerKeySeams? = nil,
     transcripts: TranscriptsModel? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
-    self.readAloudSeams = readAloud
+    self.triggerKeySeams = triggerKeys
     self.apiKey = apiKey
     let info = Bundle.main.infoDictionary ?? [:]
     let account =
@@ -162,8 +162,10 @@ final class AppCoordinator {
     // a dictating key's commands to `session.submit` and handles read and ask
     // keys itself.
     let router =
-      readAloudSeams.map {
-        SelectionSpeechRouter(session: session, speaker: $0.speaker, readSelection: $0.readSelection)
+      triggerKeySeams.map {
+        SelectionSpeechRouter(
+          session: session, speaker: $0.speaker, rewriter: $0.rewriter, planner: $0.planner,
+          performer: $0.performer, readSelection: $0.readSelection)
       }
       ?? SelectionSpeechRouter(
         session: session,
@@ -390,11 +392,4 @@ final class AppCoordinator {
     // still finishing from the end of a request it is waiting on.
     speechRouter?.sessionPhaseChanged(phase)
   }
-}
-
-/// Stand-ins for read-aloud's speaker and selection read, so a host can run the
-/// read-aloud path with no network, audio or Accessibility (Blurt's UI tests).
-struct ReadAloudSeams {
-  let speaker: any ReadAloudSpeaker
-  let readSelection: @Sendable () async -> String?
 }

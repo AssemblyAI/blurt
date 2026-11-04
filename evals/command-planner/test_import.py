@@ -74,22 +74,12 @@ def test_entries_without_a_prompt_are_skipped():
 def test_the_corpus_is_in_the_shape_the_swift_eval_decodes():
     corpus = json.loads((HERE / "cases.json").read_text())
     assert 0.5 <= corpus["passFloor"] <= 1
-    allowed = {
-        "id",
-        "said",
-        "app",
-        "window",
-        "incomplete",
-        "elements",
-        "expect",
-        "forbid",
-        "screen",
-    }
+    # Which keys a case may carry is the Swift decoder's to say
+    # (PlannerEvalTests.corpusIsAnonymous reads them off Case.CodingKeys).
     recordings = {
         path.stem for path in (HERE.parent.parent / "Tests" / "ScreenTrees").glob("*.json")
     }
     for case in corpus["cases"]:
-        assert set(case) <= allowed, case["id"]
         assert {"id", "said", "expect"} <= set(case), case["id"]
         # Over a recorded screen (Tests/ScreenTrees), or one written in the case.
         assert ("screen" in case) != ("app" in case), case["id"]

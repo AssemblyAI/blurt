@@ -12,7 +12,7 @@ import Testing
 /// among everything a real window lists. Seeded, so a run asks the same.
 extension PlannerEval {
   static func screenCases() throws -> [Case] {
-    try RecordedNode.recordings.flatMap { name in try screenCases(for: name) }
+    try RecordedNode.names.flatMap { name in try screenCases(for: name) }
   }
 
   /// The kinds a "click" means a press or a select of.
@@ -37,7 +37,7 @@ extension PlannerEval {
     }
 
     // Three elements by their fake names, picked the same way every run.
-    var rng = ReplyParserFuzzTests.Seeded(state: stableSeed(name))
+    var rng = Seeded(name: name)
     let named = unique.filter { $0.label.hasPrefix("Lorem ") }
     for element in named.shuffled(using: &rng).prefix(3) {
       cases.append(
@@ -73,11 +73,6 @@ extension PlannerEval {
   static func clickExpectation(_ element: ScreenContext.Element) -> [[String]] {
     [["press #\(element.id) *"], ["select #\(element.id) *"]]
   }
-
-  /// A seed from a name that's the same on every run (`hashValue` isn't).
-  static func stableSeed(_ name: String) -> UInt64 {
-    name.utf8.reduce(1_469_598_103_934_665_603) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 }
-  }
 }
 
 @Suite("Planner eval · recorded screens")
@@ -86,7 +81,7 @@ struct PlannerScreenEvalTests {
   func generated() throws {
     let cases = try PlannerEval.screenCases()
     #expect(Set(cases.map(\.id)).count == cases.count)
-    for name in RecordedNode.recordings {
+    for name in RecordedNode.names {
       #expect(cases.filter { $0.id.hasPrefix("\(name)-") }.count >= 3, "\(name) yields too few cases")
     }
     for item in cases {

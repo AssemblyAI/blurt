@@ -1,0 +1,31 @@
+// What markdownlint leaves alone — the one list. Read by markdownlint-cli2
+// (check.sh and .githooks/pre-commit, which pass it every tracked or staged
+// Markdown file: these apply to explicit paths too) and by the VS Code
+// extension, which bundles the same engine, so the editor flags exactly what
+// the check does. The rules themselves are in .markdownlint.jsonc, which both
+// read too.
+//
+// Here rather than in a .markdownlintignore: neither reads that file (it is
+// markdownlint-cli's), and the extension dropped its `markdownlint.ignore`
+// setting in 0.56.0, so an ignore file left the editor linting all of these.
+{
+  "ignores": [
+    // The first three mirror .cursorignore — keep those in sync.
+    // Generated Xcode project — edit App/Blurt/project.yml and run xcodegen generate.
+    "App/Blurt/Blurt.xcodeproj/**",
+    // README/marketing screenshots (not source).
+    ".github/images/**",
+    // App icon asset bundle (not Swift).
+    "Design/brand/AppIcon.icon/**",
+    // Working docs / plans / marketing drafts — prose, not shipped source.
+    "docs/**",
+    // A short shim pointing agents at AGENTS.md, which is linted instead.
+    "CLAUDE.md",
+    // Local scratch git ignores: other tools' notes and worktree copies.
+    ".superpowers/**",
+    ".claude/worktrees/**",
+    ".remember/**",
+    "**/node_modules/**",
+    ".build/**",
+  ],
+}

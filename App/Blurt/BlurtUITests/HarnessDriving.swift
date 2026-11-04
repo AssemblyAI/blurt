@@ -20,6 +20,20 @@ extension BlurtUITestCase {
     picker.menuItems[key].click()
   }
 
+  /// Sets `key` to the job a harness button names (`harnessSetAsk`,
+  /// `harnessSetCommand`, …), and points the press/release buttons at it.
+  func bind(_ key: String, with setButton: String, in harness: XCUIElement) {
+    pick(key, in: harness)
+    harness.buttons[setButton].click()
+  }
+
+  /// Holds the picked key through a request: press, recording, release.
+  func hold(in harness: XCUIElement) {
+    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
+    waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "A held key should record")
+    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
+  }
+
   func setTranscript(_ text: String, in harness: XCUIElement) {
     let field = harness.textFields[UITestIdentifiers.transcriptField]
     field.click()

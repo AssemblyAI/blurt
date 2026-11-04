@@ -201,7 +201,7 @@ the two checks that genuinely need the build products stay behind them (step 12)
    (workflow _security_: template injection, overbroad `permissions:`, unpinned actions — it matters
    most for `release.yml`, which hands the Developer ID key to a runner) **/ prettier** (yml/yaml/md
    — the repo holds no html/css/xml since the Pages site moved to assemblyai.com/blurt) **/
-   markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
+   markdownlint-cli2 / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
    block in `.editorconfig`) **/ jscpd** (copy/paste detection over the Swift, shell and Python,
    tests included; config in `.jscpd.json`, zero clones allowed — factor a repeated block into a
    helper or fixture). jscpd is pinned by the lockfile in `tools/jscpd` (`npm ci --prefix
@@ -1558,8 +1558,11 @@ weak-reference assertions in `MemoryLeakTests.swift` (`expectNoLeak`) — LeakSa
 on Darwin, so AddressSanitizer catches memory _corruption_ but not leaks; `scripts/leaks.sh` covers
 the whole app under the Darwin leak detector.
 
-**Control Your Mac** is tested in three tiers, the way other computer-use projects (Peekaboo,
-OpenAdapt, browser-use) split theirs: fast and offline on every run, live only when asked.
+**Control Your Mac** is tested at every layer, the way other computer-use projects (Peekaboo,
+OpenAdapt, browser-use) split theirs: fast and offline on every run, live only when asked. The
+suites that drive this Mac's real apps share one gate (`.drivesThisMac`, in `Stubs/MacDriver.swift`:
+the variable that asks for it plus Accessibility trust) and one tag, so a normal run reports them
+skipped.
 
 - **Policy and decisions, every run.** The step parse and its checks — an element's kind, a
   destructive label, a looping step, all refused before any step runs — name matching, the snapshot
@@ -1570,13 +1573,24 @@ OpenAdapt, browser-use) split theirs: fast and offline on every run, live only w
   shell files stay outside the coverage gate.
 - **Recorded screens, every run.** `Tests/ScreenTrees/` holds real apps' windows — 1Password, Chrome,
   Finder, Mail, Obsidian, Safari, Slack and VS Code — recorded from a Mac by `ScreenTreeRecorder` (`BLURT_RECORD_TREE=1`,
-  `BLURT_RECORD_APPS=Slack,Mail` for some) with **every string swapped for fake text** ("Lorem 12"), but
+  `BLURT_RECORD_TREE_ONLY=Slack,Mail` for some) with **every string swapped for fake text** ("Lorem 12"), but
   a short list of generic interface words (Inbox, Search, Home). `RecordedScreenTests` replays them
   through the screen read's own code (`ScreenRead`, which the live read calls with real Accessibility
   nodes through the `ScreenNode` protocol), so what a window lists is checked with no app running: 1Password's
   value-named items, VS Code's page past its share, Finder's search button, Slack's sidebar rows, a browser page never crowded out by its tab strip. A
-  re-recording needs a look before it's committed: grep it for names and addresses, as every string
-  should be fake or on the keep list.
+  re-recording is held to its anonymity on every run: `noRealText` refuses any string that isn't
+  fake or on the keep list, anything shaped like an address, path or phone number, and any key the
+  recorder doesn't write. The list of recordings is `RecordedNode.recordings`, shared by the recorder
+  and the tests, and `everyRecordingOnDisk` holds the folder to it.
+- **Paste situations, every run.** `Tests/PasteFixtures/pastes.json` holds where a dictation lands in
+  real apps — Google Docs' page, Chrome's and Safari's address bars, VS Code's editor and command
+  palette, the Claude app's prompt, Slack's composer, Obsidian, 1Password's unlock field, Muse's reply box, Messages, Notes,
+  TextEdit, Terminal, System Settings' search, and two with nowhere to paste (a Finder window,
+  Calculator) — as the facts the paste decision reads (`PasteFacts`: role, subrole, settable value,
+  insertion point, inside a web area, the app's bundle id and Electron-ness; never text), each with the
+  outcome that's right there. `PasteFixtureTests` replays them through `PasteTarget.pastes`, the
+  decision `KeyInjector` makes. `PasteFixtureRecorder` (`BLURT_RECORD_PASTE=1`,
+  `BLURT_RECORD_PASTE_ONLY=a,b`) records them by driving each app's focus there, never typing.
 - **The reply parser, fuzzed, every run.** `ReplyParserFuzzTests` throws 20,000 seeded replies — well
   formed, missing fields, wrong types, cut short, wrapped in prose — and 5,000 byte strings at
   `VoiceCommandStep.steps`: each must be refused with a `VoiceCommandError` or parse to a plan that keeps
@@ -1598,7 +1612,13 @@ OpenAdapt, browser-use) split theirs: fast and offline on every run, live only w
   README says how to read a result and how to draft cases from `commands.jsonl`. Cases can also run over the
   recorded screens — written with `"screen"`, or generated from each recording
   (`BLURT_PLANNER_EVAL_SET=corpus|screens|all`) — so the planner is scored on full 150-element windows,
-  not only the handful of elements a written case lists.
+  not only the handful of elements a written case lists. The corpus, drafted from real logs, is
+  scanned every run for anything personal and for keys `Case` doesn't decode.
+- **The app's pipeline, XCUITest.** `CommandPipelineUITests` (in `App/Blurt/BlurtUITests`) drives the
+  real app under the UI-test harness with a fake planner, performer and rewriter
+  (`UITestCommandDoubles.swift`): a command planned, performed and done; the pill held while one
+  works; a typed step pasted; a complaint noted; overheard speech refused; a rewrite pasted. Its
+  README says how to run it.
 
 **Mutation testing** — `scripts/mutate.sh`, opt-in and **not** part of `check.sh`. It flips one
 operator in a source file, re-runs the suite, and reports whether anything noticed. Reach for it

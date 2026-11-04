@@ -89,7 +89,7 @@ enum ElementActions {
       found += level.filter { title($0).map(NameMatch.normalized) == key }
       queue += level
     }
-    guard found.count == 1, let only = found.first else { return nil }
+    guard let only = found.onlyElement else { return nil }
     guard !DestructiveGuard.isDestructive(label: name) else { throw VoiceCommandError.refused("choose \(name)") }
     return only
   }

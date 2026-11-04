@@ -11,16 +11,18 @@ The harness is Swift, in `Tests/BlurtEngineTests/PlannerEvalTests.swift`:
 | Part                           | Runs                   | Checks                                                                                                  |
 | ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------- |
 | corpus + scoring               | every `swift test`     | Unique ids; each element a plan names is listed; refusal cases exist; the matcher itself                |
+| corpus privacy                 | every `swift test`     | Nothing shaped like an address, path or phone number; only the keys `Case` decodes                      |
+| generated screen cases         | every `swift test`     | Every recording yields cases, each naming an element its screen lists (`PlannerScreenEvalTests`)        |
 | live planner                   | `BLURT_PLANNER_EVAL=1` | The pass rate across every case, run `BLURT_PLANNER_EVAL_RUNS` times (3 by default), clears `passFloor` |
-| log importer (`import_log.py`) | `check.sh` (pytest)    | Reads back exactly the user turn the planner sends                                                      |
+| log importer (`import_log.py`) | `check.sh` (pytest)    | Reads back exactly the user turn the planner sends; the corpus's required fields and screen names       |
 
 ```bash
 BLURT_PLANNER_EVAL=1 ASSEMBLYAI_API_KEY=… BLURT_PLANNER_EVAL_OUT=/tmp/planner-eval.json \
   swift test --filter PlannerEvalTests/live
 ```
 
-A run costs one or two gateway calls per case per run: 25 cases × 3 runs is about 75–90
-completions. It prints `PASSED=n/total`, the model, and `promptVersion`, followed by every failing
+A run costs one or two gateway calls per case per run, so three runs of the corpus
+(`corpus.cases.count` cases) cost three to six calls a case. It prints `PASSED=n/total`, the model, and `promptVersion`, followed by every failing
 plan. The JSON written to `BLURT_PLANNER_EVAL_OUT` has a verdict for each case.
 
 ## Recorded screens
@@ -94,4 +96,4 @@ The importer rebuilds each command's screen from that prompt and drafts the case
   no `expect`. Write the right plan yourself.
 
 Drafts carry `logged` and `reported` keys that the corpus doesn't take, so a draft can't be pasted
-into `cases.json` unreviewed without the corpus test failing.
+into `cases.json` unreviewed without the corpus test (`corpusIsAnonymous`) failing.
