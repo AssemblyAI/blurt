@@ -5,20 +5,21 @@ import Testing
 @testable import BlurtiOSCore
 
 /// The listening window's transition table, a row at a time, and what every row's record promises the keyboard.
+/// The rig is in `ListeningWindowMachineTests+Rig.swift`; what the machine carries across rows, in `+Carried.swift`.
 @Suite("Listening window machine")
 struct ListeningWindowMachineTests {
-  private typealias Machine = ListeningWindowMachine
-  private typealias Effect = Machine.Effect
+  typealias Machine = ListeningWindowMachine
+  typealias Effect = Machine.Effect
 
-  private let launch = UUID()
-  private let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
+  let launch = UUID()
+  let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
   /// The setting's default, shorter than the longest dictation so the floor shows.
-  private let minutes = 15
-  private let maxAudio = SyncSTTLimits.maxAudioSeconds
-  private let held = Machine.State.open(1, idle: .held, utterance: false)
-  private let paused = Machine.State.interrupted(1, reason: .interrupted, resumable: true)
-  private let standDown = Effect.deactivateSession(skipIfInterrupted: false)
-  private let leaveActive = Effect.deactivateSession(skipIfInterrupted: true)
+  let minutes = 15
+  let maxAudio = SyncSTTLimits.maxAudioSeconds
+  let held = Machine.State.open(1, idle: .held, utterance: false)
+  let paused = Machine.State.interrupted(1, reason: .interrupted, resumable: true)
+  let standDown = Effect.deactivateSession(skipIfInterrupted: false)
+  let leaveActive = Effect.deactivateSession(skipIfInterrupted: true)
 
   @Test("closed + openRequested in front → opening: the session up, the source opening")
   func openFromClosed() throws {
@@ -32,7 +33,7 @@ struct ListeningWindowMachineTests {
   @Test("the foreground gate: an open asked for from the background is refused, never a source start")
   func openNeedsForeground() throws {
     var m = fresh()
-    let log = Effect.log("open refused: the app is not in front")
+    let log = Effect.log(Machine.openRefusedLog)
     let record = try row(&m, .openRequested(inForeground: false), at: t0, lands: .closed, asks: [log])
     #expect(record.window == .closed && record.reason == .needsForeground)
     #expect(record.notReady(now: t0) == .needsForeground)
@@ -131,10 +132,10 @@ struct ListeningWindowMachineTests {
     #expect(m.state == paused)
   }
 
-  @Test("foregrounded with the session turned off → closing(stop): the off switch wins")
+  @Test("foregrounded with the session turned off → closing(stop): the off switch wins, the session left active")
   func foregroundedTurnedOff() throws {
     var m = interruptedWindow()
-    let asks: [Effect] = [.closeSource(1), leaveActive]
+    let asks: [Effect] = [.closeSource(1), leaveActive, .log(Machine.stopWhileInterruptedLog)]
     let record = try row(&m, .foregrounded(turnedOff: true), at: t0 + 2, lands: .closing(1, cause: .stop), asks: asks)
     #expect(record.window == .closing && !record.micLive)
   }
@@ -235,10 +236,9 @@ struct ListeningWindowMachineTests {
     var waiting = interruptedWindow()
     #expect(waiting.handle(.interruptionEnded(1, shouldResume: false), now: t0).isEmpty)
     #expect(waiting.handle(.openRequested(inForeground: false), now: t0).isEmpty && waiting.state == paused)
-    var closing = openWindow()
-    _ = closing.handle(.closeRequested, now: t0)
+    var closing = closingWindow()
     #expect(closing.handle(.closeRequested, now: t0).isEmpty && closing.handle(.expired(1), now: t0).isEmpty)
-    #expect(closing.handle(.openRequested(inForeground: true), now: t0).isEmpty)
+    #expect(closing.handle(.openRequested(inForeground: false), now: t0).isEmpty)
     #expect(closing.handle(.foregrounded(turnedOff: false), now: t0).isEmpty)
     #expect(closing.state == .closing(1, cause: .stop))
     var closed = fresh()
@@ -319,77 +319,5 @@ extension ListeningWindowMachineTests {
       #expect(record.micLive == (record.window == .open))
       #expect(record.isReady(now: record.writtenAt) == (record.window == .open))
     }
-  }
-}
-
-// MARK: - The rig
-
-extension ListeningWindowMachineTests {
-  private var window: TimeInterval { TimeInterval(minutes * 60) }
-
-  private func fresh(minutes: Int? = nil) -> Machine {
-    Machine(launchID: launch, windowMinutes: minutes ?? self.minutes, maxAudioSeconds: maxAudio)
-  }
-
-  /// A window opened at `t0` (generation 1) with nothing — or a dictation — in flight; `opened: false` leaves it opening.
-  private func openWindow(minutes: Int? = nil, opened: Bool = true, dictating: Bool = false) -> Machine {
-    var machine = fresh(minutes: minutes)
-    _ = machine.handle(.openRequested(inForeground: true), now: t0)
-    if opened { _ = machine.handle(.opened(1), now: t0) }
-    if dictating { _ = machine.handle(.utteranceStarted(1), now: t0) }
-    return machine
-  }
-
-  /// An open window a call took the microphone from, at `t0`.
-  private func interruptedWindow() -> Machine {
-    var machine = openWindow()
-    _ = machine.handle(.interruptionBegan(1, .interrupted), now: t0)
-    return machine
-  }
-
-  /// The effects apart from the record they publish.
-  private func actions(_ effects: [Effect]) -> [Effect] {
-    effects.filter { if case .publish = $0 { false } else { true } }
-  }
-
-  private func records(_ effects: [Effect]) -> [ListeningState] {
-    effects.compactMap { if case .publish(let record) = $0 { record } else { nil } }
-  }
-
-  /// The one record a transition publishes.
-  private func record(_ effects: [Effect], at location: SourceLocation = #_sourceLocation) throws -> ListeningState {
-    let published = records(effects)
-    #expect(published.count == 1, sourceLocation: location)
-    return try #require(published.first, sourceLocation: location)
-  }
-
-  /// One row: where the event lands the machine and what it asks for, answering the record it publishes.
-  @discardableResult
-  private func row(
-    _ machine: inout Machine, _ event: Machine.Event, at now: Date, lands state: Machine.State,
-    asks expected: [Effect], location: SourceLocation = #_sourceLocation
-  ) throws -> ListeningState {
-    let effects = machine.handle(event, now: now)
-    #expect(machine.state == state, sourceLocation: location)
-    #expect(actions(effects) == expected, sourceLocation: location)
-    return try record(effects, at: location)
-  }
-
-  /// Every row and a beat after each, in one life: refused, opened, dictated, interrupted, resumed, stopped.
-  private func wholeLife() -> [ListeningState] {
-    var m = fresh()
-    var records: [ListeningState] = []
-    let steps: [(Machine.Event, TimeInterval)] = [
-      (.openRequested(inForeground: false), 0), (.openRequested(inForeground: true), 1), (.opened(1), 2),
-      (.utteranceStarted(1), 3), (.utteranceEnded(1), 20), (.interruptionBegan(1, .interrupted), 30),
-      (.interruptionEnded(1, shouldResume: true), 40), (.resumeFailed(1, .needsForeground), 41),
-      (.foregrounded(turnedOff: false), 50), (.resumed(1), 51), (.idleChanged(1, .pip), 52),
-      (.openRequested(inForeground: true), 60), (.closeRequested, 70), (.closed(1), 71),
-    ]
-    for (event, offset) in steps {
-      records += self.records(m.handle(event, now: t0 + offset))
-      records += self.records(m.heartbeat(micLive: true, now: t0 + offset))
-    }
-    return records
   }
 }

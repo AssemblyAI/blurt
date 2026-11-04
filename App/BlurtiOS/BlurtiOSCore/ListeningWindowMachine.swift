@@ -5,7 +5,8 @@ import Foundation
 // One owner for the window's lifecycle, with no clock, no audio and no store
 // of its own: the interpreter (`ListeningWindow`) feeds it what happened as
 // events and carries out what it answers as effects, so every transition is
-// a value a test can drive without a simulator.
+// a value a test can drive without a simulator. The causes, states, events
+// and effects are in `ListeningWindowMachine+Types.swift`.
 
 /// The app's listening window as a pure state machine. Every opening of the
 /// source gets a generation, and every event about the source carries the one
@@ -17,139 +18,23 @@ package nonisolated struct ListeningWindowMachine: Sendable {
   /// One per opening of the source; `Effect.openSource` carries the new one.
   package typealias Generation = UInt64
 
-  /// Why a window is closing or closed: for the log, and for the closed record's reason.
-  package nonisolated enum Cause: Sendable, Equatable {
-    case expiry
-    case stop
-    case interrupted
-    case died
-    case openFailed
-    case mediaReset
-    case reopen
-
-    /// How the closed record says it.
-    package var reason: FailureReason {
-      switch self {
-      case .expiry, .stop: .sessionOff
-      case .interrupted: .interrupted
-      case .died, .openFailed: .micBusy
-      case .mediaReset: .mediaReset
-      case .reopen: .opening
-      }
-    }
-  }
-
-  package nonisolated enum State: Sendable, Equatable {
-    case closed
-    case opening(Generation)
-    case open(Generation, idle: ListeningState.Idle, utterance: Bool)
-    /// `resumable`: a poll when the interruption ends may bring the source
-    /// back. False once a resume has failed; then only the next foreground
-    /// tries again.
-    case interrupted(Generation, reason: FailureReason, resumable: Bool)
-    case closing(Generation, cause: Cause)
-
-    package var generation: Generation? {
-      switch self {
-      case .closed: nil
-      case .opening(let gen), .open(let gen, _, _), .interrupted(let gen, _, _), .closing(let gen, _): gen
-      }
-    }
-
-    package var window: ListeningState.Window {
-      switch self {
-      case .closed: .closed
-      case .opening: .opening
-      case .open: .open
-      case .interrupted: .interrupted
-      case .closing: .closing
-      }
-    }
-
-    /// The source is open: the only state in which a press records.
-    package var isOpen: Bool {
-      if case .open = self { true } else { false }
-    }
-
-    /// A dictation is in flight.
-    package var utterance: Bool {
-      if case .open(_, _, true) = self { true } else { false }
-    }
-
-    /// Why a press would not record, as the record says it; nil while open.
-    package var reason: FailureReason? {
-      switch self {
-      case .closed: .sessionOff
-      case .opening: .opening
-      case .open: nil
-      case .interrupted(_, let reason, _): reason
-      case .closing(_, let cause): cause.reason
-      }
-    }
-  }
-
-  /// What happened. Events about the source carry the generation they are about;
-  /// the app's own (`openRequested`, `closeRequested`, `foregrounded`) carry none.
-  package nonisolated enum Event: Sendable, Equatable {
-    case openRequested(inForeground: Bool)
-    case opened(Generation)
-    case openFailed(Generation, FailureReason)
-    case utteranceStarted(Generation)
-    case utteranceEnded(Generation)
-    case interruptionBegan(Generation, FailureReason)
-    case interruptionEnded(Generation, shouldResume: Bool)
-    /// The app came to the front; `turnedOff` is the session switch's word.
-    case foregrounded(turnedOff: Bool)
-    case resumed(Generation)
-    case resumeFailed(Generation, FailureReason)
-    case sourceDied(Generation, FailureReason)
-    case mediaReset(Generation)
-    case expired(Generation)
-    case closeRequested
-    case closed(Generation)
-    case idleChanged(Generation, ListeningState.Idle)
-
-    package var generation: Generation? {
-      switch self {
-      case .openRequested, .foregrounded, .closeRequested: nil
-      case .opened(let gen), .openFailed(let gen, _), .utteranceStarted(let gen), .utteranceEnded(let gen),
-        .interruptionBegan(let gen, _), .interruptionEnded(let gen, _), .resumed(let gen), .resumeFailed(let gen, _),
-        .sourceDied(let gen, _), .mediaReset(let gen), .expired(let gen), .closed(let gen), .idleChanged(let gen, _):
-        gen
-      }
-    }
-  }
-
-  /// What to do about it, in order. The interpreter owns the audio session, the
-  /// source, the timers, the background task and the store; this only names it.
-  package nonisolated enum Effect: Sendable, Equatable {
-    case activateSession
-    case openSource(Generation)
-    /// `mayStart`: the app is in front, so the source may be started outright;
-    /// otherwise only reactivate and poll for it coming back on its own.
-    case tryResume(Generation, mayStart: Bool)
-    /// The dictation in flight ends: released with its words, or cancelled.
-    case endUtterance(keepWords: Bool)
-    case closeSource(Generation)
-    /// `skipIfInterrupted`: deactivating during a call throws, so leave it.
-    case deactivateSession(skipIfInterrupted: Bool)
-    case scheduleExpiry(Date, Generation)
-    case cancelExpiry
-    case beginBackgroundTask
-    case endBackgroundTask
-    case publish(ListeningState)
-    case log(String)
-  }
-
   /// `windowMinutes` of this: the window runs until stopped, with no end and no expiry.
   package static let untilStopped = 0
   package static let secondsPerMinute: TimeInterval = 60
   /// How the log names an event from a window that has since closed.
   package static let staleGenerationLog = "stale gen"
+  /// The log's line for an open asked for from the background.
+  package static let openRefusedLog = "open refused: the app is not in front"
+  /// The log's line for the session turned off while interrupted, by Stop or
+  /// by the switch: the session is left active, since deactivating during a
+  /// call throws (`Effect.deactivateSession(skipIfInterrupted:)`).
+  package static let stopWhileInterruptedLog =
+    "stop while interrupted: the audio session stays active until the interruption ends"
 
   package let launchID: UUID
-  /// `SharedStore.windowMinutes`: how long the window stays open after the last word.
-  package let windowMinutes: Int
+  /// `SharedStore.windowMinutes` as Settings last set it (`Event.windowMinutesChanged`):
+  /// how long the window stays open after the last word.
+  package private(set) var windowMinutes: Int
   /// `SyncSTTLimits.maxAudioSeconds`: a dictation's start holds the window open
   /// at least this long, so a short window can't end a long dictation partway.
   package let maxAudioSeconds: TimeInterval
@@ -160,7 +45,20 @@ package nonisolated struct ListeningWindowMachine: Sendable {
   /// The window's end, kept across an interruption so a resume can put the
   /// expiry back where it was.
   package private(set) var windowUntil: Date?
+  /// `micLive` as the last heartbeat read it off the source, which is what a
+  /// refresh republishes. True as the source comes up (opened, resumed): the
+  /// first beat has not read it yet.
+  package private(set) var lastMicLive = false
   private var lastGeneration: Generation = 0
+  /// Why the window closed, as its record said it (the failed open's reason,
+  /// the refusal's, the cause's): every heartbeat while closed says it again,
+  /// since the state no longer holds it.
+  private var closedReason: FailureReason?
+  /// A hop landed while the source was closing: `closed` reopens instead of resting.
+  private var reopenWanted = false
+  /// The source was lost (an interruption, or it died) while still opening:
+  /// `opened` lands interrupted with this reason, not open.
+  private var lossWhileOpening: FailureReason?
 
   package init(launchID: UUID, windowMinutes: Int, maxAudioSeconds: TimeInterval, idle: ListeningState.Idle = .held) {
     self.launchID = launchID
@@ -180,6 +78,7 @@ package nonisolated struct ListeningWindowMachine: Sendable {
     case .openRequested(let inForeground): return openRequested(inForeground: inForeground, now: now)
     case .closeRequested: return closeRequested(now: now)
     case .foregrounded(let turnedOff): return foregrounded(turnedOff: turnedOff, now: now)
+    case .windowMinutesChanged(let minutes): return windowMinutesChanged(to: minutes, now: now)
     case .idleChanged(_, let idle): return idleChanged(to: idle, now: now)
     default: return fromSource(event, now: now)
     }
@@ -187,9 +86,11 @@ package nonisolated struct ListeningWindowMachine: Sendable {
 
   /// The heartbeat's record: the same state with the lease renewed and
   /// `micLive` as the interpreter just read it off the source — true only
-  /// while the window is open, whatever the source says otherwise.
+  /// while the window is open, whatever the source says otherwise. A closed
+  /// record keeps saying why it closed.
   package mutating func heartbeat(micLive: Bool, now: Date) -> [Effect] {
-    [publish(now: now, micLive: micLive && state.isOpen)]
+    lastMicLive = micLive && state.isOpen
+    return [publish(now: now, micLive: lastMicLive)]
   }
 }
 
@@ -199,35 +100,47 @@ nonisolated extension ListeningWindowMachine {
   /// The foreground gate lives here: iOS refuses to start capture from the
   /// background, so an open asked for there is refused with the reason the
   /// keyboard needs to hop. A window already open is refreshed, never
-  /// reopened; one that is interrupted is reopened under a new generation.
+  /// reopened; one that is interrupted is reopened under a new generation;
+  /// one that is closing is reopened once it has closed.
   private mutating func openRequested(inForeground: Bool, now: Date) -> [Effect] {
     switch state {
     case .closed:
       guard inForeground else {
-        return [publish(now: now, reason: .needsForeground), .log("open refused: the app is not in front")]
+        closedReason = .needsForeground
+        return [publish(now: now), .log(Self.openRefusedLog)]
       }
       return open(now: now)
     case .open(_, _, let utterance):
-      return expiry(from: now, floor: utterance ? maxAudioSeconds : 0) + [publish(now: now)]
+      return expiry(from: now, floor: utterance ? maxAudioSeconds : 0) + [publish(now: now, micLive: lastMicLive)]
     case .interrupted(let gen, _, _):
       guard inForeground else { return [] }
       return [.closeSource(gen), .endBackgroundTask] + open(now: now)
-    case .opening, .closing:
+    case .closing(let gen, _):
+      guard inForeground, !reopenWanted else { return [] }
+      reopenWanted = true
+      state = .closing(gen, cause: .reopen)
+      return [publish(now: now)]
+    case .opening:
       return []
     }
   }
 
   /// The switch or Stop: the user's word, so a dictation in flight is
-  /// cancelled rather than released.
+  /// cancelled rather than released, and a reopen a hop asked for while
+  /// closing is taken back.
   private mutating func closeRequested(now: Date) -> [Effect] {
     switch state {
-    case .closed, .closing:
+    case .closed:
       return []
+    case .closing(let gen, _):
+      guard reopenWanted else { return [] }
+      reopenWanted = false
+      state = .closing(gen, cause: .stop)
+      return [publish(now: now)]
     case .opening(let gen), .open(let gen, _, _):
       return close(gen, cause: .stop, keepWords: false, now: now)
     case .interrupted(let gen, _, _):
-      return close(gen, cause: .stop, keepWords: false, now: now)
-        + [.log("stop while interrupted: the audio session stays active until the interruption ends")]
+      return close(gen, cause: .stop, keepWords: false, now: now) + [.log(Self.stopWhileInterruptedLog)]
     }
   }
 
@@ -236,8 +149,21 @@ nonisolated extension ListeningWindowMachine {
   /// the session off meanwhile, in which case the off switch wins.
   private mutating func foregrounded(turnedOff: Bool, now: Date) -> [Effect] {
     guard case .interrupted(let gen, _, _) = state else { return [] }
-    if turnedOff { return close(gen, cause: .stop, keepWords: false, now: now) }
+    if turnedOff {
+      return close(gen, cause: .stop, keepWords: false, now: now) + [.log(Self.stopWhileInterruptedLog)]
+    }
     return [.tryResume(gen, mayStart: true)]
+  }
+
+  /// Settings' change, applied live: an open window's end moves to the new
+  /// length from now (a dictation's floor still holds), and until-stopped
+  /// takes the running timer away. Any other state only keeps the number for
+  /// its next expiry.
+  private mutating func windowMinutesChanged(to minutes: Int, now: Date) -> [Effect] {
+    windowMinutes = minutes
+    guard case .open(_, _, let utterance) = state else { return [] }
+    let rescheduled = expiry(from: now, floor: utterance ? maxAudioSeconds : 0)
+    return (rescheduled.isEmpty ? [.cancelExpiry] : rescheduled) + [publish(now: now)]
   }
 
   private mutating func idleChanged(to idle: ListeningState.Idle, now: Date) -> [Effect] {
@@ -252,7 +178,8 @@ nonisolated extension ListeningWindowMachine {
     switch event {
     case .opened, .openFailed: return whileOpening(event, now: now)
     case .utteranceStarted, .utteranceEnded: return utterance(event, now: now)
-    case .interruptionBegan, .sourceDied: return lostSource(event, now: now)
+    case .interruptionBegan(_, let reason), .sourceDied(_, let reason):
+      return lostSource(event, reason: reason, now: now)
     case .interruptionEnded, .resumed, .resumeFailed: return whileInterrupted(event, now: now)
     case .mediaReset, .expired: return ending(event, now: now)
     case .closed: return closed(now: now)
@@ -260,15 +187,26 @@ nonisolated extension ListeningWindowMachine {
     }
   }
 
+  /// The source came up, or did not. A loss that landed while it was still
+  /// opening is carried: the window opens interrupted, waiting to resume, so
+  /// a press is not promised a microphone a call already holds.
   private mutating func whileOpening(_ event: Event, now: Date) -> [Effect] {
     guard case .opening(let gen) = state else { return [] }
     switch event {
     case .opened:
+      if let reason = lossWhileOpening {
+        lossWhileOpening = nil
+        state = .interrupted(gen, reason: reason, resumable: true)
+        return expiry(from: now) + [.beginBackgroundTask, publish(now: now)]
+      }
       state = .open(gen, idle: idle, utterance: false)
+      lastMicLive = true
       return expiry(from: now) + [publish(now: now)]
     case .openFailed(_, let reason):
       state = .closed
-      return [.closeSource(gen), .deactivateSession(skipIfInterrupted: false), publish(now: now, reason: reason)]
+      lossWhileOpening = nil
+      closedReason = reason
+      return [.closeSource(gen), .deactivateSession(skipIfInterrupted: false), publish(now: now)]
     default:
       return []
     }
@@ -294,20 +232,21 @@ nonisolated extension ListeningWindowMachine {
   /// A call, Siri, an alarm, or the capture session dying under us: the dictation
   /// in flight is released with what it has, and the window waits to resume rather
   /// than closing. An interruption holds a background task for the resume to run in.
-  private mutating func lostSource(_ event: Event, now: Date) -> [Effect] {
-    guard case .open(let gen, _, let inFlight) = state else { return [] }
-    var effects: [Effect] = inFlight ? [.endUtterance(keepWords: true)] : []
-    switch event {
-    case .interruptionBegan(_, let reason):
+  /// While still opening, the loss is remembered for `opened` to land on.
+  private mutating func lostSource(_ event: Event, reason: FailureReason, now: Date) -> [Effect] {
+    switch state {
+    case .opening:
+      lossWhileOpening = reason
+      return [.log("source lost while opening (\(reason.rawValue)): opened lands interrupted")]
+    case .open(let gen, _, let inFlight):
+      var effects: [Effect] = inFlight ? [.endUtterance(keepWords: true)] : []
       state = .interrupted(gen, reason: reason, resumable: true)
-      effects.append(.beginBackgroundTask)
-    case .sourceDied(_, let reason):
-      state = .interrupted(gen, reason: reason, resumable: true)
-    default:
+      if case .interruptionBegan = event { effects.append(.beginBackgroundTask) }
+      effects.append(publish(now: now))
+      return effects
+    case .closed, .interrupted, .closing:
       return []
     }
-    effects.append(publish(now: now))
-    return effects
   }
 
   /// Resuming never starts the source from the background: the interruption's
@@ -320,6 +259,7 @@ nonisolated extension ListeningWindowMachine {
       return shouldResume && resumable ? [.tryResume(gen, mayStart: false)] : []
     case .resumed:
       state = .open(gen, idle: idle, utterance: false)
+      lastMicLive = true
       let expiry = windowUntil.map { [Effect.scheduleExpiry($0, gen)] } ?? []
       return [.endBackgroundTask] + expiry + [publish(now: now)]
     case .resumeFailed(_, let reason):
@@ -341,10 +281,18 @@ nonisolated extension ListeningWindowMachine {
     }
   }
 
+  /// The source is closed. The window rests with the cause's reason — or,
+  /// when a hop landed while it was closing, opens again at once.
   private mutating func closed(now: Date) -> [Effect] {
     guard case .closing(_, let cause) = state else { return [] }
+    let standDown: [Effect] = [.endBackgroundTask, .cancelExpiry]
+    if reopenWanted {
+      reopenWanted = false
+      return standDown + open(now: now)
+    }
     state = .closed
-    return [.endBackgroundTask, .cancelExpiry, publish(now: now, reason: cause.reason)]
+    closedReason = cause.reason
+    return standDown + [publish(now: now)]
   }
 
   // MARK: The moves the rows share
@@ -354,6 +302,8 @@ nonisolated extension ListeningWindowMachine {
     lastGeneration += 1
     state = .opening(lastGeneration)
     windowUntil = nil
+    closedReason = nil
+    lossWhileOpening = nil
     return [.activateSession, .openSource(lastGeneration), publish(now: now)]
   }
 
@@ -366,6 +316,7 @@ nonisolated extension ListeningWindowMachine {
     let wasInterrupted = state.window == .interrupted
     state = .closing(gen, cause: cause)
     windowUntil = nil
+    lossWhileOpening = nil
     effects += [.closeSource(gen), .deactivateSession(skipIfInterrupted: wasInterrupted), publish(now: now)]
     return effects
   }
@@ -383,15 +334,20 @@ nonisolated extension ListeningWindowMachine {
     return [.scheduleExpiry(until, gen)]
   }
 
+  /// Why a press would not record, as the record says it: the state's, or
+  /// while closed the reason it closed for, which the state no longer holds.
+  private var publishedReason: FailureReason? {
+    if case .closed = state { closedReason ?? state.reason } else { state.reason }
+  }
+
   /// The record for the state as it stands, one sequence number on. `micLive`
-  /// and `reason` default to what the state says; a closed record may carry
-  /// the reason it closed for, which the state no longer holds.
-  private mutating func publish(now: Date, micLive: Bool? = nil, reason: FailureReason? = nil) -> Effect {
+  /// defaults to what the state says.
+  private mutating func publish(now: Date, micLive: Bool? = nil) -> Effect {
     sequence += 1
     return .publish(
       ListeningState(
         launchID: launchID, sequence: sequence, window: state.window, idle: idle,
         micLive: micLive ?? state.isOpen, windowUntil: windowUntil, utterance: state.utterance,
-        reason: reason ?? state.reason, writtenAt: now))
+        reason: publishedReason, writtenAt: now))
   }
 }
