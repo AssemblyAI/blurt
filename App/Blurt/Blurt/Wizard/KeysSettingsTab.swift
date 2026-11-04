@@ -25,11 +25,6 @@ struct KeysSettingsTab: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
 
-  /// Failable, like `BlurtLinks`: the link omits itself if the URL won't
-  /// build, since `force_unwrapping` is banned repo-wide.
-  private static let keyboardSettingsURL = URL(
-    string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
-
   /// Shared widths keep the column headings aligned with the native pickers.
   private static let actionWidth: CGFloat = 150
   private static let activationWidth: CGFloat = 108
@@ -60,22 +55,6 @@ struct KeysSettingsTab: View {
             .frame(width: Self.actionWidth, alignment: .trailing)
           Text("Activation")
             .frame(width: Self.activationWidth, alignment: .trailing)
-        }
-      } footer: {
-        if !enhancedTranscripts {
-          Text(StylesInertNotice.settingsText)
-        }
-        // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn does
-        // anything, but that write only lands at the next log-in, so until then
-        // fn double-fires. Lead with that symptom rather than the setting's name,
-        // and link to the pane that applies the change now.
-        if bindings.enabledKeys.contains(.function) {
-          Text(
-            "Until you next log in, fn may also open the emoji picker. To fix it now, set "
-              + "“Press 🌐 key to” to Do Nothing in Keyboard Settings.")
-          if let url = Self.keyboardSettingsURL {
-            Link("Open Keyboard Settings…", destination: url)
-          }
         }
       }
     }

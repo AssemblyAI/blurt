@@ -943,8 +943,8 @@ any other key restores the value it replaced. That record lives in a suite both 
 Blurt Dev restore each other to Do Nothing — and outside `DefaultsKey` on purpose, so a settings
 reset doesn't erase it: the relaunch after a reset is what restores the user's setting.
 `scripts/reset-lib.sh` (behind `reset-install.sh` and `reset-dev-install.sh`) restores from it directly, since it wipes the host domain; if the other build still binds `fn`, its next launch re-applies the override. The write
-only takes effect at the next log-in (macOS reads it then), so the Keys tab's footer warns that `fn`
-may also open the emoji picker or Apple Dictation until then, and links to Keyboard Settings. A keycode 63 saved before `fn` was removed (#146) is migrated to right ⌘ once
+only takes effect at the next log-in (macOS reads it then), so until then `fn` may also open the
+emoji picker or Apple Dictation. A keycode 63 saved before `fn` was removed (#146) is migrated to right ⌘ once
 (`TriggerKeyStore.migrateStaleFunctionBinding()`), so restoring `fn` doesn't silently rebind it. Don't fix this with an active tap that swallows `fn`: the tap is listen-only for latency.
 
 The keys are editable on Settings' Keys tab (`KeysSettingsTab`; below); after any change
