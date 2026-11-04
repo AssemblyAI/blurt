@@ -4,19 +4,21 @@ import Testing
 @testable import BlurtiOSCore
 
 /// Every row of the router's table, over values alone: no store, no clock.
+/// The fixtures are shared with `CommandRouterTests+Ending.swift`, the
+/// release and cancel rows.
 @Suite("Command router")
 struct CommandRouterTests {
-  private static let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
-  private static let launchID = UUID()
+  static let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+  static let launchID = UUID()
   /// An open window with a live mic, the record most rows start from.
-  private static let open = ListeningState(
+  static let open = ListeningState(
     launchID: launchID, sequence: 1, window: .open, micLive: true, writtenAt: now)
 
-  private let owner = "keyboard-owner"
-  private let other = "keyboard-other"
-  private let current = DictationRef(id: UUID(), ownerProcessID: "keyboard-owner")
+  let owner = "keyboard-owner"
+  let other = "keyboard-other"
+  let current = DictationRef(id: UUID(), ownerProcessID: "keyboard-owner")
 
-  private func command(
+  func command(
     _ kind: KeyboardCommand.Kind, keyboard: String? = "keyboard-owner", dictationID: UUID? = nil,
     age: TimeInterval = 0
   ) -> KeyboardCommand {
@@ -25,24 +27,26 @@ struct CommandRouterTests {
       keyboard: keyboard, dictationID: dictationID)
   }
 
-  private func record(_ window: ListeningState.Window, micLive: Bool = true, reason: FailureReason? = nil)
-    -> ListeningState
-  {
-    ListeningState(
-      launchID: Self.launchID, sequence: 1, window: window, micLive: micLive, reason: reason, writtenAt: Self.now)
+  func record(
+    _ window: ListeningState.Window, micLive: Bool = true, reason: FailureReason? = nil, leaseLapsed: Bool = false
+  ) -> ListeningState {
+    let writtenAt = leaseLapsed ? Self.now.addingTimeInterval(-(ListeningState.lease + 1)) : Self.now
+    return ListeningState(
+      launchID: Self.launchID, sequence: 1, window: window, micLive: micLive, reason: reason, writtenAt: writtenAt)
   }
 
-  private func route(
+  func route(
     _ command: KeyboardCommand, state: ListeningState? = CommandRouterTests.open, phase: PhaseSnapshot.State = .idle,
-    inFlight: DictationRef? = nil, onScreen: String? = nil, seen: Set<UUID> = [], newDictationID: UUID = UUID()
+    inFlight: DictationRef? = nil, onScreen: String? = nil, answered: [UUID: CommandAck.Outcome] = [:],
+    newDictationID: UUID = UUID()
   ) -> CommandRouter.Decision {
     CommandRouter.route(
       CommandRouter.Input(
-        command: command, state: state, phase: phase, inFlight: inFlight, onScreen: onScreen, seen: seen,
+        command: command, state: state, phase: phase, inFlight: inFlight, onScreen: onScreen, answered: answered,
         now: Self.now, launchID: Self.launchID, newDictationID: newDictationID))
   }
 
-  private func startedID(_ decision: CommandRouter.Decision) -> UUID? {
+  func startedID(_ decision: CommandRouter.Decision) -> UUID? {
     if case .started(let id) = decision.ack.outcome { return id }
     return nil
   }
@@ -58,23 +62,46 @@ struct CommandRouterTests {
     #expect(decision.ack.at == Self.now)
   }
 
-  @Test("an id answered before is a duplicate, with nothing submitted and nothing to remember")
-  func duplicate() {
+  @Test("an id answered before gets its answer again, with nothing submitted and nothing to remember")
+  func resendIsAnsweredAgain() {
     let press = command(.press)
-    let decision = route(press, seen: [press.id])
-    #expect(decision.ack.outcome == .duplicate)
+    let before = CommandAck.Outcome.notListening(.opening)
+    let decision = route(press, answered: [press.id: before])
+    #expect(decision.ack.outcome == before)
+    #expect(decision.ack.commandID == press.id)
+    #expect(decision.ack.at == Self.now)
     #expect(decision.submit == nil)
     #expect(!decision.remember)
+    #expect(decision.recipient == nil)
   }
 
-  @Test("a resend after the ack is a duplicate, not a second dictation and not busy")
-  func resendAfterAck() throws {
+  @Test("the router never answers duplicate: a resend carries the original outcome, never that word")
+  func duplicateNeverProduced() {
+    let press = command(.press)
+    let first = route(press)
+    let resend = route(press, phase: .recording, inFlight: current, answered: [press.id: first.ack.outcome])
+    #expect(resend.ack.outcome != .duplicate)
+  }
+
+  @Test("a resend of a started press is started with the same id: the keyboard keeps its own dictation")
+  func resendOfStartedPress() throws {
     let press = command(.press)
     let first = route(press)
     let started = DictationRef(id: try #require(startedID(first)), ownerProcessID: owner)
     #expect(first.remember)
-    let resend = route(press, phase: .recording, inFlight: started, seen: [press.id])
-    #expect(resend.ack.outcome == .duplicate)
+    let resend = route(press, phase: .recording, inFlight: started, answered: [press.id: first.ack.outcome])
+    #expect(resend.ack.outcome == .started(started.id))
+    #expect(resend.submit == nil)
+    #expect(!resend.remember)
+  }
+
+  @Test("a resend of a refused press is refused the same way, whatever the record says now")
+  func resendOfRefusedPress() {
+    let press = command(.press)
+    let first = route(press, state: record(.closed, reason: .sessionOff))
+    #expect(first.ack.outcome == .notListening(.sessionOff))
+    let resend = route(press, state: Self.open, answered: [press.id: first.ack.outcome])
+    #expect(resend.ack.outcome == .notListening(.sessionOff))
     #expect(resend.submit == nil)
   }
 
@@ -86,13 +113,15 @@ struct CommandRouterTests {
       #expect(decision.ack.outcome == .stale, "\(kind)")
       #expect(decision.submit == nil)
       #expect(decision.remember)
+      #expect(decision.recipient == nil)
     }
   }
 
-  @Test("the duplicate check comes first, so a stale resend is still a duplicate")
-  func staleDuplicate() {
+  @Test("the answered check comes first, so a stale resend gets its first answer, not stale")
+  func staleResend() {
     let old = command(.press, age: BlurtShared.commandFreshnessWindow + 1)
-    #expect(route(old, seen: [old.id]).ack.outcome == .duplicate)
+    let dictationID = UUID()
+    #expect(route(old, answered: [old.id: .started(dictationID)]).ack.outcome == .started(dictationID))
   }
 
   // MARK: Press
@@ -102,6 +131,7 @@ struct CommandRouterTests {
     let decision = route(command(.press), state: nil)
     #expect(decision.ack.outcome == .notListening(.sessionOff))
     #expect(decision.submit == nil)
+    #expect(decision.recipient == nil)
   }
 
   @Test("a press to a window that is not open is never submitted, and carries the record's reason")
@@ -121,6 +151,38 @@ struct CommandRouterTests {
     }
   }
 
+  @Test("the app never acks suspended: a lapsed lease is answered from the window, for each window")
+  func pressLapsedLeaseEachWindow() {
+    let cases: [(record: ListeningState, expected: FailureReason)] = [
+      (record(.closed, leaseLapsed: true), .sessionOff),
+      (record(.closed, reason: .needsForeground, leaseLapsed: true), .sessionOff),
+      (record(.closing, leaseLapsed: true), .sessionOff),
+      (record(.opening, leaseLapsed: true), .opening),
+      (record(.interrupted, leaseLapsed: true), .interrupted),
+      (record(.open, micLive: false, leaseLapsed: true), .micBusy),
+    ]
+    for (record, expected) in cases {
+      #expect(record.notReady(now: Self.now) == .suspended, "\(record.window)")
+      let decision = route(command(.press), state: record)
+      #expect(decision.ack.outcome == .notListening(expected), "\(record.window)")
+      #expect(decision.submit == nil)
+    }
+  }
+
+  @Test("reasonForPress: nil for an open live record, the record's reason otherwise, never suspended")
+  func reasonForPress() {
+    #expect(CommandRouter.reasonForPress(state: nil, now: Self.now) == .sessionOff)
+    #expect(CommandRouter.reasonForPress(state: Self.open, now: Self.now) == nil)
+    #expect(CommandRouter.reasonForPress(state: record(.open, leaseLapsed: true), now: Self.now) == nil)
+    #expect(CommandRouter.reasonForPress(state: record(.open, micLive: false), now: Self.now) == .micBusy)
+    #expect(CommandRouter.reasonForPress(state: record(.closed, reason: .noKey), now: Self.now) == .noKey)
+    #expect(CommandRouter.reasonForPress(state: record(.interrupted), now: Self.now) == .interrupted)
+    for window in [ListeningState.Window.closed, .closing, .opening, .interrupted, .open] {
+      let lapsed = record(window, micLive: false, leaseLapsed: true)
+      #expect(CommandRouter.reasonForPress(state: lapsed, now: Self.now) != .suspended, "\(window)")
+    }
+  }
+
   @Test("a press to an open window whose mic is not live is refused as mic busy")
   func pressMicNotLive() {
     let decision = route(command(.press), state: record(.open, micLive: false))
@@ -136,6 +198,7 @@ struct CommandRouterTests {
       #expect(decision.ack.outcome == .started(dictationID), "\(phase)")
       #expect(decision.submit == .press(newDictation: dictationID, owner: owner))
       #expect(decision.remember)
+      #expect(decision.recipient == nil)
     }
   }
 
@@ -159,7 +222,16 @@ struct CommandRouterTests {
       let decision = route(command(.press, keyboard: other), phase: phase, inFlight: current)
       #expect(decision.ack.outcome == .busy(current.id), "\(phase)")
       #expect(decision.submit == nil)
+      #expect(decision.recipient == nil)
     }
+  }
+
+  @Test("a new press from the owner's own process while its dictation is in flight is busy too")
+  func pressFromOwnerWhileInFlight() {
+    let decision = route(command(.press, keyboard: owner), phase: .recording, inFlight: current)
+    #expect(decision.ack.outcome == .busy(current.id))
+    #expect(decision.submit == nil)
+    #expect(decision.remember)
   }
 
   @Test("a press while something runs that no press started has no id to latch onto: mic busy")
@@ -176,100 +248,6 @@ struct CommandRouterTests {
 
   @Test("the window and the mic are read as written: a lapsed lease does not refuse a press")
   func pressLapsedLease() {
-    let lapsed = ListeningState(
-      launchID: Self.launchID, sequence: 1, window: .open, micLive: true,
-      writtenAt: Self.now.addingTimeInterval(-(ListeningState.lease + 1)))
-    #expect(route(command(.press), state: lapsed).submit != nil)
-  }
-
-  // MARK: Release and cancel
-
-  @Test("a release or cancel with nothing in flight has nothing to end")
-  func nothingInFlight() {
-    for kind in [KeyboardCommand.Kind.release, .cancel] {
-      let decision = route(command(kind), phase: .idle, inFlight: nil)
-      #expect(decision.ack.outcome == .nothingInFlight, "\(kind)")
-      #expect(decision.submit == nil)
-      #expect(decision.remember)
-    }
-  }
-
-  @Test("the owner's release stops the dictation in flight")
-  func ownerRelease() {
-    let decision = route(command(.release, dictationID: current.id), phase: .recording, inFlight: current)
-    #expect(decision.ack.outcome == .stopped(current.id))
-    #expect(decision.submit == .release)
-    #expect(decision.remember)
-  }
-
-  @Test("the owner's cancel cancels it")
-  func ownerCancel() {
-    let decision = route(command(.cancel, dictationID: current.id), phase: .recording, inFlight: current)
-    #expect(decision.ack.outcome == .cancelled(current.id))
-    #expect(decision.submit == .cancel)
-  }
-
-  @Test("a release that names no dictation ends the one in flight")
-  func releaseWithoutDictationID() {
-    let decision = route(command(.release), phase: .connecting, inFlight: current)
-    #expect(decision.ack.outcome == .stopped(current.id))
-    #expect(decision.submit == .release)
-  }
-
-  @Test("a release for an older dictation is not the owner's to make")
-  func releaseOlderDictation() {
-    let decision = route(command(.release, dictationID: UUID()), phase: .recording, inFlight: current)
-    #expect(decision.ack.outcome == .notOwner)
-    #expect(decision.submit == nil)
-  }
-
-  @Test("a release from the keyboard on screen is accepted though it is not the owner")
-  func releaseFromOnScreen() {
-    let decision = route(command(.release, keyboard: other), phase: .recording, inFlight: current, onScreen: other)
-    #expect(decision.ack.outcome == .stopped(current.id))
-    #expect(decision.submit == .release)
-  }
-
-  @Test("a cancel from the keyboard on screen is accepted too")
-  func cancelFromOnScreen() {
-    let decision = route(command(.cancel, keyboard: other), phase: .recording, inFlight: current, onScreen: other)
-    #expect(decision.ack.outcome == .cancelled(current.id))
-    #expect(decision.submit == .cancel)
-  }
-
-  @Test("a release from a keyboard that neither owns the dictation nor is on screen is refused")
-  func releaseNotOwner() {
-    for onScreen in [nil, owner, "keyboard-third"] {
-      let decision = route(command(.release, keyboard: other), phase: .recording, inFlight: current, onScreen: onScreen)
-      #expect(decision.ack.outcome == .notOwner, "on screen: \(String(describing: onScreen))")
-      #expect(decision.submit == nil)
-      #expect(decision.remember)
-    }
-  }
-
-  @Test("the on-screen match needs both sides named: an unnamed sender never passes as the keyboard on screen")
-  func releaseUnnamedSender() {
-    #expect(route(command(.release, keyboard: nil), phase: .recording, inFlight: current).ack.outcome == .notOwner)
-    #expect(
-      route(command(.release, keyboard: nil), phase: .recording, inFlight: current, onScreen: owner).ack.outcome
-        == .notOwner)
-  }
-
-  @Test("a dictation nobody owns is ended by a command that names no sender, the old way")
-  func releaseUnownedDictation() {
-    let unowned = DictationRef(id: UUID(), ownerProcessID: nil)
-    let decision = route(command(.release, keyboard: nil), phase: .recording, inFlight: unowned)
-    #expect(decision.ack.outcome == .stopped(unowned.id))
-    #expect(decision.submit == .release)
-    #expect(route(command(.release, keyboard: other), phase: .recording, inFlight: unowned).ack.outcome == .notOwner)
-  }
-
-  @Test("a stop resent after its ack is a duplicate, so the session is not told twice")
-  func stopResend() {
-    let release = command(.release, dictationID: current.id)
-    #expect(route(release, phase: .recording, inFlight: current).submit == .release)
-    let resend = route(release, phase: .processing, inFlight: current, seen: [release.id])
-    #expect(resend.ack.outcome == .duplicate)
-    #expect(resend.submit == nil)
+    #expect(route(command(.press), state: record(.open, leaseLapsed: true)).submit != nil)
   }
 }
