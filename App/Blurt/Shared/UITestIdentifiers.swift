@@ -22,8 +22,6 @@ enum UITestIdentifiers {
   // Window titles the XCUITest suite queries, sourced from the `Window(_:id:)`
   // declarations in `App.swift`.
   static let mainWindowTitle = "Blurt"
-  /// The open item's back button, leading the main window's toolbar.
-  static let transcriptBackButton = "main.toolbar.back"
   /// The main window's toolbar Filter menu, over the Library.
   static let libraryFilterMenu = "main.toolbar.filter"
   static let harnessWindowTitle = "Blurt UI Test Harness"

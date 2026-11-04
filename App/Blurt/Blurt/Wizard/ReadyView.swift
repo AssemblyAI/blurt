@@ -39,38 +39,45 @@ struct ReadyView: View {
   /// The toolbar's Browse open panel.
   @State private var isImporting = false
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// The one page the window pushes: whatever the model has open.
+  private enum Route: Hashable { case openItem }
+
+  /// The navigation path, bound to the model: a page while it has something
+  /// open — an item, a recording, a file going up, which open themselves as
+  /// often as a click opens them — and none when it's idle. Popping (back,
+  /// or Esc) lets go of it, abandoning a file going up.
+  private var path: Binding<[Route]> {
+    Binding(
+      get: { coordinator.transcripts.state == .idle ? [] : [.openItem] },
+      set: { if $0.isEmpty { coordinator.transcripts.dismiss() } })
+  }
 
   var body: some View {
-    let isOpen = coordinator.transcripts.state != .idle
-    ZStack {
-      if isOpen {
-        // An opened item — or a recording, or a file going up — slides in
-        // over the Library, as an entry does in Journal, with its own toolbar.
-        TranscriptPage(model: coordinator.transcripts)
-          .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
-          .transition(.move(edge: .trailing))
-      } else {
-        home
-          .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
-          .toolbar { toolbarItems }
-          // The system's search: its own capsule at the toolbar's trailing
-          // edge, widening when clicked into, as Finder's and Mail's do.
-          .searchable(text: $query, placement: .toolbar, prompt: "Search Blurt")
-          .searchFocused($searchFocused)
-          // Not the field a window opens in: focused, it widens and pushes
-          // Filter and Settings behind a » menu. Click or ⌘F puts it there.
-          .defaultFocus($searchFocused, false)
-          .task { searchFocused = false }
-          // A click anywhere in the window's content lets go of the search,
-          // as clicking off a field does. Alongside, not instead of, what the
-          // click does — a card still opens, a menu still drops.
-          .simultaneousGesture(TapGesture().onEnded { searchFocused = false })
-          // Just there on the way back: only the item slides.
-          .transition(.identity)
-      }
+    // The system's push and back, as Journal's entries open.
+    NavigationStack(path: path) {
+      home
+        .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
+        .toolbar { toolbarItems }
+        // The system's search: its own capsule at the toolbar's trailing
+        // edge, widening when clicked into, as Finder's and Mail's do.
+        .searchable(text: $query, placement: .toolbar, prompt: "Search Blurt")
+        .searchFocused($searchFocused)
+        // Not the field a window opens in: focused, it widens and pushes
+        // Filter and Settings behind a » menu. Click or ⌘F puts it there.
+        .defaultFocus($searchFocused, false)
+        .task { searchFocused = false }
+        // A click anywhere in the window's content lets go of the search, as
+        // clicking off a field does. Alongside, not instead of, what the
+        // click does — a card still opens, a menu still drops.
+        .simultaneousGesture(TapGesture().onEnded { searchFocused = false })
+        .navigationDestination(for: Route.self) { _ in
+          TranscriptPage(model: coordinator.transcripts)
+            .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
+            // A recording holds the page until it's stopped or discarded.
+            .navigationBarBackButtonHidden(coordinator.transcripts.isRecordingBusy)
+        }
     }
-    .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: isOpen)
     .frame(width: MainWindow.contentWidth)
     // No rule under the toolbar: the window reads as one surface, the
     // backdrop running up behind the toolbar as Journal's does.

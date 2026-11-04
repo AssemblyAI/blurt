@@ -52,12 +52,13 @@ private struct AudioFileDropTarget: ViewModifier {
   }
 }
 
-/// An opened item, slid in over the main window's Library as an entry is in
-/// Journal: a back button leads the toolbar on its own, the item's actions
-/// follow as toolbar icons — the View menu, Play or Listen, Copy, Show in
-/// Finder, Delete — and its title heads the transcript below. Nothing here is edited, so there's
-/// no Done or check mark: back (or Esc) slides back to the Library. The same
-/// page shows a recording as it runs, a file's progress, and why one failed.
+/// An opened item, pushed over the main window's Library on its
+/// `NavigationStack` as an entry opens in Journal: the system's back button
+/// leads the toolbar, the item's actions follow as icons — the View menu,
+/// Play, Copy, Show in Finder, Delete — and its title heads the transcript
+/// below. Nothing here is edited, so there's no Done or check mark: back (or
+/// Esc) returns to the Library. The same page shows a recording as it runs, a
+/// file's progress, and why one failed.
 struct TranscriptPage: View {
   var model: TranscriptsModel
   @State private var copied = false
@@ -133,22 +134,11 @@ struct TranscriptPage: View {
     }
   }
 
-  /// Back, then — once there's a transcript — its view and actions: the View
+  /// Once there's a transcript, its view and actions — the system's back
+  /// button leads (`ReadyView`'s `NavigationStack`): the View
   /// menu, Play or Listen, Copy, and Show in Finder where
   /// there's a file, then Delete in a group of its own.
   @ToolbarContentBuilder private var toolbarItems: some ToolbarContent {
-    ToolbarItem(placement: .navigation) {
-      // Over a file going up, back abandons it; a recording holds the page
-      // until it's stopped or discarded (`dismiss`).
-      Button {
-        model.dismiss()
-      } label: {
-        Label("Back", systemImage: "chevron.left")
-      }
-      .disabled(model.isRecordingBusy)
-      .help(model.isRecordingBusy ? "Stop the recording first" : "Back to the Library")
-      .accessibilityIdentifier(UITestIdentifiers.transcriptBackButton)
-    }
     if model.state == .finished { actions }
   }
 

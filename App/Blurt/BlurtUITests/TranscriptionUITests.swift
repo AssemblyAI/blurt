@@ -87,8 +87,9 @@ final class TranscriptionUITests: BlurtUITestCase {
       windowText(containing: UITestIdentifiers.cannedTaskResult).waitForExistence(timeout: 10),
       "Meeting notes shows the LLM's result")
 
-    app.windows[UITestIdentifiers.mainWindowTitle].buttons[UITestIdentifiers.transcriptBackButton].click()
-    XCTAssertFalse(viewPicker.waitForExistence(timeout: 2), "Back returns to the Library")
+    // Esc pops back to the Library, as the navigation's back button does.
+    app.typeKey(.escape, modifierFlags: [])
+    XCTAssertFalse(viewPicker.waitForExistence(timeout: 2), "Esc returns to the Library")
   }
 
   func testDeleteAsksThenRemovesTheEntry() {
