@@ -124,21 +124,33 @@ enum TextShortcutExpander {
   /// press reads it back; this keeps it local.
   ///
   /// Literal and case-sensitive, since the field holds exactly what was inserted.
+  /// Whole words only, like `expand`: an expansion that begins or ends with a
+  /// letter or digit never matches inside a longer word, so a short one ("ok")
+  /// leaves "booked" alone instead of garbling the prompt it is scrubbing.
   /// Longest expansion first, so one that contains another is caught whole. The
   /// capture reads only the last few hundred characters, so a long expansion can
   /// arrive with its head cut off: a tail of one (at least
-  /// `minimumClippedOverlap` long) at the very start of `text` counts too.
+  /// `minimumClippedOverlap` long, and ending a word) at the very start of
+  /// `text` counts too.
   /// Replaced with the trigger rather than nothing, so the prompt still reads as
   /// the continuous passage it is.
   static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
     var result = text
     for shortcut in shortcuts.sorted(by: { $0.expansion.count > $1.expansion.count }) {
       let expansion = shortcut.expansion
-      result = result.replacingOccurrences(of: expansion, with: shortcut.trigger)
+      if let whole = try? NSRegularExpression(pattern: wholeWordPattern(for: expansion)) {
+        result = whole.stringByReplacingMatches(
+          in: result, range: NSRange(location: 0, length: (result as NSString).length),
+          withTemplate: NSRegularExpression.escapedTemplate(for: shortcut.trigger))
+      }
       // No clip longer than `result` can be its prefix, so start there.
       let longest = min(expansion.count - 1, result.count)
       if let clip = stride(from: longest, through: minimumClippedOverlap, by: -1).lazy
-        .map({ expansion.suffix($0) }).first(where: { result.hasPrefix($0) })
+        .map({ expansion.suffix($0) })
+        .first(where: {
+          result.hasPrefix($0)
+            && !(isWordCharacter($0.last) && isWordCharacter(result.dropFirst($0.count).first))
+        })
       {
         result = shortcut.trigger + result.dropFirst(clip.count)
       }
@@ -150,6 +162,20 @@ enum TextShortcutExpander {
   /// treats as a clipped copy at the very start of `text`. Below this an overlap
   /// is as likely to be coincidence — a shared "com" or "." — as a clip.
   private static let minimumClippedOverlap = 4
+
+  /// `literal`, escaped, fenced off from any letter or digit beside it — on each
+  /// side only where `literal` itself starts or ends with one, so an address
+  /// glued to punctuation ("(me@example.com).") still matches.
+  private static func wholeWordPattern(for literal: String) -> String {
+    let head = isWordCharacter(literal.first) ? "(?<![\(wordClass)])" : ""
+    let tail = isWordCharacter(literal.last) ? "(?![\(wordClass)])" : ""
+    return head + NSRegularExpression.escapedPattern(for: literal) + tail
+  }
+
+  /// Whether `character` is part of a word in `wordClass`'s sense.
+  private static func isWordCharacter(_ character: Character?) -> Bool {
+    character.map { $0.isLetter || $0.isNumber } ?? false
+  }
 
   /// The regex body for one trigger: its letter/digit runs, escaped, joined by
   /// an optional run of separators. `nil` for a trigger with no letters or
