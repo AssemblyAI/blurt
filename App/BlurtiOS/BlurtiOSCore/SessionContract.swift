@@ -221,13 +221,24 @@ nonisolated extension BlurtShared {
 
   package static let setupHost = "setup"
 
+  /// `blurt://start` with nothing else — what every hop falls back to.
+  private static var startLink: URL {
+    var components = URLComponents()
+    components.scheme = urlScheme
+    components.host = startHost
+    // `URLComponents` with a scheme and a host alone cannot fail to form a URL.
+    return components.url ?? URL(fileURLWithPath: "/")
+  }
+
   /// `blurt://start?reason=<FailureReason>`: the keyboard's hop, saying why.
   package static func startURL(reason: FailureReason?) -> URL {
     var components = URLComponents()
     components.scheme = urlScheme
     components.host = startHost
     if let reason { components.queryItems = [URLQueryItem(name: "reason", value: reason.rawValue)] }
-    return components.url ?? URL(string: "\(urlScheme)://\(startHost)")!  // literal-ok: scheme and host are constants
+    // A scheme, a host and one query item from an enum's raw value always
+    // form a URL; the fallback is the bare start link.
+    return components.url ?? startLink
   }
 
   /// `blurt://setup?need=fullAccess`: the keyboard can't dictate until the
@@ -237,7 +248,7 @@ nonisolated extension BlurtShared {
     components.scheme = urlScheme
     components.host = setupHost
     components.queryItems = [URLQueryItem(name: "need", value: need)]
-    return components.url ?? URL(string: "\(urlScheme)://\(setupHost)")!  // literal-ok: scheme and host are constants
+    return components.url ?? startLink
   }
 
   package static let fullAccessNeed = "fullAccess"
@@ -289,7 +300,7 @@ nonisolated extension SharedStore {
   }
 
   package static var keyboardPresence: KeyboardPresenceRecord? {
-    get { read(KeyboardPresenceRecord.self, forKey: BlurtShared.Key.keyboardPresence) }
+    read(KeyboardPresenceRecord.self, forKey: BlurtShared.Key.keyboardPresence)
   }
 
   /// Writes the presence record. A keyboard leaving writes `onScreen: false`
