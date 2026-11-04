@@ -41,9 +41,16 @@ struct TranscriptPage: View {
     }
 
     .toolbar { toolbarItems }
-    // Esc goes back, as the back button does — in every state but a
-    // recording (`dismiss`).
-    .onExitCommand { model.dismiss() }
+    // Esc goes back, as the back button does, wherever focus is — a hidden
+    // button rather than `onExitCommand`, which needs the page focused and
+    // lost it to the View menu. Not over a recording (`dismiss`).
+    .background {
+      if !model.isRecordingBusy {
+        Button("Back") { model.dismiss() }
+          .keyboardShortcut(.cancelAction)
+          .hidden()
+      }
+    }
     // The page's replacement is silent otherwise.
     .onChange(of: model.state) { _, state in
       switch state {
@@ -96,10 +103,16 @@ struct TranscriptPage: View {
     }
   }
 
-  /// Whether the page has a title: a recording's or a file's, or the progress
-  /// of one — never an entry whose title is only the start of its text.
+  /// Whether the page has a title: a saved recording's or file's, or a file
+  /// going up — never an entry whose title is only the start of its text, nor
+  /// a recording under way, whose live header ("● Recording 17:26") already
+  /// says so.
   private var showsTitle: Bool {
-    model.state != .finished || model.openEntry?.isTranscript == true
+    switch model.state {
+    case .finished: model.openEntry?.isTranscript == true
+    case .recording, .finishingRecording, .idle: false
+    case .transcribing, .failed: true
+    }
   }
 
   /// What the page is headed with: the saved entry's title (the LLM's once

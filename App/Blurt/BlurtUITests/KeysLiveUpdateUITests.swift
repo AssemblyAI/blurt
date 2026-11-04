@@ -34,8 +34,8 @@ final class KeysLiveUpdateUITests: BlurtUITestCase {
     let statusItem = app.menuBars.statusItems.firstMatch
     XCTAssertTrue(statusItem.waitForExistence(timeout: 15))
     statusItem.click()
-    let hint = app.menuItems.matching(NSPredicate(format: "title CONTAINS %@", "right ⌥ to dictate")).firstMatch
-    XCTAssertTrue(hint.waitForExistence(timeout: 5), "The menu bar's reminder should name right ⌥")
+    let hint = app.menuItems.matching(NSPredicate(format: "title CONTAINS %@", "Right Option to dictate")).firstMatch
+    XCTAssertTrue(hint.waitForExistence(timeout: 5), "The menu bar's reminder should name Right Option")
     app.typeKey(.escape, modifierFlags: [])
   }
 }
