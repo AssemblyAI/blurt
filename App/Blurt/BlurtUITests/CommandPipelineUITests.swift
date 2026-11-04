@@ -54,7 +54,11 @@ final class CommandPipelineUITests: BlurtUITestCase {
     for _ in 0..<20 {
       if text(of: performed(in: harness)).contains("Notes") { break }
       XCTAssertTrue(pill.exists && pill.isHittable, "The pill went away while the command was still working")
-      XCTAssertEqual(pill.label, "Carrying out your command.", "The pill should say the command is working")
+      // Working — or, if the command ended since the check above, just done:
+      // what must never happen is the pill leaving, or saying anything else.
+      XCTAssertTrue(
+        ["Carrying out your command.", "Your command was carried out."].contains(pill.label),
+        "The pill should say the command is working, got \(pill.label)")
       usleep(100_000)
     }
     waitForText(performed(in: harness), containing: "openApp(\"Notes\")", timeout: 10, "The command should finish")
