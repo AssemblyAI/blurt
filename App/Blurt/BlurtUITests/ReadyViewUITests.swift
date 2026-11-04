@@ -81,9 +81,11 @@ final class ReadyViewUITests: BlurtUITestCase {
     pasteboard.clearContents()
     pasteboard.setString("sentinel-before-copy", forType: .string)
 
-    // Right-click the card for its "Copy" contextual menu item — a click
-    // would open it. The cards have no selection, so Edit › Copy has nothing
-    // to copy: the only "Copy" that can land is the card's own.
+    // Select the card, then right-click it for its "Copy" contextual menu
+    // item. Selecting first keeps the assertion honest whichever "Copy" the
+    // query lands on: the context menu copies the card it was opened on, and
+    // Edit › Copy copies the selected one.
+    row.click()
     row.rightClick()
     let copyItem = app.menus.menuItems["Copy"].firstMatch
     XCTAssertTrue(copyItem.waitForExistence(timeout: 5), "Recent row should offer a Copy action")

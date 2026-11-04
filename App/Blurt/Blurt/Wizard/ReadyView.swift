@@ -132,63 +132,54 @@ struct ReadyView: View {
     // Default sentinel, or the first profile when it names nothing — never a
     // second reading here.
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
-    // One scroll for the whole window, as Journal's: the keys scroll away
-    // with the Library under them, and the scroller is the window's own.
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        // What you can press — Blurt's real work happens outside this window,
-        // on these keys. A legend on the backdrop under a Keys heading, not a white card: only the
-        // Library's entries are cards, and the keys are drawn as keycaps, to
-        // press rather than click. A click on one still opens Settings › Keys,
-        // where it's changed. Once a custom style exists, the writing style
-        // the dictation keys use closes the group.
+    // One list for the whole window: the keys lead it and scroll away with
+    // the Library under them, and its scroller is the window's own.
+    LibrarySection(
+      coordinator: coordinator, triggerKey: triggerKey, activation: activation, query: query, filter: filter
+    ) {
+      // What you can press — Blurt's real work happens outside this window,
+      // on these keys. A legend under a Keys heading, not a white card: only the
+      // Library's entries are cards, and the keys are drawn as keycaps, to
+      // press rather than click. Once a custom style exists, the writing
+      // style the dictation keys use closes the group.
+      VStack(alignment: .leading, spacing: 0) {
+        Text("Keys")
+          .font(.headline)
+          .padding(.leading, 4)
+          .padding(.bottom, 4)
+          .accessibilityAddTraits(.isHeader)
+        // A soft, translucent panel — rounded like the cards but flat and
+        // see-through, so it reads as a legend rather than another card to
+        // click.
         VStack(alignment: .leading, spacing: 0) {
-          Text("Keys")
-            .font(.headline)
-            .padding(.leading, 4)
-            .padding(.bottom, 4)
-            .accessibilityAddTraits(.isHeader)
-          // A soft, translucent panel — rounded like the cards but flat and
-          // see-through, so it reads as a legend rather than another card to
-          // click.
-          VStack(alignment: .leading, spacing: 0) {
-            shortcutRow.keyRow()
-            // Every other key given an action in the Keys tab, in its order,
-            // each under a faint hairline across the row, pairing each action
-            // with its key.
-            ForEach(bindings.extraKeys, id: \.self) { key in
-              KeyDivider()
-              extraKeyRow(key, profiles: profiles).keyRow()
-            }
-          }
-          .padding(.vertical, 6)
-          .background(
-            Color(nsColor: .textBackgroundColor).opacity(0.55),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-          // Only once there is a custom style: with none, every dictation is
-          // Default and the row would offer no choice. Never locked during a
-          // dictation: each one's style is fixed as its key goes down
-          // (`PressStyle`), so a pick mid-utterance applies to the next.
-          if !profiles.isEmpty {
-            StyleRow(profiles: profiles, activeID: active?.id)
-              .keyRow()
-            // The caveat is about styles, so it goes with the row.
-            StylesInertNotice()
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .padding(.horizontal, 10)
+          shortcutRow.keyRow()
+          // Every other key given an action in the Keys tab, in its order,
+          // each under a faint hairline across the row, pairing each action
+          // with its key.
+          ForEach(bindings.extraKeys, id: \.self) { key in
+            KeyDivider()
+            extraKeyRow(key, profiles: profiles).keyRow()
           }
         }
-
-        // What Blurt has done, newest first, each a card.
-        LibrarySection(
-          coordinator: coordinator, triggerKey: triggerKey, activation: activation, query: query, filter: filter
-        )
+        .padding(.vertical, 6)
+        .background(
+          Color(nsColor: .textBackgroundColor).opacity(0.55),
+          in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // Only once there is a custom style: with none, every dictation is
+        // Default and the row would offer no choice. Never locked during a
+        // dictation: each one's style is fixed as its key goes down
+        // (`PressStyle`), so a pick mid-utterance applies to the next.
+        if !profiles.isEmpty {
+          StyleRow(profiles: profiles, activeID: active?.id)
+            .keyRow()
+          // The caveat is about styles, so it goes with the row.
+          StylesInertNotice()
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+        }
       }
-      .padding(20)
     }
-    // Opens on the keys, at the top.
-    .defaultScrollAnchor(.top)
     .background(BlurtBrand.backdrop.ignoresSafeArea())
   }
 

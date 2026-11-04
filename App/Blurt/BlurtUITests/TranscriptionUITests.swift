@@ -69,7 +69,7 @@ final class TranscriptionUITests: BlurtUITestCase {
     mainWindow()
     let recording = row(titled: UITestIdentifiers.seededRecordingTitle)
     XCTAssertTrue(recording.waitForExistence(timeout: 10))
-    recording.click()
+    recording.doubleClick()
 
     // Full: the turns, each under its speaker.
     XCTAssertTrue(windowText(containing: "Speaker A").waitForExistence(timeout: 5), "Full shows speaker A's turn")

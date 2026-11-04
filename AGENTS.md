@@ -1490,10 +1490,12 @@ restating them.
   control — not clickable, and nothing in the window reacts while a key is down (how a dictation is going is the pill's to say); once a custom style
   exists, a Style row's pop-up (Default plus up to 4 profiles, ⌘1–⌘5) closes
   the card, with a footer only while enhanced transcripts are off. Below it, the Library as a feed of
-  what Blurt has done. The whole window scrolls as one, as Journal's (the keys scroll away, the
-  scroller is the window's), on a pale wash of the brand green (`BlurtBrand.backdrop`) with no rule
-  under the toolbar; the key list and each entry are white cards (`card()`). Entries are compact
-  cards — a click opens one, there's no selection — with the time on the details line and a ⋯ menu
+  what Blurt has done. The whole window scrolls as one list, as Journal's (the keys lead it and scroll
+  away, the scroller is the window's), on a pale wash of the brand green (`BlurtBrand.backdrop`) with no rule
+  under the toolbar; the entries are white cards (`LibraryCard`). The Library is a stock `List` drawn as cards (row
+  backgrounds and insets; the table's own highlight turned off so a selected card takes a Journal-style
+  accent ring): a click selects, double-click or Return opens, ⌘C copies, Delete deletes, arrows move;
+  day headings are ordinary rows, so they scroll rather than pin. Entries are compact cards with the time on the details line and a ⋯ menu
   of the entry's actions (Open, Play, Copy, Show in Finder, Delete…), and when empty a
   first-dictation prompt. The unified toolbar holds Record and
   Browse leading, then the Library's Filter menu (Mail's: one kind or all, the icon filled while a

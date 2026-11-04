@@ -4,9 +4,12 @@ import SwiftUI
 
 /// The ready screen's Library: every saved recording, dictation, file and
 /// spoken answer, searchable, filtered by kind, and grouped under day headings.
-/// White cards on the window's brand gradient, as Journal's entries: a click
-/// opens one, its ⋯ menu and contextual menu hold its actions, and ⌘F searches.
-struct LibrarySection: View {
+/// A stock `List` drawn as white cards on the window's brand gradient, as
+/// Journal's entries look, led by the window's key legend (`header`). Mac list
+/// behaviour throughout: a click selects a card, double-click or Return opens
+/// it, ⌘C copies, Delete asks to delete, arrows move; its ⋯ menu and the
+/// contextual menu hold the rest, and ⌘F searches.
+struct LibrarySection<Header: View>: View {
   var coordinator: AppCoordinator
   let triggerKey: TriggerKey
   let activation: TriggerActivation
@@ -15,6 +18,9 @@ struct LibrarySection: View {
   let query: String
   /// The toolbar's Filter menu (`ReadyView`).
   let filter: LibraryFilter
+  /// What leads the list, above the first day: the window's key legend.
+  @ViewBuilder var header: Header
+  @State private var selection: SavedTranscript.ID?
   @State private var pendingDelete: SavedTranscript?
   /// The history, filtered and under its day headings: rebuilt only when the
   /// history, the filter or the search changes — not on every selection
@@ -54,6 +60,11 @@ struct LibrarySection: View {
     let cache = details
     days = LibraryDay.group(filtered(), now: .now) { cache[$0.id]?.text ?? LibraryDay.details(of: $0) }
     shownQuery = trimmedQuery
+    // A selection the filter or search now hides is dropped, so Delete and
+    // ⌘C can't act on an entry that isn't on screen.
+    if let selected = selection, !days.contains(where: { $0.rows.contains { $0.entry.id == selected } }) {
+      selection = nil
+    }
   }
 
   /// Brings `details` up to date with the history: kept for an entry whose
@@ -74,15 +85,70 @@ struct LibrarySection: View {
   }
 
   var body: some View {
-    Group {
+    List(selection: $selection) {
+      Section {
+        header
+          .listRowInsets(Self.margins)
+          .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+      }
       if days.isEmpty {
         emptyMessage
           .frame(maxWidth: .infinity, minHeight: 160)
-          .card()
-      } else {
-        cards
+          .listRowInsets(Self.margins)
+          .listRowBackground(LibraryCard(isSelected: false))
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+      }
+      ForEach(days) { day in
+        // The day as an ordinary row, not a section header: those stay pinned
+        // to the top as the list scrolls, and these headings scroll with it.
+        Text(day.title)
+          .font(.headline)
+          .padding(.top, 8)
+          .listRowInsets(Self.headingInsets)
+          .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+          .accessibilityAddTraits(.isHeader)
+        ForEach(day.rows, id: \.entry.id) { row in
+          let entry = row.entry
+          HistoryRow(
+            entry: entry, details: row.details, dayTitle: day.title,
+            actions: EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
+          )
+          .tag(entry.id)
+          // Label colours on the white card even when selected: without the
+          // band, the selected row's white text would vanish.
+          .environment(\.backgroundProminence, .standard)
+          .listRowInsets(Self.cardInsets)
+          .listRowBackground(LibraryCard(isSelected: selection == entry.id))
+          .listRowSeparator(.hidden)
+        }
       }
     }
+    .listStyle(.plain)
+    .listSectionSeparator(.hidden)
+    .scrollContentBackground(.hidden)
+    // The card's outline marks the selection (`LibraryCard`), not the
+    // system's full-width band, which ran past the cards' rounded edges.
+    .background(TableSelectionHighlightRemover())
+    .accessibilityIdentifier(UITestIdentifiers.recentList)
+    .contextMenu(forSelectionType: SavedTranscript.ID.self) { ids in
+      if let entry = entry(id: ids.first) {
+        EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
+      }
+    } primaryAction: { ids in
+      // Double-click and Return.
+      if let entry = entry(id: ids.first) { model.open(entry) }
+    }
+    .onCopyCommand {
+      guard let entry = entry(id: selection) else { return [] }
+      AccessibilityNotification.Announcement("Copied").post()
+      return [NSItemProvider(object: entry.text as NSString)]
+    }
+    .onDeleteCommand { pendingDelete = entry(id: selection) }
     .onChange(of: model.history, initial: true) {
       updateDetails()
       refresh()
@@ -99,40 +165,39 @@ struct LibrarySection: View {
       guard (try? await Task.sleep(for: .milliseconds(150))) != nil else { return }
       refresh()
     }
-    .deleteConfirmation(for: $pendingDelete, model: model)
+    .deleteConfirmation(for: $pendingDelete, model: model) { deleted in
+      // The next card takes the selection, as Mac lists do, so Delete can
+      // carry on down the list.
+      let rows = days.flatMap(\.rows).map(\.entry)
+      guard selection == deleted.id, let index = rows.firstIndex(where: { $0.id == deleted.id }) else { return }
+      let neighbors = rows.indices.contains(index + 1) ? rows[index + 1] : index > 0 ? rows[index - 1] : nil
+      selection = neighbors?.id
+    }
   }
 
-  /// The entries as cards under their day headings, as Journal's — denser:
-  /// a click opens one, its ⋯ menu and contextual menu hold the rest.
-  private var cards: some View {
-    LazyVStack(alignment: .leading, spacing: 8) {
-      ForEach(days) { day in
-        Text(day.title)
-          .font(.headline)
-          .padding(.top, 6)
-          .padding(.leading, 4)
-          .accessibilityAddTraits(.isHeader)
-        ForEach(day.rows, id: \.entry.id) { row in
-          let entry = row.entry
-          let actions = EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
-          HistoryRow(entry: entry, details: row.details, dayTitle: day.title, actions: actions)
-            .padding(.horizontal, 14)
-            // Optically even: the title's line keeps more space above its caps
-            // than the details' keeps under its baseline, so the top takes 2
-            // pt less than the bottom to look the same.
-            .padding(.top, 9)
-            .padding(.bottom, 11)
-            .card()
-            .contentShape(Rectangle())
-            .onTapGesture { model.open(entry) }
-            .contextMenu { actions }
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { model.open(entry) }
-        }
-      }
-    }
-    .accessibilityElement(children: .contain)
-    .accessibilityIdentifier(UITestIdentifiers.recentList)
+  /// The list's own padding at each side of a row, on top of its insets.
+  private static var listPadding: CGFloat { 8 }
+  /// The window's margin around everything in the list: 20 pt, less the
+  /// list's own padding.
+  private static var margins: EdgeInsets {
+    EdgeInsets(top: 8, leading: 20 - listPadding, bottom: 8, trailing: 20 - listPadding)
+  }
+  /// A day heading's inset: in line with the Keys heading, 4 pt inside the
+  /// margin.
+  private static var headingInsets: EdgeInsets {
+    EdgeInsets(top: 4, leading: 24 - listPadding, bottom: 2, trailing: 20 - listPadding)
+  }
+  /// A card's content inset: the window margin, the gap between cards, and the
+  /// card's own padding — 14 at the sides, and optically even top to bottom
+  /// (the title's line keeps more space above its caps than the details' keeps
+  /// under its baseline, so the top takes 2 pt less than the bottom).
+  private static var cardInsets: EdgeInsets {
+    EdgeInsets(
+      top: LibraryCard.gap + 9, leading: 34 - listPadding, bottom: LibraryCard.gap + 11, trailing: 34 - listPadding)
+  }
+
+  private func entry(id: SavedTranscript.ID?) -> SavedTranscript? {
+    id.flatMap { id in model.history.first { $0.id == id } }
   }
 
   @ViewBuilder private var emptyMessage: some View {

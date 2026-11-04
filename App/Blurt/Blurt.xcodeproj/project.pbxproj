@@ -102,6 +102,7 @@
 		2F5526E7BF0E08FE4E74F2B2 /* juno-69-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DED921D522FA87E2970C2EFF /* juno-69-stop.m4a */; };
 		3015C1E46AE0ECA3A96F819C /* juno-69-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A29FFB86C18EA299EAFFCFD /* juno-69-start.m4a */; };
 		3182C793A397A4AC6BF4F24D /* AccountSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAC096B44D037E7BB119609A /* AccountSignIn.swift */; };
+		31A4E70BB32A269EAC5F782A /* LibraryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4ACFC5071B68C432A875B39 /* LibraryCard.swift */; };
 		3246BF1C37C7A027817D9458 /* juno-110-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E552326770AD5967B8128420 /* juno-110-stop.m4a */; };
 		336F75E5060815018D79ACEB /* rom1b-21-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 01B663528C4E1AFEF24675E1 /* rom1b-21-start.m4a */; };
 		33C581B5DE3847C05F540701 /* juno-81-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3FCE941C19A3FF0DC61462B7 /* juno-81-stop.m4a */; };
@@ -343,6 +344,7 @@
 		BB6AD6072811807783AF6526 /* juno-87-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A72EE584A3704166E932D950 /* juno-87-start.m4a */; };
 		BBFE6E3BBB854163861E1450 /* juno-26-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CE3BEBDADD5DD54629837F34 /* juno-26-stop.m4a */; };
 		BC3195AFF07AA2FA98486A3F /* rom1a-14-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1DE1622660807FF440D18D34 /* rom1a-14-stop.m4a */; };
+		BC4D5F7EC52E0BE8CE4E1C37 /* AudioFileDropTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = D574A31ACB311D98BBE107F6 /* AudioFileDropTarget.swift */; };
 		BC5D17A158C17F6D5450FFC4 /* rom1a-9-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F17631D5583E0070A4DFCF3F /* rom1a-9-start.m4a */; };
 		BDC3E7A0E9E6A349E340459D /* juno-115-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 338537DEC8694C87839545CC /* juno-115-start.m4a */; };
 		BE6EA55FEF13362210107437 /* juno-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 627207A211954DBC35179466 /* juno-7-stop.m4a */; };
@@ -875,6 +877,8 @@
 		D220A3AC36DCE278804F81A1 /* rom1b-18-start.m4a */ = {isa = PBXFileReference; path = "rom1b-18-start.m4a"; sourceTree = "<group>"; };
 		D27DAF2436D272EEF031303B /* juno-47-start.m4a */ = {isa = PBXFileReference; path = "juno-47-start.m4a"; sourceTree = "<group>"; };
 		D3681457B0FB13FF3FD6BAF6 /* juno-74-stop.m4a */ = {isa = PBXFileReference; path = "juno-74-stop.m4a"; sourceTree = "<group>"; };
+		D4ACFC5071B68C432A875B39 /* LibraryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCard.swift; sourceTree = "<group>"; };
+		D574A31ACB311D98BBE107F6 /* AudioFileDropTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFileDropTarget.swift; sourceTree = "<group>"; };
 		D58930841AD9EB26714E8385 /* rom1a-20-start.m4a */ = {isa = PBXFileReference; path = "rom1a-20-start.m4a"; sourceTree = "<group>"; };
 		D643CB1D491E00A2182907F8 /* BlurtCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtCommands.swift; sourceTree = "<group>"; };
 		D679085098210876A65E88BD /* rom1b-5-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-5-stop.m4a"; sourceTree = "<group>"; };
@@ -1457,12 +1461,14 @@
 		77C72856311952343339E7BE /* Wizard */ = {
 			isa = PBXGroup;
 			children = (
+				D574A31ACB311D98BBE107F6 /* AudioFileDropTarget.swift */,
 				D643CB1D491E00A2182907F8 /* BlurtCommands.swift */,
 				E0552AF62A5A7B4EC4FC6EB0 /* ClipPlayer.swift */,
 				0AF3379504F58AAF3A57819F /* DeleteConfirmation.swift */,
 				C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */,
 				48C4CFC6271703797187A269 /* KeyCap.swift */,
 				AE6928CEB0A1A92241762DB6 /* KeysSettingsTab.swift */,
+				D4ACFC5071B68C432A875B39 /* LibraryCard.swift */,
 				A1E4E6475D21A5D03D21B1B2 /* LibraryParts.swift */,
 				64C90BFCBE7F97C6FB19F861 /* LibrarySection.swift */,
 				324768A585509378B2AF8A8A /* LiveRecordingView.swift */,
@@ -2148,6 +2154,7 @@
 				B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */,
 				3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */,
 				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
+				BC4D5F7EC52E0BE8CE4E1C37 /* AudioFileDropTarget.swift in Sources */,
 				24EC3A8465DE5D0356AB73F8 /* Binding+IsPresent.swift in Sources */,
 				034A91EE923BF5EA71438B7D /* BlurtBrand.swift in Sources */,
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
@@ -2164,6 +2171,7 @@
 				92041B42C67CE21AF82B6863 /* KeyCap.swift in Sources */,
 				9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */,
 				1C89CB94C7D10B67BD0573DF /* KeysSettingsTab.swift in Sources */,
+				31A4E70BB32A269EAC5F782A /* LibraryCard.swift in Sources */,
 				16BAB2F3D0F8ED815A55BB65 /* LibraryParts.swift in Sources */,
 				58FAFE916586BFC0CBCC0EB9 /* LibrarySection.swift in Sources */,
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,

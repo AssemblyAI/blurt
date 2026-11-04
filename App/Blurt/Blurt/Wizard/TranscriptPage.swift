@@ -4,54 +4,6 @@ import AssemblyAI
 import BlurtEngine
 import SwiftUI
 
-extension View {
-  /// Makes the whole view a drop target for audio and video files, as
-  /// MacWhisper's and ImageOptim's windows are: nothing on screen asks for a
-  /// drop, and only while a file is held over the window does it say what
-  /// letting go will do.
-  func audioFileDropTarget(_ model: TranscriptsModel) -> some View {
-    modifier(AudioFileDropTarget(model: model))
-  }
-}
-
-private struct AudioFileDropTarget: ViewModifier {
-  var model: TranscriptsModel
-  @State private var isTargeted = false
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  func body(content: Content) -> some View {
-    content
-      .dropDestination(for: URL.self) { urls, _ in
-        // Never over a recording: it owns the sheet until it's saved.
-        guard !model.isRecordingBusy else { return false }
-        model.openFiles(urls)
-        return true
-      } isTargeted: {
-        isTargeted = $0
-      }
-      .overlay {
-        if isTargeted { dropOverlay }
-      }
-      .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isTargeted)
-  }
-
-  /// The whole window, tinted and outlined in the accent, saying one thing.
-  private var dropOverlay: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 12, style: .continuous)
-        .fill(BlurtBrand.accent.opacity(0.12))
-      RoundedRectangle(cornerRadius: 12, style: .continuous)
-        .strokeBorder(BlurtBrand.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-      Label("Drop to Transcribe", systemImage: "arrow.down.doc")
-        .font(.title3.weight(.semibold))
-        .foregroundStyle(BlurtBrand.accent)
-    }
-    .padding(8)
-    .allowsHitTesting(false)
-    .transition(.opacity)
-  }
-}
-
 /// An opened item, pushed over the main window's Library on its
 /// `NavigationStack` as an entry opens in Journal: the system's back button
 /// leads the toolbar, the item's actions follow as icons — the View menu,
@@ -65,39 +17,29 @@ struct TranscriptPage: View {
   @State private var pendingDelete: SavedTranscript?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      // The title heads the page, as Notes' date line heads a note: in the
-      // toolbar it took the actions' room, pushing them into a » menu. Only
-      // where it says something the text doesn't — a recording's or a file's;
-      // a dictation's or a read's would just repeat the words below it.
-      if showsTitle {
-        Text(title)
-          .font(.body.weight(.semibold))
-          .lineLimit(2)
-          .truncationMode(.middle)
-          .textSelection(.enabled)
-      }
-      switch model.state {
-      case .idle:
-        EmptyView()
-      case .recording:
-        LiveRecordingView(model: model)
-      case .finishingRecording:
-        ProgressLine("Finishing…").frame(maxWidth: .infinity, maxHeight: .infinity)
-      case .transcribing(_, let phase):
-        ProgressLine(phase == .uploading ? "Uploading…" : "Transcribing…")
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      case .finished:
-        facetContent
-      case .failed(_, let message):
-        Label(message, systemImage: "exclamationmark.triangle")
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-        Spacer()
+    Group {
+      if case .finished = model.state, case .ready = model.contents[model.selection] {
+        // A transcript scrolls as one page with its title, as a note does:
+        // the title goes up with the text rather than staying pinned, and the
+        // scroller is the window's own.
+        ScrollView {
+          VStack(alignment: .leading, spacing: 12) {
+            titleLine
+            facetContent
+          }
+          .padding(20)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      } else {
+        VStack(alignment: .leading, spacing: 12) {
+          titleLine
+          status
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       }
     }
-    .padding(20)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
     .toolbar { toolbarItems }
     // Esc goes back, as the back button does — in every state but a
     // recording (`dismiss`).
@@ -115,6 +57,43 @@ struct TranscriptPage: View {
     .onChange(of: model.selection) { copied = false }
     // Asks first; deleting the open entry slides back to the Library.
     .deleteConfirmation(for: $pendingDelete, model: model)
+  }
+
+  /// The title heads the page, as Notes' date line heads a note: in the
+  /// toolbar it took the actions' room, pushing them into a » menu. Only where
+  /// it says something the text doesn't — a recording's or a file's; a
+  /// dictation's or a read's would just repeat the words below it.
+  @ViewBuilder private var titleLine: some View {
+    if showsTitle {
+      Text(title)
+        .font(.body.weight(.semibold))
+        .lineLimit(2)
+        .truncationMode(.middle)
+        .textSelection(.enabled)
+    }
+  }
+
+  /// Everything but a transcript in hand: a recording, progress, a failure,
+  /// or a task still on its way.
+  @ViewBuilder private var status: some View {
+    switch model.state {
+    case .idle:
+      EmptyView()
+    case .recording:
+      LiveRecordingView(model: model)
+    case .finishingRecording:
+      ProgressLine("Finishing…").frame(maxWidth: .infinity, maxHeight: .infinity)
+    case .transcribing(_, let phase):
+      ProgressLine(phase == .uploading ? "Uploading…" : "Transcribing…")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    case .finished:
+      facetContent
+    case .failed(_, let message):
+      Label(message, systemImage: "exclamationmark.triangle")
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer()
+    }
   }
 
   /// Whether the page has a title: a recording's or a file's, or the progress
@@ -226,20 +205,17 @@ struct TranscriptPage: View {
     Group {
       switch content {
       case .ready(let text):
-        ScrollView {
-          Group {
-            // A transcript's Full tab, with speakers told apart, shows as
-            // coloured turns (parsed once, `fullTurns`); everything else is
-            // prose, shown as it is.
-            if model.selection == .full, !model.fullTurns.isEmpty {
-              SpeakerTurnsView(turns: model.fullTurns)
-            } else {
-              Text(text).textSelection(.enabled)
-            }
+        // Inside the page's own scroll (`body`). A transcript's Full tab,
+        // with speakers told apart, shows as coloured turns (parsed once,
+        // `fullTurns`); everything else is prose, shown as it is.
+        Group {
+          if model.selection == .full, !model.fullTurns.isEmpty {
+            SpeakerTurnsView(turns: model.fullTurns)
+          } else {
+            Text(text).textSelection(.enabled)
           }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.vertical, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
       case .failed(let message):
         VStack(spacing: 8) {
           Label(message, systemImage: "exclamationmark.triangle")
@@ -257,7 +233,9 @@ struct TranscriptPage: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
-    .textAreaSurface()
+    // In the page's scroll a transcript takes its own height; anything else
+    // fills what's left of the window.
+    .frame(maxHeight: model.selectedText == nil ? .infinity : nil)
   }
 
   private func copy(_ transcript: String) {

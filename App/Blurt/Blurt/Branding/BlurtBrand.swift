@@ -96,12 +96,3 @@ extension BlurtBrand {
       .background(Color(nsColor: .windowBackgroundColor))
   }
 }
-
-extension View {
-  /// A white card on the brand backdrop — the key list, each Library entry —
-  /// in the text background, so it follows Dark Mode.
-  func card() -> some View {
-    background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-      .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
-  }
-}
