@@ -15,6 +15,12 @@ final class CommandPipelineUITests: BlurtUITestCase {
     harness.staticTexts[UITestIdentifiers.performedLabel]
   }
 
+  /// The pill's last brief notice, kept by the harness: the pill shows one for
+  /// under a second, too briefly for XCUITest's polling to catch.
+  private func notice(in harness: XCUIElement) -> XCUIElement {
+    harness.staticTexts[UITestIdentifiers.noticeLabel]
+  }
+
   /// The picked key held while `command` is "said".
   private func command(_ command: String, in harness: XCUIElement) {
     setTranscript(command, in: harness)
@@ -33,7 +39,8 @@ final class CommandPipelineUITests: BlurtUITestCase {
     command("Open Slack", in: harness)
     waitForLabel(planned(in: harness), equals: "Open Slack", timeout: 15, "The spoken command should reach the planner")
     waitForText(performed(in: harness), containing: "openApp(\"Slack\")", "The planned step should be carried out")
-    waitForLabel(pill, equals: "Your command was carried out.", "The pill should say the command was done")
+    waitForLabel(
+      notice(in: harness), equals: "Your command was carried out.", "The pill should say the command was done")
   }
 
   /// While a command is still planning, the pill stays up saying it's working —
@@ -51,7 +58,7 @@ final class CommandPipelineUITests: BlurtUITestCase {
       usleep(100_000)
     }
     waitForText(performed(in: harness), containing: "openApp(\"Notes\")", timeout: 10, "The command should finish")
-    waitForLabel(pill, equals: "Your command was carried out.", "Then the pill should say it's done")
+    waitForLabel(notice(in: harness), equals: "Your command was carried out.", "Then the pill should say it's done")
   }
 
   /// A typed step pastes through the session's own injector, as a dictation would.
@@ -69,7 +76,9 @@ final class CommandPipelineUITests: BlurtUITestCase {
     command("Mute", in: harness)
     waitForText(performed(in: harness), containing: "media(", timeout: 15, "The first command should run")
     command("That didn't work", in: harness)
-    waitForLabel(pill, equals: "Noted: the last command was marked as not working.", "The complaint should be noted")
+    waitForLabel(
+      notice(in: harness), equals: "Noted: the last command was marked as not working.", "The complaint should be noted"
+    )
     XCTAssertEqual(text(of: planned(in: harness)), "Mute", "A complaint is never planned")
   }
 
@@ -78,7 +87,9 @@ final class CommandPipelineUITests: BlurtUITestCase {
     let harness = readyHarness()
     commandKey(in: harness)
     command(String(repeating: "and the results are coming in tonight ", count: 10), in: harness)
-    waitForLabel(pill, equals: "That was too long to be a command.", timeout: 15, "A long stretch should be refused")
+    waitForLabel(
+      notice(in: harness), equals: "That was too long to be a command.", timeout: 15, "A long stretch should be refused"
+    )
     XCTAssertEqual(text(of: planned(in: harness)), "—", "Nothing overheard is planned")
   }
 
@@ -87,7 +98,8 @@ final class CommandPipelineUITests: BlurtUITestCase {
     let harness = readyHarness()
     commandKey(in: harness)
     command("Juggle the windows", in: harness)
-    waitForLabel(pill, equals: "Blurt can’t do that command.", timeout: 15, "A command it can't do should say so")
+    waitForLabel(
+      notice(in: harness), equals: "Blurt can’t do that command.", timeout: 15, "A command it can't do should say so")
     command("Open Music", in: harness)
     waitForText(performed(in: harness), containing: "openApp(\"Music\")", timeout: 15, "The key should still work")
   }

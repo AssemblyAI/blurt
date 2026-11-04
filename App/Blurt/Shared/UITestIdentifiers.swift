@@ -89,6 +89,7 @@ enum UITestIdentifiers {
   /// What the stub planner was asked to plan, and what the stub performer did.
   static let plannedLabel = "harness.planned"
   static let performedLabel = "harness.performed"
+  static let noticeLabel = "harness.notice"
   static let developerToggle = "settings.developer.toggle"
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"

@@ -146,6 +146,11 @@ final class OverlayWindowController {
   }
 
   func show(state: OverlayUIState) {
+    #if UITEST_HOOKS
+      if UITestMode.isActive, state.noticeDwellSeconds != nil {
+        UITestState.shared.lastNotice = state.accessibilityLabel
+      }
+    #endif
     // Any explicit state change supersedes a pending error-flash revert: a new
     // press while the red pill is up should win, not get stomped back to idle.
     errorRevertTask?.cancel()

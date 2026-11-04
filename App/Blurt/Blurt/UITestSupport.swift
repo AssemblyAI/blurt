@@ -103,6 +103,11 @@
     func recordPlanned(_ command: String) { plannedCommand = command }
     func recordPerformed(_ step: String) { performedSteps.append(step) }
 
+    /// The pill's last brief notice ("Your command was carried out."), kept
+    /// after the pill clears it: a notice dwells under a second, shorter than
+    /// XCUITest's predicate polling, so a test reads it here instead.
+    var lastNotice: String?
+
     /// The trigger key the harness's press/release buttons drive.
     var selectedKey = TriggerKey.rightCommand
   }
@@ -334,6 +339,10 @@
         LabeledContent("Performed") {
           Text(state.performedSteps.isEmpty ? "—" : state.performedSteps.joined(separator: "; "))
             .accessibilityIdentifier(UITestIdentifiers.performedLabel)
+        }
+        LabeledContent("Notice") {
+          Text(state.lastNotice ?? "—")
+            .accessibilityIdentifier(UITestIdentifiers.noticeLabel)
         }
 
         // Mirrors the newest dictation in the saved history (the ready
