@@ -108,6 +108,11 @@
     /// XCUITest's predicate polling, so a test reads it here instead.
     var lastNotice: String?
 
+    /// Keeps `state`'s words when it's a brief notice, under the UI-test harness.
+    func recordNotice(of state: OverlayUIState) {
+      if UITestMode.isActive, state.noticeDwellSeconds != nil { lastNotice = state.accessibilityLabel }
+    }
+
     /// The trigger key the harness's press/release buttons drive.
     var selectedKey = TriggerKey.rightCommand
   }
