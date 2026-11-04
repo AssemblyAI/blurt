@@ -7,9 +7,11 @@ import SwiftUI
 /// with the small + beside it for the one thing people want the instant
 /// Blurt mishears a word: add it as a key term. The row is `VoiceRow`; this
 /// swaps it for the key-term field the keys type into, or for the one note
-/// the element can't carry (no Full Access).
+/// the element can't carry (no Full Access). `addCap` is the most the add
+/// key may take where keys share the row (the slim bar).
 struct VoiceBar: View {
   var model: KeyboardModel
+  var addCap: CGFloat?
   @Environment(\.keyboardPalette) private var palette
 
   static let height = DesignTokens.Metrics.voicebarHeight
@@ -37,7 +39,7 @@ struct VoiceBar: View {
         .accessibilityLabel("Start Blurt")
         .transition(.opacity)
       } else {
-        VoiceRow(model: model, slot: .bar, height: Self.height)
+        VoiceRow(model: model, slot: .bar, height: Self.height, addCap: addCap)
           .transition(.opacity)
       }
     }

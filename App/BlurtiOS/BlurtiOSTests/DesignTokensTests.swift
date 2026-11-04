@@ -82,24 +82,40 @@ struct DesignTokensTests {
       "tokens whose value differs: \(changed.map { "\($0): \(compiled[$0] ?? "?") vs \(expected[$0] ?? "?")" })")
   }
 
-  @Test("the layout heights are the rows at the token spacing, and the layout/* tokens agree")
+  @Test("the layout heights are the rows at each generation's spacing, and the layout/* tokens agree")
   func heights() {
     let metrics = DesignTokens.Metrics.self
-    #expect(KeyboardLayout.slimBar.height == 2 * metrics.marginVertical + metrics.voicebarHeight)
-    #expect(KeyboardLayout.slimBar.height == metrics.layoutSlim)
-    #expect(KeyboardLayout.panel.height == metrics.layoutPanel)
+    let glass = KeyboardProfile(generation: .glass, width: metrics.keyReferenceWidth, hasGlobe: true)
+    #expect(KeyboardLayout.slimBar.height(profile: glass) == 2 * metrics.marginVertical + metrics.voicebarHeight)
+    #expect(KeyboardLayout.slimBar.height(profile: glass) == metrics.layoutSlim)
+    #expect(KeyboardLayout.panel.height(profile: glass) == metrics.layoutPanel)
     #expect(
-      KeyboardLayout.full.height
+      KeyboardLayout.full.height(profile: glass)
         == metrics.marginVertical + metrics.voicebarHeight + 4 * metrics.keyHeight + 3 * metrics.rowGap
         + metrics.marginBottomKeys)
-    #expect(KeyboardLayout.full.height == metrics.layoutFull)
+    #expect(KeyboardLayout.full.height(profile: glass) == metrics.layoutFull)
+    let classic = KeyboardProfile(generation: .classic, width: 390, hasGlobe: false)
+    #expect(KeyboardLayout.slimBar.height(profile: classic) == 2 * metrics.classicMarginTop + metrics.voicebarHeight)
+    #expect(KeyboardLayout.slimBar.height(profile: classic) == metrics.layoutSlimClassic)
+    #expect(KeyboardLayout.panel.height(profile: classic) == metrics.layoutPanel)
+    #expect(
+      KeyboardLayout.full.height(profile: classic)
+        == metrics.classicMarginTop + metrics.voicebarHeight + 4 * metrics.classicKeyHeight
+        + 3 * metrics.classicRowGap + metrics.classicBottomInset)
+    #expect(KeyboardLayout.full.height(profile: classic) == metrics.layoutFullClassic)
+    // The glass/* set is the measured key/*, row/* and margin/* tokens under the profile's names.
+    #expect(metrics.glassKeyGap == metrics.keyGap && metrics.glassKeyHeight == metrics.keyHeight)
+    #expect(metrics.glassRowGap == metrics.rowGap && metrics.glassMarginSide == metrics.marginSide)
+    #expect(
+      metrics.glassAbcWidth402 == metrics.keyAbcWidth402 && metrics.glassReferenceWidth == metrics.keyReferenceWidth)
   }
 
   @Test("the full layout at 402 pt matches the @402 tokens the design is drawn at")
   func fullLayoutAt402() {
     // The tokens are written to a thousandth of a point; the row's thirds
     // round either way at the last digit.
-    let geometry = KeyGeometry(width: DesignTokens.Metrics.keyReferenceWidth)
+    let profile = KeyboardProfile(generation: .glass, width: DesignTokens.Metrics.keyReferenceWidth, hasGlobe: true)
+    let geometry = KeyGeometry(width: DesignTokens.Metrics.keyReferenceWidth, profile: profile)
     #expect(abs(geometry.letterWidth - DesignTokens.Metrics.keyLetterWidth402) < 0.005)
     #expect(abs(geometry.sideWidth - DesignTokens.Metrics.keySideWidth402) < 0.005)
     #expect(abs(geometry.abcWidth - DesignTokens.Metrics.keyAbcWidth402) < 0.005)
@@ -107,9 +123,10 @@ struct DesignTokensTests {
     #expect(abs(geometry.spaceWidth(globe: true) - DesignTokens.Metrics.keySpaceWidth402) < 0.005)
   }
 
-  /// Each face beside the ten theme tokens it must equal, in role order:
-  /// surface, key, modifier, legend, secondary legend, signal, pop-up, field,
-  /// field border, notice.
+  /// Each face beside the thirteen theme tokens it must equal, in role
+  /// order: surface, key, modifier, legend, secondary legend, signal, pop-up,
+  /// field, field border, notice, key in container, modifier in container,
+  /// material.
   private static let paletteTokens: [(KeyboardPalette, [Color])] = {
     typealias Themes = DesignTokens.Themes
     return [
@@ -130,12 +147,32 @@ struct DesignTokensTests {
           Themes.darkContainerKey, Themes.darkContainerKeyModifier, Themes.darkMaterial,
         ]
       ),
+      (
+        .systemLight,
+        [
+          Themes.systemLightSurface, Themes.systemLightKey, Themes.systemLightKeyModifier, Themes.systemLightLegend,
+          Themes.systemLightLegendSecondary, Themes.systemLightSignal, Themes.systemLightPopup,
+          Themes.systemLightField, Themes.systemLightFieldBorder, Themes.systemLightNotice,
+          Themes.systemLightContainerKey, Themes.systemLightContainerKeyModifier, Themes.systemLightMaterial,
+        ]
+      ),
+      (
+        .systemDark,
+        [
+          Themes.systemDarkSurface, Themes.systemDarkKey, Themes.systemDarkKeyModifier, Themes.systemDarkLegend,
+          Themes.systemDarkLegendSecondary, Themes.systemDarkSignal, Themes.systemDarkPopup, Themes.systemDarkField,
+          Themes.systemDarkFieldBorder, Themes.systemDarkNotice, Themes.systemDarkContainerKey,
+          Themes.systemDarkContainerKeyModifier, Themes.systemDarkMaterial,
+        ]
+      ),
     ]
   }()
 
   @Test("every face is its theme's tokens, role by role")
   func palettes() {
-    #expect(Self.paletteTokens.count == KeyboardPalette.all.count + 1)
+    // Two themes, two faces each: the brand on both generations, the system theme on classic.
+    let offered = Set(KeyboardPalette.all(for: .classic).map(\.id) + KeyboardPalette.all(for: .glass).map(\.id))
+    #expect(Self.paletteTokens.count == 2 * offered.count)
     for (palette, colors) in Self.paletteTokens {
       let roles = [
         palette.surface, palette.key, palette.keyDark, palette.keyText, palette.keyTextSecondary, palette.signal,
@@ -180,6 +217,53 @@ struct DesignTokensTests {
   func ctaIsTheAccent() {
     #expect(DesignTokens.Keyboard.appCtaLight == DesignTokens.Keyboard.appAccentLight)
     #expect(DesignTokens.Keyboard.appCtaDark == DesignTokens.Keyboard.appAccentDark)
+  }
+
+  /// The least a modifier cap must contrast with the surface it sits on to
+  /// read as a key of its own: Apple's classic sets measure 1.43 (light) and
+  /// 1.50 (dark).
+  static let modifierContrastFloor = 1.3
+  /// The brand's modifiers are quieter by design (DESIGN.md › Keys: flat, one
+  /// colour): 1.21 and 1.10 on the painted faces, 1.13 and 1.28 in the host's
+  /// container. This floor keeps them from vanishing (1.02 was the brand's
+  /// light modifier on Apple's grey, before classic painted its surface).
+  static let brandModifierContrastFloor = 1.09
+
+  /// WCAG's relative luminance of a token colour, from its sRGB bytes.
+  private static func luminance(_ colour: Color) -> Double {
+    let rgba = Self.rgba(UIColor(colour)).map { Double($0) / 255 }
+    func linear(_ channel: Double) -> Double {
+      channel <= 0.03928 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * linear(rgba[0]) + 0.7152 * linear(rgba[1]) + 0.0722 * linear(rgba[2])
+  }
+
+  /// The contrast ratio between two colours, 1 (the same) to 21.
+  static func contrast(_ first: Color, _ second: Color) -> Double {
+    let (one, two) = (luminance(first), luminance(second))
+    return (max(one, two) + 0.05) / (min(one, two) + 0.05)
+  }
+
+  @Test(
+    "every modifier cap contrasts with the surface it sits on, both generations, both faces",
+    arguments: [KeyboardProfile.Generation.classic, .glass], [false, true])
+  func modifierContrast(generation: KeyboardProfile.Generation, dark: Bool) {
+    let profile = KeyboardProfile(generation: generation, width: 390, hasGlobe: false)
+    for theme in KeyboardPalette.all(for: generation) {
+      let palette = KeyboardPalette.resolve(theme.id, dark: dark, generation: generation)
+      // What the keyboard draws: the key fill for this generation (the
+      // container colours inside one) on the surface under it (the painted
+      // face outside a container, the host's material inside one).
+      let modifier = palette.keyFill(modifier: true, inContainer: profile.inContainer)
+      let key = palette.keyFill(modifier: false, inContainer: profile.inContainer)
+      let surface = palette.standIn(painted: profile.paintsSurface)
+      let ratio = Self.contrast(modifier, surface)
+      let floor = theme.id == KeyboardPalette.systemID ? Self.modifierContrastFloor : Self.brandModifierContrastFloor
+      #expect(ratio >= floor, "\(theme.id) \(generation) \(dark ? "dark" : "light"): modifier/surface \(ratio)")
+      #expect(Self.contrast(key, surface) >= floor, "\(theme.id) \(generation) \(dark ? "dark" : "light"): key/surface")
+      // A modifier is a step away from an ordinary key.
+      #expect(modifier != key, "\(theme.id) \(generation) \(dark ? "dark" : "light")")
+    }
   }
 
   /// sRGB components to 8 bits, as the catalog stores them.

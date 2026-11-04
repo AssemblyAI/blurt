@@ -151,11 +151,16 @@ struct LayoutTests {
     #expect(MicAlignment.left.id == "left")
   }
 
-  @Test("heights are the rows at the iPhone keyboard's spacing (DESIGN.md)")
+  @Test("heights are the rows at the iPhone keyboard's spacing, per generation (DESIGN.md)")
   func heights() {
-    #expect(KeyboardLayout.slimBar.height == 60)
-    #expect(KeyboardLayout.panel.height == 216)
-    #expect(KeyboardLayout.full.height == 270)
+    let glass = KeyboardProfile(generation: .glass, width: 402, hasGlobe: false)
+    #expect(KeyboardLayout.slimBar.height(profile: glass) == 60)
+    #expect(KeyboardLayout.panel.height(profile: glass) == 216)
+    #expect(KeyboardLayout.full.height(profile: glass) == 270)
+    let classic = KeyboardProfile(generation: .classic, width: 390, hasGlobe: false)
+    #expect(KeyboardLayout.slimBar.height(profile: classic) == 56)
+    #expect(KeyboardLayout.panel.height(profile: classic) == 216)
+    #expect(KeyboardLayout.full.height(profile: classic) == 260)
   }
 
   @Test("letter rows follow the phone's first language")
@@ -167,15 +172,23 @@ struct LayoutTests {
     #expect(LetterLayout.forPreferredLanguages([]) == LetterLayout.qwerty)
   }
 
-  @Test("every theme has a distinct id; the brand has two faces; an unknown or retired id is the brand's")
+  @Test("every theme has a distinct id; the brand has two faces; an unknown id is the brand's on either generation")
   func palettes() {
-    let ids = KeyboardPalette.all.map(\.id)
-    #expect(Set(ids).count == ids.count)
-    #expect(KeyboardPalette.resolve("blurt", dark: true).face == .dark)
-    #expect(KeyboardPalette.resolve("blurt", dark: false).keyText == DesignTokens.Themes.lightLegend)
-    #expect(KeyboardPalette.resolve("blurt", dark: true).keyText == DesignTokens.Themes.darkLegend)
-    #expect(KeyboardPalette.resolve("nope", dark: false).id == "blurt")
-    #expect(KeyboardPalette.resolve("system", dark: true) == .brandDark)
+    for generation in [KeyboardProfile.Generation.classic, .glass] {
+      let ids = KeyboardPalette.all(for: generation).map(\.id)
+      #expect(Set(ids).count == ids.count)
+      #expect(KeyboardPalette.resolve("blurt", dark: true, generation: generation).face == .dark)
+      #expect(
+        KeyboardPalette.resolve("blurt", dark: false, generation: generation).keyText == DesignTokens.Themes.lightLegend
+      )
+      #expect(
+        KeyboardPalette.resolve("blurt", dark: true, generation: generation).keyText == DesignTokens.Themes.darkLegend)
+      #expect(KeyboardPalette.resolve("nope", dark: false, generation: generation).id == "blurt")
+    }
+    // The store's default, `system`, is the brand on glass and the iPhone's own keys on classic.
+    #expect(KeyboardPalette.resolve("system", dark: true, generation: .glass) == .brandDark)
+    #expect(KeyboardPalette.resolve("system", dark: true, generation: .classic) == .systemDark)
     #expect(KeyboardPalette.brandLight != KeyboardPalette.brandDark)
+    #expect(KeyboardPalette.systemLight != KeyboardPalette.brandLight)
   }
 }

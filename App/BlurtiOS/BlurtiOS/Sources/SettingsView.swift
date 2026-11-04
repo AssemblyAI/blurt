@@ -120,7 +120,9 @@ struct SettingsView: View {
       NavigationLink {
         ThemePickerView()
       } label: {
-        LabeledContent("Theme", value: KeyboardPalette.resolve(themeID, dark: false).name)
+        LabeledContent(
+          "Theme",
+          value: KeyboardPalette.resolve(themeID, dark: false, generation: KeyboardProfile.standInGeneration).name)
       }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }

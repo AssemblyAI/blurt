@@ -5,17 +5,24 @@ import SwiftUI
 /// Pick a keyboard theme from live previews: a card per theme, each the real
 /// keyboard drawn small in both of its faces — the light one the keyboard
 /// shows over a light app, the dark one over a dark app — the chosen theme
-/// ringed in the accent. One theme for now; the curated ones return through
-/// `KeyboardPalette.all`. The keyboard picks the choice up the next time it
-/// comes up.
+/// ringed in the accent. The list is this OS generation's
+/// (`KeyboardPalette.all(for:)`): the brand, and on the classic generation
+/// the iPhone's own keys first; the curated ones return through the same
+/// list. The keyboard picks the choice up the next time it comes up.
 struct ThemePickerView: View {
-  @State private var chosen = KeyboardPalette.resolve(SharedStore.themeID, dark: false).id
+  /// The generation this phone draws, so the picker offers what the
+  /// keyboard will show (`KeyboardProfile.standIn`).
+  private static let profile = KeyboardProfile.standIn(width: DesignTokens.Metrics.pickerPreviewWidth)
+
+  @State private var chosen = KeyboardPalette.resolve(
+    SharedStore.themeID, dark: false, generation: KeyboardProfile.standInGeneration
+  ).id
 
   var body: some View {
     ScrollView {
       VStack(spacing: DesignTokens.Metrics.appStackGap) {
-        ForEach(KeyboardPalette.all) { palette in
-          ThemeCard(palette: palette, chosen: palette.id == chosen) {
+        ForEach(KeyboardPalette.all(for: Self.profile.generation)) { palette in
+          ThemeCard(palette: palette, profile: Self.profile, chosen: palette.id == chosen) {
             chosen = palette.id
             SharedStore.themeID = palette.id
           }
@@ -31,6 +38,7 @@ struct ThemePickerView: View {
 
 private struct ThemeCard: View {
   let palette: KeyboardPalette
+  let profile: KeyboardProfile
   let chosen: Bool
   let pick: () -> Void
 
@@ -43,8 +51,8 @@ private struct ThemeCard: View {
     Button(action: pick) {
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
         HStack(spacing: DesignTokens.Metrics.appPreviewGap) {
-          preview(KeyboardPalette.resolve(palette.id, dark: false))
-          preview(KeyboardPalette.resolve(palette.id, dark: true))
+          preview(KeyboardPalette.resolve(palette.id, dark: false, generation: profile.generation))
+          preview(KeyboardPalette.resolve(palette.id, dark: true, generation: profile.generation))
         }
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
           Text(palette.name).font(BlurtType.body(DesignTokens.Typography.sizeBody, bold: true)).foregroundStyle(
@@ -65,11 +73,12 @@ private struct ThemeCard: View {
   }
 
   private func preview(_ face: KeyboardPalette) -> some View {
-    KeyboardRootView(model: Self.model(for: face))
-      .frame(width: Self.previewWidth, height: KeyboardLayout.full.height)
-      .background(face.standIn)
+    let height = KeyboardLayout.full.height(profile: profile)
+    return KeyboardRootView(model: Self.model(for: face), profile: profile)
+      .frame(width: Self.previewWidth, height: height)
+      .background(face.standIn(painted: profile.paintsSurface))
       .scaleEffect(Self.scale, anchor: .topLeading)
-      .frame(width: Self.previewWidth * Self.scale, height: KeyboardLayout.full.height * Self.scale)
+      .frame(width: Self.previewWidth * Self.scale, height: height * Self.scale)
       .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Metrics.pickerRadius))
       .allowsHitTesting(false)
   }

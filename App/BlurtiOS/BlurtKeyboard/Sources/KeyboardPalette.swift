@@ -1,16 +1,21 @@
 import BlurtDesign
+import BlurtiOSCore
 import SwiftUI
 
-/// The colours the keys draw with: the brand's two faces. The keyboard follows
-/// the field it is typing into — ink with the brand's film grain when the
-/// host app is dark, warm paper when it is light — so Blurt sits on any app
-/// as one keyboard, on the brand and off Apple's grey. The spacing never
-/// changes (the iPhone keyboard's own — 6 pt between keys, 11 between rows,
-/// 3 at the edges), so a face changes how the keyboard looks and never how it
-/// types. The keys are flat: one colour, no drop, no edge, no gloss.
+/// The colours the keys draw with: the brand's two faces, and — on the
+/// classic generation — the iPhone's own. The keyboard follows the field it
+/// is typing into: ink with the brand's film grain when the host app is
+/// dark, warm paper when it is light — so Blurt sits on any app as one
+/// keyboard, on the brand and off Apple's grey. The spacing is the profile's
+/// (`KeyboardProfile`), so a face changes how the keyboard looks and never
+/// how it types. The keys are flat: one colour, no drop, no edge, no gloss.
 ///
-/// One theme for now, with two faces. The curated themes come back later as
-/// value sets through the same shape: `all` is the picker's list, `resolve`
+/// Two themes. The brand, with its two faces, on every phone; and on the
+/// classic generation (iOS 18, or an iOS 26 host with no container) the
+/// `system` theme — Apple's classic grey, white and `#ADB3BC` modifiers, the
+/// dark keys `#6B6B6B` on `#2B2B2B` — which is the default there, the brand
+/// one row away in the picker. The curated themes come back later as value
+/// sets through the same shape: `all(for:)` is the picker's list, `resolve`
 /// the keyboard's lookup, and neither needs to change for a third entry.
 struct KeyboardPalette: Equatable, Identifiable {
   enum Face: String {
@@ -51,10 +56,6 @@ struct KeyboardPalette: Equatable, Identifiable {
   /// screen stand in for it (the system's own keyboard colour, measured).
   let material: Color
 
-  static let rowGap = DesignTokens.Metrics.rowGap
-  static let margin = DesignTokens.Metrics.marginSide
-  static let keyRadius = DesignTokens.Metrics.keyRadius
-
   private typealias Themes = DesignTokens.Themes
 
   /// The brand theme's id, and what any unknown id resolves to.
@@ -84,21 +85,56 @@ struct KeyboardPalette: Equatable, Identifiable {
     containerKey: Themes.darkContainerKey, containerKeyModifier: Themes.darkContainerKeyModifier,
     material: Themes.darkMaterial)
 
-  /// The picker's list, one entry per theme (a theme's two faces share an id).
-  static let all: [KeyboardPalette] = [brandLight]
+  /// The system theme's id: the store's default, so a phone that never
+  /// picked a theme gets the iPhone's own keys on the classic generation.
+  static let systemID = SharedStore.defaultThemeID
+  private static let systemName = "System"
+  private static let systemVibe = "The iPhone's own keys"
 
-  /// The theme with this id in the given appearance, or the brand's for an id
-  /// that no longer exists (the old `system` default, a retired theme).
-  static func resolve(_ id: String, dark: Bool) -> KeyboardPalette {
-    // One theme so far: a known id and a retired one land in the same place.
-    guard all.contains(where: { $0.id == id }) else { return dark ? brandDark : brandLight }
+  /// The iPhone's classic light keyboard: `#D1D5DB` under white keys and
+  /// `#ADB3BC` modifiers, black legends, no grain.
+  static let systemLight = KeyboardPalette(
+    id: systemID, face: .light, name: systemName, vibe: systemVibe,
+    surface: Themes.systemLightSurface, key: Themes.systemLightKey, keyDark: Themes.systemLightKeyModifier,
+    keyText: Themes.systemLightLegend, keyTextSecondary: Themes.systemLightLegendSecondary,
+    signal: Themes.systemLightSignal, popupFill: Themes.systemLightPopup, field: Themes.systemLightField,
+    fieldBorder: Themes.systemLightFieldBorder, notice: Themes.systemLightNotice, grain: 0,
+    containerKey: Themes.systemLightContainerKey, containerKeyModifier: Themes.systemLightContainerKeyModifier,
+    material: Themes.systemLightMaterial)
+
+  /// The iPhone's classic dark keyboard: `#2B2B2B` under `#6B6B6B` keys and
+  /// `#464646` modifiers, white legends, no grain.
+  static let systemDark = KeyboardPalette(
+    id: systemID, face: .dark, name: systemName, vibe: systemVibe,
+    surface: Themes.systemDarkSurface, key: Themes.systemDarkKey, keyDark: Themes.systemDarkKeyModifier,
+    keyText: Themes.systemDarkLegend, keyTextSecondary: Themes.systemDarkLegendSecondary,
+    signal: Themes.systemDarkSignal, popupFill: Themes.systemDarkPopup, field: Themes.systemDarkField,
+    fieldBorder: Themes.systemDarkFieldBorder, notice: Themes.systemDarkNotice, grain: 0,
+    containerKey: Themes.systemDarkContainerKey, containerKeyModifier: Themes.systemDarkContainerKeyModifier,
+    material: Themes.systemDarkMaterial)
+
+  /// The picker's list for a generation, one entry per theme (a theme's two
+  /// faces share an id): on classic the system theme first, then the brand;
+  /// on glass the brand alone — the host's material is the system look there.
+  static func all(for generation: KeyboardProfile.Generation) -> [KeyboardPalette] {
+    switch generation {
+    case .classic: [systemLight, brandLight]
+    case .glass: [brandLight]
+    }
+  }
+
+  /// The theme with this id in the given appearance on this generation, or
+  /// the brand's for an id the generation does not offer (`system` on glass,
+  /// a retired theme).
+  static func resolve(_ id: String, dark: Bool, generation: KeyboardProfile.Generation) -> KeyboardPalette {
+    if generation == .classic, id == systemID { return dark ? systemDark : systemLight }
     return dark ? brandDark : brandLight
   }
 
   /// What stands under the keyboard where the host's material would be
   /// (the gallery, a preview): the face's surface when it is painted, else
   /// the material.
-  var standIn: Color { KeyboardRootView.paintsSurface ? surface : material }
+  func standIn(painted: Bool) -> Color { painted ? surface : material }
 
   /// A key's fill: the face's, or the container's when the host's material
   /// is the surface.
@@ -135,5 +171,18 @@ extension EnvironmentValues {
   var keyboardPalette: KeyboardPalette {
     get { self[KeyboardPaletteKey.self] }
     set { self[KeyboardPaletteKey.self] = newValue }
+  }
+}
+
+private struct KeyboardProfileKey: EnvironmentKey {
+  static let defaultValue = KeyboardProfile.standIn(width: DesignTokens.Metrics.glassReferenceWidth)
+}
+
+extension EnvironmentValues {
+  /// The keyboard's numbers for this phone and OS (`KeyboardProfile`), set
+  /// once at the root: the key height and corner, the gaps, the margins.
+  var keyboardProfile: KeyboardProfile {
+    get { self[KeyboardProfileKey.self] }
+    set { self[KeyboardProfileKey.self] = newValue }
   }
 }

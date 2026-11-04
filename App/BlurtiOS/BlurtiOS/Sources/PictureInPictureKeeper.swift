@@ -24,7 +24,7 @@ final class PictureInPictureKeeper: NSObject {
   static let frameWidth = 4683
   static let frameHeight = 1
   /// The layer's size on screen in points, the same aspect.
-  static let sourceSize = CGSize(width: 369, height: 0.079)
+  static let sourceSize = CGSize(width: 369, height: 0.079)  // literal-ok: the PiP source's aspect, not a design size
   /// AVKit's private `controlsStyle` value for no controls at all.
   private static let hiddenControls = 2
 

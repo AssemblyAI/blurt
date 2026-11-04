@@ -8,10 +8,14 @@
 #   scripts/ios-keyboard-flows.sh                       # the whole matrix
 #   scripts/ios-keyboard-flows.sh --face dark --voice a --layout panel
 #   scripts/ios-keyboard-flows.sh --layout full --align right   # the mic at an edge (Settings › alignment)
+#   BLURT_SIM_RUNTIME=18.6 BLURT_SIM_DEVICE="iPhone 16e (18.6)" scripts/ios-keyboard-flows.sh
+#       # the classic generation: the same flows on an iOS 18 simulator (KeyboardProfile, DESIGN.md)
 #
 # The probe app sets the layout, mic concept and side in the App Group for
 # each run; a run with --align puts the side back to the middle at the end,
 # so Neil's own keyboard on this simulator never inherits a probe's setting.
+# Every run checks the mic's centre is the keyboard's (W/2) in every layout,
+# or that it sits at the chosen edge.
 #
 # Prints one FLOW-OK / FLOW-FAIL line per step; screenshots land in
 # .build/design/flows/<face>-<voice>-<layout>/, with a sheet.png of every

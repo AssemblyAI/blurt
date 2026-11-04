@@ -261,9 +261,14 @@ targets:
       # compiled DesignTokens.swift to the file it was generated from.
       - path: Design/tokens.json
         buildPhase: resources
-      # The iPhone keyboard's measured geometry, so AppleGeometryTests can pin
-      # the key/* tokens to what scripts/apple-geometry.sh read off the phone.
-      - path: Design/apple-geometry.json
+      # The iPhone keyboard's measured geometry, one file per profile, so
+      # AppleGeometryTests and KeyboardProfileTests can pin the glass/* and
+      # classic/* tokens to what scripts/apple-geometry.sh read off the phone.
+      - path: Design/apple-geometry-glass-402.json
+        buildPhase: resources
+      - path: Design/apple-geometry-classic-390.json
+        buildPhase: resources
+      - path: Design/apple-geometry-classic-375.json
         buildPhase: resources
     dependencies:
       - target: BlurtiOS

@@ -309,10 +309,12 @@ package struct Insertion: Equatable {
   }
 }
 
-/// The three letter rows, by the language the user types in most.
+/// The three letter rows, by the language the user types in most. AZERTY's
+/// third row carries the apostrophe, as the iPhone's French keyboard does,
+/// so every layout's third row has seven keys between shift and delete.
 package nonisolated enum LetterLayout {
   package static let qwerty = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-  package static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn"]
+  package static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn'"]
   package static let qwertz = ["qwertzuiop", "asdfghjkl", "yxcvbnm"]
 
   /// From the phone's own language order — no setting to make.

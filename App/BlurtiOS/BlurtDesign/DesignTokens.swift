@@ -139,6 +139,58 @@ package enum DesignTokens {
     package nonisolated static let lightSignal: Color = Brand.green700
     /// `brand.paper/200`.
     package nonisolated static let lightSurface: Color = Brand.paper200
+    /// `brand.apple/dark-key`.
+    package nonisolated static let systemDarkContainerKey: Color = Brand.appleDarkKey
+    /// `brand.apple/dark-modifier`.
+    package nonisolated static let systemDarkContainerKeyModifier: Color = Brand.appleDarkModifier
+    /// `brand.apple/dark-key`.
+    package nonisolated static let systemDarkField: Color = Brand.appleDarkKey
+    /// `brand.apple/dark-modifier`.
+    package nonisolated static let systemDarkFieldBorder: Color = Brand.appleDarkModifier
+    /// `brand.apple/dark-key`.
+    package nonisolated static let systemDarkKey: Color = Brand.appleDarkKey
+    /// `brand.apple/dark-modifier`.
+    package nonisolated static let systemDarkKeyModifier: Color = Brand.appleDarkModifier
+    /// `brand.white`.
+    package nonisolated static let systemDarkLegend: Color = Brand.white
+    /// `brand.white`.
+    package nonisolated static let systemDarkLegendSecondary: Color = Brand.white
+    /// `brand.apple/dark-surface`.
+    package nonisolated static let systemDarkMaterial: Color = Brand.appleDarkSurface
+    /// `brand.orange`.
+    package nonisolated static let systemDarkNotice: Color = Brand.orange
+    /// `brand.apple/dark-key`.
+    package nonisolated static let systemDarkPopup: Color = Brand.appleDarkKey
+    /// `brand.green/400`.
+    package nonisolated static let systemDarkSignal: Color = Brand.green400
+    /// `brand.apple/dark-surface`.
+    package nonisolated static let systemDarkSurface: Color = Brand.appleDarkSurface
+    /// `brand.white`.
+    package nonisolated static let systemLightContainerKey: Color = Brand.white
+    /// `brand.apple/light-modifier`.
+    package nonisolated static let systemLightContainerKeyModifier: Color = Brand.appleLightModifier
+    /// `brand.white`.
+    package nonisolated static let systemLightField: Color = Brand.white
+    /// `brand.apple/light-modifier`.
+    package nonisolated static let systemLightFieldBorder: Color = Brand.appleLightModifier
+    /// `brand.white`.
+    package nonisolated static let systemLightKey: Color = Brand.white
+    /// `brand.apple/light-modifier`.
+    package nonisolated static let systemLightKeyModifier: Color = Brand.appleLightModifier
+    /// `brand.black`.
+    package nonisolated static let systemLightLegend: Color = Brand.black
+    /// `brand.black`.
+    package nonisolated static let systemLightLegendSecondary: Color = Brand.black
+    /// `brand.apple/light-surface`.
+    package nonisolated static let systemLightMaterial: Color = Brand.appleLightSurface
+    /// `brand.orange`.
+    package nonisolated static let systemLightNotice: Color = Brand.orange
+    /// `brand.white`.
+    package nonisolated static let systemLightPopup: Color = Brand.white
+    /// `brand.green/700`.
+    package nonisolated static let systemLightSignal: Color = Brand.green700
+    /// `brand.apple/light-surface`.
+    package nonisolated static let systemLightSurface: Color = Brand.appleLightSurface
   }
 
   package enum Keyboard {
@@ -268,6 +320,46 @@ package enum DesignTokens {
     package nonisolated static let caretLead: CGFloat = 1
     package nonisolated static let caretRadius: CGFloat = 1
     package nonisolated static let caretWidth: CGFloat = 2
+    /// Classic: 123 and the globe span this many W/10 cells (return two of those, space the rest), the cap two insets narrower — unmeasured: iOS 18's bottom row at 375 pt.
+    package nonisolated static let classicAbcCells: CGFloat = 1.25
+    /// Classic: under the bottom row of keys — unmeasured (the plan's number).
+    package nonisolated static let classicBottomInset: CGFloat = 6
+    /// Classic: between caps, two insets — unmeasured (the plan's rule).
+    package nonisolated static let classicKeyGap: CGFloat = 6
+    /// Classic: every cap — unmeasured (the plan's number).
+    package nonisolated static let classicKeyHeight: CGFloat = 42
+    /// Classic: the caps' corner — unmeasured (the plan's number).
+    package nonisolated static let classicKeyRadius: CGFloat = 5
+    /// The classic profile (iOS 18–25, or an iOS 26 host with no container): the caps are inset this far inside W/10 cells, so the row's margin is one inset — unmeasured: the plan's rule (cell = W/10, cap = cell − 2 × 3), pending scripts/apple-geometry.sh --profile classic-390 on an iOS 18.6 simulator.
+    package nonisolated static let classicMarginSide: CGFloat = 3
+    /// Classic: the keyboard's top above the voice row, and the slim bar's bottom — half a row gap, as the first cell's inset — unmeasured.
+    package nonisolated static let classicMarginTop: CGFloat = 6
+    /// Classic: between rows, a 54 pt pitch less the cap — unmeasured (the plan's number).
+    package nonisolated static let classicRowGap: CGFloat = 12
+    /// Classic: shift and delete to the letters — unmeasured: what puts iOS 18's 42 pt shift cap at 375 pt inside its 1.5 cells (56.25 − 42).
+    package nonisolated static let classicSideGap: CGFloat = 14.25
+    /// The least the host's material must inset the keyboard above or below (read at viewIsAppearing from the input view's superview) for a container to be detected; iOS 26's is about 16.
+    package nonisolated static let containerInsetMin: CGFloat = 8
+    /// Glass: 123 and the globe at the reference width; they scale with the keyboard.
+    package nonisolated static let glassAbcWidth402: CGFloat = Metrics.keyAbcWidth402
+    /// Glass: under the bottom row of keys.
+    package nonisolated static let glassBottomInset: CGFloat = Metrics.marginBottomKeys
+    /// Glass: between keys.
+    package nonisolated static let glassKeyGap: CGFloat = Metrics.keyGap
+    /// Glass: every cap.
+    package nonisolated static let glassKeyHeight: CGFloat = Metrics.keyHeight
+    /// Glass: the caps' corner.
+    package nonisolated static let glassKeyRadius: CGFloat = Metrics.keyRadius
+    /// The glass profile (iOS 26+ in the host's container): the key, row and margin tokens measured at 402 pt, under the profile's names.
+    package nonisolated static let glassMarginSide: CGFloat = Metrics.marginSide
+    /// Glass: the keyboard's top, above the voice row, and the slim bar's bottom.
+    package nonisolated static let glassMarginTop: CGFloat = Metrics.marginVertical
+    /// Glass: the width the @402 tokens were measured at.
+    package nonisolated static let glassReferenceWidth: CGFloat = Metrics.keyReferenceWidth
+    /// Glass: between rows.
+    package nonisolated static let glassRowGap: CGFloat = Metrics.rowGap
+    /// Glass: shift and delete to the letters.
+    package nonisolated static let glassSideGap: CGFloat = Metrics.keySideGap
     /// The +, × and ✓ touch targets: the HIG's 44 pt square around a size/glyph symbol.
     package nonisolated static let glyphHit: CGFloat = 44
     package nonisolated static let grilleBarHeight: CGFloat = 28
@@ -315,10 +407,14 @@ package enum DesignTokens {
     package nonisolated static let keySpaceWidth402: CGFloat = 191.667
     /// Margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys.
     package nonisolated static let layoutFull: CGFloat = 270
+    /// Classic/margin-top + voicebar/height + 4 × classic/key-height + 3 × classic/row-gap + classic/bottom-inset: iOS 18's 216 pt keyboard under its 44 pt bar.
+    package nonisolated static let layoutFullClassic: CGFloat = 260
     /// Chosen: room for the 96 orb over one key row.
     package nonisolated static let layoutPanel: CGFloat = 216
     /// 2 × margin/vertical + voicebar/height.
     package nonisolated static let layoutSlim: CGFloat = 60
+    /// 2 × classic/margin-top + voicebar/height.
+    package nonisolated static let layoutSlimClassic: CGFloat = 56
     /// Under a bottom row of keys (the full keyboard, the panel): the iPhone's.
     package nonisolated static let marginBottomKeys: CGFloat = 13
     /// At the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2.
@@ -385,6 +481,8 @@ package enum DesignTokens {
     package nonisolated static let ribsRestWidth: CGFloat = 40
     /// Between rows, the iPhone's.
     package nonisolated static let rowGap: CGFloat = 11
+    /// A keyboard at least this wide is the large size class (the Plus and Max phones); narrower is compact (375–402).
+    package nonisolated static let sizeLargeMinWidth: CGFloat = 414
     /// Between a stat's number-and-unit parts, as a fraction of its size.
     package nonisolated static let statPartGapRatio: CGFloat = 0.38
     /// A stat number's tracking, as a fraction of its size.
@@ -635,6 +733,32 @@ package enum DesignTokens {
     "themes.light/popup": "#FFFFFF",
     "themes.light/signal": "#01762F",
     "themes.light/surface": "#ECEBE5",
+    "themes.system-dark/container-key": "#6B6B6B",
+    "themes.system-dark/container-key-modifier": "#464646",
+    "themes.system-dark/field": "#6B6B6B",
+    "themes.system-dark/field-border": "#464646",
+    "themes.system-dark/key": "#6B6B6B",
+    "themes.system-dark/key-modifier": "#464646",
+    "themes.system-dark/legend": "#FFFFFF",
+    "themes.system-dark/legend-secondary": "#FFFFFF",
+    "themes.system-dark/material": "#2B2B2B",
+    "themes.system-dark/notice": "#E67F36",
+    "themes.system-dark/popup": "#6B6B6B",
+    "themes.system-dark/signal": "#67AD82",
+    "themes.system-dark/surface": "#2B2B2B",
+    "themes.system-light/container-key": "#FFFFFF",
+    "themes.system-light/container-key-modifier": "#ADB3BC",
+    "themes.system-light/field": "#FFFFFF",
+    "themes.system-light/field-border": "#ADB3BC",
+    "themes.system-light/key": "#FFFFFF",
+    "themes.system-light/key-modifier": "#ADB3BC",
+    "themes.system-light/legend": "#000000",
+    "themes.system-light/legend-secondary": "#000000",
+    "themes.system-light/material": "#D1D5DB",
+    "themes.system-light/notice": "#E67F36",
+    "themes.system-light/popup": "#FFFFFF",
+    "themes.system-light/signal": "#01762F",
+    "themes.system-light/surface": "#D1D5DB",
     "keyboard.app/accent-dark": "#67AD82",
     "keyboard.app/accent-light": "#01762F",
     "keyboard.app/card-border-dark": "#3A362F",
@@ -698,6 +822,26 @@ package enum DesignTokens {
     "metrics.caret/lead": "1",
     "metrics.caret/radius": "1",
     "metrics.caret/width": "2",
+    "metrics.classic/abc-cells": "1.25",
+    "metrics.classic/bottom-inset": "6",
+    "metrics.classic/key-gap": "6",
+    "metrics.classic/key-height": "42",
+    "metrics.classic/key-radius": "5",
+    "metrics.classic/margin-side": "3",
+    "metrics.classic/margin-top": "6",
+    "metrics.classic/row-gap": "12",
+    "metrics.classic/side-gap": "14.25",
+    "metrics.container/inset-min": "8",
+    "metrics.glass/abc-width-402": "43.333",
+    "metrics.glass/bottom-inset": "13",
+    "metrics.glass/key-gap": "6",
+    "metrics.glass/key-height": "43",
+    "metrics.glass/key-radius": "8",
+    "metrics.glass/margin-side": "6.5",
+    "metrics.glass/margin-top": "8",
+    "metrics.glass/reference-width": "402",
+    "metrics.glass/row-gap": "11",
+    "metrics.glass/side-gap": "13.667",
     "metrics.glyph/hit": "44",
     "metrics.grille/bar-height": "28",
     "metrics.grille/bar-width": "64",
@@ -723,8 +867,10 @@ package enum DesignTokens {
     "metrics.key/side-width-402": "45.583",
     "metrics.key/space-width-402": "191.667",
     "metrics.layout/full": "270",
+    "metrics.layout/full-classic": "260",
     "metrics.layout/panel": "216",
     "metrics.layout/slim": "60",
+    "metrics.layout/slim-classic": "56",
     "metrics.margin/bottom-keys": "13",
     "metrics.margin/side": "6.5",
     "metrics.margin/vertical": "8",
@@ -761,6 +907,7 @@ package enum DesignTokens {
     "metrics.ribs/rest-height": "16",
     "metrics.ribs/rest-width": "40",
     "metrics.row/gap": "11",
+    "metrics.size/large-min-width": "414",
     "metrics.stat/part-gap-ratio": "0.38",
     "metrics.stat/tracking-ratio": "-0.03",
     "metrics.stat/unit-gap-ratio": "0.15",

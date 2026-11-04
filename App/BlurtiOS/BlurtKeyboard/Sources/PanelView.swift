@@ -8,19 +8,24 @@ import SwiftUI
 struct PanelView: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
+  @Environment(\.keyboardProfile) private var profile
   @Environment(\.layoutDirection) private var direction
 
   var body: some View {
     GeometryReader { geo in
-      let geometry = KeyGeometry(rowWidth: geo.size.width)
+      let geometry = KeyGeometry(rowWidth: geo.size.width, profile: profile)
       let alignment = model.micAlignment.alignment(in: direction)
       let atEdge = alignment != .center
       VStack(spacing: DesignTokens.Metrics.panelSpacing) {
         // The row takes all the height above the keys. The spacing under it
         // is the margin above the page, so the mic is centred between the
-        // keyboard's top edge and the keys.
-        VoiceRow(model: model, slot: .panel, height: VoiceSlot.panel.box.height, cancels: !atEdge)
-          .frame(maxHeight: .infinity)
+        // keyboard's top edge and the keys. The element's box is capped so
+        // the + and the × beside it always have their room on a narrow phone.
+        VoiceRow(
+          model: model, slot: .panel, height: VoiceSlot.panel.box.height, cancels: !atEdge,
+          micCap: Self.micCap(rowWidth: geo.size.width)
+        )
+        .frame(maxHeight: .infinity)
         // The stock bottom row at the full keyboard's widths, so nothing
         // changes size when the carousel flips to the keys and back.
         HStack(spacing: geometry.gap) {
@@ -43,5 +48,12 @@ struct PanelView: View {
       }
       .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: model.voiceState.canCancel)
     }
+  }
+
+  /// The most the panel's element may show: its box, or what leaves the +
+  /// and the × their clearance and hit square on either side of it.
+  static func micCap(rowWidth: CGFloat) -> CGFloat {
+    let metrics = DesignTokens.Metrics.self
+    return min(VoiceSlot.panel.box.width, rowWidth - 2 * (metrics.voicebarAddtermClearance + metrics.glyphHit))
   }
 }
