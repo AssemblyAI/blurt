@@ -261,11 +261,26 @@ private struct EntryActions: View {
 /// for a recording, else the start of the text) over its details, and the time
 /// of day — the day is the section heading. Opening is double-click or Return,
 /// deleting is Delete, and the rest is the contextual menu, as in any Mac list.
+/// Under the pointer the time gives way to a one-click Copy button.
 private struct HistoryRow: View {
   let entry: SavedTranscript
   let details: String
   let dayTitle: String
   let actions: EntryActions
+
+  @State private var isHovered = false
+  @State private var showsCopied = false
+  /// Bumped per copy, so a second copy restarts the "Copied" timer.
+  @State private var copyCount = 0
+
+  /// What the trailing slot shows: the time at rest, Copy under the pointer,
+  /// and a brief "Copied" after a copy. One value, so only one can show.
+  private enum TrailingSlot { case time, copyButton, copied }
+
+  private var trailingSlot: TrailingSlot {
+    if showsCopied { return .copied }
+    return isHovered ? .copyButton : .time
+  }
 
   var body: some View {
     let title = entry.title
@@ -286,17 +301,64 @@ private struct HistoryRow: View {
           .foregroundStyle(.secondary)
       }
       Spacer(minLength: 8)
-      Text(time)
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-        .fixedSize()
+      trailingAccessory(time: time)
     }
     .padding(.vertical, 3)
+    .onHover { isHovered = $0 }
+    // Reverts "Copied" after a beat; a superseded timer is cancelled rather
+    // than clearing a newer copy's confirmation.
+    .task(id: copyCount) {
+      guard copyCount > 0 else { return }
+      guard (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
+      showsCopied = false
+    }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(title), \(details), \(dayTitle) at \(time)")
     .accessibilityHint("Opens the transcript")
     // The contextual menu's actions, offered to VoiceOver on the row itself.
     .accessibilityActions { actions }
+  }
+
+  /// The trailing slot: the time, the Copy button or "Copied", layered and
+  /// faded rather than swapped, so the slot sizes to the widest and nothing
+  /// shifts as they trade places.
+  private func trailingAccessory(time: String) -> some View {
+    ZStack(alignment: .trailing) {
+      Text(time)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+        .opacity(trailingSlot == .time ? 1 : 0)
+        .allowsHitTesting(false)
+      Button(action: copy) {
+        // Tighter than `Label`'s icon–title gap, which reads as two items here.
+        HStack(spacing: 3) {
+          Image(systemName: "doc.on.doc")
+          Text("Copy")
+        }
+      }
+      // Borderless draws it in the accent, marking it clickable against the
+      // secondary time it replaces.
+      .buttonStyle(.borderless)
+      .help("Copy the transcript")
+      .opacity(trailingSlot == .copyButton ? 1 : 0)
+      // Opacity-0 views still hit-test: take clicks only while visible.
+      .allowsHitTesting(trailingSlot == .copyButton)
+      Label("Copied", systemImage: "checkmark")
+        .foregroundStyle(.secondary)
+        .opacity(trailingSlot == .copied ? 1 : 0)
+        .allowsHitTesting(false)
+    }
+    .font(.subheadline)
+    .fixedSize()
+    .animation(.easeOut(duration: 0.12), value: trailingSlot)
+    // VoiceOver copies through the row's Copy action and hears the
+    // announcement, so the visual slot stays out of the combined element.
+    .accessibilityHidden(true)
+  }
+
+  private func copy() {
+    NSPasteboard.copyAnnounced(entry.text)
+    showsCopied = true
+    copyCount += 1
   }
 }
