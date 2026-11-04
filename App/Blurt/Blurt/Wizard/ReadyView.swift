@@ -1,11 +1,12 @@
 import BlurtEngine
 import SwiftUI
 
-/// The "you're all set" screen shown in the main window once setup is complete:
-/// the wordmark over a grouped form — a row to record or drop in audio, then
-/// the keys you've configured and the style in effect — the Library, and a
-/// bottom bar with the attribution links and a Settings button, the window's own door to the Settings scene
-/// alongside the app-menu "Settings…" (⌘,) and the menu-bar item.
+/// The main window once setup is complete, shaped like a dictation app's home:
+/// Blurt's real work happens outside it, on the keys, so the keys lead — each
+/// configured key and what it does, and the style in effect — over a feed of
+/// what Blurt has done (the Library). Recording and file import, the one
+/// thing done from the window itself, are toolbar buttons beside the Filter
+/// menu, Settings and the search.
 ///
 /// A grouped `Form`, the same surface the Settings window's panes use, rather
 /// than hand-drawn cards: one inset-grouped style for every container means
@@ -22,7 +23,7 @@ struct ReadyView: View {
   private var triggerKey: TriggerKey { bindings.bound }
   /// The dictation key's tap/hold mode, which the rows' tooltips and the
   /// Library's first-run prompt follow.
-  private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
+  private var activation: TriggerActivation { bindings.activation }
 
   /// Kept as view state because Settings is a separate scene: its defaults
   /// write can otherwise leave this already-open window displaying the old
@@ -30,99 +31,68 @@ struct ReadyView: View {
   /// after each list write, and this window reloads through the store so its
   /// decoding and normalization rules remain the single source of truth.
   @State private var profiles = StyleProfileStore().profiles
+  /// The toolbar's Filter menu: everything, or one kind of entry.
+  @State private var filter = LibraryFilter.all
+  /// The toolbar's search, and whether the cursor is in it (⌘F).
+  @State private var query = ""
+  @FocusState private var searchFocused: Bool
+  /// The toolbar's Browse open panel.
+  @State private var isImporting = false
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    // Decoded and resolved once per render: `body` re-runs on every dictation
-    // (the Library is live), and both answers cost a JSON decode. Which
-    // style is active is the engine's rule — the stored pointer, `nil` for the
-    // Default sentinel, or the first profile when it names nothing — never a
-    // second reading here.
-    let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
-    VStack(spacing: 0) {
-      MainWindowBranding()
-        .padding(.top, 12)
-
-      Form {
-        // Recording and file import first: the one row that starts something
-        // from the window itself.
-        Section {
-          TranscribeRow(model: coordinator.transcripts)
-        }
-        // The keys, each with how its gesture works in its tooltip; the
-        // writing style the dictation keys use closes the group.
-        Section {
-          shortcutRow
-          // Every other key given an action in the Keys tab, in its order.
-          ForEach(bindings.extraKeys, id: \.self) { key in
-            extraKeyRow(key, profiles: profiles)
-          }
-          // Always present, even with no custom styles, so the active treatment
-          // remains visible from the main window.
-          StyleRow(profiles: profiles, activeID: active?.id)
-            // Locked while the mic is opening or capturing: a style picked
-            // mid-utterance would disagree with what the request was built
-            // with. `.disabled` propagates to the pop-up and the hidden
-            // ⌘1–⌘5 buttons, whose shortcuts don't fire while disabled.
-            .disabled(coordinator.isCapturing)
-        } footer: {
-          StylesInertNotice()
-        }
+    let isOpen = coordinator.transcripts.state != .idle
+    ZStack {
+      if isOpen {
+        // An opened item — or a recording, or a file going up — slides in
+        // over the Library, as an entry does in Journal, with its own toolbar.
+        TranscriptPage(model: coordinator.transcripts)
+          .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
+          .transition(.move(edge: .trailing))
+      } else {
+        home
+          .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
+          .toolbar { toolbarItems }
+          // The system's search: its own capsule at the toolbar's trailing
+          // edge, widening when clicked into, as Finder's and Mail's do.
+          .searchable(text: $query, placement: .toolbar, prompt: "Search Blurt")
+          .searchFocused($searchFocused)
+          // Not the field a window opens in: focused, it widens and pushes
+          // Filter and Settings behind a » menu. Click or ⌘F puts it there.
+          .defaultFocus($searchFocused, false)
+          .task { searchFocused = false }
+          // A click anywhere in the window's content lets go of the search,
+          // as clicking off a field does. Alongside, not instead of, what the
+          // click does — a card still opens, a menu still drops.
+          .simultaneousGesture(TapGesture().onEnded { searchFocused = false })
+          // Just there on the way back: only the item slides.
+          .transition(.identity)
       }
-      .formStyle(.grouped)
-      .controlSize(.small)
-      .environment(\.defaultMinListRowHeight, 28)
-      .scrollDisabled(true)
-      .fixedSize(horizontal: false, vertical: true)
-
-      // Every saved entry, outside the form so its list scrolls; the whole
-      // window takes a dropped file (`audioFileDropTarget`).
-      LibrarySection(coordinator: coordinator, triggerKey: triggerKey, activation: activation)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
-
-      bottomBar
-        // The grouped form insets its sections by 20, so the bar lines up
-        // with their edges.
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
     }
+    .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: isOpen)
     .frame(width: MainWindow.contentWidth)
-    .fixedSize(horizontal: false, vertical: true)
+    // No rule under the toolbar: the window reads as one surface, the
+    // backdrop running up behind the toolbar as Journal's does.
+    .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+    // No title beside the search: it left the field no room to grow when
+    // focused, and the toolbar overflowed into a » menu. An open item names
+    // itself in its own toolbar. The window keeps its title for the Window
+    // menu, Mission Control and accessibility.
+    .toolbar(removing: .title)
     // Drop an audio or video file anywhere on the window to transcribe it.
     .audioFileDropTarget(coordinator.transcripts)
-    .onReceive(
-      NotificationCenter.default.publisher(for: StyleProfileStore.profilesDidChangeNotification)
-    ) { _ in
-      profiles = StyleProfileStore().profiles
+    // Edit › Find (⌘F), for this window: nothing to search before a first
+    // entry.
+    .focusedSceneValue(
+      \.focusHistorySearch, coordinator.transcripts.history.isEmpty ? nil : { searchFocused = true }
+    )
+    // File › Open… (⌘O), for this window: Browse's panel. Not over a
+    // recording, which `transcribe(_:)` refuses.
+    .focusedSceneValue(\.importAudioFile, coordinator.transcripts.isRecordingBusy ? nil : { isImporting = true })
+    .fileImporter(isPresented: $isImporting, allowedContentTypes: [.audiovisualContent]) { result in
+      if case .success(let url) = result { coordinator.transcripts.transcribe(url) }
     }
-  }
-
-  /// The dictation shortcut as a form row: "Dictate" leading, the bound key
-  /// trailing, and how its gesture works in the tooltip. The keycap fills
-  /// with the accent the moment the key goes down (`isCapturing`, which
-  /// includes the mic bring-up) — the window's proof the hotkey is registered —
-  /// with the live phase beside the key during capture and transcription.
-  ///
-  /// The phase is gated on the same stream the overlay pill renders
-  /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes
-  /// the mic bring-up) — during "Connecting…" nothing is captured yet, so
-  /// claiming "Listening" would invite unrecoverable speech.
-  private var shortcutRow: some View {
-    SettingRow(title: "Dictate", systemImage: "keyboard") {
-      HStack(spacing: 8) {
-        // The live phase while dictating.
-        if coordinator.menuBarStatus != .idle {
-          phaseText
-            .foregroundStyle(.secondary)
-        }
-        KeyCap(label: triggerKey.keycapLabel, isLit: coordinator.isCapturing)
-      }
-    }
-    .help(activation.hint(for: .dictate))
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(phaseDescription)")
     // Esc cancels the in-flight dictation — same command the overlay's owner
     // submits (`.cancel`), scoped to this window by living on a button in it.
     // Present through all of capture (not just `.recording`), so Esc during
@@ -134,121 +104,192 @@ struct ReadyView: View {
           .hidden()
       }
     }
+    .onReceive(
+      NotificationCenter.default.publisher(for: StyleProfileStore.profilesDidChangeNotification)
+    ) { _ in
+      profiles = StyleProfileStore().profiles
+    }
+  }
+
+  /// The window's height: free between these, as its content scrolls; an
+  /// open item takes the same, so the window doesn't jump as it comes and goes.
+  private static let minHeight: CGFloat = 420
+  private static let idealHeight: CGFloat = 640
+
+  /// The keys over the Library, as white cards on the brand gradient: what
+  /// the window shows with nothing open.
+  @ViewBuilder private var home: some View {
+    // Decoded and resolved once per render: `body` re-runs on every dictation
+    // (the Library is live), and both answers cost a JSON decode. Which
+    // style is active is the engine's rule — the stored pointer, `nil` for the
+    // Default sentinel, or the first profile when it names nothing — never a
+    // second reading here.
+    let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
+    // One scroll for the whole window, as Journal's: the keys scroll away
+    // with the Library under them, and the scroller is the window's own.
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        // What you can press — Blurt's real work happens outside this window,
+        // on these keys. A legend on the backdrop under a Keys heading, not a white card: only the
+        // Library's entries are cards, and the keys are drawn as keycaps, to
+        // press rather than click. A click on one still opens Settings › Keys,
+        // where it's changed. Once a custom style exists, the writing style
+        // the dictation keys use closes the group.
+        VStack(alignment: .leading, spacing: 0) {
+          Text("Keys")
+            .font(.headline)
+            .padding(.leading, 4)
+            .padding(.bottom, 4)
+            .accessibilityAddTraits(.isHeader)
+          // A soft, translucent panel — rounded like the cards but flat and
+          // see-through, so it reads as a legend rather than another card to
+          // click.
+          VStack(alignment: .leading, spacing: 0) {
+            shortcutRow.keyRow()
+            // Every other key given an action in the Keys tab, in its order,
+            // each under a faint hairline across the row, pairing each action
+            // with its key.
+            ForEach(bindings.extraKeys, id: \.self) { key in
+              KeyDivider()
+              extraKeyRow(key, profiles: profiles).keyRow()
+            }
+          }
+          .padding(.vertical, 6)
+          .background(
+            Color(nsColor: .textBackgroundColor).opacity(0.55),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+          // Only once there is a custom style: with none, every dictation is
+          // Default and the row would offer no choice. Never locked during a
+          // dictation: each one's style is fixed as its key goes down
+          // (`PressStyle`), so a pick mid-utterance applies to the next.
+          if !profiles.isEmpty {
+            StyleRow(profiles: profiles, activeID: active?.id)
+              .keyRow()
+            // The caveat is about styles, so it goes with the row.
+            StylesInertNotice()
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .padding(.horizontal, 10)
+          }
+        }
+
+        // What Blurt has done, newest first, each a card.
+        LibrarySection(
+          coordinator: coordinator, triggerKey: triggerKey, activation: activation, query: query, filter: filter
+        )
+      }
+      .padding(20)
+    }
+    // Opens on the keys, at the top.
+    .defaultScrollAnchor(.top)
+    .background(BlurtBrand.backdrop.ignoresSafeArea())
+  }
+
+  /// The dictation shortcut as a form row: "Dictate" leading, the bound key
+  /// trailing, and how its gesture works in the tooltip. Still while a key is
+  /// down: how a dictation is going is the pill's to say, not the window's.
+  private var shortcutRow: some View {
+    SettingRow(title: "Dictate", systemImage: TriggerKeyAction.dictate.systemImage) {
+      KeyCap(label: triggerKey.spokenName)
+    }
+    .help(activation.hint(for: .dictate))
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(activation.hint(for: .dictate))")
   }
 
   /// One extra key's row: what it does — with the style a dictating key uses
   /// when it isn't the main window's — leading, its keycap trailing, and how
-  /// its gesture works in the tooltip. No live phase: that stays on the dictation row above,
-  /// whichever key started the dictation.
+  /// its gesture works in the tooltip.
   private func extraKeyRow(_ key: TriggerKey, profiles: [StyleProfile]) -> some View {
     let choice = bindings.choice(for: key, profiles: profiles)
-    let (title, symbol): (String, String) =
+    let title: String =
       switch choice {
-      case .readAloud: (LibraryKind.readAloud.name, LibraryKind.readAloud.systemImage)
-      case .ask: (LibraryKind.ask.name, LibraryKind.ask.systemImage)
-      case .rewrite: (KeyActionName.rewrite, "pencil.line")
-      case .command: (KeyActionName.command, "command")
-      case .dictate(TriggerKeyChoice.mainWindowStyle), .off: ("Dictate", "keyboard")
+      case .readAloud: LibraryKind.readAloud.name
+      case .ask: LibraryKind.ask.name
+      case .rewrite: KeyActionName.rewrite
+      case .command: KeyActionName.command
+      case .dictate(TriggerKeyChoice.mainWindowStyle), .off: "Dictate"
       case .dictate(let style):
-        (
-          "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)",
-          "keyboard"
-        )
+        "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)"
       }
-    let hint = bindings.activation(for: key).hint(for: choice.action)
+    let symbol = choice.action.systemImage
+    let hint = bindings.activation.hint(for: choice.action)
     return SettingRow(title: title, systemImage: symbol) {
-      KeyCap(label: key.keycapLabel)
+      KeyCap(label: key.spokenName)
     }
     .help(hint)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(title): \(key.spokenName). \(hint)")
   }
 
-  /// The shortcut row's trailing status, shown only during an active dictation.
-  @ViewBuilder
-  private var phaseText: some View {
-    switch coordinator.menuBarStatus {
-    case .recording:
-      HStack(spacing: 4) {
-        Image(systemName: "waveform")
-          .foregroundStyle(BlurtBrand.accent)
-          // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
-          // stilled under Reduce Motion the same way.
-          .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
-        Text("Listening…")
+  /// The toolbar: Record and Browse leading, as a window's own actions are;
+  /// beside the search, the Library's Filter menu and Settings.
+  @ToolbarContentBuilder private var toolbarItems: some ToolbarContent {
+    let model = coordinator.transcripts
+    ToolbarItemGroup(placement: .navigation) {
+      Button {
+        model.startRecording()
+      } label: {
+        Label("Record", systemImage: "record.circle")
       }
-    case .transcribing:
-      Text("Transcribing…")
-    case .idle:
-      EmptyView()
+      // Disabled while anything else has the transcript sheet; a running
+      // recording's Stop lives in that sheet.
+      .disabled(!model.canRecord)
+      .help(
+        model.canRecord
+          ? "Record your microphone and your Mac's audio together, transcribed live"
+          : "Available when the current transcription finishes"
+      )
+      .accessibilityIdentifier(UITestIdentifiers.transcribeRecordButton)
+      Button {
+        isImporting = true
+      } label: {
+        Label("Browse", systemImage: "folder")
+      }
+      // `transcribe(_:)` refuses while a recording is busy, so the button
+      // says so rather than opening a panel that does nothing.
+      .disabled(model.isRecordingBusy)
+      .help("Choose an audio or video file to transcribe")
+      .accessibilityIdentifier(UITestIdentifiers.transcribeBrowseButton)
     }
-  }
-
-  /// The phase for VoiceOver, spelled out where the row abbreviates — naming
-  /// only the gestures the configured activation responds to.
-  private var phaseDescription: String {
-    switch coordinator.menuBarStatus {
-    case .recording: "Listening. \(activation.finishHint) Escape cancels."
-    case .transcribing: "Transcribing."
-    case .idle: activation.hint(for: .dictate)
+    ToolbarItem {
+      // Mail's Filter button: one kind of entry, or all of them. The icon
+      // fills while a filter is on, so a shortened list never looks complete.
+      Menu {
+        Picker("Show", selection: $filter) {
+          ForEach(LibraryFilter.allCases, id: \.self) { kind in
+            Label(kind.title, systemImage: kind.systemImage).tag(kind)
+          }
+        }
+        .pickerStyle(.inline)
+      } label: {
+        Label(
+          "Filter",
+          systemImage: filter == .all
+            ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+      }
+      .help(filter == .all ? "Show one kind of entry" : "Showing \(filter.title.lowercased())")
+      .accessibilityIdentifier(UITestIdentifiers.libraryFilterMenu)
     }
-  }
-
-  /// The window's last row, laid out the way a macOS window's bottom bar is:
-  /// the attribution on the leading edge, the one button on the trailing edge.
-  /// A standard push button — Settings is a place visited once, and ⌘, and the
-  /// app menu already reach it, so it takes neither the accent nor glass.
-  private var bottomBar: some View {
-    HStack {
-      footerLinks
-      Spacer()
+    ToolbarItem {
       Button {
         openSettings()
       } label: {
-        Label("Settings…", systemImage: "gearshape")
-          .labelStyle(.titleAndIcon)
+        Label("Settings", systemImage: "slider.horizontal.3")
       }
-      .controlSize(.small)
+      .help("Settings")
     }
-  }
-
-  /// "Powered by AssemblyAI · Report a bug", caption-level. Links retain
-  /// the system's semantic link color instead of reusing the brand accent that
-  /// also colors noninteractive glyphs elsewhere in the window.
-  ///
-  /// Split so the linked words keep their affordance: "Powered by" is quiet
-  /// secondary prose, while each `Link` carries the platform's link color;
-  /// making the entire line secondary leaves the interactive words
-  /// indistinguishable from static attribution.
-  ///
-  /// Sharing lives in the Help menu (`BlurtCommands`) rather than here: a
-  /// half-linked "Share Blurt on LinkedIn" read as an ad on the window's
-  /// quietest line. Each link omits itself if its URL fails to build
-  /// (`force_unwrapping` is banned repo-wide).
-  private var footerLinks: some View {
-    HStack(spacing: 3) {
-      if let url = BlurtLinks.poweredBy {
-        Text("Powered by").foregroundStyle(.secondary)
-        Link("AssemblyAI", destination: url)
-      }
-      if let issuesURL = BlurtLinks.reportBug {
-        // The dot is decoration, so VoiceOver skips it.
-        Text("·").foregroundStyle(.secondary).accessibilityHidden(true)
-        Link("Report a bug", destination: issuesURL)
-      }
+    // The search in a group of its own, apart from Settings.
+    if #available(macOS 26, *) {
+      ToolbarSpacer(.fixed)
     }
-    .font(.caption2)
-    .tint(.secondary)
   }
 }
 
-/// The app's outbound links, shared by the ready screen's footer and the Help
-/// menu (`BlurtCommands`). Failable construction throughout, so a caller omits
-/// its link rather than force-unwrapping.
+/// The app's outbound links, in the Help menu (`BlurtCommands`). Failable
+/// construction throughout, so a caller omits its link rather than
+/// force-unwrapping.
 enum BlurtLinks {
-  /// Where "Powered by AssemblyAI" points.
-  static let poweredBy = URL(string: "https://www.assemblyai.com/blurt")
-
   /// The repo's GitHub issues.
   static let reportBug = URL(string: "https://github.com/AssemblyAI/blurt/issues")
 
@@ -261,7 +302,8 @@ enum BlurtLinks {
   }()
 }
 
-/// The `blurt` wordmark over the form: the brand-green mark
+/// The `blurt` wordmark over the setup screen's form (`WizardView`; the ready
+/// screen goes without, its toolbar holding the search): the brand-green mark
 /// (`Design/brand/blurt-ready-logo.png`, a 720×180 rasterization of the design's
 /// vector wordmark, so its 72×18 pt slot is fed nearly 7× the pixels it needs and
 /// stays crisp at any display scale). Smoothly interpolated — it's curved
@@ -271,10 +313,9 @@ enum BlurtLinks {
 /// omits itself if the PNG can't load rather than swapping in a fallback
 /// identity view.
 struct MainWindowBranding: View {
-  /// Loaded once for the process rather than per `body` evaluation: this view
-  /// sits in `ReadyView`, whose body re-runs on every new dictation
-  /// (the saved history), and a bundle lookup plus a PNG decode is not
-  /// something to re-do on the main thread each time.
+  /// Loaded once for the process rather than per `body` evaluation: a bundle
+  /// lookup plus a PNG decode is not something to re-do on the main thread
+  /// each time the setup screen re-renders.
   ///
   /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
   /// rather than spelled `nonisolated(unsafe)`: `body` reads it on the main actor
@@ -304,5 +345,24 @@ struct MainWindowBranding: View {
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }
+  }
+}
+
+extension View {
+  /// A key legend row's padding: room for the hairline between rows.
+  fileprivate func keyRow() -> some View {
+    padding(.horizontal, 10).padding(.vertical, 6)
+  }
+}
+
+/// The hairline between key rows: the separator colour, faint on the pale
+/// panel, across the whole row — icon and all — inset as the rows are.
+private struct KeyDivider: View {
+  var body: some View {
+    Rectangle()
+      .fill(Color(nsColor: .separatorColor).opacity(0.6))
+      .frame(height: 0.5)
+      .padding(.horizontal, 10)
+      .accessibilityHidden(true)
   }
 }

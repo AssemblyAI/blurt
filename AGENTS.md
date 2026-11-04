@@ -902,10 +902,9 @@ three of them pure engine logic:
   defaulting to **right ⌘**.
 - **`DictationKeyGate`** — pure, clock-free state machine (`idle`/`armed`/`latched`) turning
   modifier-down/up and other-key-down into `start`/`stop`/`cancel`/`none`. Recording starts the
-  instant the modifier goes down; what a key-up means is that key's **`TriggerActivation`**
-  (`TriggerKeyBindings.activation(for:)`: the key's own mode in `TriggerKeyActivationStore`, else
-  tap-or-hold for a key that reads aloud, else `TriggerActivationStore`'s shared mode, default
-  tap-or-hold): under tap-or-hold a release ≥ `holdThreshold` (default 1 s) is a **hold**
+  instant the modifier goes down; what a key-up means is the **`TriggerActivation`** every key
+  shares (`TriggerKeyBindings.activation`, from `TriggerActivationStore`, default tap-or-hold —
+  one mode for all keys, owner-directed 2026-11-04, after per-key modes were tried): under tap-or-hold a release ≥ `holdThreshold` (default 1 s) is a **hold**
   (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops);
   tap-only latches on every release, hold-only stops on every release. A combo
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
@@ -956,20 +955,27 @@ defaults and the rules; views that must re-render live on a Settings change use
 through `@AppStorage` and builds the snapshot from them. The unset defaults belong to the bindings
 (an absent keycode maps to right ⌘), so views must not restate them.
 
-**Keys.** Settings' Keys tab, after General (`KeysSettingsTab`), is a table with two pop-ups per
-`TriggerKey`: its action (`TriggerKeyChoice`) — Off, dictate (with the main window's style, no custom style, or a profile; the
-styles disabled while enhanced transcripts are off), Read Selection Aloud, Ask About Selection, Rewrite Selection, or Control Your Mac — and whether it is
-tapped, held, or either. How read-aloud sounds (voice, speed, skipping jargon —
+**Keys.** Settings' Keys tab, after General (`KeysSettingsTab`), has one row per action
+(`TriggerKeyChoice` minus Off) — dictate (with the main window's style, no custom style, or each
+profile; the styles disabled while enhanced transcripts are off), Read Selection Aloud, Ask About
+Selection, Rewrite Selection, Control Your Mac — each with a pop-up choosing its key or None
+(`TriggerKeyStyleStore.assign(_:to:)`: a key does one thing, so choosing one in use moves it, and
+the Dictate row's key becomes the bound key), then one Activation pop-up for every key. Each key's start/stop cue voice is the Sounds tab's, after Keys
+(`SoundsSettingsTab`): one row per key that isn't Off. `TriggerKeySoundStore`
+(`BlurtTriggerKeySounds`, keycode → pack id) holds the ones set; a key with no entry plays its
+action's setting (`SoundPackStore.fallback(for:)` — read-aloud's, Control Your Mac's, or
+dictation's for every recording action), so an untouched install sounds as it did before keys had
+voices. `CueSoundPlayer` keeps a pair per key and plays the one whose press started the recording
+or read (`AppCoordinator`'s `onStart` tells it first). How read-aloud sounds (voice, speed, skipping jargon —
 `ReadAloudStyleStore`) is its own Settings tab, Read Aloud, before Styles (`ReadAloudSettingsTab`);
 picking a voice plays a sample of it, as picking a cue sound does. Its own tab, not rows on General,
 because General has to stay short enough for a small display (three per-key rows pushed the
 cue-sound picker off CI's screen).
 `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → choice, the stored form a style id had
-before read and ask) and `TriggerKeyActivationStore` (`BlurtTriggerKeyActivations`, keycode → mode,
-the bound key's included) are the writes; both encode through `TriggerKeyMap`. An absent choice is
-the key's default — the bound key dictating with the current style, left ⌥ reading aloud, the rest
-off — so Off is stored explicitly where it isn't the default; an absent mode follows
-`TriggerActivationStore`'s shared one, so an install from before per-key modes reads unchanged. The
+before read and ask, encoded through `TriggerKeyMap`) and `TriggerActivationStore`
+(`BlurtTriggerActivation`) are the writes; the action rows are a view over the keycode map. An
+absent choice is the key's default — the bound key dictating with the current style, left ⌥
+reading aloud, the rest off — so Off is stored explicitly where it isn't the default. The
 bound key (`TriggerKeyStore`, the one the ready screen and menu bar name) always dictates:
 `TriggerKeyStyleStore.setChoice` refuses to take the only dictating key off dictation, and taking
 the bound key off it moves the binding to the next dictating key first. A key's entries mean the
@@ -1477,20 +1483,39 @@ restating them.
 `App/Blurt/Blurt/App.swift` declares four scenes (five in Debug):
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
-  "ready" screen (`ReadyView`: the wordmark over a grouped `Form` — the same surface as the Settings
-  panes, no hand-drawn cards. A Shortcut row trails the bound key as a keycap that fills with the
-  accent while the key is down, beside the configured activation ("Tap or hold", "Tap" or "Hold")
-  swapped for "Listening…"/"Transcribing…" on the same phase stream the pill renders, with Esc
-  cancelling while this window is key; a Style row's
-  pop-up — Default plus up to 4 profiles and an "Edit Styles…" item that opens Settings on its Styles
-  pane, selectable by ⌘1–⌘5, locked during capture — with a footer only while enhanced transcripts
-  are off, saying styles don't apply; then a Recent section, one form row per dictation trailing the
-  style it was made with and the relative time as plain secondary text, swapped for a Copy
-  affordance on hover, and when empty a first-dictation prompt. A bottom bar
-  holds "Powered by AssemblyAI · Report a bug" and a plain Settings button; the LinkedIn share is in
-  the Help menu). Standard titlebar, always presented at launch.
+  "ready" screen (`ReadyView`), shaped like a dictation app's home: Blurt's work happens outside the
+  window, on the keys, so they lead — a legend under a Keys heading on a soft translucent panel (not a white card:
+  only Library entries are cards) with each configured key's action and the key as a keycap (`KeyCap`) by its
+  full name ("Right Command", the name every Settings row uses), so it reads as a key to press, not a
+  control — not clickable, and nothing in the window reacts while a key is down (how a dictation is going is the pill's to say); once a custom style
+  exists, a Style row's pop-up (Default plus up to 4 profiles, ⌘1–⌘5) closes
+  the card, with a footer only while enhanced transcripts are off. Below it, the Library as a feed of
+  what Blurt has done. The whole window scrolls as one, as Journal's (the keys scroll away, the
+  scroller is the window's), on a pale wash of the brand green (`BlurtBrand.backdrop`) with no rule
+  under the toolbar; the key list and each entry are white cards (`card()`). Entries are compact
+  cards — a click opens one, there's no selection — with the time on the details line and a ⋯ menu
+  of the entry's actions (Open, Play, Copy, Show in Finder, Delete…), and when empty a
+  first-dictation prompt. The unified toolbar holds Record and
+  Browse leading, then the Library's Filter menu (Mail's: one kind or all, the icon filled while a
+  filter is on), Settings, and the search (`.searchable`, ⌘F: its own capsule at the trailing edge,
+  widening when clicked into, as Finder's and Mail's do) with no title beside it. Esc cancels a dictation while the window
+  is key. Opening an item — and a recording, or a file going up — slides the window over to it, as an
+  entry does in Journal (`TranscriptPage`): a back button leads the toolbar on its own, the item's
+  title heads the page (in the toolbar it crowded the actions into a » menu), and its actions
+  follow as icons — the View menu (✨: the transcript, Plain text, the stock tasks,
+  Custom…), Play and Stop — the entry's own audio, or speech generated on the spot (a spinner until
+  the first word), Copy, Show in Finder, Delete — over the transcript. Nothing there is edited, so
+  there's no Done or check mark: back (or Esc) slides back to the Library, abandoning a file going up;
+  a recording holds the page until it's stopped or discarded. A file comes in four ways, as
+  a Mac app's do: dropped anywhere on the window (`audioFileDropTarget` — no drop zone at rest, an
+  accent overlay saying "Drop to Transcribe" only while a file is held over it), dropped on the Dock
+  icon or opened from Finder's Open With (`CFBundleDocumentTypes`, an Alternate handler for
+  `public.audiovisual-content`, through `AppDelegate.application(_:open:)`), File › Open… (⌘O), or
+  Browse; each goes through `TranscriptsModel.openFiles`, which refuses anything but audio or video
+  with a reason. No footer: Report a bug and the LinkedIn share are in the Help menu. Always presented
+  at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
-  never at launch. General holds the everyday setup (key, shortcut, mic, cue); Styles leads with the
+  never at launch. General holds the everyday setup (account, mic, meeting auto-record); Keys holds an action-per-row table with one activation mode; Sounds holds each key's cue voice; Styles leads with the
   enhanced-transcripts switch (styles only shape that rewrite) above the style profiles; Vocabulary
   holds the key terms and the text-shortcut table (+ / −, double-click to edit); Advanced holds
   the update check, the developer-mode toggle, and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as

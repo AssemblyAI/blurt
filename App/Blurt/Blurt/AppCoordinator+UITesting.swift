@@ -18,9 +18,9 @@
       keyTap?.simulateReleaseForTesting(key, asTap: asTap)
     }
 
-    /// Sets how `key` is pressed, as the Keys tab would, and rebinds the tap.
-    func setKeyActivationForTesting(_ activation: TriggerActivation, for key: TriggerKey) {
-      TriggerKeyActivationStore().setActivation(activation, for: key)
+    /// Sets how every key is pressed, as the Keys tab would, and rebinds the tap.
+    func setActivationForTesting(_ activation: TriggerActivation) {
+      TriggerActivationStore().setActivation(activation)
       dictationBindingChanged()
     }
 

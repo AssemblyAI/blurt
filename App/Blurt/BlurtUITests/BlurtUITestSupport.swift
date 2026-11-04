@@ -59,6 +59,7 @@ class BlurtUITestCase: XCTestCase {
     let paneTitles = [
       UITestIdentifiers.generalSettingsTab,
       UITestIdentifiers.keysSettingsTab,
+      UITestIdentifiers.soundsSettingsTab,
       UITestIdentifiers.readAloudSettingsTab,
       UITestIdentifiers.stylesSettingsTab,
       UITestIdentifiers.vocabularySettingsTab,

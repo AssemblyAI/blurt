@@ -139,4 +139,36 @@ struct HistoryModelTests {
     #expect(calls.first?.kind == "speak: Meeting notes.")
     #expect(calls.first?.style.skipsJargon == false)
   }
+
+  @Test("onStart runs once, at the first audio, however many levels follow")
+  func textReaderOnStart() async throws {
+    let starts = Mutex(0)
+    try await TextReader(speaker: LevelSpeaker(levels: 3)).read("Meeting notes.") {
+      starts.withLock { $0 += 1 }
+    }
+    #expect(starts.withLock { $0 } == 1)
+  }
+
+  @Test("onStart doesn't run when no audio plays")
+  func textReaderNoAudio() async throws {
+    let starts = Mutex(0)
+    try await TextReader(speaker: LevelSpeaker(levels: 0)).read("Meeting notes.") {
+      starts.withLock { $0 += 1 }
+    }
+    #expect(starts.withLock { $0 } == 0)
+  }
+}
+
+/// A speaker that reports `levels` meter readings, as audio playing does, then
+/// finishes.
+private struct LevelSpeaker: ReadAloudSpeaker {
+  let levels: Int
+
+  func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws {
+    for _ in 0..<levels { onLevel?(0.5) }
+  }
+
+  func answer(
+    _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
+  ) async throws {}
 }

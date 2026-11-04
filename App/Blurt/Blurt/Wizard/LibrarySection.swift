@@ -1,45 +1,21 @@
-import Accessibility
 import AppKit
 import BlurtEngine
 import SwiftUI
 
 /// The ready screen's Library: every saved recording, dictation, file and
 /// spoken answer, searchable, filtered by kind, and grouped under day headings.
-/// A stock plain `List` on a grouped form section's fill: native selection supports
-/// double-click/Return to open, ⌘C to copy, Delete to confirm deletion, and ⌘F
-/// to search; the contextual menu holds each entry's actions.
+/// White cards on the window's brand gradient, as Journal's entries: a click
+/// opens one, its ⋯ menu and contextual menu hold its actions, and ⌘F searches.
 struct LibrarySection: View {
   var coordinator: AppCoordinator
   let triggerKey: TriggerKey
   let activation: TriggerActivation
 
-  /// The list's tallest: about six two-line rows and their day headings,
-  /// then it scrolls.
-  private static let maxListHeight: CGFloat = 300
-  /// The list's shortest: room for the empty prompt or a no-results message.
-  private static let minListHeight: CGFloat = 132
-  /// A two-line row and a day heading, as a plain list draws them.
-  private static let rowHeight: CGFloat = 44
-  private static let headingHeight: CGFloat = 28
-
-  /// The list's height: fitted to the whole library — its rows and day
-  /// headings — between `minListHeight` and `maxListHeight`, so a short
-  /// library doesn't sit atop an empty panel. Sized from the history rather
-  /// than what the filter or search shows, so the panel keeps one shape while
-  /// they change. Only the entries that could fit are walked.
-  static func listHeight(for history: [SavedTranscript]) -> CGFloat {
-    let calendar = Calendar.current
-    let visible = history.prefix(Int(maxListHeight / rowHeight) + 1)
-    let headings = Set(visible.map { calendar.startOfDay(for: $0.date) }).count
-    let content = CGFloat(visible.count) * rowHeight + CGFloat(headings) * headingHeight
-    return min(max(content, minListHeight), maxListHeight)
-  }
-
-  @State private var query = ""
-  @State private var filter = LibraryFilter.all
-  @State private var selection: SavedTranscript.ID?
+  /// The toolbar's search (`ReadyView`).
+  let query: String
+  /// The toolbar's Filter menu (`ReadyView`).
+  let filter: LibraryFilter
   @State private var pendingDelete: SavedTranscript?
-  @State private var searchFocusRequest = 0
   /// The history, filtered and under its day headings: rebuilt only when the
   /// history, the filter or the search changes — not on every selection
   /// change or play/stop, which also redraw this view, and which would
@@ -78,11 +54,6 @@ struct LibrarySection: View {
     let cache = details
     days = LibraryDay.group(filtered(), now: .now) { cache[$0.id]?.text ?? LibraryDay.details(of: $0) }
     shownQuery = trimmedQuery
-    // A selection the filter or search now hides is dropped, so Delete and
-    // ⌘C can't act on an entry that isn't on screen.
-    if let selected = selection, !days.contains(where: { $0.rows.contains { $0.entry.id == selected } }) {
-      selection = nil
-    }
   }
 
   /// Brings `details` up to date with the history: kept for an entry whose
@@ -102,38 +73,15 @@ struct LibrarySection: View {
       uniquingKeysWith: { first, _ in first })
   }
 
-  private func entry(id: SavedTranscript.ID?) -> SavedTranscript? {
-    id.flatMap { id in model.history.first { $0.id == id } }
-  }
-
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text("Library")
-          .font(.headline)
-          .accessibilityAddTraits(.isHeader)
-        Spacer(minLength: 8)
-        // Nothing to filter or search yet, so the controls wait for a first entry.
-        if !model.history.isEmpty {
-          SearchField(text: $query, prompt: "Search transcripts", focusRequest: searchFocusRequest)
-            .frame(width: 180)
-        }
+    Group {
+      if days.isEmpty {
+        emptyMessage
+          .frame(maxWidth: .infinity, minHeight: 160)
+          .card()
+      } else {
+        cards
       }
-      if !model.history.isEmpty {
-        filterPicker
-      }
-      // The panel is always drawn so the window keeps one shape, but the list
-      // only while it has rows: a plain list emptied of every section keeps
-      // drawing its old rows, under the empty message laid over them.
-      Group {
-        if days.isEmpty { Color.clear } else { list }
-      }
-      .overlay { emptyMessage }
-      .frame(height: Self.listHeight(for: model.history))
-      // The grouped form's section look, so the Library matches the panels
-      // above it: a plain list on the form's fill, clipped to its radius.
-      .background(Color(nsColor: .quaternarySystemFill), in: FormPanel.shape)
-      .clipShape(FormPanel.shape)
     }
     .onChange(of: model.history, initial: true) {
       updateDetails()
@@ -151,67 +99,40 @@ struct LibrarySection: View {
       guard (try? await Task.sleep(for: .milliseconds(150))) != nil else { return }
       refresh()
     }
-    // Edit › Find (⌘F), for this window.
-    .focusedSceneValue(\.focusHistorySearch, model.history.isEmpty ? nil : { searchFocusRequest += 1 })
-    .deleteConfirmation(for: $pendingDelete, model: model) { deleted in
-      // The next row takes the selection, as Mac lists do, so Delete
-      // can carry on down the list.
-      let rows = days.flatMap(\.rows).map(\.entry)
-      guard selection == deleted.id, let index = rows.firstIndex(where: { $0.id == deleted.id }) else { return }
-      let neighbors = rows.indices.contains(index + 1) ? rows[index + 1] : index > 0 ? rows[index - 1] : nil
-      selection = neighbors?.id
-    }
+    .deleteConfirmation(for: $pendingDelete, model: model)
   }
 
-  /// The kind filter, at its natural width — small, as at regular size its five
-  /// segments outgrow the window.
-  private var filterPicker: some View {
-    Picker("Show", selection: $filter) {
-      ForEach(LibraryFilter.allCases, id: \.self) { Text($0.title).tag($0) }
-    }
-    .pickerStyle(.segmented)
-    .labelsHidden()
-    .controlSize(.small)
-    .fixedSize()
-  }
-
-  /// The list of entries, under their day headings.
-  private var list: some View {
-    List(selection: $selection) {
+  /// The entries as cards under their day headings, as Journal's — denser:
+  /// a click opens one, its ⋯ menu and contextual menu hold the rest.
+  private var cards: some View {
+    LazyVStack(alignment: .leading, spacing: 8) {
       ForEach(days) { day in
-        Section(day.title) {
-          ForEach(day.rows, id: \.entry.id) { row in
-            let entry = row.entry
-            HistoryRow(
-              entry: entry, details: row.details, dayTitle: day.title,
-              actions: EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
-            )
-            .tag(entry.id)
-            // Two-line rows separate themselves, as in Mail; a plain list's
-            // edge-to-edge rules wouldn't match the form's inset ones above.
-            .listRowSeparator(.hidden)
-          }
+        Text(day.title)
+          .font(.headline)
+          .padding(.top, 6)
+          .padding(.leading, 4)
+          .accessibilityAddTraits(.isHeader)
+        ForEach(day.rows, id: \.entry.id) { row in
+          let entry = row.entry
+          let actions = EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
+          HistoryRow(entry: entry, details: row.details, dayTitle: day.title, actions: actions)
+            .padding(.horizontal, 14)
+            // Optically even: the title's line keeps more space above its caps
+            // than the details' keeps under its baseline, so the top takes 2
+            // pt less than the bottom to look the same.
+            .padding(.top, 9)
+            .padding(.bottom, 11)
+            .card()
+            .contentShape(Rectangle())
+            .onTapGesture { model.open(entry) }
+            .contextMenu { actions }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { model.open(entry) }
         }
       }
     }
-    .listStyle(.plain)
-    .listSectionSeparator(.hidden)
-    .scrollContentBackground(.hidden)
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier(UITestIdentifiers.recentList)
-    .contextMenu(forSelectionType: SavedTranscript.ID.self) { ids in
-      if let entry = entry(id: ids.first) {
-        EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
-      }
-    } primaryAction: { ids in
-      // Double-click and Return.
-      if let entry = entry(id: ids.first) { model.open(entry) }
-    }
-    .onCopyCommand {
-      guard let entry = entry(id: selection) else { return [] }
-      AccessibilityNotification.Announcement("Copied").post()
-      return [NSItemProvider(object: entry.text as NSString)]
-    }
-    .onDeleteCommand { pendingDelete = entry(id: selection) }
   }
 
   @ViewBuilder private var emptyMessage: some View {
@@ -236,7 +157,7 @@ struct LibrarySection: View {
         .foregroundStyle(.primary)
       HStack(spacing: 4) {
         Text("Click a text field, then \(activation.startVerb)")
-        KeyCap(label: triggerKey.keycapLabel)
+        KeyCap(label: triggerKey.spokenName)
         Text("to dictate")
       }
       Text("Press Record, or drop an audio file, to transcribe")
@@ -279,108 +200,68 @@ private struct EntryActions: View {
   }
 }
 
-/// One saved entry as a two-line row: its kind's glyph, the title (the LLM's
-/// for a recording, else the start of the text) over its details, and the time
-/// of day — the day is the section heading. Opening is double-click or Return,
-/// deleting is Delete, and the rest is the contextual menu, as in any Mac list.
-/// Under the pointer the time gives way to a one-click Copy button.
+/// One saved entry as a compact two-line row — Journal's entry card, much
+/// denser: its kind's glyph, the title (the LLM's for a recording, else the
+/// start of the text) over its details and time of day — the day is the
+/// section heading — and a ⋯ menu of its actions, as each Journal entry has.
+/// A click on the card opens it; the same actions are its contextual menu.
 private struct HistoryRow: View {
   let entry: SavedTranscript
   let details: String
   let dayTitle: String
   let actions: EntryActions
 
-  @State private var isHovered = false
-  @State private var showsCopied = false
-  /// Bumped per copy, so a second copy restarts the "Copied" timer.
-  @State private var copyCount = 0
-
-  /// What the trailing slot shows: the time at rest, Copy under the pointer,
-  /// and a brief "Copied" after a copy. One value, so only one can show.
-  private enum TrailingSlot { case time, copyButton, copied }
-
-  private var trailingSlot: TrailingSlot {
-    if showsCopied { return .copied }
-    return isHovered ? .copyButton : .time
-  }
+  /// Wide enough for the widest kind glyph.
+  private static let iconWidth: CGFloat = 20
 
   var body: some View {
     let title = entry.title
     let time = entry.date.formatted(date: .omitted, time: .shortened)
-    HStack {
-      Label {
-        VStack(alignment: .leading, spacing: 1) {
-          Text(title)
-            .lineLimit(1)
-            .truncationMode(entry.isTranscript ? .middle : .tail)
-          Text(details)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-      } icon: {
-        Image(systemName: LibraryKind(entry).systemImage)
+    HStack(spacing: 8) {
+      // Centred on both lines, in a slot of one width, so every title starts
+      // at the same x whatever the kind's glyph.
+      Image(systemName: LibraryKind(entry).systemImage)
+        .foregroundStyle(.secondary)
+        .frame(width: Self.iconWidth)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(title)
+          .lineLimit(1)
+          .truncationMode(entry.isTranscript ? .middle : .tail)
+        Text("\(details) · \(time)")
+          .font(.subheadline)
           .foregroundStyle(.secondary)
+          .monospacedDigit()
+          .lineLimit(1)
       }
-      Spacer(minLength: 8)
-      trailingAccessory(time: time)
-    }
-    .padding(.vertical, 3)
-    .onHover { isHovered = $0 }
-    // Reverts "Copied" after a beat; a superseded timer is cancelled rather
-    // than clearing a newer copy's confirmation.
-    .task(id: copyCount) {
-      guard copyCount > 0 else { return }
-      guard (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
-      showsCopied = false
+      Spacer(minLength: 4)
+      Menu {
+        actions
+      } label: {
+        Label("Actions", systemImage: "ellipsis")
+          .labelStyle(.iconOnly)
+      }
+      .menuStyle(.borderlessButton)
+      .menuIndicator(.hidden)
+      .fixedSize()
+      .foregroundStyle(.secondary)
+      .help("Actions")
+      // VoiceOver reaches the same actions on the row itself.
+      .accessibilityHidden(true)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(title), \(details), \(dayTitle) at \(time)")
     .accessibilityHint("Opens the transcript")
-    // The contextual menu's actions, offered to VoiceOver on the row itself.
+    // The menu's actions, offered to VoiceOver on the row itself.
     .accessibilityActions { actions }
   }
+}
 
-  /// The trailing slot: the time, the Copy button or "Copied", layered and
-  /// faded rather than swapped, so the slot sizes to the widest and nothing
-  /// shifts as they trade places.
-  private func trailingAccessory(time: String) -> some View {
-    ZStack(alignment: .trailing) {
-      Text(time)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-        .opacity(trailingSlot == .time ? 1 : 0)
-        .allowsHitTesting(false)
-      Button(action: copy) {
-        // Tighter than `Label`'s icon–title gap, which reads as two items here.
-        HStack(spacing: 3) {
-          Image(systemName: "doc.on.doc")
-          Text("Copy")
-        }
-      }
-      // Borderless draws it in the accent, marking it clickable against the
-      // secondary time it replaces.
-      .buttonStyle(.borderless)
-      .help("Copy the transcript")
-      .opacity(trailingSlot == .copyButton ? 1 : 0)
-      // Opacity-0 views still hit-test: take clicks only while visible.
-      .allowsHitTesting(trailingSlot == .copyButton)
-      Label("Copied", systemImage: "checkmark")
-        .foregroundStyle(.secondary)
-        .opacity(trailingSlot == .copied ? 1 : 0)
-        .allowsHitTesting(false)
-    }
-    .font(.subheadline)
-    .fixedSize()
-    .animation(.easeOut(duration: 0.12), value: trailingSlot)
-    // VoiceOver copies through the row's Copy action and hears the
-    // announcement, so the visual slot stays out of the combined element.
-    .accessibilityHidden(true)
-  }
-
-  private func copy() {
-    NSPasteboard.copyAnnounced(entry.text)
-    showsCopied = true
-    copyCount += 1
-  }
+extension FocusedValues {
+  /// Puts the cursor in the focused window's history search: what Edit › Find
+  /// (⌘F) calls. Nil — and the menu item disabled — in a window without one.
+  @Entry var focusHistorySearch: (() -> Void)?
+  /// Opens the focused window's file panel to transcribe a file: what File ›
+  /// Open… (⌘O) calls. Nil — and the menu item disabled — in a window without
+  /// one.
+  @Entry var importAudioFile: (() -> Void)?
 }

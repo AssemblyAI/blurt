@@ -1,10 +1,9 @@
 import SwiftUI
 
 /// Lays its children out left to right, wrapping onto a new line when the next
-/// one won't fit — the iPhone's key-term pills and the Mac transcript sheet's
-/// facet chips. Compiled into both apps (the Mac target and the iPhone's
-/// `BlurtDesign`) from this one file, since no stock container does it and two
-/// copies would drift; each side supplies its own spacing.
+/// one won't fit — the iPhone's key-term pills. Compiled into the iPhone's
+/// `BlurtDesign` from here, outside any one target, since no stock container
+/// does it; it supplies its own spacing.
 package struct FlowLayout: Layout {
   var spacing: CGFloat
 

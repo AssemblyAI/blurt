@@ -33,12 +33,12 @@ struct MenuBarContent: View {
   // the dictation key or its mode changes in Settings (`ObservedKeyBindings`).
   @ObservedKeyBindings private var bindings
   private var triggerKey: TriggerKey { bindings.bound }
-  private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
+  private var activation: TriggerActivation { bindings.activation }
 
   var body: some View {
     // Disabled informational row: the dictation trigger is an invisible lone
     // modifier, so spell it out here as the menu bar's discoverability anchor.
-    Text("\(activation.label) \(triggerKey.label) to dictate and paste")
+    Text("\(activation.label) \(triggerKey.spokenName) to dictate and paste")
 
     Divider()
 

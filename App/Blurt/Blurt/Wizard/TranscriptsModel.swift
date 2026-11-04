@@ -65,6 +65,8 @@ final class TranscriptsModel {
   let reader = TextReader()
   /// The task result being read aloud now, if any.
   var readingFacet: TranscriptFacet?
+  /// Whether that reading's first word has played; before, it's preparing.
+  var readingStarted = false
   @ObservationIgnored var readingTask: Task<Void, Never>?
   /// Meetings' switch, policy, probe loop and last answer (`+Meetings.swift`).
   @ObservationIgnored var autoRecordMeetings = false
