@@ -694,7 +694,10 @@ user has defined a **style profile** (`StyleProfileStore`, resolved at each pres
 headroom the API's 2048
 instruction cap leaves (`customStyleBudget`, measured in UTF-8 bytes — the cap's own unit is
 unmeasured, and bytes are the conservative bound); no profile, or blank instructions, sends the base
-instruction unchanged. **Only the active profile's text ever goes on the wire** — never a
+instruction unchanged. A styled request leads with `CleanupInstruction.styledText` instead of
+`text`: the base with its "preserve the original punctuation, capitalization, and spacing" rule
+swapped for one that defers to the style (no longer than the original, so the budget never
+shrinks) — left as-is, that rule beat styles asking for no capitals or commas. **Only the active profile's text ever goes on the wire** — never a
 concatenation of all of them, which is the obvious-looking generalization and the one that fails
 every dictation, since over-cap is a 400 on the whole request.
 
