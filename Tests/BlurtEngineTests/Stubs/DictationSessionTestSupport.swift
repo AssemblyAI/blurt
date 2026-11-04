@@ -204,3 +204,18 @@ func waitForMicStart(_ fixture: SessionFixture) async throws {
     try await Task.sleep(for: .milliseconds(5))
   }
 }
+
+/// One held hand-back press of right ⌥ through `router` — a rewrite's
+/// instruction or a command — recorded by `fixture`'s session and let go, the
+/// session's phases wired to the router first. Returns that wiring, for the
+/// caller to cancel.
+@MainActor
+func speakHeldPress(_ router: SelectionSpeechRouter, on fixture: SessionFixture) async throws -> Task<Void, Never> {
+  let phases = Task {
+    for await phase in await fixture.session.phaseStream() { router.sessionPhaseChanged(phase) }
+  }
+  router.press(key: .rightOption)
+  try await waitForMicStart(fixture)
+  router.submit(.release)
+  return phases
+}

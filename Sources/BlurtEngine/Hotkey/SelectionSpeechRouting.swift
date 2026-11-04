@@ -3,7 +3,7 @@
 /// dictation session; a read-aloud key reads the selection aloud; an ask key
 /// records a spoken request about the selection and reads the answer; a rewrite
 /// key records a spoken instruction and pastes the selection, rewritten, over
-/// it. It is a
+/// it; a command key records a spoken command and carries it out. It is a
 /// pure state machine. The app's `SelectionSpeechRouter` carries out the
 /// actions it returns (the AX read, the hold timer, the speech task, the gate
 /// resets), the same split as `DictationKeyRouter` under `DictationKeyTap`.
@@ -24,6 +24,9 @@
 ///   until the key is let go. Then the transcript comes back as `.handedBack`
 ///   and the answer is read. A rewrite records the same way, and its
 ///   transcript is the instruction the selection is rewritten by.
+/// - A command records the same way, and its transcript is carried out. It
+///   needs no selection, so it skips the read: the press is `.selected` from
+///   the key-down, and still waits to prove itself before the mic opens.
 ///
 /// The Accessibility read is in flight while those signals land, so a press
 /// first waits in `.deciding`, noting them, and acts once the read returns.
@@ -36,71 +39,11 @@
 /// for a dictation, while `.resetGate` just clears it, because no recording is
 /// involved.
 struct SelectionSpeechRouting: Sendable {
-  enum Action: Sendable, Equatable {
-    case forward(DictationSession.Command)
-    /// Start the Accessibility read. Its result comes back through `selectionResolved`.
-    case readSelection
-    /// Call `holdElapsed` after `holdDelay`, unless a newer press restarts it.
-    case startHoldTimer
-    case speak(String)
-    /// Answer the spoken `request` about `selection`, aloud.
-    case answer(request: String, selection: String)
-    /// Rewrite `selection` as the spoken `request` asks, and paste it over the selection.
-    case rewrite(request: String, selection: String)
-    case stopSpeech
-    /// Abandon the rewrite in flight, before it pastes.
-    case stopRewrite
-    /// A dictation ended without a key event: `DictationKeyTap.syncAfterTerminalPhase`.
-    case syncGateAfterSession
-    /// The gate is latched or armed by a key press that holds no recording: a read
-    /// ending on its own, a press that only stopped something, a held ask let go
-    /// before it asked. Clear the gate with no recording discarded.
-    case resetGate
-  }
-
   /// How long a read or ask key must stay down, in a mode that holds, before
   /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
   /// asker waits this long (plus the mic bring-up) for the start chime before
   /// speaking; a deliberate tap is over long before it.
   static let holdDelay = Duration.milliseconds(350)
-
-  private enum Intent: Sendable, Equatable {
-    case read, ask, rewrite
-
-    /// Whether the press records a spoken request (`.asking`) rather than reading.
-    var records: Bool { self != .read }
-  }
-
-  /// How a read or ask press proved itself: a tap (the gate latched), or a
-  /// hold (still down at `holdDelay`).
-  private enum Trigger: Sendable, Equatable {
-    case tap, hold
-  }
-
-  private enum Mode: Sendable, Equatable {
-    case passthrough
-    /// The selection read is in flight. `trigger`: how the press already
-    /// proved itself, if it has. `ended`: the key let go or a combo cancelled
-    /// it; the gate is idle.
-    case deciding(Intent, trigger: Trigger?, ended: Bool)
-    /// A selection is in hand, and the key is down but hasn't proved itself yet.
-    case selected(Intent, String)
-    /// Recording the spoken request about the selection (an ask's question,
-    /// or a rewrite's instruction: `intent`). Not `started` while
-    /// an earlier dictation is still finishing: the hand-back press waits for
-    /// it, since the session refuses a press until it is back at rest.
-    /// `byHold`: the key is held for the request, so letting it go — even
-    /// before the gate's own hold threshold — ends it; a tapped request runs
-    /// until the next tap, like a dictation.
-    case asking(Intent, String, started: Bool, byHold: Bool)
-    /// The request was let go of and is being transcribed (or, not `started`,
-    /// was let go of before the mic ever opened).
-    case transcribing(Intent, String, started: Bool)
-    case speaking
-    /// The selection is being rewritten and pasted. Like `.speaking`, the gate
-    /// is free under it, and any press abandons it.
-    case rewriting
-  }
 
   private var mode = Mode.passthrough
   /// Whether the session's last phase was in flight. A terminal phase is then
@@ -114,9 +57,15 @@ struct SelectionSpeechRouting: Sendable {
 
   /// Whether the session's run is a rewrite press's spoken instruction, being
   /// recorded or transcribed: the pill says "Rewriting" for it.
-  var recordsRewrite: Bool {
+  var recordsRewrite: Bool { records(.rewrite) }
+
+  /// Whether the session's run is a command press's spoken command: the pill
+  /// says it's working on it.
+  var recordsCommand: Bool { records(.command) }
+
+  private func records(_ intent: Intent) -> Bool {
     switch mode {
-    case .asking(.rewrite, _, _, _), .transcribing(.rewrite, _, _): true
+    case .asking(let recording, _, _, _), .transcribing(let recording, _, _): recording == intent
     default: false
     }
   }
@@ -132,6 +81,10 @@ struct SelectionSpeechRouting: Sendable {
       // Off only reaches here when Settings turned the key off mid-press:
       // dictate, as it was bound to.
       case .dictate, .off: return [.forward(.press(key: key))]
+      case .command:
+        // Nothing to read: the press only has to prove itself.
+        mode = .selected(.command, "")
+        return holds ? [.startHoldTimer] : []
       case .readAloud, .ask, .rewrite:
         mode = .deciding(Self.intent(action), trigger: nil, ended: false)
         return holds ? [.readSelection, .startHoldTimer] : [.readSelection]
@@ -145,6 +98,9 @@ struct SelectionSpeechRouting: Sendable {
       // a paste landing in the middle of whatever the press starts would be
       // the worse surprise. The gate is free here too.
       return interrupt(with: .stopRewrite, key: key, action: action)
+    case .commanding:
+      // Any press abandons a command between steps, for the same reason.
+      return interrupt(with: .stopCommand, key: key, action: action)
     case .transcribing(_, _, let started):
       // A press while the request is transcribing drops it, for the same reason.
       mode = .passthrough
@@ -172,7 +128,7 @@ struct SelectionSpeechRouting: Sendable {
     mode = .passthrough
     switch action {
     case .dictate, .off: return [stop, .forward(.press(key: key))]
-    case .readAloud, .ask, .rewrite: return [stop, .resetGate]
+    case .readAloud, .ask, .rewrite, .command: return [stop, .resetGate]
     }
   }
 
@@ -197,8 +153,13 @@ struct SelectionSpeechRouting: Sendable {
       return asking(intent, selection, started: started, command)
     case .transcribing(_, _, let started):
       return transcribing(started: started, command)
-    case .speaking, .rewriting:
-      let stop: Action = mode == .speaking ? .stopSpeech : .stopRewrite
+    case .speaking, .rewriting, .commanding:
+      let stop: Action =
+        switch mode {
+        case .speaking: .stopSpeech
+        case .rewriting: .stopRewrite
+        default: .stopCommand
+        }
       mode = .passthrough
       // A recovery reset still reaches the session, where it can only cancel a
       // live recording, and there isn't one.
@@ -263,7 +224,7 @@ struct SelectionSpeechRouting: Sendable {
       // A held read let go before the gate's threshold keeps playing, latched.
       // Free the gate, as a tapped read does, so the other keys still work.
       return [.resetGate]
-    case .passthrough, .asking, .transcribing, .rewriting:
+    case .passthrough, .asking, .transcribing, .rewriting, .commanding:
       return []
     }
   }
@@ -277,7 +238,7 @@ struct SelectionSpeechRouting: Sendable {
       return []
     case .selected(let intent, let selection):
       return trigger(intent, selection, by: .hold)
-    case .passthrough, .deciding, .asking, .transcribing, .speaking, .rewriting:
+    case .passthrough, .deciding, .asking, .transcribing, .speaking, .rewriting, .commanding:
       return []
     }
   }
@@ -312,7 +273,7 @@ struct SelectionSpeechRouting: Sendable {
       // every other key — dictation's among them — dead until it ended. A
       // held read keeps it, so letting go stops the read.
       return trigger == .tap ? [.speak(selection), .resetGate] : [.speak(selection)]
-    case .ask, .rewrite:
+    case .ask, .rewrite, .command:
       mode = .asking(intent, selection, started: !sessionBusy, byHold: trigger == .hold)
       return sessionBusy ? [] : [.forward(.pressHandingBack(key: nil))]
     }
@@ -322,6 +283,7 @@ struct SelectionSpeechRouting: Sendable {
     switch action {
     case .ask: .ask
     case .rewrite: .rewrite
+    case .command: .command
     case .readAloud, .dictate, .off: .read
     }
   }
@@ -340,6 +302,14 @@ struct SelectionSpeechRouting: Sendable {
   /// not report a rewrite it stopped itself.
   mutating func rewriteFinished() -> [Action] {
     guard mode == .rewriting else { return [] }
+    mode = .passthrough
+    return [.resetGate]
+  }
+
+  /// The command was carried out, or failed. As with `speechFinished`, the
+  /// caller must not report a command it stopped itself.
+  mutating func commandFinished() -> [Action] {
+    guard mode == .commanding else { return [] }
     mode = .passthrough
     return [.resetGate]
   }
@@ -368,7 +338,7 @@ struct SelectionSpeechRouting: Sendable {
       return requestEnded(phase, intent: intent, selection: selection, stillDown: true)
     case .transcribing(let intent, let selection, started: true):
       return requestEnded(phase, intent: intent, selection: selection, stillDown: false)
-    case .deciding, .selected, .speaking, .rewriting:
+    case .deciding, .selected, .speaking, .rewriting, .commanding:
       return []
     }
   }
@@ -381,12 +351,17 @@ struct SelectionSpeechRouting: Sendable {
       // recording cap released it. Clear the gate, or the eventual key-up
       // would stop the answer (or abandon the rewrite).
       let reset: [Action] = stillDown ? [.resetGate] : []
-      if intent == .rewrite {
+      switch intent {
+      case .rewrite:
         mode = .rewriting
         return [.rewrite(request: request, selection: selection)] + reset
+      case .command:
+        mode = .commanding
+        return [.runCommand(request)] + reset
+      case .ask, .read:
+        mode = .speaking
+        return [.answer(request: request, selection: selection)] + reset
       }
-      mode = .speaking
-      return [.answer(request: request, selection: selection)] + reset
     }
     // Nothing said, or the request failed or was cancelled: a dictation ending
     // without a key event, like any other.

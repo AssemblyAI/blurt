@@ -126,6 +126,9 @@ struct OverlayView: View {
     case .rewriting:
       waitingContent("Rewriting")
         .transition(.opacity)
+    case .commanding:
+      waitingContent("Working")
+        .transition(.opacity)
     case .error(let message, nil):
       // "Try again" tells the user what to do; the full failure reason is too
       // long for the pill, so expose it on hover. The VoiceOver announcement
@@ -166,6 +169,11 @@ struct OverlayView: View {
       // error flash. No glyph — the word alone carries it. Hover still exposes
       // the full announcement text.
       StatusLineText("Copied")
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
+    case .done:
+      // A command's "Pasted": the same quiet status line.
+      StatusLineText("Done")
         .transition(.opacity)
         .help(state.accessibilityLabel)
     }

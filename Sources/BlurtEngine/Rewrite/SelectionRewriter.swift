@@ -58,9 +58,7 @@ public struct SelectionRewriter: SelectionRewriting {
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
     transport: any HTTPTransport = URLSession.shared
   ) {
-    send = { body in
-      try await ReadAloudLLM.send(body, apiKey: apiKeyProvider(), transport: transport, timeout: Self.timeout)
-    }
+    send = ReadAloudLLM.sender(apiKeyProvider: apiKeyProvider, transport: transport, timeout: Self.timeout)
   }
 
   public func rewrite(_ selection: String, as request: String) async throws -> String {

@@ -148,6 +148,24 @@ struct ReadAloudLLM: Sendable {
     return try reply(from: data)
   }
 
+  /// `send` with the key, transport and timeout bound in: the one-call
+  /// closure `SelectionRewriter` keeps.
+  static func sender(
+    apiKeyProvider: @escaping @Sendable () -> String?, transport: any HTTPTransport, timeout: TimeInterval
+  ) -> @Sendable (Body) async throws -> Reply {
+    { body in try await send(body, apiKey: apiKeyProvider(), transport: transport, timeout: timeout) }
+  }
+
+  /// The key and transport a gateway client sends with, kept as one value.
+  struct Connection: Sendable {
+    let apiKeyProvider: @Sendable () -> String?
+    let transport: any HTTPTransport
+
+    func send(_ body: Body, timeout: TimeInterval) async throws -> Reply {
+      try await ReadAloudLLM.send(body, apiKey: apiKeyProvider(), transport: transport, timeout: timeout)
+    }
+  }
+
   // MARK: - Wire format
 
   struct Body: Encodable {
@@ -160,17 +178,47 @@ struct ReadAloudLLM: Sendable {
     let messages: [Message]
     let maxTokens: Int
     let temperature: Double
+    /// A JSON schema the reply must follow (`VoiceCommandPlanner`'s plan).
+    /// Nil leaves the key off the wire, as every other client sends it.
+    var responseFormat: JSONValue?
 
     enum CodingKeys: String, CodingKey {
       case model, messages, temperature
       case maxTokens = "max_tokens"
+      case responseFormat = "response_format"
+    }
+  }
+
+  /// A JSON value built in code: a response format's schema.
+  indirect enum JSONValue: Encodable, Equatable, Sendable {
+    case string(String)
+    case integer(Int)
+    case bool(Bool)
+    case array([JSONValue])
+    case object([String: JSONValue])
+
+    func encode(to encoder: any Encoder) throws {
+      var container = encoder.singleValueContainer()
+      switch self {
+      case .string(let value): try container.encode(value)
+      case .integer(let value): try container.encode(value)
+      case .bool(let value): try container.encode(value)
+      case .array(let value): try container.encode(value)
+      case .object(let value): try container.encode(value)
+      }
     }
   }
 
   static func chat(system: String, user: String, maxTokens: Int, model: String = model) -> Body {
+    chat(system: system, turns: [.init(role: "user", content: user)], maxTokens: maxTokens, model: model)
+  }
+
+  /// A chat with more than one turn after the system prompt: a retry that
+  /// shows the model its own unusable reply and what was wrong with it.
+  static func chat(system: String, turns: [Body.Message], maxTokens: Int, model: String = model) -> Body {
     Body(
       model: model,
-      messages: [.init(role: "system", content: system), .init(role: "user", content: user)],
+      messages: [.init(role: "system", content: system)] + turns,
       maxTokens: maxTokens,
       // Copying or answering, not composing: the same input should come back
       // the same way twice.

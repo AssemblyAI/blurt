@@ -246,6 +246,21 @@ extension DictationSession {
     }
   }
 
+  /// Pastes `text` wherever focus is now: a voice command's `type` step. It
+  /// drops the press's captured target first, unlike `replaceSelection`,
+  /// because the command's earlier steps may have brought another app forward
+  /// and the words belong there. Reactivating the app the press captured would
+  /// undo them. The next press pins its own target again. Answers as
+  /// `replaceSelection` does.
+  ///
+  /// Checks for cancellation first: a press that abandoned the command is
+  /// about to pin its own target, and a late nil here could land after it.
+  public func typeText(_ text: String) async throws -> PipelinePhase {
+    try Task.checkCancellation()
+    await injector.setTarget(nil)
+    return try await replaceSelection(with: text)
+  }
+
   /// The phase a failed paste ends in. Which injector errors are a quiet
   /// "copied" notice rather than a fault is `BlurtError.isQuietDegradation` — an
   /// exhaustive switch over the cases, so a new error that leaves the transcript

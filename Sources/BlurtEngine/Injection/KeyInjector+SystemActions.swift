@@ -39,7 +39,9 @@
       let deadline = clock.now.advanced(by: budget)
       while clock.now < deadline {
         if await check() { return true }
-        try? await clock.sleep(for: interval)
+        // Cancelled, the sleep returns at once: without this the loop would
+        // spin on `check` (a main-actor hop) for the rest of the budget.
+        do { try await clock.sleep(for: interval) } catch { return false }
       }
       // One last read: the final sleep may have carried us past the deadline just
       // before the activation landed.

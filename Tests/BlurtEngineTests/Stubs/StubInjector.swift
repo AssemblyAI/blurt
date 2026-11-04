@@ -19,6 +19,8 @@ actor StubInjector: InjectorProtocol {
     insertedPrior.append(priorText)
     insertedWindowTitles.append(windowTitle)
   }
-  func setTarget(_ focus: CapturedFocus?) async {}
+  /// The pid of each `setTarget`, nil for "wherever focus is now".
+  var targets: [pid_t?] = []
+  func setTarget(_ focus: CapturedFocus?) async { targets.append(focus?.pid) }
   func setError(_ error: (any Error & Sendable)?) { self.error = error }
 }

@@ -101,7 +101,8 @@ NOT_TRANSCRIPT_LLM=":!Sources/BlurtEngine/STT/TranscriptTransform.swift"
 # The Rewrite Selection key's client (Rewrite/SelectionRewriter.swift) needs no
 # carve-out: it sends through ReadAloudLLM.send, so the gateway URL this rule
 # greps for stays in ReadAloudLLM.swift. Keep it that way rather than adding a
-# third exemption.
+# third exemption. The same goes for the Control Your Mac key's planner
+# (Command/VoiceCommandPlanner.swift).
 # The socket rule's one carve-out: the main window's Record button, which
 # streams a meeting or call to AssemblyAI's realtime API so its words appear as
 # they're spoken. It never carries a dictation — dictation stays one HTTP
@@ -153,7 +154,7 @@ SCOPES=(
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
   "the dictation API returns the full text in one response; there is no streaming dictation, and the one socket is the Record button's live transcript (RealtimeTranscriber.swift; read-aloud's TTS is a streaming HTTP response)"
-  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the gateway clients are read-aloud's, ReadAloudLLM.swift, file transcripts', TranscriptTransform.swift, and the rewrite key's, SelectionRewriter.swift, which sends through ReadAloudLLM)"
+  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the gateway clients are read-aloud's, ReadAloudLLM.swift, file transcripts', TranscriptTransform.swift, the rewrite key's, SelectionRewriter.swift, and the command key's, VoiceCommandPlanner.swift, both sending through ReadAloudLLM)"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
   "config.conversation_context was replaced by config.stt_prompt (STTPrompt)"

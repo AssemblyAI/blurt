@@ -12,6 +12,9 @@ public enum TriggerKeyAction: Sendable, Hashable {
   /// Records a spoken instruction ("make it more formal") and pastes the
   /// selected text, rewritten that way, over it.
   case rewrite
+  /// Records a spoken command ("open Slack and start a new message") and
+  /// carries it out (`VoiceCommandPlanner`, `VoiceCommandPerforming`).
+  case command
 }
 
 /// What one trigger key is set to in the Keys tab. Persisted as a string
@@ -26,6 +29,7 @@ public enum TriggerKeyChoice: Hashable, Sendable {
   case readAloud
   case ask
   case rewrite
+  case command
 
   /// The style id for "use the main window's selection". Not a UUID, and not
   /// `StyleProfileStore.defaultStyleID`, so it can collide with neither.
@@ -40,17 +44,19 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .readAloud: .readAloud
     case .ask: .ask
     case .rewrite: .rewrite
+    case .command: .command
     }
   }
 
   /// The stored form. Any string that isn't one of the action markers is a
-  /// style id — the encoding from before read, ask and rewrite existed.
+  /// style id — the encoding from before read, ask, rewrite and command existed.
   init(raw: String) {
     switch raw {
     case "": self = .off
     case "read-aloud": self = .readAloud
     case "ask": self = .ask
     case "rewrite": self = .rewrite
+    case "command": self = .command
     default: self = .dictate(style: raw)
     }
   }
@@ -62,6 +68,7 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .readAloud: "read-aloud"
     case .ask: "ask"
     case .rewrite: "rewrite"
+    case .command: "command"
     }
   }
 }
@@ -153,6 +160,8 @@ public struct TriggerKeyBindings: Sendable, Equatable {
   public var asks: Bool { TriggerKey.allCases.contains { action(for: $0) == .ask } }
   /// Whether some key rewrites, which sends the selection and what's said to the LLM Gateway.
   public var rewrites: Bool { TriggerKey.allCases.contains { action(for: $0) == .rewrite } }
+  /// Whether some key takes commands, which sends what's said and the frontmost app's name to the LLM Gateway.
+  public var commands: Bool { TriggerKey.allCases.contains { action(for: $0) == .command } }
 
   /// Every key the tap watches, with its mode — the router's binding.
   public var activations: [TriggerKey: TriggerActivation] {

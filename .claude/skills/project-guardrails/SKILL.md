@@ -86,6 +86,18 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   instruction asks, and pasted over the selection — the one gateway output
   that is pasted, owner-directed (2026-11-03). It never touches a dictation's
   words; the instruction it is given is a hand-back press's, never pasted.
+  The fourth is the Control Your Mac key's (`Command/VoiceCommandPlanner.swift`,
+  through `ReadAloudLLM.send`): a spoken command turned into steps from a
+  closed list (`VoiceCommandStep`) that Blurt carries out itself — the one
+  gateway output acted on, owner-directed (2026-11-03). Keep it data, never
+  script: no AppleScript, shell or arbitrary URL schemes, and a typed step
+  still pastes through the injector. Its Accessibility steps (a named button,
+  a menu path) press what's on screen, never a coordinate, and the
+  destructive-action ban stays in code (`DestructiveGuard`), not only the
+  prompt. It sees the screen through the Accessibility tree (`ScreenContext`:
+  labels of actionable elements), owner-directed: no screenshots, so no Screen
+  Recording permission, and never a field's contents or a password field. It
+  never sees a dictation's words.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **There is no `config.conversation_context`.** `config.stt_prompt`

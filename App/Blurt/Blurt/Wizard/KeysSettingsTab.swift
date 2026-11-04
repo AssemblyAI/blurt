@@ -76,6 +76,14 @@ struct KeysSettingsTab: View {
             "Select text, then use a \(KeyActionName.rewrite) key and say how to change it. Your selection and "
               + "spoken request are sent to AssemblyAI’s LLM Gateway, and the rewrite replaces the selection.")
         }
+        if bindings.commands {
+          Text(
+            "Use a \(KeyActionName.command) key and say what to do, like “open Safari and start a new tab.” What "
+              + "you say, the app in front, and its window’s title and the names of the buttons, links and fields in "
+              + "it, including list rows (never what’s typed in a field) are sent to AssemblyAI’s LLM Gateway. Blurt then opens, "
+              + "hides or quits apps, opens links, presses shortcuts and buttons, chooses menu items, types and uses "
+              + "the media keys to carry it out.")
+        }
         // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn does
         // anything, but that write only lands at the next log-in, so until then
         // fn double-fires. Lead with that symptom rather than the setting's name,
@@ -123,6 +131,7 @@ struct KeysSettingsTab: View {
             Text(KeyActionName.readAloud).tag(TriggerKeyChoice.readAloud)
             Text(KeyActionName.ask).tag(TriggerKeyChoice.ask)
             Text(KeyActionName.rewrite).tag(TriggerKeyChoice.rewrite)
+            Text(KeyActionName.command).tag(TriggerKeyChoice.command)
           }
         }
         .labelsHidden()

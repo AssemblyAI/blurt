@@ -27,12 +27,7 @@ struct SelectionRewriteRouterTests {
     let events = RewriteEvents()
     router.rewritePill = { events.pills.append($0) }
     router.resetGate = { events.resets += 1 }
-    let phases = Task {
-      for await phase in await fixture.session.phaseStream() { router.sessionPhaseChanged(phase) }
-    }
-    router.press(key: .rightOption)
-    try await waitForMicStart(fixture)
-    router.submit(.release)
+    let phases = try await speakHeldPress(router, on: fixture)
     try await waitUntil { !rewriter.calls.isEmpty }
     return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
   }
