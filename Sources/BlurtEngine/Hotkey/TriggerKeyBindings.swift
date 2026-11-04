@@ -158,11 +158,6 @@ public struct TriggerKeyBindings: Sendable, Equatable {
   /// — and whether some key asks, which sends what's said to the LLM Gateway.
   public var readsOrAsks: Bool { TriggerKey.allCases.contains { [.readAloud, .ask].contains(action(for: $0)) } }
   public var asks: Bool { TriggerKey.allCases.contains { action(for: $0) == .ask } }
-  /// Whether some key rewrites, which sends the selection and what's said to the LLM Gateway.
-  public var rewrites: Bool { TriggerKey.allCases.contains { action(for: $0) == .rewrite } }
-  /// Whether some key takes commands, which sends what's said, the frontmost app's name, its window's title and
-  /// the labels of the controls in it to the LLM Gateway.
-  public var commands: Bool { TriggerKey.allCases.contains { action(for: $0) == .command } }
 
   /// Every key the tap watches, with its mode — the router's binding.
   public var activations: [TriggerKey: TriggerActivation] {

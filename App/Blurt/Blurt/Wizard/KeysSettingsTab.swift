@@ -47,7 +47,6 @@ struct KeysSettingsTab: View {
   var body: some View {
     let bindings = bindings
     let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
-    let dictating = bindings.dictatingKeys
     SettingsPane {
       Section {
         ForEach(TriggerKey.allCases, id: \.self) { key in
@@ -63,23 +62,8 @@ struct KeysSettingsTab: View {
             .frame(width: Self.activationWidth, alignment: .trailing)
         }
       } footer: {
-        Text("Dictate uses your current style. No custom style uses Blurt’s standard cleanup.")
-        // The only dictating key's other choices are disabled; say why.
-        if let only = dictating.first, dictating.count == 1 {
-          Text("To change \(only.spokenName), set another key to Dictate first.")
-        }
         if !enhancedTranscripts {
           Text(StylesInertNotice.settingsText)
-        }
-        if bindings.rewrites {
-          Text(
-            "\(KeyActionName.rewrite): select text and say how to change it. Your selection and request are sent "
-              + "to AssemblyAI.")
-        }
-        if bindings.commands {
-          Text(
-            "\(KeyActionName.command): say what to do, like “open Safari and start a new tab.” Your request and the "
-              + "names of the controls on screen (never what you’ve typed) are sent to AssemblyAI.")
         }
         // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn does
         // anything, but that write only lands at the next log-in, so until then
@@ -107,8 +91,7 @@ struct KeysSettingsTab: View {
         // only the one chosen, without the menu's dividers around it. The
         // hidden titles are what VoiceOver reads for each pop-up. The only
         // dictating key offers only dictation — left out rather than disabled,
-        // since a menu pop-up doesn't reliably disable single items; the
-        // footer says why.
+        // since a menu pop-up doesn't reliably disable single items.
         Picker("Action for \(key.fullName)", selection: choice(for: key, bindings: bindings, profiles: profiles)) {
           if !isOnlyDictatingKey {
             Text("Off").tag(TriggerKeyChoice.off)
