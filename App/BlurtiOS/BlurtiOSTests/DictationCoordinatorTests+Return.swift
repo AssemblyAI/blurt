@@ -71,8 +71,8 @@ struct DictationCoordinatorReturnTests {
     await rig.opened()
     #expect(returns.hosts.isEmpty)
 
-    let bench = make(state: .active)
-    let (active, activeRig, activeReturns) = (bench.coordinator, bench.rig, bench.returns)
+    let second = make(state: .active)
+    let (active, activeRig, activeReturns) = (second.coordinator, second.rig, second.returns)
     active.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
     #expect(active.returnHost == nil && !active.startedFromKeyboard)
     await activeRig.opened()
@@ -126,8 +126,8 @@ struct DictationCoordinatorReturnTests {
     #expect(returns.hosts.isEmpty)
 
     // A window seen and then closed: the open did not hold.
-    let bench = make()
-    let (second, secondRig, secondReturns) = (bench.coordinator, bench.rig, bench.returns)
+    let later = make()
+    let (second, secondRig, secondReturns) = (later.coordinator, later.rig, later.returns)
     second.expectsKeeper = true
     second.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
     await secondRig.opened()
