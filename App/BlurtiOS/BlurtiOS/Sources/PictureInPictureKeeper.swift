@@ -34,6 +34,9 @@ final class PictureInPictureKeeper: NSObject {
   let layer = AVSampleBufferDisplayLayer()
   private(set) var isArmed = false
   private(set) var isActive = false
+  /// `disarm()` asked a live window to stop and `didStop` has not landed: the
+  /// window is still active, and nothing may park under it.
+  private(set) var isStopping = false
   private(set) var isPossible = false
   @ObservationIgnored var onStart: (() -> Void)?
   @ObservationIgnored var onStop: (() -> Void)?
@@ -104,7 +107,9 @@ final class PictureInPictureKeeper: NSObject {
   private func tryStart() {
     guard startWanted, let controller else { return }
     guard !controller.isPictureInPictureActive else {
-      startWanted = false
+      // Up already — or still stopping, in which case the start keeps and
+      // `didStop` tries it again.
+      if !isStopping { startWanted = false }
       return
     }
     let bounds = layer.bounds
@@ -137,13 +142,29 @@ final class PictureInPictureKeeper: NSObject {
     if value { tryStart() }
   }
 
-  /// Stops the window and keeps it from starting again.
+  /// Stops the window and keeps it from starting again. The stop lands later,
+  /// as `didStop`; `isStopping` says so until then.
   func disarm() {
     isArmed = false
     startWanted = false
     controller?.canStartPictureInPictureAutomaticallyFromInline = false
-    if controller?.isPictureInPictureActive == true { controller?.stopPictureInPicture() }
+    if controller?.isPictureInPictureActive == true {
+      isStopping = true
+      controller?.stopPictureInPicture()
+    }
     Self.log.notice("disarmed")
+  }
+
+  private static let stopPollStep: Duration = .milliseconds(50)
+
+  /// Waits for a stop `disarm()` asked for to land, at most `timeout`: a
+  /// window still stopping past that is logged and left to its `didStop`.
+  func waitUntilStopped(timeout: Duration) async {
+    let polls = Int(timeout / Self.stopPollStep)
+    for _ in 0..<polls where isStopping {
+      try? await Task.sleep(for: Self.stopPollStep)
+    }
+    if isStopping { Self.log.notice("still stopping after \(timeout, privacy: .public)") }
   }
 
   /// One frame of a live "video": a 4683 × 1 transparent strip, shown the
@@ -217,8 +238,15 @@ extension PictureInPictureKeeper: AVPictureInPictureControllerDelegate {
 
   func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
     isActive = false
+    isStopping = false
     Self.log.notice("did stop; state: \(UIApplication.shared.applicationState.rawValue)")
-    onStop?()
+    // A start asked for while it was stopping is the next window's: this
+    // stop is nobody's news, and the window goes up again for it.
+    guard startWanted else {
+      onStop?()
+      return
+    }
+    tryStart()
   }
 
   func pictureInPictureController(

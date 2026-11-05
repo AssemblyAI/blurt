@@ -53,9 +53,7 @@ struct ListeningWindowTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = WindowRig()
-    await rig.opened()
-    rig.window.utteranceStarted()
-    #expect(await until { rig.state?.utterance == true })
+    #expect(await rig.dictating())
     #expect(rig.idle.began == 1)
     #expect(await rig.interrupted())
     #expect(rig.endings == [true])
@@ -135,6 +133,7 @@ struct ListeningWindowTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = WindowRig()
+    rig.window.start()
     await rig.opened()
     guard let first = rig.state else { return }
     #expect(first.leaseUntil < Date().addingTimeInterval(ListeningState.lease + 1))
@@ -161,8 +160,8 @@ struct ListeningWindowTests {
     await rig.opened()
     rig.window.close()
     rig.window.open()
-    // The closing record is published once the source has closed, so the
-    // second open is what says the reopen went through.
+    // The reopen goes through once the source has closed, so the second
+    // open is what says it did.
     #expect(await until { rig.source.opened == 2 && rig.state?.window == .open })
     #expect(rig.source.closed == 1)
     #expect(rig.audio.activated == 2)
@@ -198,9 +197,7 @@ struct ListeningWindowTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = WindowRig()
-    await rig.opened()
-    rig.window.utteranceStarted()
-    #expect(await until { rig.state?.utterance == true })
+    #expect(await rig.dictating())
     rig.window.close()
     #expect(await until { rig.state?.window == .closed })
     #expect(rig.endings == [false])
@@ -234,10 +231,11 @@ struct ListeningWindowTests {
     defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
-    rig.idle.report?(.idleChanged(.pip))
+    #expect(rig.idle.generation == 1, "armed for the first window")
+    rig.idle.report?(.idleChanged(.pip), rig.idle.generation)
     #expect(await until { rig.state?.idle == .pip })
     #expect(rig.state?.window == .open)
-    rig.idle.report?(.sourceDied(.needsForeground))
+    rig.idle.report?(.sourceDied(.needsForeground), rig.idle.generation)
     #expect(await until { rig.state?.window == .interrupted })
     #expect(rig.state?.reason == .needsForeground)
   }

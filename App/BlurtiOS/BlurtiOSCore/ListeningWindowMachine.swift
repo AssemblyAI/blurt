@@ -84,13 +84,33 @@ package nonisolated struct ListeningWindowMachine: Sendable {
     }
   }
 
-  /// The heartbeat's record: the same state with the lease renewed and
-  /// `micLive` as the interpreter just read it off the source — true only
-  /// while the window is open, whatever the source says otherwise. A closed
-  /// record keeps saying why it closed.
+  /// The heartbeat's record while a window exists: the same state with the
+  /// lease renewed and `micLive` as the interpreter just read it off the
+  /// source — true only while the window is open, whatever the source says
+  /// otherwise. A closed record keeps saying why it closed.
   package mutating func heartbeat(micLive: Bool, now: Date) -> [Effect] {
     lastMicLive = micLive && state.isOpen
     return [publish(now: now, micLive: lastMicLive)]
+  }
+
+  /// The heartbeat's record with no window: the one the interpreter last
+  /// published — the launch's, or the closed one a window left — renewed as
+  /// `ListeningState.renewed` says it, the lease moved on and the reason kept,
+  /// so the keyboard reads an app that is alive and off, never one suspended.
+  /// The sequence stays this machine's to give out: the next window's first
+  /// record follows the beats, so the keyboard's order holds.
+  package mutating func heartbeat(renewing record: ListeningState, now: Date) -> [Effect] {
+    let renewed = record.renewed(micLive: false, at: now)
+    sequence = max(sequence, renewed.sequence)
+    return [.publish(renewed)]
+  }
+
+  /// The record for the state as it stands this instant, as the next publish
+  /// would say it, the sequence unmoved: what the interpreter routes a command
+  /// on between publishes, since the record it last published trails the
+  /// effects that follow a transition.
+  package func current(now: Date) -> ListeningState {
+    record(sequence: sequence, now: now, micLive: state.isOpen && lastMicLive)
   }
 }
 
@@ -307,18 +327,21 @@ nonisolated extension ListeningWindowMachine {
     return [.activateSession, .openSource(lastGeneration), publish(now: now)]
   }
 
-  /// Into `closing`: the dictation in flight ends first (while the feed still
-  /// holds its audio), then the source closes and the session stands down —
-  /// left active if the window was interrupted, since deactivating during a
-  /// call throws. `closed(gen)` finishes it.
+  /// Into `closing`: the closing record goes out first, before any of the
+  /// work — ending the dictation and closing the source are awaited, and a
+  /// press read meanwhile must find a window that no longer records — then
+  /// the dictation in flight ends (while the feed still holds its audio), the
+  /// source closes and the session stands down — left active if the window
+  /// was interrupted, since deactivating during a call throws. `closed(gen)`
+  /// finishes it with one more record.
   private mutating func close(_ gen: Generation, cause: Cause, keepWords: Bool, now: Date) -> [Effect] {
-    var effects: [Effect] = state.utterance ? [.endUtterance(keepWords: keepWords)] : []
+    let ending: [Effect] = state.utterance ? [.endUtterance(keepWords: keepWords)] : []
     let wasInterrupted = state.window == .interrupted
     state = .closing(gen, cause: cause)
     windowUntil = nil
     lossWhileOpening = nil
-    effects += [.closeSource(gen), .deactivateSession(skipIfInterrupted: wasInterrupted), publish(now: now)]
-    return effects
+    return [publish(now: now)] + ending
+      + [.closeSource(gen), .deactivateSession(skipIfInterrupted: wasInterrupted)]
   }
 
   /// The window's end from now — `windowMinutes` of silence, or `floor` if
@@ -344,10 +367,13 @@ nonisolated extension ListeningWindowMachine {
   /// defaults to what the state says.
   private mutating func publish(now: Date, micLive: Bool? = nil) -> Effect {
     sequence += 1
-    return .publish(
-      ListeningState(
-        launchID: launchID, sequence: sequence, window: state.window, idle: idle,
-        micLive: micLive ?? state.isOpen, windowUntil: windowUntil, utterance: state.utterance,
-        reason: publishedReason, writtenAt: now))
+    return .publish(record(sequence: sequence, now: now, micLive: micLive ?? state.isOpen))
+  }
+
+  /// The state as a record, under the given sequence number.
+  private func record(sequence: UInt64, now: Date, micLive: Bool) -> ListeningState {
+    ListeningState(
+      launchID: launchID, sequence: sequence, window: state.window, idle: idle, micLive: micLive,
+      windowUntil: windowUntil, utterance: state.utterance, reason: publishedReason, writtenAt: now)
   }
 }

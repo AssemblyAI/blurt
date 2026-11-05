@@ -70,21 +70,20 @@ extension ListeningWindow {
 
   /// Opens the source under the new generation, then lets the idle mode take
   /// over. A mode that can't (no Picture in Picture here) leaves the window
-  /// held, which is the base the record already says. The heartbeat runs from
-  /// here until the source closes, so the lease is renewed while the window
-  /// opens, waits out an interruption, or closes — a stale "ready" is the one
-  /// thing it must never say, and a lapsed lease says "suspended" instead.
+  /// held, which is the base the record already says. A new window starts
+  /// with no interruption on its books: a Stop during a call left the last
+  /// one's `.began` standing, and the session's `.ended` may never come.
   private func openSource(_ generation: Machine.Generation) async {
+    sessionInterrupted = false
     guard !activationFailed else {
       activationFailed = false
       feed(.openFailed(generation, .micBusy))
       return
     }
-    startHeartbeat()
     do {
       try await source.open()
       feed(.opened(generation))
-      await takeIdleMode()
+      await takeIdleMode(generation)
     } catch {
       lastError = CaptureFailure.sentence(for: error)
       Self.log.error("source open failed: \(error.localizedDescription, privacy: .public)")
@@ -92,9 +91,9 @@ extension ListeningWindow {
     }
   }
 
-  private func takeIdleMode() async {
+  private func takeIdleMode(_ generation: Machine.Generation) async {
     do {
-      try await idle.windowOpened(source: source)
+      try await idle.windowOpened(source: source, generation: generation)
     } catch {
       Self.log.notice("idle mode \(self.idle.kind.rawValue, privacy: .public) unavailable here; the mic stays held")
     }
@@ -126,12 +125,14 @@ extension ListeningWindow {
       return
     }
     feed(.resumed(generation))
-    if mayStart { await takeIdleMode() }
+    if mayStart { await takeIdleMode(generation) }
   }
 
+  /// The idle mode lets go first — and is waited for, so a window opened
+  /// right after (a hop over an interrupted one) never parks under a keeper
+  /// still on its way out — then the source closes.
   private func closeSource(_ generation: Machine.Generation) async {
-    idle.windowClosing()
-    stopHeartbeat()
+    await idle.windowClosing()
     await source.close()
     feed(.closed(generation))
   }
@@ -160,10 +161,12 @@ extension ListeningWindow {
     expiry = nil
   }
 
-  /// Renews the record every `SharedStore.appHeartbeatInterval` while a window
-  /// exists, with `micLive` as the idle mode reads it, so the keyboard sees a
-  /// lease that lapses within seconds of the app dying.
-  private func startHeartbeat() {
+  /// Renews the record every `SharedStore.appHeartbeatInterval` for as long as
+  /// the process runs, in every state of the window — with `micLive` as the
+  /// idle mode reads it while a window exists, false with none — so the
+  /// keyboard sees a lease that lapses within seconds of the app dying and
+  /// never while it lives (DESIGN.md). Started once, by `start()`.
+  func startHeartbeat() {
     heartbeat?.cancel()
     let clock = clock
     heartbeat = Task { [weak self] in
@@ -175,16 +178,12 @@ extension ListeningWindow {
     }
   }
 
-  private func stopHeartbeat() {
-    heartbeat?.cancel()
-    heartbeat = nil
-  }
-
   // MARK: The record
 
   /// Writes the record for the keyboard and remembers it for the home
   /// screen. A window opening or open again is past whatever failed last.
-  private func publish(_ record: ListeningState) {
+  /// Internal for `start()`'s launch record, across the file split.
+  func publish(_ record: ListeningState) {
     let changed = state?.window != record.window
     state = record
     if [.opening, .open].contains(record.window) { lastError = nil }

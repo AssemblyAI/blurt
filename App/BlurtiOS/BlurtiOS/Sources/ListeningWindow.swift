@@ -39,6 +39,8 @@ final class ListeningWindow {
   /// The background task held through an interruption, so the dictation it
   /// cut short can still release and land.
   static let interruptionTask = "blurt.interruption"
+  /// How the log names an idle mode's report for a window that has since closed.
+  static let staleIdleReportLog = "stale idle report"
 
   let source: any ListeningSource
   let launchID: UUID
@@ -98,7 +100,7 @@ final class ListeningWindow {
       launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: SyncSTTLimits.maxAudioSeconds)
     let (inputs, continuation) = AsyncStream<Input>.makeStream()
     inbox = continuation
-    idle.report = { [weak self] report in self?.idleReported(report) }
+    idle.report = { [weak self] report, generation in self?.idleReported(report, generation: generation) }
     loop = Task { [weak self] in
       for await input in inputs {
         guard let self else { return }
@@ -134,11 +136,30 @@ final class ListeningWindow {
 
   // MARK: What the app asks
 
+  /// The app is up: the record says so — a fresh launch, no window, the
+  /// session off — and the heartbeat runs from here for as long as the
+  /// process does, in every state of the window, so the keyboard reads an app
+  /// that is alive as off, never as suspended. Once per process; a second
+  /// call changes nothing.
+  func start() {
+    guard heartbeat == nil else { return }
+    publish(.launched(launchID))
+    startHeartbeat()
+  }
+
   /// A window exists — opening, open, paused or closing — as the session
   /// switch shows it.
   var isOn: Bool {
     if case .closed = machine.state { false } else { true }
   }
+
+  /// The window as the machine has it this instant, with the mic as the last
+  /// beat read it — not `state`, the record last published, which the
+  /// machine runs ahead of by the effects between a transition and its
+  /// publish (an opening's record lands once the source has opened). A
+  /// command is routed on this, so a press is never promised a window the
+  /// machine already knows is closing.
+  var liveState: ListeningState { machine.current(now: Date()) }
 
   /// The Picture in Picture keeper, when that is the idle mode: its source
   /// layer has to be in the view hierarchy for the window to start.
@@ -209,10 +230,24 @@ final class ListeningWindow {
       let from = machine.state
       let effects = machine.handle(event, now: Date())
       if machine.state != from { logTransition(from: from, to: machine.state, on: event) }
+      // A resume is the end of whatever interruption the session announced,
+      // whether or not its `.ended` arrived: the source's own word on the
+      // next one is news again.
+      if case .resumed = event, from.window == .interrupted, machine.state.isOpen { sessionInterrupted = false }
       await run(effects)
     case .heartbeat:
-      await run(machine.heartbeat(micLive: idle.isLive, now: Date()))
+      await run(heartbeatEffects(now: Date()))
     }
+  }
+
+  /// The beat's record: while a window exists, the machine's, with the mic as
+  /// the idle mode reads it; with none, the last record renewed — the lease
+  /// moved on, the reason kept, the mic not live.
+  private func heartbeatEffects(now: Date) -> [Machine.Effect] {
+    guard machine.state.generation != nil else {
+      return machine.heartbeat(renewing: state ?? .launched(launchID), now: now)
+    }
+    return machine.heartbeat(micLive: idle.isLive, now: now)
   }
 
   private func logTransition(from: Machine.State, to: Machine.State, on event: Machine.Event) {
@@ -279,10 +314,19 @@ final class ListeningWindow {
     }
   }
 
-  private func idleReported(_ report: IdleReport) {
+  /// The idle mode's word about the window it was armed for. One about a
+  /// window that has since closed — a keeper stopping after the hop that
+  /// closed it — is dropped here, never read as the next window's.
+  private func idleReported(_ report: IdleReport, generation: Machine.Generation) {
+    guard generation == machine.state.generation else {
+      let current = machine.state.generation.map(String.init) ?? "none"
+      Self.log.notice(
+        "\(Self.staleIdleReportLog) \(generation, privacy: .public) (current \(current, privacy: .public))")
+      return
+    }
     switch report {
-    case .idleChanged(let idle): withGeneration { .idleChanged($0, idle) }
-    case .sourceDied(let reason): withGeneration { .sourceDied($0, reason) }
+    case .idleChanged(let idle): feed(.idleChanged(generation, idle))
+    case .sourceDied(let reason): feed(.sourceDied(generation, reason))
     }
   }
 }
