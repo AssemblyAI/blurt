@@ -34,6 +34,8 @@ package nonisolated enum BlurtShared {
     package static let micAlignment = "micAlignment"
     package static let listeningUntil = "listeningUntil"
     package static let windowMinutes = "listeningWindowMinutes"
+    /// "Use AirPods mic": the session allows a Bluetooth microphone.
+    package static let airPodsMic = "airPodsMic"
     package static let phase = "phase"
     package static let command = "command"
     package static let result = "result"
@@ -358,5 +360,15 @@ package nonisolated enum SharedStore {
   package static var listeningUntil: Date? {
     get { defaults.object(forKey: BlurtShared.Key.listeningUntil) as? Date }
     set { defaults.set(newValue, forKey: BlurtShared.Key.listeningUntil) }
+  }
+
+  /// Whether AirPods (any Bluetooth headset) may be the microphone while a
+  /// session is on. Off by default: the session then prefers the phone's own
+  /// mic and allows only A2DP, so music on AirPods stays stereo for the whole
+  /// window; on, the session allows HFP and takes their mic. Read when the
+  /// session is set up, so a change applies to the next session.
+  package static var airPodsMic: Bool {
+    get { defaults.bool(forKey: BlurtShared.Key.airPodsMic) }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.airPodsMic) }
   }
 }

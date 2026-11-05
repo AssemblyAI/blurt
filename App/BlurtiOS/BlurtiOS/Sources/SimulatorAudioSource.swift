@@ -26,8 +26,6 @@
     private let queue = Mutex<AudioQueueRef?>(nil)
     private let opened = Atomic<Bool>(false)
     private let parking = Atomic<Bool>(false)
-    private let failures: AsyncStream<Void>.Continuation
-    let failedStarts: AsyncStream<Void>
     private let eventSink: AsyncStream<SourceEvent>.Continuation
     let events: AsyncStream<SourceEvent>
 
@@ -82,7 +80,6 @@
       init(fault: Fault? = Fault.fromEnvironment, usesMicrophone: Bool = true) {
         self.fault = fault
         self.usesMicrophone = usesMicrophone
-        (failedStarts, failures) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let (events, sink) = AsyncStream<SourceEvent>.makeStream()
         self.events = events
         eventSink = sink
@@ -90,7 +87,6 @@
       }
     #else
       init() {
-        (failedStarts, failures) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let (events, sink) = AsyncStream<SourceEvent>.makeStream()
         self.events = events
         eventSink = sink
@@ -188,7 +184,6 @@
         } catch {
           guard isOpen, !Task.isCancelled else { throw CancellationError() }
           Self.log.error("capture parked start failed: \(error.localizedDescription, privacy: .public)")
-          failures.yield()
           throw BlurtError.audioCaptureFailed(underlying: error)
         }
         // Closed while the queue came up: no window, no microphone.
@@ -298,6 +293,7 @@
         case .routeChangeAfter:
           let route = "reason=\(Fault.routeChangeReason) input=\(Fault.routeInput)"
           Self.log.notice("capture route \(route, privacy: .public) (simulated)")
+          feed.holdSilence()
           eventSink.yield(.routeChanged(reason: Fault.routeChangeReason, input: Fault.routeInput))
         case .refuseStart, .silentFrames, .refuseBackgroundStart:
           break

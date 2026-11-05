@@ -15,7 +15,10 @@ import UIKit
 /// wide and 0.079 pt tall, which iOS frames at 112 × 0 pt, so nothing is
 /// visible. This keeper does the same: one frame of a 4683 × 1 "video", the
 /// window started explicitly while Blurt is in front, and started on its own
-/// the next time the user leaves as a backstop. SPIKE: logs everything.
+/// the next time the user leaves as a backstop. The recipe — the frame, the
+/// layer's size, the start after the first frame renders, the hidden
+/// controls — is the one proven on a phone (iPhone 13, iOS 18.7.8,
+/// 2026-11-04); `PictureInPictureIdle` decides what the mic does around it.
 @MainActor
 @Observable
 final class PictureInPictureKeeper: NSObject {
@@ -73,7 +76,8 @@ final class PictureInPictureKeeper: NSObject {
     controller?.canStartPictureInPictureAutomaticallyFromInline = true
     isArmed = true
     enqueueFrame()
-    Self.log.notice("armed; possible: \(self.controller?.isPictureInPicturePossible ?? false) state: \(UIApplication.shared.applicationState.rawValue)")
+    let possible = controller?.isPictureInPicturePossible ?? false
+    Self.log.notice("armed; possible: \(possible) state: \(UIApplication.shared.applicationState.rawValue)")
   }
 
   /// Starts the window while Blurt is in front — once the first frame has
@@ -104,16 +108,15 @@ final class PictureInPictureKeeper: NSObject {
       return
     }
     let bounds = layer.bounds
+    let placement = "bounds \(bounds.width)x\(bounds.height); renderer \(layer.sampleBufferRenderer.status.rawValue)"
     guard controller.isPictureInPicturePossible else {
-      Self.log.notice(
-        "start wanted, not possible yet (on screen: \(self.layer.superlayer != nil); bounds \(bounds.width)x\(bounds.height); renderer \(self.layer.sampleBufferRenderer.status.rawValue))"
-      )
+      let onScreen = layer.superlayer != nil
+      Self.log.notice("start wanted, not possible yet (on screen: \(onScreen); \(placement, privacy: .public))")
       return
     }
     attempts += 1
-    Self.log.notice(
-      "startPictureInPicture #\(self.attempts); state: \(UIApplication.shared.applicationState.rawValue); bounds \(bounds.width)x\(bounds.height); renderer \(self.layer.sampleBufferRenderer.status.rawValue)"
-    )
+    let state = UIApplication.shared.applicationState.rawValue
+    Self.log.notice("startPictureInPicture #\(self.attempts); state: \(state); \(placement, privacy: .public)")
     controller.startPictureInPicture()
   }
 
@@ -153,7 +156,7 @@ final class PictureInPictureKeeper: NSObject {
     let renderer = layer.sampleBufferRenderer
     if renderer.status == .failed || renderer.requiresFlushToResumeDecoding { renderer.flush() }
     renderer.enqueue(sample)
-    Self.log.notice("frame enqueued \(Self.frameWidth)x\(Self.frameHeight); renderer status \(renderer.status.rawValue)")
+    Self.log.notice("frame enqueued \(Self.frameWidth)x\(Self.frameHeight); renderer \(renderer.status.rawValue)")
   }
 
   private static func sampleBuffer(width: Int, height: Int) -> CMSampleBuffer? {
@@ -239,11 +242,15 @@ extension PictureInPictureKeeper: AVPictureInPictureControllerDelegate {
 extension PictureInPictureKeeper: AVPictureInPictureSampleBufferPlaybackDelegate {
   nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, setPlaying playing: Bool) {}
 
-  nonisolated func pictureInPictureControllerTimeRangeForPlayback(_ controller: AVPictureInPictureController) -> CMTimeRange {
+  nonisolated func pictureInPictureControllerTimeRangeForPlayback(
+    _ controller: AVPictureInPictureController
+  ) -> CMTimeRange {
     CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
   }
 
-  nonisolated func pictureInPictureControllerIsPlaybackPaused(_ controller: AVPictureInPictureController) -> Bool { false }
+  nonisolated func pictureInPictureControllerIsPlaybackPaused(_ controller: AVPictureInPictureController) -> Bool {
+    false
+  }
 
   nonisolated func pictureInPictureController(
     _ controller: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions

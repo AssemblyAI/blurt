@@ -1,7 +1,8 @@
-import AVFoundation
+import BlurtEngine
 import BlurtiOSCore
 import Foundation
 import Observation
+import UIKit
 
 /// The stretch of time the app keeps the microphone open so the keyboard can
 /// start a dictation without bringing the app forward — Wispr calls the same
@@ -10,129 +11,295 @@ import Observation
 /// Opening needs the app in front (iOS refuses to start capture from the
 /// background), which is why the keyboard's mic key opens `blurt://start` when
 /// no window is open. Once open, `UIBackgroundModes: audio` plus the active
-/// audio session keep it alive after the user swipes back. Every dictation
-/// extends the window; it closes on its own after `SharedStore.windowMinutes`
-/// of silence (0 means never), when the user closes it in the app, or when a
-/// phone call, Siri or another app takes the microphone: the window is over
-/// then, and saying so beats a mic that looks open and hears nothing.
+/// audio session keep it alive after the user swipes back; the idle mode
+/// (`IdleMode`) says what the mic does between dictations. The window's
+/// lifetime counts from the last word (`SharedStore.windowMinutes`; 0 means
+/// until stopped); a call, Siri or another app taking the microphone pauses
+/// it rather than ending it, and it resumes when they are done or when Blurt
+/// is next in front.
+///
+/// This is the interpreter of `ListeningWindowMachine`, which owns every rule:
+/// what happened arrives here as an event — from the coordinator, the source,
+/// the audio session, the timers, the idle mode — and what the machine asks
+/// for is carried out in order (`ListeningWindow+Effects.swift`). Events go
+/// through one serial loop, so an effect still running (the source opening)
+/// is never interleaved with the next event's. Everything the machine
+/// publishes is the keyboard's whole picture of the window
+/// (`SharedStore.publish`), and is logged as one line per transition.
 @MainActor
 @Observable
 final class ListeningWindow {
-  #if targetEnvironment(simulator)
-    // The simulator's capture session carries no audio; see SimulatorAudioSource.
-    let source: any ListeningSource = SimulatorAudioSource()
-  #else
-    let source: any ListeningSource = WindowedAudioSource()
-  #endif
-  private(set) var until: Date?
+  typealias Machine = ListeningWindowMachine
+  static let log = HostIdentity.current.logger("ListeningWindow")
+  /// How long a resume waits for the source to come back on its own after an
+  /// interruption ends, polling, before the window stays interrupted until
+  /// the next foreground (DESIGN.md).
+  static let resumePoll: Duration = .milliseconds(500)
+  static let resumePollStep: Duration = .milliseconds(50)
+  /// The background task held through an interruption, so the dictation it
+  /// cut short can still release and land.
+  static let interruptionTask = "blurt.interruption"
+
+  let source: any ListeningSource
+  let launchID: UUID
+  @ObservationIgnored let audioSession: any AudioSessionControlling
+  @ObservationIgnored let appState: () -> UIApplication.State
+  @ObservationIgnored let backgroundTasks: any BackgroundTasking
+  @ObservationIgnored let clock: any Clock<Duration>
+  @ObservationIgnored let idle: any IdleMode
+  private(set) var machine: Machine
+  /// The last record published: what the keyboard reads, and what the home
+  /// screen draws the session from.
+  private(set) var state: ListeningState?
+  /// Why the last open or resume failed, in the source's own words, for the
+  /// home screen; nil once one succeeds.
   private(set) var lastError: String?
-  @ObservationIgnored private var expiry: Task<Void, Never>?
-  @ObservationIgnored private var heartbeat: Task<Void, Never>?
-  @ObservationIgnored private var interruptions: Task<Void, Never>?
-  /// Run when the window closes on its own — its time ran out, or iOS took
-  /// the microphone — and awaited *before* the source closes: a dictation
-  /// riding on the feed has to be ended by whoever owns the session while
-  /// the feed still holds its audio, not left recording into a closed one.
-  @ObservationIgnored var onClosingOnItsOwn: (() async -> Void)?
+  /// Run before the source closes or pauses with a dictation in flight: the
+  /// coordinator ends it through the session — released with its words, or
+  /// cancelled — while the feed still holds its audio.
+  @ObservationIgnored var onEndingUtterance: ((_ keepWords: Bool) async -> Void)?
+  /// Run when a published record's window differs from the last one's.
+  @ObservationIgnored var onStateChanged: ((ListeningState) -> Void)?
+  @ObservationIgnored private let inbox: AsyncStream<Input>.Continuation
+  @ObservationIgnored private var loop: Task<Void, Never>?
+  @ObservationIgnored private var readers: [Task<Void, Never>] = []
+  @ObservationIgnored var expiry: Task<Void, Never>?
+  @ObservationIgnored var heartbeat: Task<Void, Never>?
+  /// The audio session's `.began` is still on: the source's own
+  /// `interrupted` then says nothing new, and deactivating would throw.
+  @ObservationIgnored var sessionInterrupted = false
+  /// `activateSession` threw: the open that follows fails rather than
+  /// starting a source under a session that isn't there.
+  @ObservationIgnored var activationFailed = false
 
-  /// `until` is read first, always: it is what a view reading this observes
-  /// (the source's flag isn't observable), so a view that last saw the window
-  /// closed still redraws when it opens.
-  var isOpen: Bool { (until.map { $0 > Date() } ?? false) && source.isOpen }
-
-  /// Opens the microphone for `SharedStore.windowMinutes`. Foreground only.
-  func open() async {
-    do {
-      let audioSession = AVAudioSession.sharedInstance()
-      // `.mixWithOthers` so the window doesn't silence whatever the user is
-      // playing for the whole time it is open; `.defaultToSpeaker` so that
-      // audio doesn't drop to the earpiece while the microphone is ours; HFP
-      // so AirPods can be the input.
-      try audioSession.setCategory(
-        .playAndRecord, mode: .default, options: [.allowBluetoothHFP, .mixWithOthers, .defaultToSpeaker])
-      try audioSession.setActive(true)
-      try await source.open()
-      lastError = nil
-      extend()
-      startHeartbeat()
-      watchInterruptions()
-    } catch {
-      lastError = error.localizedDescription
-      await close()
-    }
+  /// What the loop takes: the machine's events, and the heartbeat's turn.
+  enum Input: Sendable {
+    case event(Machine.Event)
+    case heartbeat
   }
 
-  /// Pushes the window's end out again — called on open and after every
-  /// dictation, so a window only closes on real silence. `atLeast` holds it
-  /// open that long whatever the setting says: a dictation's start passes the
-  /// longest a dictation can run (`SyncSTTLimits.maxAudioSeconds`), so a
-  /// five-minute window can't end a twenty-minute dictation partway through.
-  func extend(atLeast floor: TimeInterval = 0) {
-    let minutes = SharedStore.windowMinutes
-    let end = minutes > 0 ? Date().addingTimeInterval(max(TimeInterval(minutes * 60), floor)) : Date.distantFuture
-    until = end
-    SharedStore.listeningUntil = end
-    expiry?.cancel()
-    guard end != .distantFuture else { return }
-    expiry = Task { [weak self] in
-      try? await Task.sleep(for: .seconds(end.timeIntervalSinceNow))
-      guard !Task.isCancelled else { return }
-      await self?.closeOnItsOwn()
-    }
-  }
-
-  /// Tells the keyboard the app is alive and the microphone really is open —
-  /// `SharedStore.isListening` needs both. Stops reporting the moment capture
-  /// is interrupted, so the keyboard's next tap reopens the app instead of
-  /// sending a press into silence.
-  private func startHeartbeat() {
-    heartbeat?.cancel()
-    heartbeat = Task { [weak self] in
-      while !Task.isCancelled {
-        // Re-checked each beat and not held across the sleep, so a window
-        // nobody closed can still go away and the beat stops with it.
-        guard let isOpen = self?.source.isOpen else { return }
-        SharedStore.appSeenAt = isOpen ? Date() : nil
-        try? await Task.sleep(for: .seconds(SharedStore.appHeartbeatInterval))
+  init(
+    source: any ListeningSource, audioSession: any AudioSessionControlling,
+    appState: @escaping () -> UIApplication.State, backgroundTasks: any BackgroundTasking,
+    clock: any Clock<Duration>, idle: any IdleMode, launchID: UUID = UUID()
+  ) {
+    self.source = source
+    self.audioSession = audioSession
+    self.appState = appState
+    self.backgroundTasks = backgroundTasks
+    self.clock = clock
+    self.idle = idle
+    self.launchID = launchID
+    machine = Machine(
+      launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: SyncSTTLimits.maxAudioSeconds)
+    let (inputs, continuation) = AsyncStream<Input>.makeStream()
+    inbox = continuation
+    idle.report = { [weak self] report in self?.idleReported(report) }
+    loop = Task { [weak self] in
+      for await input in inputs {
+        guard let self else { return }
+        await self.take(input)
       }
     }
+    readers = [readSourceEvents(), readSessionEvents()]
   }
 
-  /// A phone call, Siri, an alarm: iOS takes the microphone and tells us. The
-  /// window closes rather than pretending; the user reopens it in Blurt.
-  private func watchInterruptions() {
-    interruptions?.cancel()
-    interruptions = Task { [weak self] in
-      let began = NotificationCenter.default.notifications(named: AVAudioSession.interruptionNotification)
-        .filter { notification in
-          let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
-          return raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
-        }
-      for await _ in began {
-        guard !Task.isCancelled else { return }
-        await self?.closeOnItsOwn()
-        return
-      }
+  /// The phone's window: its capture source (the simulator's in the
+  /// simulator), the system audio session, the application's own state, and
+  /// the idle mode the device supports.
+  convenience init(backgroundTasks: any BackgroundTasking) {
+    #if targetEnvironment(simulator)
+      // The simulator's capture session carries no audio; see SimulatorAudioSource.
+      let source: any ListeningSource = SimulatorAudioSource()
+    #else
+      let source: any ListeningSource = WindowedAudioSource()
+    #endif
+    let appState = { UIApplication.shared.applicationState }
+    self.init(
+      source: source, audioSession: SystemAudioSession(), appState: appState, backgroundTasks: backgroundTasks,
+      clock: ContinuousClock(), idle: IdleModes.production(appState: appState))
+  }
+
+  deinit {
+    loop?.cancel()
+    for reader in readers { reader.cancel() }
+    expiry?.cancel()
+    heartbeat?.cancel()
+  }
+
+  // MARK: What the app asks
+
+  /// The source is open: the only state in which a press records.
+  var isOpen: Bool { machine.state.isOpen }
+
+  /// A window exists — opening, open, paused or closing — as the session
+  /// switch shows it.
+  var isOn: Bool {
+    if case .closed = machine.state { false } else { true }
+  }
+
+  /// The Picture in Picture keeper, when that is the idle mode: its source
+  /// layer has to be in the view hierarchy for the window to start.
+  var pictureInPictureKeeper: PictureInPictureKeeper? { (idle as? PictureInPictureIdle)?.keeper }
+
+  /// Asks for a window. The machine refuses an ask from the background (iOS
+  /// would refuse the capture), refreshes a window that is open, and reopens
+  /// one that is paused or closing.
+  func open() {
+    feed(.openRequested(inForeground: appState() != .background))
+  }
+
+  /// The switch or Stop: the dictation in flight is cancelled, the source closed.
+  func close() {
+    feed(.closeRequested)
+  }
+
+  /// The app came to the front; `turnedOff` is the session switch's word.
+  func foregrounded(turnedOff: Bool) {
+    feed(.foregrounded(turnedOff: turnedOff))
+  }
+
+  /// Settings changed `SharedStore.windowMinutes`: applied to the window that is open.
+  func windowMinutesChanged() {
+    feed(.windowMinutesChanged(SharedStore.windowMinutes))
+  }
+
+  /// A dictation is recording: the window's lifetime holds past it.
+  func utteranceStarted() {
+    idle.utteranceWillBegin()
+    withGeneration { .utteranceStarted($0) }
+  }
+
+  /// A dictation ended, however it ended: the lifetime counts from now.
+  func utteranceEnded() {
+    idle.utteranceDidEnd()
+    withGeneration { .utteranceEnded($0) }
+  }
+
+  /// A press's start failed with this reason: the source is lost until it
+  /// resumes (a refused background start, a dead or silent mic). The session
+  /// being off is no news to the window.
+  func captureFailed(reason: FailureReason) {
+    guard reason != .sessionOff else { return }
+    withGeneration { .sourceDied($0, reason) }
+  }
+
+  // MARK: The loop
+
+  func feed(_ event: Machine.Event) {
+    inbox.yield(.event(event))
+  }
+
+  /// An event about the source carries the generation it is about; none, no event.
+  private func withGeneration(_ make: (Machine.Generation) -> Machine.Event) {
+    guard let generation = machine.state.generation else { return }
+    feed(make(generation))
+  }
+
+  private func take(_ input: Input) async {
+    switch input {
+    case .event(let event):
+      let from = machine.state
+      let effects = machine.handle(event, now: Date())
+      if machine.state != from { logTransition(from: from, to: machine.state, on: event) }
+      await run(effects)
+    case .heartbeat:
+      await run(machine.heartbeat(micLive: idle.isLive, now: Date()))
     }
   }
 
-  /// The window ending without the user asking: the owner hears first.
-  private func closeOnItsOwn() async {
-    await onClosingOnItsOwn?()
-    await close()
+  private func logTransition(from: Machine.State, to: Machine.State, on event: Machine.Event) {
+    let generation = to.generation.map(String.init) ?? from.generation.map(String.init) ?? "none"
+    Self.log.notice(
+      "window \(from.window.rawValue, privacy: .public) → \(to.window.rawValue, privacy: .public) on \(event.name, privacy: .public) gen=\(generation, privacy: .public) launch=\(self.launchID, privacy: .public)"
+    )
+    DeviceTrace.record(
+      "window",
+      ["from": from.window.rawValue, "to": to.window.rawValue, "event": event.name, "gen": generation,
+        "launch": launchID.uuidString])
   }
 
-  func close() async {
-    expiry?.cancel()
-    expiry = nil
-    heartbeat?.cancel()
-    heartbeat = nil
-    interruptions?.cancel()
-    interruptions = nil
-    await source.close()
-    until = nil
-    SharedStore.listeningUntil = nil
-    SharedStore.appSeenAt = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  // MARK: What the source, the session and the idle mode say
+
+  private func readSourceEvents() -> Task<Void, Never> {
+    let events = source.events
+    return Task { [weak self] in
+      for await event in events { self?.sourceEvent(event) }
+    }
+  }
+
+  private func readSessionEvents() -> Task<Void, Never> {
+    let events = audioSession.events
+    return Task { [weak self] in
+      for await event in events { self?.sessionEvent(event) }
+    }
+  }
+
+  /// The capture session's word. An interruption the audio session already
+  /// announced is the same interruption; one it didn't (another client took
+  /// the input) is news. A dead session and a silent one are the source lost.
+  private func sourceEvent(_ event: SourceEvent) {
+    switch event {
+    case .interrupted(let reason):
+      guard !sessionInterrupted else { return }
+      Self.log.notice("source interrupted (\(reason, privacy: .public)) with no audio session interruption")
+      withGeneration { .interruptionBegan($0, .interrupted) }
+    case .interruptionEnded:
+      guard !sessionInterrupted else { return }
+      withGeneration { .interruptionEnded($0, shouldResume: true) }
+    case .runtimeError:
+      withGeneration { .sourceDied($0, .micBusy) }
+    case .silent:
+      withGeneration { .sourceDied($0, .micSilent) }
+    case .routeChanged(_, let input):
+      Self.log.notice("route changed; input=\(input ?? "none", privacy: .public); preferred input re-applied")
+      audioSession.applyPreferredInput()
+    }
+  }
+
+  private func sessionEvent(_ event: AudioSessionEvent) {
+    switch event {
+    case .interruptionBegan:
+      sessionInterrupted = true
+      withGeneration { .interruptionBegan($0, .interrupted) }
+    case .interruptionEnded(let shouldResume):
+      sessionInterrupted = false
+      withGeneration { .interruptionEnded($0, shouldResume: shouldResume) }
+    case .mediaReset:
+      sessionInterrupted = false
+      withGeneration { .mediaReset($0) }
+    }
+  }
+
+  private func idleReported(_ report: IdleReport) {
+    switch report {
+    case .idleChanged(let idle): withGeneration { .idleChanged($0, idle) }
+    case .sourceDied(let reason): withGeneration { .sourceDied($0, reason) }
+    }
+  }
+}
+
+extension ListeningWindowMachine.Event {
+  /// The event's name for the transition log: the case, and the reason where one rides along.
+  var name: String {
+    switch self {
+    case .openRequested(let inForeground): inForeground ? "openRequested" : "openRequested(background)"
+    case .opened: "opened"
+    case .openFailed(_, let reason): "openFailed(\(reason.rawValue))"
+    case .utteranceStarted: "utteranceStarted"
+    case .utteranceEnded: "utteranceEnded"
+    case .interruptionBegan(_, let reason): "interruptionBegan(\(reason.rawValue))"
+    case .interruptionEnded(_, let shouldResume): shouldResume ? "interruptionEnded" : "interruptionEnded(noResume)"
+    case .foregrounded(let turnedOff): turnedOff ? "foregrounded(turnedOff)" : "foregrounded"
+    case .resumed: "resumed"
+    case .resumeFailed(_, let reason): "resumeFailed(\(reason.rawValue))"
+    case .sourceDied(_, let reason): "sourceDied(\(reason.rawValue))"
+    case .mediaReset: "mediaReset"
+    case .expired: "expired"
+    case .closeRequested: "closeRequested"
+    case .closed: "closed"
+    case .idleChanged(_, let idle): "idleChanged(\(idle.rawValue))"
+    case .windowMinutesChanged(let minutes): "windowMinutesChanged(\(minutes))"
+    }
   }
 }

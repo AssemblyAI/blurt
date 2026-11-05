@@ -14,18 +14,16 @@ nonisolated protocol ListeningSource: MicCaptureProtocol {
   var levels: AsyncStream<Float> { get }
   /// What the microphone reports about itself while the window is open —
   /// taken away and given back, dying, its route changing, an utterance that
-  /// hears nothing — in the order it happened. One reader: the window.
+  /// hears nothing — in the order it happened. One reader: the window. A
+  /// press's start that fails is not an event: it throws its typed failure
+  /// to the engine, and the coordinator hands the window the reason.
   var events: AsyncStream<SourceEvent> { get }
-  /// One element each time a parked source couldn't bring the microphone
-  /// back for a press — iOS refusing a start from the background, as far as
-  /// the window can tell (`MicParking`).
-  var failedStarts: AsyncStream<Void> { get }
   /// Opens the microphone and holds it open. Async because opening a capture
   /// session blocks for hundreds of milliseconds on a phone and must not do
   /// so on the main actor.
   func open() async throws
-  /// From now until `close`, releases the microphone between utterances and
-  /// reopens it on each press.
+  /// From now until `close` or `hold`, releases the microphone between
+  /// utterances and reopens it on each press (`PictureInPictureIdle`).
   func park() async
   /// Back to holding the microphone open between utterances. Foreground only.
   func hold() async throws
@@ -95,22 +93,32 @@ nonisolated enum ListeningSourceFailure: Error, LocalizedError, Equatable {
 ///
 /// It also keeps the silence watchdog: a run of `silenceSeconds` of digital
 /// silence inside an open utterance is reported once, through `onSilence`,
-/// because a live route never delivers a second of exact zeros. A parked
-/// route may, while it comes up — `begin(watchingSilence: false)` holds the
-/// count until `watchSilence()` says the first live frame has arrived.
+/// because a live route never delivers a second of exact zeros. A route
+/// coming up may, held or parked — so every start holds the watchdog until
+/// the first chunk with sound in it, and a route change holds it again
+/// (`holdSilence`). A microphone that delivers only zeros is still said,
+/// after `startGraceSeconds` of them: a dead mic is said, not recorded.
 nonisolated final class UtteranceFeed: Sendable {
-  /// How much digital silence an open utterance tolerates before the
-  /// watchdog says the microphone hears nothing (DESIGN.md).
+  /// How much digital silence an open utterance tolerates, once it has heard
+  /// a live chunk, before the watchdog says the microphone hears nothing
+  /// (DESIGN.md).
   static let silenceSeconds = 1
+  /// How long a start — or a route change — may deliver nothing but zeros
+  /// before the watchdog says so anyway: the parked bring-up's own first-frame
+  /// budget (`WindowedAudioSource.firstFrameTimeout`).
+  static let startGraceSeconds = 3
   /// That second as 16 kHz mono 16-bit PCM.
   static let silenceBytes = silenceSeconds * SyncSTTLimits.sampleRate * MemoryLayout<Int16>.size
+  static let startGraceBytes = startGraceSeconds * SyncSTTLimits.sampleRate * MemoryLayout<Int16>.size
 
   private struct State {
     var sink: AsyncStream<Data>.Continuation?
     var bytes = 0
     /// Digital silence since the last live chunk, in bytes.
     var silentBytes = 0
-    var watchingSilence = true
+    /// A chunk with sound in it has arrived since the start or the last route
+    /// change: the watchdog counts to `silenceBytes`; before it, to the grace.
+    var heardSound = false
     /// Said once per run of silence.
     var silenceReported = false
   }
@@ -128,25 +136,29 @@ nonisolated final class UtteranceFeed: Sendable {
   }
 
   /// Starts an utterance: chunks delivered from now on go to the returned
-  /// stream. Any utterance still open is finished first. `watchingSilence`
-  /// false holds the watchdog until `watchSilence()`.
-  func begin(watchingSilence: Bool = true) -> AsyncStream<Data> {
+  /// stream. Any utterance still open is finished first. The watchdog waits
+  /// for the first chunk with sound in it.
+  func begin() -> AsyncStream<Data> {
     let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
     state.withLock { state in
       state.sink?.finish()
       state.sink = continuation
       state.bytes = 0
       state.silentBytes = 0
+      state.heardSound = false
       state.silenceReported = false
-      state.watchingSilence = watchingSilence
     }
     return stream
   }
 
-  /// Turns the watchdog on for the open utterance: the route has delivered
-  /// its first live frame, so a second of zeros from now on means it died.
-  func watchSilence() {
-    state.withLock { $0.watchingSilence = true }
+  /// The route changed under the utterance: the new one may deliver zeros
+  /// while it comes up, so the watchdog waits for its first live chunk again.
+  func holdSilence() {
+    state.withLock { state in
+      state.silentBytes = 0
+      state.heardSound = false
+      state.silenceReported = false
+    }
   }
 
   /// Ends the utterance and reports how many bytes it carried.
@@ -187,16 +199,18 @@ nonisolated final class UtteranceFeed: Sendable {
   }
 
   /// Counts the chunk toward the watchdog; true the once a run of silence
-  /// reaches `silenceBytes`.
+  /// reaches the limit — a second once sound has been heard, the start's
+  /// grace before.
   private static func watch(_ state: inout State, _ chunk: Data) -> Bool {
-    guard state.watchingSilence else { return false }
     guard isDigitalSilence(chunk) else {
+      state.heardSound = true
       state.silentBytes = 0
       state.silenceReported = false
       return false
     }
     state.silentBytes += chunk.count
-    guard state.silentBytes >= silenceBytes, !state.silenceReported else { return false }
+    let limit = state.heardSound ? silenceBytes : startGraceBytes
+    guard state.silentBytes >= limit, !state.silenceReported else { return false }
     state.silenceReported = true
     return true
   }

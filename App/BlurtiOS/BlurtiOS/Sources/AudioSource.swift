@@ -17,13 +17,14 @@ import Synchronization
 /// the press. What holding costs is the orange microphone indicator for the
 /// length of the window.
 ///
-/// `park()` is the way out of that cost. Once a silent loop keeps the app
-/// running (`AudioKeepAlive`; `MicParking` has the rule), the window parks the source: the
-/// session stops whenever no utterance is open, a press starts it again and
-/// waits for its first frame — the engine shows `.connecting` meanwhile — and
-/// the indicator is on only while the user dictates. A press that can't bring
-/// the microphone back is reported on `failedStarts`, so the window can stop
-/// parking.
+/// `park()` is the way out of that cost. Once a Picture in Picture keeper
+/// holds the process's foreground role (`PictureInPictureIdle`), the window
+/// parks the source: the session stops whenever no utterance is open, a press
+/// starts it again and waits for its first frame — the engine shows
+/// `.connecting` meanwhile — and the indicator is on only while the user
+/// dictates. A press that can't bring the microphone back throws
+/// `backgroundStartRefused`, typed, and the window hears of it through the
+/// coordinator's capture failure.
 ///
 /// What the session says about itself — an interruption, a runtime error, the
 /// route changing — reaches the window as `events` and the log as one line
@@ -46,7 +47,7 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
   private static let firstFrameTimeout: Duration = .seconds(3)
   static let log = HostIdentity.current.logger("Capture")
 
-  private let feed: UtteranceFeed
+  let feed: UtteranceFeed
   let session = AVCaptureSession()
   private let output = AVCaptureAudioDataOutput()
   /// Serial, so the converter below needs no lock.
@@ -60,8 +61,6 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
   /// Parked: the session runs only while an utterance is open.
   private let parking = Atomic<Bool>(false)
   private let firstFrame = FirstFrame()
-  private let failures: AsyncStream<Void>.Continuation
-  let failedStarts: AsyncStream<Void>
   let eventSink: AsyncStream<SourceEvent>.Continuation
   let events: AsyncStream<SourceEvent>
   /// The session's observers, registered once on the control queue
@@ -79,7 +78,6 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
   var levels: AsyncStream<Float> { feed.levels }
 
   override init() {
-    (failedStarts, failures) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
     let (events, sink) = AsyncStream<SourceEvent>.makeStream()
     self.events = events
     eventSink = sink
@@ -149,6 +147,8 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
     session.startRunning()
     Self.log.notice("capture start parked=\(parked) \(self.sessionFlags, privacy: .public)")
     guard session.isRunning, !session.isInterrupted else { throw startFailure(parked: parked) }
+    // A start that took is the end of whatever interruption came before it.
+    interruption.withLock { $0 = nil }
     downAfterInterruption.store(false, ordering: .releasing)
   }
 
@@ -219,6 +219,9 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
       self.feed.end()
     }
     firstFrame.cancel()
+    // The window is over, and so is any interruption it was waiting out: the
+    // next window's first start must not report a call that ended with this one.
+    interruption.withLock { $0 = nil }
   }
 
   private func onControlQueue<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
@@ -245,7 +248,9 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
     guard parking.load(ordering: .acquiring) else {
       // Held open: an interrupted session is "running" and delivering
       // nothing, and a feed from it would claim `.recording` over a dead mic,
-      // which the engine's timing contract forbids.
+      // which the engine's timing contract forbids. The watchdog waits for
+      // the first live chunk (`UtteranceFeed`): a held route can deliver
+      // zeros too, right after a route change.
       guard session.isRunning, !session.isInterrupted else {
         throw BlurtError.audioCaptureFailed(underlying: heldSessionDown())
       }
@@ -269,9 +274,9 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
   /// ends the wait at once rather than when the mic comes up.
   private func startParked() async throws -> AsyncStream<Data> {
     firstFrame.arm()
-    // The watchdog waits for the first live frame: a route coming up
-    // delivers zeros, and that is the first-frame timeout's to judge.
-    let stream = feed.begin(watchingSilence: false)
+    // A route coming up delivers zeros; the first-frame timeout judges those,
+    // and the feed's watchdog waits for the first live chunk by itself.
+    let stream = feed.begin()
     let firstFrame = firstFrame
     let started: Bool
     do {
@@ -296,7 +301,6 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
         firstFrame.cancel()
       } : false
     guard arrived else { try failStart(noFirstFrame()) }
-    feed.watchSilence()
     return stream
   }
 
@@ -311,14 +315,14 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
 
   /// Undoes a parked start. A cancel or a closed window is the user's (or the
   /// window's) doing: the session hears `CancellationError`, its cancel
-  /// path, and nothing is reported as the phone refusing the mic.
+  /// path, and nothing is reported as the phone refusing the mic. Anything
+  /// else is thrown typed, for the coordinator to hand the window as a reason.
   private func failStart(_ error: any Error) throws -> Never {
     firstFrame.cancel()
     feed.end()
     controlQueue.async { self.parkOnControlQueue() }
     if Task.isCancelled || !opened.load(ordering: .acquiring) { throw CancellationError() }
     Self.log.error("capture parked start failed: \(error.localizedDescription, privacy: .public)")
-    failures.yield()
     throw BlurtError.audioCaptureFailed(underlying: error)
   }
 

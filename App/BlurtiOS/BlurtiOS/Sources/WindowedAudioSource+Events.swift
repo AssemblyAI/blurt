@@ -73,6 +73,8 @@ extension WindowedAudioSource {
   private func routeChanged(reason: String, input: String?) {
     let route = "reason=\(reason) input=\(input ?? "none")"
     Self.log.notice("capture route \(route, privacy: .public) \(self.sessionFlags, privacy: .public)")
+    // The new route may deliver zeros while it comes up: not a dead mic.
+    feed.holdSilence()
     eventSink.yield(.routeChanged(reason: reason, input: input))
   }
 
