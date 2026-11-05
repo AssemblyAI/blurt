@@ -52,7 +52,9 @@ class BlurtUITestCase: XCTestCase {
   /// General pane. Production restores the last-used pane, per the macOS HIG;
   /// tests explicitly select General here so each case starts deterministically.
   /// The command is app-global, so it works regardless of which window has
-  /// focus. Unlike the harness, Settings opens frontmost via ⌘,, so its
+  /// focus, and it's sent even when Settings is already open: that raises it
+  /// over the harness a test clicked since, rather than driving its toolbar
+  /// from behind. Unlike the harness, Settings opens frontmost via ⌘,, so its
   /// controls are hittable without closing the other windows.
   @discardableResult
   func openSettingsWindow(timeout: TimeInterval = 10) -> XCUIElement {
@@ -66,9 +68,7 @@ class BlurtUITestCase: XCTestCase {
       UITestIdentifiers.advancedSettingsTab,
     ]
     let settings = app.windows.matching(NSPredicate(format: "title IN %@", paneTitles)).firstMatch
-    if !settings.exists {
-      app.typeKey(",", modifierFlags: .command)
-    }
+    app.typeKey(",", modifierFlags: .command)
     XCTAssertTrue(
       settings.waitForExistence(timeout: timeout),
       "Settings window did not open after ⌘,")
@@ -78,21 +78,28 @@ class BlurtUITestCase: XCTestCase {
 
   /// Selects a Settings pane (a `TabView` tab in the preferences toolbar) by its
   /// visible name. macOS exposes a preference tab as a radio button or a plain
-  /// button depending on the OS build, so try the radio group first and fall
-  /// back to a button. Returns a fresh proxy for the settings window: selecting
-  /// a pane retitles the window to the pane's name, so a proxy captured before
-  /// the switch (e.g. `openSettingsWindow()`'s) goes stale — scope follow-up
-  /// queries to the returned one.
+  /// button depending on the OS build (a button on macOS 26), so one query
+  /// takes either: waiting out a radio that never comes left the button only
+  /// a few seconds, too few on a loaded CI runner. Returns a fresh proxy for
+  /// the settings window: selecting a pane retitles the window to the pane's
+  /// name, so a proxy captured before the switch (e.g. `openSettingsWindow()`'s)
+  /// goes stale — scope follow-up queries to the returned one.
   @discardableResult
   func selectSettingsTab(_ window: XCUIElement, named name: String) -> XCUIElement {
-    let radio = window.radioButtons[name]
-    if radio.waitForExistence(timeout: 5) {
-      radio.click()
-    } else {
-      let button = window.buttons[name]
-      XCTAssertTrue(button.waitForExistence(timeout: 3), "Settings tab '\(name)' not found")
-      button.click()
+    let tab = window.toolbars.firstMatch.descendants(matching: .any)
+      .matching(
+        NSPredicate(
+          format: "(elementType == %d OR elementType == %d) AND title == %@",
+          XCUIElement.ElementType.radioButton.rawValue, XCUIElement.ElementType.button.rawValue, name)
+      )
+      .firstMatch
+    guard tab.waitForExistence(timeout: 10) else {
+      // What the window held instead, so a CI failure says why without the
+      // .xcresult.
+      XCTFail("Settings tab '\(name)' not found in:\n\(window.debugDescription)")
+      return app.windows[name]
     }
+    tab.click()
     return app.windows[name]
   }
 
