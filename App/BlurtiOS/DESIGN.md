@@ -27,6 +27,7 @@ screenshot never depends on tapping through Notes:
 BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording,processing dark" scripts/ios-sim.sh --screenshot panel.png
 BLURT_LAUNCH_ARGS="-BlurtGallery full idle,symbols,send light" scripts/ios-sim.sh --screenshot full.png
 BLURT_LAUNCH_ARGS="-BlurtSettings" scripts/ios-sim.sh --screenshot settings.png
+BLURT_LAUNCH_ARGS="-BlurtKeepOpen -BlurtGalleryStill" scripts/ios-sim.sh --screenshot keep-open.png
 ```
 
 Layouts: `slimBar`, `panel`, `full`. Faces: `light`, `dark` (the older theme
@@ -550,36 +551,44 @@ The keyboard's semantic colours and the app's catalog colours:
 
 <!-- tokens:begin keyboard -->
 
-| Token                   | Value                                      | Swift                         | Use                                                                                           |
-| ----------------------- | ------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `app/accent-dark`       | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                                             |
-| `app/accent-light`      | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`     | the catalog's AccentColor in light: Blurt green, the one accent every screen and the CTA take |
-| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                                              |
-| `app/card-border-light` | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                                             |
-| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                                                |
-| `app/card-fill-light`   | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                                               |
-| `app/cta-dark`          | `#67AD82` (`keyboard.app/accent-dark`)     | `Keyboard.appCtaDark`         | the catalog's CTA in dark: the one accent button                                              |
-| `app/cta-light`         | `#01762F` (`keyboard.app/accent-light`)    | `Keyboard.appCtaLight`        | the catalog's CTA in light: the one accent button                                             |
-| `app/cta-text-dark`     | `#1D1B16` (`brand.ink`)                    | `Keyboard.appCtaTextDark`     | the catalog's CTAText in dark: ink on green, as the site                                      |
-| `app/cta-text-light`    | `#FFFFFF` (`brand.white`)                  | `Keyboard.appCtaTextLight`    | the catalog's CTAText in light                                                                |
-| `app/muted-dark`        | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appMutedDark`       | the catalog's Muted in dark                                                                   |
-| `app/muted-light`       | `#777673` (`brand.neutral/700`)            | `Keyboard.appMutedLight`      | the catalog's Muted in light: eyebrows, captions, secondary text                              |
-| `app/page-dark`         | `#1D1B16` (`brand.ink`)                    | `Keyboard.appPageDark`        | the catalog's Page in dark: ink, the website's ground                                         |
-| `app/page-light`        | `#FDFCF8` (`brand.paper/page`)             | `Keyboard.appPageLight`       | the catalog's Page in light: the design system's page                                         |
-| `app/text-dark`         | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appTextDark`        | the catalog's Text in dark                                                                    |
-| `app/text-light`        | `#1D1B16` (`brand.ink`)                    | `Keyboard.appTextLight`       | the catalog's Text in light                                                                   |
-| `kb/cancel`             | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`           | the panel's cancel ×                                                                          |
-| `kb/field`              | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`            | the key-term field                                                                            |
-| `kb/field-border`       | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`      | the field's hairline                                                                          |
-| `kb/full-access-note`   | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                                                 |
-| `kb/key`                | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`              | an ordinary key                                                                               |
-| `kb/key-modifier`       | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                                                     |
-| `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                                                   |
-| `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest                              |
-| `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                                         |
-| `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                                             |
-| `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                                          |
-| `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Swift reads the palette)                                           |
+| Token                        | Value                                      | Swift                            | Use                                                                                           |
+| ---------------------------- | ------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `app/accent-dark`            | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`         | the catalog's AccentColor in dark                                                             |
+| `app/accent-light`           | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`        | the catalog's AccentColor in light: Blurt green, the one accent every screen and the CTA take |
+| `app/card-border-dark`       | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`     | the catalog's CardBorder in dark                                                              |
+| `app/card-border-light`      | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight`    | the catalog's CardBorder in light                                                             |
+| `app/card-fill-dark`         | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`       | the catalog's CardFill in dark                                                                |
+| `app/card-fill-light`        | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`      | the catalog's CardFill in light                                                               |
+| `app/cta-dark`               | `#67AD82` (`keyboard.app/accent-dark`)     | `Keyboard.appCtaDark`            | the catalog's CTA in dark: the one accent button                                              |
+| `app/cta-light`              | `#01762F` (`keyboard.app/accent-light`)    | `Keyboard.appCtaLight`           | the catalog's CTA in light: the one accent button                                             |
+| `app/cta-text-dark`          | `#1D1B16` (`brand.ink`)                    | `Keyboard.appCtaTextDark`        | the catalog's CTAText in dark: ink on green, as the site                                      |
+| `app/cta-text-light`         | `#FFFFFF` (`brand.white`)                  | `Keyboard.appCtaTextLight`       | the catalog's CTAText in light                                                                |
+| `app/keep-open-tint-1-dark`  | `#67AD82` (`brand.green/400`)              | `Keyboard.appKeepOpenTint1Dark`  | tint 1 in dark                                                                                |
+| `app/keep-open-tint-1-light` | `#01762F` (`brand.green/700`)              | `Keyboard.appKeepOpenTint1Light` | the drifting wordmark on the Blurt-is-on card, a colour per wall in turn: the accent first    |
+| `app/keep-open-tint-2-dark`  | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appKeepOpenTint2Dark`  | tint 2 in dark                                                                                |
+| `app/keep-open-tint-2-light` | `#1D1B16` (`brand.ink`)                    | `Keyboard.appKeepOpenTint2Light` | then the text colour                                                                          |
+| `app/keep-open-tint-3-dark`  | `#99C8AC` (`brand.green/200`)              | `Keyboard.appKeepOpenTint3Dark`  | tint 3 in dark                                                                                |
+| `app/keep-open-tint-3-light` | `#67AD82` (`brand.green/400`)              | `Keyboard.appKeepOpenTint3Light` | then the green a step lighter                                                                 |
+| `app/keep-open-tint-4-dark`  | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appKeepOpenTint4Dark`  | tint 4 in dark                                                                                |
+| `app/keep-open-tint-4-light` | `#777673` (`brand.neutral/700`)            | `Keyboard.appKeepOpenTint4Light` | then the muted grey, and round again                                                          |
+| `app/muted-dark`             | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appMutedDark`          | the catalog's Muted in dark                                                                   |
+| `app/muted-light`            | `#777673` (`brand.neutral/700`)            | `Keyboard.appMutedLight`         | the catalog's Muted in light: eyebrows, captions, secondary text                              |
+| `app/page-dark`              | `#1D1B16` (`brand.ink`)                    | `Keyboard.appPageDark`           | the catalog's Page in dark: ink, the website's ground                                         |
+| `app/page-light`             | `#FDFCF8` (`brand.paper/page`)             | `Keyboard.appPageLight`          | the catalog's Page in light: the design system's page                                         |
+| `app/text-dark`              | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appTextDark`           | the catalog's Text in dark                                                                    |
+| `app/text-light`             | `#1D1B16` (`brand.ink`)                    | `Keyboard.appTextLight`          | the catalog's Text in light                                                                   |
+| `kb/cancel`                  | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`              | the panel's cancel ×                                                                          |
+| `kb/field`                   | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`               | the key-term field                                                                            |
+| `kb/field-border`            | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`         | the field's hairline                                                                          |
+| `kb/full-access-note`        | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`      | the one line of words the keyboard ever shows                                                 |
+| `kb/key`                     | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`                 | an ordinary key                                                                               |
+| `kb/key-modifier`            | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`         | shift, delete, globe, return, 123, cancel                                                     |
+| `kb/legend`                  | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`              | key legends and bare glyphs                                                                   |
+| `kb/legend-secondary`        | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`     | the mono word labels (123, ABC, return, space) and the + at rest                              |
+| `kb/notice-error`            | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`         | the solid ring and glyph for an error                                                         |
+| `kb/popup`                   | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`               | the letter pop-up                                                                             |
+| `kb/signal`                  | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`              | the wave, the caret, the saved check                                                          |
+| `kb/surface`                 | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`             | the design face's surface (Swift reads the palette)                                           |
 
 <!-- tokens:end keyboard -->
 
@@ -664,6 +673,13 @@ pins the derivation.
 | `grille/panel-width`         | `160`                                  | `Metrics.grillePanelWidth`         | the grille in the panel                                                                                                                                                                                                                                                                                 |
 | `grille/pitch`               | `4`                                    | `Metrics.grillePitch`              | the dot lattice: one dot every                                                                                                                                                                                                                                                                          |
 | `grille/sheen-width`         | `0.35`                                 | `Metrics.grilleSheenWidth`         | the sheen's band, as a fraction of the width                                                                                                                                                                                                                                                            |
+| `keep-open/corner-tolerance` | `4`                                    | `Metrics.keepOpenCornerTolerance`  | touching one edge this close to the other counts as an exact corner                                                                                                                                                                                                                                     |
+| `keep-open/flare-arm`        | `3`                                    | `Metrics.keepOpenFlareArm`         | the corner flare's vertical arm, as a fraction of the wordmark's height                                                                                                                                                                                                                                 |
+| `keep-open/flare-core`       | `5`                                    | `Metrics.keepOpenFlareCore`        | the flare's bright centre                                                                                                                                                                                                                                                                               |
+| `keep-open/flare-span`       | `1.6`                                  | `Metrics.keepOpenFlareSpan`        | and its horizontal arm, as a fraction of the wordmark's width                                                                                                                                                                                                                                           |
+| `keep-open/flare-width`      | `1`                                    | `Metrics.keepOpenFlareWidth`       | the flare's lines                                                                                                                                                                                                                                                                                       |
+| `keep-open/speed`            | `64`                                   | `Metrics.keepOpenSpeed`            | how far it drifts along each axis in a second, so the path is the 45° zigzag                                                                                                                                                                                                                            |
+| `keep-open/wordmark-height`  | `44`                                   | `Metrics.keepOpenWordmarkHeight`   | the wordmark drifting on the Blurt-is-on card: twice the header's                                                                                                                                                                                                                                       |
 | `key/abc-width-402`          | `43.333`                               | `Metrics.keyAbcWidth402`           | 123 and the globe at 402 pt: the iPhone's                                                                                                                                                                                                                                                               |
 | `key/gap`                    | `6`                                    | `Metrics.keyGap`                   | between keys, the iPhone's                                                                                                                                                                                                                                                                              |
 | `key/height`                 | `43`                                   | `Metrics.keyHeight`                | every key: the iPhone's cap height (apple-geometry.json)                                                                                                                                                                                                                                                |
@@ -766,26 +782,29 @@ house curve (`ease/signature`, `cubic-bezier(0.22, 1, 0.36, 1)`).
 
 <!-- tokens:begin motion -->
 
-| Token            | Value           | Swift                  | Use                                                                        |
-| ---------------- | --------------- | ---------------------- | -------------------------------------------------------------------------- |
-| `caret`          | `0.5`           | `Motion.caret`         | the caret's blink                                                          |
-| `chip-hold`      | `0.6`           | `Motion.chipHold`      | holding the chip opens the field instead of adding; longer than a firm tap |
-| `colour`         | `0.2`           | `Motion.colour`        | a colour or fill changing state: the brand's transition                    |
-| `ease/signature` | `0.22,1,0.36,1` | `Motion.easeSignature` | the house curve for everything that moves; nothing springs                 |
-| `flip`           | `0.25`          | `Motion.flip`          | the panel's carousel                                                       |
-| `glint-life`     | `0.5`           | `Motion.glintLife`     | a facet's flash while recording                                            |
-| `height-change`  | `0.25`          | `Motion.heightChange`  | the keyboard resizing                                                      |
-| `key-press`      | `0.08`          | `Motion.keyPress`      | a key lighting                                                             |
-| `landing`        | `0.6`           | `Motion.landing`       | the glint when the words land                                              |
-| `press`          | `0.1`           | `Motion.press`         | the orb's press; the one thing that answers at once                        |
-| `ring-period`    | `1.6`           | `Motion.ringPeriod`    | one turn of the ring, the Mac's cadence                                    |
-| `sheen`          | `4`             | `Motion.sheen`         | one pass of the light over the element at rest                             |
-| `sheen-working`  | `1.6`           | `Motion.sheenWorking`  | and while something is happening: the ring's cadence                       |
-| `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming              |
-| `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                                           |
-| `typing-flash`   | `0.15`          | `Motion.typingFlash`   | the typing field's border turning, and the countdown's thump               |
-| `typing-tick`    | `0.1`           | `Motion.typingTick`    | how often the typing test's clock and live speed redraw                    |
-| `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                                  |
+| Token                    | Value           | Swift                        | Use                                                                                              |
+| ------------------------ | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `caret`                  | `0.5`           | `Motion.caret`               | the caret's blink                                                                                |
+| `chip-hold`              | `0.6`           | `Motion.chipHold`            | holding the chip opens the field instead of adding; longer than a firm tap                       |
+| `colour`                 | `0.2`           | `Motion.colour`              | a colour or fill changing state: the brand's transition                                          |
+| `ease/signature`         | `0.22,1,0.36,1` | `Motion.easeSignature`       | the house curve for everything that moves; nothing springs                                       |
+| `flip`                   | `0.25`          | `Motion.flip`                | the panel's carousel                                                                             |
+| `glint-life`             | `0.5`           | `Motion.glintLife`           | a facet's flash while recording                                                                  |
+| `height-change`          | `0.25`          | `Motion.heightChange`        | the keyboard resizing                                                                            |
+| `keep-open-fade`         | `0.6`           | `Motion.keepOpenFade`        | the Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns |
+| `keep-open-first-corner` | `9`             | `Motion.keepOpenFirstCorner` | the first exact corner, this long after the card appears; the rest come as the screen allows     |
+| `keep-open-flare`        | `0.9`           | `Motion.keepOpenFlare`       | the cross flare when the wordmark lands in a corner                                              |
+| `key-press`              | `0.08`          | `Motion.keyPress`            | a key lighting                                                                                   |
+| `landing`                | `0.6`           | `Motion.landing`             | the glint when the words land                                                                    |
+| `press`                  | `0.1`           | `Motion.press`               | the orb's press; the one thing that answers at once                                              |
+| `ring-period`            | `1.6`           | `Motion.ringPeriod`          | one turn of the ring, the Mac's cadence                                                          |
+| `sheen`                  | `4`             | `Motion.sheen`               | one pass of the light over the element at rest                                                   |
+| `sheen-working`          | `1.6`           | `Motion.sheenWorking`        | and while something is happening: the ring's cadence                                             |
+| `state-fade`             | `0.5`           | `Motion.stateFade`           | every other change on the key: the ring, a glyph, the dimming                                    |
+| `term-swap`              | `0.4`           | `Motion.termSwap`            | the voice bar becoming the field                                                                 |
+| `typing-flash`           | `0.15`          | `Motion.typingFlash`         | the typing field's border turning, and the countdown's thump                                     |
+| `typing-tick`            | `0.1`           | `Motion.typingTick`          | how often the typing test's clock and live speed redraw                                          |
+| `wave-fade`              | `0.7`           | `Motion.waveFade`            | the orb and the wave crossing, either way                                                        |
 
 <!-- tokens:end motion -->
 
@@ -879,7 +898,40 @@ contact names) and links the privacy policy; `ALLOW` records it and opens the
 window. App Review 5.1.2(i). The list is what `AIConsent.version` covers:
 sending anything new means a new version, and everyone is asked again.
 
-`-BlurtSettings` opens Settings as the root for a screenshot; `xcrun simctl
+**Blurt is on** (`KeepOpenView`, `KeepOpen`, `Bounce`): the app-switcher
+card. Whenever the scene leaves the front with a listening window on — the
+swipe up to the switcher, the home gesture — `RootView` fades a full-screen
+page in over whatever the app was showing (`keep-open-fade`, 0.6 s on the
+house curve; a layer, never a presentation), and fades it out again when the
+app comes back to the front. That page is what iOS shows as Blurt's card in
+the switcher and keeps as its snapshot, so the card says the one thing the
+user has to know there: `BLURT IS ON` in the accent, the serif "Keep Blurt in
+the background.", and a line saying to leave it here and the Blurt keyboard
+dictates in any app, and for how long it listens after the last word, in
+Settings' words (15 minutes, 1 hour, or until you stop it). Nothing on it is
+tapped: the scene is inactive whenever it shows. Without a window — the
+session off — the switcher shows the app as it was.
+
+Above the words, the screensaver — the DVD player's — on a little screen of
+its own: a card (the hairline, at the button's 4 pt corner, square enough that
+a corner reads as one) filling the room between the header and the words. The
+wordmark, twice the header's (44), drifts across it at 64 pt/s on both axes
+and turns back off every edge, so the path is the 45° zigzag, and it takes the
+next of four colours at every wall it touches (the accent, the text, a lighter
+green, the muted grey; `app/keep-open-tint-*`, easing over `colour`). Touch
+one edge within 4 pt of the other and it is an exact corner: the grille's
+cross flare at the wordmark's scale over the corner it landed in (the upright
+3 × its height, the arm 1.6 × its width, a green and a violet fringe as light,
+gone over 0.9 s, clipped to the screen), a success haptic, and one more on the
+mono `CORNERS · N` in the top corner. Exact corners are rare by nature, so the
+start is chosen to land the first one 9 s in (`keep-open-first-corner`); after
+that they come as the screen allows. Every frame is a function of the time
+since the card appeared (`Bounce`, tested: the reflection, the wall count, the
+corner and its tolerance, the parked frame). Reduce Motion parks the wordmark
+dead centre in the accent and drops the tally.
+
+`-BlurtSettings` opens Settings as the root for a screenshot, and
+`-BlurtKeepOpen` Blurt is on (`-BlurtGalleryStill` parks it); `xcrun simctl
 ui booted appearance dark` before any capture for the dark appearance;
 `-BlurtStartListening` opens the mic at launch (and grants AI consent, which a scripted run can't tap through).
 

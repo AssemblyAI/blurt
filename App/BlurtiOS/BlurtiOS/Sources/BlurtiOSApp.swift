@@ -77,6 +77,12 @@ struct BlurtiOSApp: App {
         } else if CommandLine.arguments.contains("-BlurtSettings") {
           // The settings sheet as the root, for a screenshot without a tap.
           SettingsView(coordinator: coordinator)
+        } else if CommandLine.arguments.contains("-BlurtKeepOpen") {
+          // The app-switcher card as the root, for a screenshot or a recording
+          // without a trip to the switcher; `-BlurtGalleryStill` holds it at
+          // time zero.
+          KeepOpenView(
+            windowMinutes: SharedStore.windowMinutes, still: CommandLine.arguments.contains("-BlurtGalleryStill"))
         } else if rows.isEmpty {
           home
         } else {

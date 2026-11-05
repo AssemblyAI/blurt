@@ -214,6 +214,22 @@ package enum DesignTokens {
     package nonisolated static let appCtaTextDark: Color = Brand.ink
     /// The catalog's CTAText in light.
     package nonisolated static let appCtaTextLight: Color = Brand.white
+    /// Tint 1 in dark.
+    package nonisolated static let appKeepOpenTint1Dark: Color = Brand.green400
+    /// The drifting wordmark on the Blurt-is-on card, a colour per wall in turn: the accent first.
+    package nonisolated static let appKeepOpenTint1Light: Color = Brand.green700
+    /// Tint 2 in dark.
+    package nonisolated static let appKeepOpenTint2Dark: Color = Brand.paperTint
+    /// Then the text colour.
+    package nonisolated static let appKeepOpenTint2Light: Color = Brand.ink
+    /// Tint 3 in dark.
+    package nonisolated static let appKeepOpenTint3Dark: Color = Brand.green200
+    /// Then the green a step lighter.
+    package nonisolated static let appKeepOpenTint3Light: Color = Brand.green400
+    /// Tint 4 in dark.
+    package nonisolated static let appKeepOpenTint4Dark: Color = Brand.neutral500
+    /// Then the muted grey, and round again.
+    package nonisolated static let appKeepOpenTint4Light: Color = Brand.neutral700
     /// The catalog's Muted in dark.
     package nonisolated static let appMutedDark: Color = Brand.neutral500
     /// The catalog's Muted in light: eyebrows, captions, secondary text.
@@ -381,6 +397,20 @@ package enum DesignTokens {
     package nonisolated static let grillePitch: CGFloat = 4
     /// The sheen's band, as a fraction of the width.
     package nonisolated static let grilleSheenWidth: CGFloat = 0.35
+    /// Touching one edge this close to the other counts as an exact corner.
+    package nonisolated static let keepOpenCornerTolerance: CGFloat = 4
+    /// The corner flare's vertical arm, as a fraction of the wordmark's height.
+    package nonisolated static let keepOpenFlareArm: CGFloat = 3
+    /// The flare's bright centre.
+    package nonisolated static let keepOpenFlareCore: CGFloat = 5
+    /// And its horizontal arm, as a fraction of the wordmark's width.
+    package nonisolated static let keepOpenFlareSpan: CGFloat = 1.6
+    /// The flare's lines.
+    package nonisolated static let keepOpenFlareWidth: CGFloat = 1
+    /// How far it drifts along each axis in a second, so the path is the 45° zigzag.
+    package nonisolated static let keepOpenSpeed: CGFloat = 64
+    /// The wordmark drifting on the Blurt-is-on card: twice the header's.
+    package nonisolated static let keepOpenWordmarkHeight: CGFloat = 44
     /// 123 and the globe at 402 pt: the iPhone's.
     package nonisolated static let keyAbcWidth402: CGFloat = 43.333
     /// Between keys, the iPhone's.
@@ -642,6 +672,12 @@ package enum DesignTokens {
     package nonisolated static let glintLife: Double = 0.5
     /// The keyboard resizing.
     package nonisolated static let heightChange: Double = 0.25
+    /// The Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns.
+    package nonisolated static let keepOpenFade: Double = 0.6
+    /// The first exact corner, this long after the card appears; the rest come as the screen allows.
+    package nonisolated static let keepOpenFirstCorner: Double = 9
+    /// The cross flare when the wordmark lands in a corner.
+    package nonisolated static let keepOpenFlare: Double = 0.9
     /// A key lighting.
     package nonisolated static let keyPress: Double = 0.08
     /// The glint when the words land.
@@ -771,6 +807,14 @@ package enum DesignTokens {
     "keyboard.app/cta-light": "#01762F",
     "keyboard.app/cta-text-dark": "#1D1B16",
     "keyboard.app/cta-text-light": "#FFFFFF",
+    "keyboard.app/keep-open-tint-1-dark": "#67AD82",
+    "keyboard.app/keep-open-tint-1-light": "#01762F",
+    "keyboard.app/keep-open-tint-2-dark": "#F5F3EB",
+    "keyboard.app/keep-open-tint-2-light": "#1D1B16",
+    "keyboard.app/keep-open-tint-3-dark": "#99C8AC",
+    "keyboard.app/keep-open-tint-3-light": "#67AD82",
+    "keyboard.app/keep-open-tint-4-dark": "#A5A4A2",
+    "keyboard.app/keep-open-tint-4-light": "#777673",
     "keyboard.app/muted-dark": "#A5A4A2",
     "keyboard.app/muted-light": "#777673",
     "keyboard.app/page-dark": "#1D1B16",
@@ -856,6 +900,13 @@ package enum DesignTokens {
     "metrics.grille/panel-width": "160",
     "metrics.grille/pitch": "4",
     "metrics.grille/sheen-width": "0.35",
+    "metrics.keep-open/corner-tolerance": "4",
+    "metrics.keep-open/flare-arm": "3",
+    "metrics.keep-open/flare-core": "5",
+    "metrics.keep-open/flare-span": "1.6",
+    "metrics.keep-open/flare-width": "1",
+    "metrics.keep-open/speed": "64",
+    "metrics.keep-open/wordmark-height": "44",
     "metrics.key/abc-width-402": "43.333",
     "metrics.key/gap": "6",
     "metrics.key/height": "43",
@@ -993,6 +1044,9 @@ package enum DesignTokens {
     "motion.flip": "0.25",
     "motion.glint-life": "0.5",
     "motion.height-change": "0.25",
+    "motion.keep-open-fade": "0.6",
+    "motion.keep-open-first-corner": "9",
+    "motion.keep-open-flare": "0.9",
     "motion.key-press": "0.08",
     "motion.landing": "0.6",
     "motion.press": "0.1",
