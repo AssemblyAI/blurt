@@ -111,7 +111,8 @@ extension KeyboardModel {
   private func hop(reason: FailureReason?) {
     let url =
       hasFullAccess
-      ? BlurtShared.startURL(reason: reason) : BlurtShared.setupURL(need: BlurtShared.fullAccessNeed)
+      ? BlurtShared.startURL(reason: reason, host: hostBundleID)
+      : BlurtShared.setupURL(need: BlurtShared.fullAccessNeed)
     openApp(url: url)
   }
 

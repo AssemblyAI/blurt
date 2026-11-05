@@ -118,6 +118,9 @@ package final class KeyboardModel {
   @ObservationIgnored package var noticeClock: Task<Void, Never>?
   /// This controller — one per host field — within the process (`KeyboardProcess.id`).
   @ObservationIgnored package let controllerID = UUID().uuidString
+  /// The app this keyboard is up in (`HostApp.bundleID`), read on each
+  /// appearance; the hop carries it so the app can come back to it.
+  @ObservationIgnored package var hostBundleID: String?
   /// The last command written, kept whole for the handshake's resend: the
   /// same id and stamp again, so an app that did read it ignores the copy.
   @ObservationIgnored package var lastCommand: KeyboardCommand?

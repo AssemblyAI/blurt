@@ -20,12 +20,19 @@ package nonisolated enum KeyboardLog {
   package static let category = "Keyboard"
   private static let logger = Logger(subsystem: BlurtShared.logSubsystem, category: category)
 
-  package static func appeared(pid: Int32, process: String, controller: String, fullAccess: Bool) {
+  package static func appeared(pid: Int32, process: String, controller: String, fullAccess: Bool, host: String?) {
     logger.info(
       """
       appeared pid=\(pid, privacy: .public) process=\(process, privacy: .public) \
-      controller=\(controller, privacy: .public) fullAccess=\(fullAccess, privacy: .public)
+      controller=\(controller, privacy: .public) fullAccess=\(fullAccess, privacy: .public) \
+      host=\(host ?? "unknown", privacy: .public)
       """)
+  }
+
+  /// No holder had the host's bundle id: the classes that were asked, so the
+  /// device log says where to look on an iOS that moved it.
+  package static func hostUnknown(holders: [String]) {
+    logger.notice("host unknown; asked \(holders.joined(separator: " > "), privacy: .public)")
   }
 
   package static func disappeared(pid: Int32, process: String, controller: String) {

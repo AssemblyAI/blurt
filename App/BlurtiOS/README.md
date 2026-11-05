@@ -189,7 +189,10 @@ iPhone 13.
    then **Open Settings** › **Apps › Blurt › Keyboards** (a phone may open straight on Blurt's page):
    Blurt on, **Allow Full Access**.
 4. Dictate: turn the **session** on, go to Messages or Notes, hold the globe key, pick Blurt, tap
-   the mic — tap again to stop, or hold it while you talk; the words land in the field. Repeat at
+   the mic — tap again to stop, or hold it while you talk; the words land in the field. With the
+   session off, the tap opens Blurt instead, which turns the session on and brings Messages back by
+   itself (`HostReturn`; the trace's `hop` line carries the host and its `return` line says whether
+   iOS agreed — refused, Blurt stays in front with its "◀" hint). Repeat at
    the waits the flow asks for, and try the other two layouts from the app's Keyboard picker (the
    keyboard reads the choice the next time it comes up). `scripts/ios-device.sh kill blurt` or
    `kill keyboard` ends either process mid-dictation (the relaunch and dead-keyboard flows).

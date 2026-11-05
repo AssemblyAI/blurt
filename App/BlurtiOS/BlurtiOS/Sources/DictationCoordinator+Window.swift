@@ -117,12 +117,77 @@ extension DictationCoordinator {
     }
     guard BlurtShared.isStart(url) else { return }
     let reason = BlurtShared.hopReason(url)
-    Self.log.notice("start hop reason=\(reason?.rawValue ?? "none", privacy: .public)")
-    DeviceTrace.record("hop", ["reason": reason?.rawValue ?? ""])
-    startedFromKeyboard = UIApplication.shared.applicationState != .active
+    let host = BlurtShared.hopHost(url)
+    Self.log.notice(
+      "start hop reason=\(reason?.rawValue ?? "none", privacy: .public) host=\(host ?? "none", privacy: .public)")
+    DeviceTrace.record("hop", ["reason": reason?.rawValue ?? "", "host": host ?? ""])
+    startedFromKeyboard = appState() != .active
+    // The keyboard was in another app: go back to it once the window is
+    // open. Not when it was Blurt's own box, which iOS would not return to.
+    cancelReturn()
+    if startedFromKeyboard, let host, host != Bundle.main.bundleIdentifier {
+      returnHost = host
+    }
     // The keyboard's mic asked for a session: that undoes an earlier off.
     SessionAutoStart.setTurnedOff(false)
     Task { await startListening() }
+  }
+
+  // MARK: The way back
+
+  /// Every record the window publishes, read for the return: open and the
+  /// mic staying live → go back; open but the keeper not up → go back at the
+  /// cap; closed after a window was seen → the open failed, stay.
+  func recordPublished(_ record: ListeningState) {
+    guard returnHost != nil else { return }
+    switch record.window {
+    case .opening, .open, .interrupted, .closing:
+      returnSawWindow = true
+    case .closed:
+      if returnSawWindow {
+        Self.log.notice("hop return dropped: the window closed")
+        cancelReturn()
+      }
+      return
+    }
+    let keeperExpected = expectsKeeper ?? (window.pictureInPictureKeeper != nil)
+    if HopReturn.isReady(record, keeperExpected: keeperExpected, capPassed: false) {
+      returnToHost()
+    } else if record.window == .open, returnCap == nil {
+      returnCap = Task { [weak self] in
+        guard let self else { return }
+        try? await clock.sleep(for: .seconds(BlurtShared.hopReturnCap))
+        guard !Task.isCancelled, returnHost != nil, window.isOn else { return }
+        Self.log.notice("hop return at the cap: the keeper is not up yet")
+        returnToHost()
+      }
+    }
+  }
+
+  /// Asks iOS for the host app, once. Refused (the call is not there on
+  /// this iOS), the app stays in front with its "◀" hint.
+  private func returnToHost() {
+    guard let host = returnHost else { return }
+    cancelReturn()
+    let opened = hostReturner(host)
+    Self.log.notice("hop return host=\(host, privacy: .public) \(opened ? "opened" : "refused", privacy: .public)")
+    DeviceTrace.record("return", ["host": host, "opened": String(opened)])
+    if opened { startedFromKeyboard = false }
+  }
+
+  func cancelReturn() {
+    returnHost = nil
+    returnSawWindow = false
+    returnCap?.cancel()
+    returnCap = nil
+  }
+
+  /// The app has left the front — the user went back themselves, or the
+  /// return did it: the hop's hints and its return are over.
+  func sceneLeft() {
+    startedFromKeyboard = false
+    needsFullAccess = false
+    cancelReturn()
   }
 
   /// `blurt://setup?need=<what>`: what the keyboard is missing.

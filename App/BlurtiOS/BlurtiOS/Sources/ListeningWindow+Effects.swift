@@ -194,5 +194,6 @@ extension ListeningWindow {
     ]
     DeviceTrace.record("state", fields)
     if changed { onStateChanged?(record) }
+    onRecord?(record)
   }
 }

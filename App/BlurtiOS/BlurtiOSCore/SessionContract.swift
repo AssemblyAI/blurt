@@ -231,16 +231,28 @@ nonisolated extension BlurtShared {
     return components.url ?? URL(fileURLWithPath: "/")
   }
 
-  /// `blurt://start?reason=<FailureReason>`: the keyboard's hop, saying why.
-  package static func startURL(reason: FailureReason?) -> URL {
+  /// `blurt://start?reason=<FailureReason>&host=<bundle id>`: the keyboard's
+  /// hop, saying why, and from which app (`HostApp.bundleID`), so the app can
+  /// bring that one back once the window is open (`HopReturn`).
+  package static func startURL(reason: FailureReason?, host: String? = nil) -> URL {
     var components = URLComponents()
     components.scheme = urlScheme
     components.host = startHost
-    if let reason { components.queryItems = [URLQueryItem(name: "reason", value: reason.rawValue)] }
-    // A scheme, a host and one query item from an enum's raw value always
-    // form a URL; the fallback is the bare start link.
+    var items: [URLQueryItem] = []
+    if let reason { items.append(URLQueryItem(name: "reason", value: reason.rawValue)) }
+    if let host = host.trimmedNonEmpty() { items.append(URLQueryItem(name: "host", value: host)) }
+    if !items.isEmpty { components.queryItems = items }
+    // A scheme, a host and query items from an enum's raw value and a bundle
+    // id always form a URL; the fallback is the bare start link.
     return components.url ?? startLink
   }
+
+  /// The window is open and the app can go back to the host: at once under
+  /// a held mic, or once the Picture in Picture keeper is up, which it is
+  /// within this of the window opening — past it the app goes back anyway,
+  /// and the keeper starts from the inline layer as the app leaves
+  /// (`PictureInPictureKeeper`).
+  package static let hopReturnCap: TimeInterval = 1.5
 
   /// `blurt://setup?need=fullAccess`: the keyboard can't dictate until the
   /// app's setup is finished, so no window is opened.
@@ -264,8 +276,29 @@ nonisolated extension BlurtShared {
 
   /// The reason a `startURL` carried, if any.
   package static func hopReason(_ url: URL) -> FailureReason? {
-    URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
-      .first { $0.name == "reason" }?.value.flatMap(FailureReason.init(rawValue:))
+    query(url, "reason").flatMap(FailureReason.init(rawValue:))
+  }
+
+  /// The host app a `startURL` came from, if the keyboard knew it.
+  package static func hopHost(_ url: URL) -> String? {
+    query(url, "host").trimmedNonEmpty()
+  }
+
+  private static func query(_ url: URL, _ name: String) -> String? {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
+  }
+}
+
+/// When the app, brought forward by the keyboard's hop, goes back to the app
+/// the keyboard was in: once the record says the window is open and the mic
+/// will stay live without the app in front — at once under a held mic (the
+/// capture, started in front, carries on), once the keeper reports under
+/// Picture in Picture (`ListeningState.idle == .pip`), or at
+/// `BlurtShared.hopReturnCap` past the open if it has not. Pure: the
+/// coordinator reads it off every record it publishes.
+package nonisolated enum HopReturn {
+  package static func isReady(_ record: ListeningState, keeperExpected: Bool, capPassed: Bool) -> Bool {
+    record.window == .open && (!keeperExpected || record.idle == .pip || capPassed)
   }
 }
 

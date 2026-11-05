@@ -109,10 +109,7 @@ struct MainView: View {
       // Back in the app the user was typing in: the ◀ hint and the Full
       // Access note have done their job. Here rather than on the Dictate
       // tab, which isn't there while Words is.
-      if phase == .background {
-        coordinator.startedFromKeyboard = false
-        coordinator.needsFullAccess = false
-      }
+      if phase == .background { coordinator.sceneLeft() }
     }
     .tint(BlurtBrand.accent)
   }

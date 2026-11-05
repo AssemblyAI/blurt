@@ -55,6 +55,7 @@ struct SessionContractNumbersTests {
       row("stop ack", "`BlurtShared.stopDeadline` \(seconds(BlurtShared.stopDeadline))"),
       row("command retry", "`KeyboardModel.commandRetryDelay` \(milliseconds(KeyboardModel.commandRetryDelay))"),
       row("hop URLs", "`BlurtShared.fullAccessNeed`"),
+      row("hop return", "`BlurtShared.hopReturnCap` \(seconds(BlurtShared.hopReturnCap))"),
       row("result freshness", "`KeyboardModel.resultFreshnessWindow` \(seconds(KeyboardModel.resultFreshnessWindow))"),
       row(
         "result delivery", "`KeyboardRelayInjector.deliveryTimeout` \(seconds(KeyboardRelayInjector.deliveryTimeout))"),
@@ -251,6 +252,25 @@ struct SessionContractNumbersTests {
     }
     #expect(BlurtShared.hopReason(BlurtShared.startURL(reason: nil)) == nil)
     #expect(BlurtShared.isSetup(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed)))
+    // The host rides along when the keyboard knows it, and reads back out.
+    let fromMessages = BlurtShared.startURL(reason: .sessionOff, host: "com.apple.MobileSMS")
+    #expect(BlurtShared.isStart(fromMessages) && BlurtShared.hopReason(fromMessages) == .sessionOff)
+    #expect(BlurtShared.hopHost(fromMessages) == "com.apple.MobileSMS")
+    #expect(BlurtShared.hopHost(BlurtShared.startURL(reason: .sessionOff)) == nil)
+    #expect(BlurtShared.startURL(reason: .sessionOff, host: " ") == BlurtShared.startURL(reason: .sessionOff))
+    #expect(BlurtShared.hopHost(BlurtShared.startURL(reason: nil, host: "com.apple.mobilenotes")) == "com.apple.mobilenotes")
+  }
+
+  @Test("hop return: open and live goes back; a keeper expected waits for pip or the cap")
+  func hopReturn() {
+    let open = ListeningState(launchID: UUID(), sequence: 1, window: .open, micLive: true)
+    let pip = ListeningState(launchID: UUID(), sequence: 2, window: .open, idle: .pip, micLive: true)
+    let opening = ListeningState(launchID: UUID(), sequence: 1, window: .opening)
+    #expect(HopReturn.isReady(open, keeperExpected: false, capPassed: false))
+    #expect(!HopReturn.isReady(open, keeperExpected: true, capPassed: false))
+    #expect(HopReturn.isReady(pip, keeperExpected: true, capPassed: false))
+    #expect(HopReturn.isReady(open, keeperExpected: true, capPassed: true))
+    #expect(!HopReturn.isReady(opening, keeperExpected: false, capPassed: true))
   }
 
   @Test("log subsystem: the keyboard logs under the app's, read through one constant")

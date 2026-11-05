@@ -66,6 +66,9 @@ final class ListeningWindow {
   @ObservationIgnored var onEndingUtterance: ((_ keepWords: Bool) async -> Void)?
   /// Run when a published record's window differs from the last one's.
   @ObservationIgnored var onStateChanged: ((ListeningState) -> Void)?
+  /// Run on every record published, after `onStateChanged`: the idle mode
+  /// and the mic change without the window doing so (`HopReturn`).
+  @ObservationIgnored var onRecord: ((ListeningState) -> Void)?
   @ObservationIgnored private let inbox: AsyncStream<Input>.Continuation
   @ObservationIgnored private var loop: Task<Void, Never>?
   @ObservationIgnored private var readers: [Task<Void, Never>] = []

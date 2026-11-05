@@ -61,8 +61,11 @@ extension KeyboardModel {
     readField()
     readSelection()
     updateShift()
+    hostBundleID = controller.flatMap(HostApp.bundleID(of:))
     KeyboardLog.appeared(
-      pid: Self.pid, process: KeyboardProcess.id, controller: controllerID, fullAccess: hasFullAccess)
+      pid: Self.pid, process: KeyboardProcess.id, controller: controllerID, fullAccess: hasFullAccess,
+      host: hostBundleID)
+    if hostBundleID == nil, let controller { KeyboardLog.hostUnknown(holders: HostApp.holderNames(of: controller)) }
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (`VoiceRowHost`), but nothing below can
     // run — and nothing from a previous appearance (a phase, a latched gate,

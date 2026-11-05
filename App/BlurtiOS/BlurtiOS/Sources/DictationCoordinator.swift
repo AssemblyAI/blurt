@@ -4,6 +4,7 @@ import BlurtiOSCore
 import Foundation
 import Observation
 import Synchronization
+import UIKit
 
 /// The one place the engine is composed for the iPhone app — the role
 /// `AppCoordinator` plays in the Mac shell. It owns the listening window (the
@@ -47,6 +48,19 @@ final class DictationCoordinator {
   /// (`blurt://setup?need=fullAccess`): the setup step says what to turn on,
   /// and no window is opened, until the user leaves.
   var needsFullAccess = false
+  /// The app the keyboard hopped from (`BlurtShared.hopHost`), held until the
+  /// window is open and the app has gone back to it (`HopReturn`,
+  /// `HostReturn`), or the window failed to open, or the user left first.
+  @ObservationIgnored var returnHost: String?
+  /// The return's cap, armed when the window opens before the keeper is up
+  /// (`BlurtShared.hopReturnCap`).
+  @ObservationIgnored var returnCap: Task<Void, Never>?
+  /// A record since the hop said opening or open: only then does a closed
+  /// one mean the open failed, rather than the launch record before it.
+  @ObservationIgnored var returnSawWindow = false
+  /// Whether a Picture in Picture keeper has to be up before the app may
+  /// leave; nil reads the window's idle mode (a test sets it).
+  @ObservationIgnored var expectsKeeper: Bool?
   /// How many contact names the keyboard last read off the phone — the key
   /// terms that come for free, so the home screen can say so.
   private(set) var lexiconNameCount = 0
@@ -129,13 +143,22 @@ final class DictationCoordinator {
   /// `transcriber` and `clock` are seams for the tests, which drive a press
   /// through the real session against a stub transcript and a clock they
   /// advance; the app keeps both defaults.
+  /// Whether the app is in front, as `handle(url)` reads it; a test's stand-in.
+  @ObservationIgnored let appState: @MainActor () -> UIApplication.State
+  /// Brings the host app back (`HostReturn.open`); a test's capture.
+  @ObservationIgnored let hostReturner: @MainActor (String) -> Bool
+
   init(
     apiKey: APIKeyModel = APIKeyModel(), window: ListeningWindow = ListeningWindow(),
-    transcriber: any TranscriberProtocol = AssemblyAITranscriber(), clock: any Clock<Duration> = ContinuousClock()
+    transcriber: any TranscriberProtocol = AssemblyAITranscriber(), clock: any Clock<Duration> = ContinuousClock(),
+    appState: @escaping @MainActor () -> UIApplication.State = { UIApplication.shared.applicationState },
+    hostReturner: @escaping @MainActor (String) -> Bool = HostReturn.open(bundleID:)
   ) {
     self.window = window
     self.apiKey = apiKey
     self.clock = clock
+    self.appState = appState
+    self.hostReturner = hostReturner
     let (recents, continuation) = AsyncStream.makeStream(
       of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1))
     self.recents = recents
@@ -160,11 +183,13 @@ final class DictationCoordinator {
         frontmost: { Self.claimPress() }, field: { Self.fieldContext() }))
     window.onEndingUtterance = { [weak self] keepWords in await self?.endUtterance(keepWords: keepWords) }
     window.onStateChanged = { [weak self] _ in self?.clearError() }
+    window.onRecord = { [weak self] record in self?.recordPublished(record) }
   }
 
   deinit {
     watchdog?.cancel()
     errorDwell?.cancel()
+    returnCap?.cancel()
     for task in tasks { task.cancel() }
   }
 
