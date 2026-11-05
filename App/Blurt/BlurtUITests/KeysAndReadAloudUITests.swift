@@ -80,8 +80,8 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
 
   // MARK: - Styles
 
-  /// A style made in Settings shows up in the Keys tab's menu. The bound key
-  /// dictates with the main window's style; a key set to "No custom style"
+  /// A style made in Settings shows up as a Keys tab row. The bound key
+  /// dictates with the main window's style; the key given "No custom style"
   /// sends none.
   func testEachKeyDictatesWithItsOwnStyle() {
     let harness = readyHarness()
@@ -90,11 +90,12 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
 
     // The window's title follows its tab, so find it afresh before switching.
     let keys = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.keysSettingsTab)
-    let option = keys.popUpButtons[UITestIdentifiers.keyStylePicker(61)]
-    XCTAssertTrue(option.waitForExistence(timeout: 5), "Right ⌥'s action pop-up not found")
-    option.click()
-    XCTAssertTrue(option.menuItems["Dictate: Casual"].waitForExistence(timeout: 5), "The new style should be offered")
-    option.menuItems["Dictate: No custom style"].click()
+    XCTAssertTrue(
+      keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate: Casual")].waitForExistence(timeout: 5),
+      "The new style should have a row")
+    let plain = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate: No custom style")]
+    plain.click()
+    plain.menuItems["Right Option"].click()
 
     harness.click()
     pick("right ⌘", in: harness)

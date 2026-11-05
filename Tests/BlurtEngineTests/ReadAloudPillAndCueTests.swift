@@ -70,18 +70,16 @@ struct ReadAloudPillAndCueTests {
 
   @Test("the views' key decisions: extra rows, the only dictating key, whether read-aloud does anything")
   func bindingsViewHelpers() {
-    let defaults = TriggerKeyBindings(boundKeyCode: 54, choicesRaw: "", modesRaw: "", sharedModeRaw: "")
+    let defaults = TriggerKeyBindings(boundKeyCode: 54, choicesRaw: "", activationRaw: "")
     #expect(defaults.extraKeys == [.leftOption])
     #expect(defaults.isOnlyDictatingKey(.rightCommand))
     #expect(defaults.readsOrAsks)
-    #expect(!defaults.asks)
     let asking = TriggerKeyBindings(
-      boundKeyCode: 54, choicesRaw: #"{"58":"","61":"current","59":"ask"}"#, modesRaw: "", sharedModeRaw: "")
+      boundKeyCode: 54, choicesRaw: #"{"58":"","61":"current","59":"ask"}"#, activationRaw: "")
     #expect(asking.extraKeys == [.rightOption, .leftControl])
     #expect(!asking.isOnlyDictatingKey(.rightCommand))
     #expect(asking.readsOrAsks)
-    #expect(asking.asks)
-    let silent = TriggerKeyBindings(boundKeyCode: 54, choicesRaw: #"{"58":""}"#, modesRaw: "", sharedModeRaw: "")
+    let silent = TriggerKeyBindings(boundKeyCode: 54, choicesRaw: #"{"58":""}"#, activationRaw: "")
     #expect(!silent.readsOrAsks)
   }
 }

@@ -85,3 +85,14 @@ enum BlurtBrand {
   nonisolated static let orbRingGradient = LinearGradient(
     colors: [green, .white], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
+
+extension BlurtBrand {
+  /// The main window's backdrop: a pale wash of the brand green over the
+  /// window colour, nearly white at the top and a touch greener down the
+  /// window, under its white cards. Over the window colour, so it darkens
+  /// with Dark Mode as the cards do.
+  nonisolated static var backdrop: some View {
+    LinearGradient(colors: [accent.opacity(0.05), accent.opacity(0.16)], startPoint: .top, endPoint: .bottom)
+      .background(Color(nsColor: .windowBackgroundColor))
+  }
+}

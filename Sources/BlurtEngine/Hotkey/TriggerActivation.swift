@@ -62,18 +62,6 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
     }
   }
 
-  /// How to finish a dictation that is recording, e.g. "Tap again or release
-  /// to finish." — only the gestures this mode actually stops on.
-  public var finishHint: String { "\(stopGesture) to finish." }
-
-  private var stopGesture: String {
-    switch self {
-    case .tapOrHold: "Tap again or release"
-    case .tap: "Tap again"
-    case .hold: "Release"
-    }
-  }
-
   /// Whether releasing the trigger latches the recording on (tap-to-toggle)
   /// rather than stopping it, given how long this press was held. Only presses
   /// that *started* the recording ask — a release over an already-latched

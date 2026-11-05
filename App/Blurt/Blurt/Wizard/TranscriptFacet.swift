@@ -1,7 +1,7 @@
 import BlurtEngine
 
-/// The sheet's chips: the transcript itself, the stock transforms, and the
-/// user's own request. Titles and symbols are the app's; the instructions
+/// The transcript sheet's views, in its "View:" pop-up: the transcript itself,
+/// the stock transforms, and the user's own request. Titles and symbols are the app's; the instructions
 /// behind them are the engine's (`TranscriptTransform`). Raw values key the
 /// saved results, so they never change once shipped.
 enum TranscriptFacet: String, Hashable, CaseIterable {
@@ -46,7 +46,7 @@ enum TranscriptFacet: String, Hashable, CaseIterable {
     }
   }
 
-  /// The engine transform behind this chip; nil for Full, and for Custom
+  /// The engine transform behind this view; nil for Full, and for Custom
   /// until there is a request.
   func transform(custom: String) -> TranscriptTransform? {
     switch self {

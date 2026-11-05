@@ -45,7 +45,7 @@ struct PermissionsStepView: View {
       permissionRow(
         PermissionInfo(
           label: "Microphone", symbol: "mic.fill", buttonLabel: "Allow Access",
-          detail: "Records when you use \(triggerKey.keycapLabel)."),
+          detail: "Records when you use \(triggerKey.spokenName)."),
         granted: controller.permissions.microphone,
         action: {
           Task {

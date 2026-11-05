@@ -34,22 +34,17 @@ struct StyleRow: View {
     SettingRow(
       title: "Writing style", systemImage: "textformat"
     ) {
-      if profiles.isEmpty {
-        // With no alternative there is nothing to pick. A passive value avoids
-        // presenting a one-item pop-up that promises a choice it can't offer.
-        Text(StyleProfileStore.defaultStyleName)
-          .foregroundStyle(.secondary)
-      } else {
-        Picker("Writing style", selection: choice) {
-          Text(StyleProfileStore.defaultStyleName).tag(Choice.defaultStyle)
-          ForEach(profiles) { profile in
-            Text(profile.name).tag(Choice.profile(profile.id))
-          }
+      // Shown only once a custom style exists (`ReadyView`), so there is always
+      // a choice beyond Default.
+      Picker("Writing style", selection: choice) {
+        Text(StyleProfileStore.defaultStyleName).tag(Choice.defaultStyle)
+        ForEach(profiles) { profile in
+          Text(profile.name).tag(Choice.profile(profile.id))
         }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .accessibilityIdentifier(UITestIdentifiers.styleProfilePickerFromMain)
       }
+      .pickerStyle(.menu)
+      .labelsHidden()
+      .accessibilityIdentifier(UITestIdentifiers.styleProfilePickerFromMain)
     }
     .background(shortcuts)
   }

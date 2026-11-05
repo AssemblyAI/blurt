@@ -4,7 +4,7 @@ import Testing
 @testable import BlurtEngine
 
 /// What each trigger key does and how it's pressed (`TriggerKeyBindings`, over
-/// `TriggerKeyStyleStore` and `TriggerKeyActivationStore`), and the style one
+/// `TriggerKeyStyleStore` and `TriggerActivationStore`), and the style one
 /// dictation uses without moving the main window's selection (`PressStyle`
 /// over `StyleProfileStore.profile(for:)`).
 @Suite("TriggerKeyBindings")
@@ -14,7 +14,6 @@ struct TriggerKeyStyleTests {
   private let formal = StyleProfile(name: "Formal", instructions: "no contractions")
 
   private var choices: TriggerKeyStyleStore { TriggerKeyStyleStore(defaults: defaults) }
-  private var modes: TriggerKeyActivationStore { TriggerKeyActivationStore(defaults: defaults) }
   private var bindings: TriggerKeyBindings { TriggerKeyBindings(defaults: defaults) }
 
   /// A style store holding both profiles with Formal selected in the main window.
@@ -66,8 +65,7 @@ struct TriggerKeyStyleTests {
   @Test("the bound key dictates whatever its entry says")
   func boundKeyAlwaysDictates() {
     let bindings = TriggerKeyBindings(
-      boundKeyCode: TriggerKey.rightCommand.keyCode, choicesRaw: #"{"54":"read-aloud"}"#, modesRaw: "",
-      sharedModeRaw: "")
+      boundKeyCode: TriggerKey.rightCommand.keyCode, choicesRaw: #"{"54":"read-aloud"}"#, activationRaw: "")
     #expect(bindings.choice(for: .rightCommand) == .dictate)
   }
 
@@ -98,7 +96,7 @@ struct TriggerKeyStyleTests {
   @Test("a row shows Off, the main window's style, a style that still exists, read or ask")
   func rowChoice() {
     func bindings(_ raw: String) -> TriggerKeyBindings {
-      TriggerKeyBindings(boundKeyCode: 54, choicesRaw: raw, modesRaw: "", sharedModeRaw: "")
+      TriggerKeyBindings(boundKeyCode: 54, choicesRaw: raw, activationRaw: "")
     }
     let styled = bindings(#"{"61":"\#(casual.id.uuidString)","63":"\#(formal.id.uuidString)"}"#)
     #expect(styled.choice(for: .rightCommand, profiles: [casual]) == .dictate)
@@ -112,29 +110,44 @@ struct TriggerKeyStyleTests {
     #expect(base.choice(for: .leftControl, profiles: []) == .ask)
   }
 
-  @Test("modes: a key's own, else left ⌥'s read is tap or hold, else the shared mode")
+  @Test("one mode for every key: the shared slot, tap or hold when unset")
   func activations() {
-    defaults.set(TriggerActivation.hold.rawValue, forKey: TriggerActivationStore.defaultsKey)
     choices.setChoice(.dictate(style: casual.id.uuidString), for: .rightOption)
-    #expect(bindings.activation(for: .rightCommand) == .hold)
-    #expect(bindings.activation(for: .leftOption) == .tapOrHold)
-    #expect(bindings.activation(for: .rightOption) == .hold)
-    modes.setActivation(.tap, for: .leftOption)
-    modes.setActivation(.tap, for: .rightCommand)
-    #expect(bindings.activation(for: .leftOption) == .tap)
-    #expect(bindings.activation(for: .rightCommand) == .tap)
-    // Right ⌥ has no mode of its own, so it follows the shared one.
-    #expect(bindings.activations == [.rightCommand: .tap, .rightOption: .hold, .leftOption: .tap])
+    #expect(bindings.activation == .tapOrHold)
+    TriggerActivationStore(defaults: defaults).setActivation(.hold)
+    #expect(bindings.activation == .hold)
+    #expect(bindings.activations == [.rightCommand: .hold, .rightOption: .hold, .leftOption: .hold])
   }
 
-  @Test("each key keeps its own mode when the binding moves")
-  func modesStayWithTheirKeys() {
-    choices.setChoice(.dictate, for: .rightOption)
-    modes.setActivation(.tap, for: .rightOption)
-    modes.setActivation(.hold, for: .rightCommand)
-    choices.setChoice(.off, for: .rightCommand)
+  @Test("an action row's key: it alone holds the action, and the key gives up its old one")
+  func assignMovesTheAction() {
+    // Left ⌃ takes reading aloud from left ⌥, which turns off.
+    #expect(choices.assign(.leftControl, to: .readAloud))
+    #expect(bindings.action(for: .leftControl) == .readAloud)
+    #expect(bindings.action(for: .leftOption) == .off)
+    // Left ⌃ moves on to asking; nothing reads aloud any more.
+    #expect(choices.assign(.leftControl, to: .ask))
+    #expect(bindings.action(for: .leftControl) == .ask)
+    #expect(!TriggerKey.allCases.contains { bindings.action(for: $0) == .readAloud })
+    // No key asks.
+    #expect(choices.assign(nil, to: .ask))
+    #expect(bindings.action(for: .leftControl) == .off)
+  }
+
+  @Test("Dictate's key becomes the bound key; the last dictating key can't be left without dictation")
+  func assignKeepsADictatingKey() {
+    #expect(!choices.assign(nil, to: .dictate), "Right ⌘ is the only dictating key")
+    #expect(bindings.bound == .rightCommand)
+    #expect(!choices.assign(.rightCommand, to: .readAloud), "…nor can it be given another action")
+    #expect(choices.assign(.function, to: .dictate))
+    #expect(bindings.bound == .function)
+    #expect(bindings.action(for: .rightCommand) == .off)
+    // A styled dictation key keeps the binding where it is.
+    #expect(choices.assign(.rightOption, to: .dictate(style: casual.id.uuidString)))
+    #expect(bindings.bound == .function)
+    #expect(choices.assign(nil, to: .dictate), "Right ⌥ still dictates")
+    #expect(bindings.dictatingKeys == [.rightOption])
     #expect(bindings.bound == .rightOption)
-    #expect(bindings.activation(for: .rightOption) == .tap)
   }
 
   @Test("each press resolves under its own key's mode")
