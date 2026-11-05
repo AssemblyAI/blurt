@@ -82,13 +82,12 @@ struct CleanupInstructionTests {
     }
   }
 
-  /// The append is additive-only: the base instruction leads unchanged (its
-  /// safeguards keep protecting every request), the preamble bridges, and the
-  /// user's text — trimmed of padding — closes.
-  @Test("custom style instructions are appended after the unchanged base instruction")
+  /// The styled base leads (its safeguards keep protecting every request), the
+  /// preamble bridges, and the user's text — trimmed of padding — closes.
+  @Test("custom style instructions are appended after the styled base instruction")
   func customStyleIsAppended() throws {
     let combined = try #require(CleanupInstruction.sendable(appending: "  always write in lowercase \n"))
-    #expect(combined.hasPrefix(CleanupInstruction.text + CleanupInstruction.customStylePreamble))
+    #expect(combined.hasPrefix(CleanupInstruction.styledText + CleanupInstruction.customStylePreamble))
     #expect(combined.hasSuffix("always write in lowercase"))
     #expect(combined.utf8.count <= CleanupInstruction.characterCap)
   }
@@ -110,7 +109,7 @@ struct CleanupInstructionTests {
     let oversized = String(repeating: "x", count: CleanupInstruction.customStyleBudget + 100)
     let combined = try #require(CleanupInstruction.sendable(appending: oversized))
     #expect(combined.utf8.count == CleanupInstruction.characterCap)
-    #expect(combined.hasPrefix(CleanupInstruction.text))
+    #expect(combined.hasPrefix(CleanupInstruction.styledText))
   }
 
   /// Emoji are the worst case the field's placeholder invites: one `Character`
@@ -124,7 +123,7 @@ struct CleanupInstructionTests {
     let oversized = String(repeating: emoji, count: CleanupInstruction.customStyleBudget)
     let combined = try #require(CleanupInstruction.sendable(appending: oversized))
     #expect(combined.utf8.count <= CleanupInstruction.characterCap)
-    let lead = CleanupInstruction.text + CleanupInstruction.customStylePreamble
+    let lead = CleanupInstruction.styledText + CleanupInstruction.customStylePreamble
     #expect(combined.hasPrefix(lead))
     // Something survived the trim, and only whole emoji did.
     let appended = combined.dropFirst(lead.count)
@@ -138,10 +137,48 @@ struct CleanupInstructionTests {
   @Test("the custom style budget is the real headroom under the cap")
   func customStyleBudgetIsTheHeadroom() {
     #expect(
-      CleanupInstruction.text.utf8.count + CleanupInstruction.customStylePreamble.utf8.count
+      CleanupInstruction.styledText.utf8.count + CleanupInstruction.customStylePreamble.utf8.count
         + CleanupInstruction.customStyleBudget == CleanupInstruction.characterCap)
     #expect(CleanupInstruction.customStyleBudget >= 200)
     #expect(StyleProfileStore.characterLimit == CleanupInstruction.customStyleBudget)
+  }
+
+  /// The unedited rule ("Preserve the original punctuation, capitalization…") beat
+  /// a style asking for no capitals or commas, preamble or not. A styled request
+  /// must carry the qualified rule instead — and the swap must actually happen:
+  /// `replacing` is silently a no-op if a re-optimized `text` rewords the sentence.
+  @Test("a styled request qualifies the preservation rule instead of pinning punctuation")
+  func styledTextQualifiesThePreservationRule() throws {
+    #expect(CleanupInstruction.text.contains(CleanupInstruction.preservationRule))
+    #expect(CleanupInstruction.styledText.contains(CleanupInstruction.preservationRule) == false)
+    #expect(CleanupInstruction.styledText.contains(CleanupInstruction.styledPreservationRule))
+    let combined = try #require(
+      CleanupInstruction.sendable(appending: "Remove the commas and the capital letters."))
+    #expect(combined.contains(CleanupInstruction.preservationRule) == false)
+    #expect(combined.contains(CleanupInstruction.styledPreservationRule))
+    for stem in ["answer", "translat", "rephrase"] {
+      #expect(CleanupInstruction.styledText.contains(stem), "missing safeguard: \(stem)")
+    }
+  }
+
+  /// The swap is the only difference: everything around the rule is the shipped
+  /// winner byte for byte.
+  @Test("the styled base differs from the shipped text only in the preservation rule")
+  func styledTextIsOtherwiseTheShippedText() {
+    let qualified = CleanupInstruction.styledPreservationRule
+    let restored = CleanupInstruction.styledText.replacing(qualified, with: CleanupInstruction.preservationRule)
+    #expect(restored == CleanupInstruction.text)
+  }
+
+  /// The budget is measured against the styled base. Were the qualified rule longer
+  /// than the one it replaces, every style profile's limit would quietly shrink
+  /// (and a style saved at the old limit would be trimmed on the wire).
+  @Test("the styled base is no longer than the shipped text, so the style budget never shrinks")
+  func styledTextDoesNotShrinkTheBudget() {
+    let shippedLength = CleanupInstruction.text.utf8.count
+    let preambleLength = CleanupInstruction.customStylePreamble.utf8.count
+    #expect(CleanupInstruction.styledText.utf8.count <= shippedLength)
+    #expect(CleanupInstruction.customStyleBudget >= CleanupInstruction.characterCap - shippedLength - preambleLength)
   }
 
   /// It travels as one JSON string. The instruction is full of quotes, backticks,
