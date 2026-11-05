@@ -14,7 +14,10 @@ extension DictationCoordinator {
   static let answeredCapacity = 32
 
   /// A command landed (`Signal.command`): decided, acknowledged, and — when
-  /// the router says so — submitted to the session.
+  /// the router says so — submitted to the session. Decided on the window as
+  /// it is this instant (`ListeningWindow.liveState`), never on the record it
+  /// last wrote: a press that lands while the window is closing is refused,
+  /// not promised a microphone on its way out.
   func handleCommand() {
     guard let command = SharedStore.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) else { return }
     // The command is consumed: nothing re-reads it, and the text it carried
@@ -22,7 +25,7 @@ extension DictationCoordinator {
     SharedStore.remove(forKey: BlurtShared.Key.command)
     let decision = CommandRouter.route(
       CommandRouter.Input(
-        command: command, state: window.state, phase: routerPhase, inFlight: inFlight,
+        command: command, state: window.liveState, phase: routerPhase, inFlight: inFlight,
         onScreen: SharedStore.keyboardOnScreen()?.processID, answered: answered, launchID: window.launchID))
     SharedStore.acknowledge(decision.ack)
     if decision.remember { remember(command.id, decision.ack.outcome) }
@@ -40,11 +43,15 @@ extension DictationCoordinator {
       inFlight = DictationRef(id: newDictation, ownerProcessID: owner)
       answers = command.id
       watchdogReleased = nil
+      stopAccepted = nil
+      startWatchdog()
       session.submit(.press())
     case .release:
+      stopAccepted = inFlight?.id
       Self.claimedPress.withLock { $0.stopRecipient = decision.recipient }
       session.submit(.release)
     case .cancel:
+      stopAccepted = inFlight?.id
       Self.claimedPress.withLock { $0.stopRecipient = decision.recipient }
       session.submit(.cancel)
     }
@@ -82,23 +89,34 @@ extension DictationCoordinator {
 
   // MARK: The owner's watchdog
 
-  /// Every keyboard beat, asks whether the dictation in flight still has its
-  /// keyboard; the `keyboard` signal asks at once.
-  func watchOwner() -> Task<Void, Never> {
-    Task { [weak self] in
+  /// From an accepted press to the dictation's end, asks every
+  /// `watchdogTick` whether the dictation still has its keyboard; the
+  /// `keyboard` signal asks at once. Nothing to ask with nothing in flight.
+  private func startWatchdog() {
+    watchdog?.cancel()
+    let clock = clock
+    watchdog = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(SharedStore.keyboardHeartbeatInterval))
+        try? await clock.sleep(for: Self.watchdogTick)
         guard !Task.isCancelled else { return }
         self?.tickWatchdog()
       }
     }
   }
 
+  private func stopWatchdog() {
+    watchdog?.cancel()
+    watchdog = nil
+  }
+
   /// A dictation whose keyboard is gone is released, once, with its words
   /// kept: they go to the clipboard, as they would with no keyboard to take
-  /// them. Under the release's background task, like any release.
+  /// them. Under the release's background task, like any release. Not one
+  /// whose keyboard already asked for its end (`stopAccepted`): that release
+  /// is in the session's queue, and a second would only double the work and
+  /// the log line.
   func tickWatchdog() {
-    guard let inFlight, watchdogReleased != inFlight.id,
+    guard let inFlight, watchdogReleased != inFlight.id, stopAccepted != inFlight.id,
       OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: Date())
     else { return }
     watchdogReleased = inFlight.id
@@ -112,8 +130,10 @@ extension DictationCoordinator {
 
   /// The terminal phase has been published with the press it answered and
   /// the dictation it named: nothing is in flight now, the words have landed
-  /// or been copied, and the background task around the release is over.
+  /// or been copied, the watchdog has nothing to watch, and the background
+  /// task around the release is over.
   func dictationEnded(_ phase: PipelinePhase) {
+    stopWatchdog()
     window.backgroundTasks.end(Self.releaseTask)
     if let inFlight {
       let outcome =
@@ -128,6 +148,7 @@ extension DictationCoordinator {
     }
     inFlight = nil
     answers = nil
+    stopAccepted = nil
     Self.claimedPress.withLock { $0.stopRecipient = nil }
   }
 

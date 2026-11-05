@@ -24,6 +24,11 @@ final class DictationCoordinator {
   /// The background task held from a release to the dictation's end, so the
   /// words land after the keyboard's host put Blurt in the background.
   static let releaseTask = "blurt.release"
+  /// How often, while a dictation is in flight, the owner's presence is
+  /// checked (`OwnerWatchdog`): a dead keyboard's dictation is released at
+  /// most this long after `BlurtShared.ownerWatchdog` has passed since its
+  /// last beat (DESIGN.md). The `keyboard` signal asks at once besides.
+  static let watchdogTick: Duration = .seconds(2)
 
   let window: ListeningWindow
   let apiKey: APIKeyModel
@@ -60,10 +65,15 @@ final class DictationCoordinator {
   private(set) var error: String?
 
   @ObservationIgnored let session: DictationSession
+  /// What the watchdog's tick sleeps on; injectable so tests advance it.
+  @ObservationIgnored let clock: any Clock<Duration>
   @ObservationIgnored private let recents: AsyncStream<RecentDictations>
   @ObservationIgnored private var observers: [DarwinObserver] = []
   @ObservationIgnored private var tasks: [Task<Void, Never>] = []
   @ObservationIgnored private var errorDwell: Task<Void, Never>?
+  /// The owner's watchdog, ticking `watchdogTick` while a dictation is in
+  /// flight and cancelled at its end (`DictationCoordinator+Commands.swift`).
+  @ObservationIgnored var watchdog: Task<Void, Never>?
   /// The keyboard command the app last took: the press this phase answers,
   /// or the release or cancel that ended it (`PhaseSnapshot.command`).
   @ObservationIgnored var lastCommandID: UUID?
@@ -79,6 +89,11 @@ final class DictationCoordinator {
   @ObservationIgnored var answers: UUID?
   /// The dictation the watchdog already released, so a stuck one is released once.
   @ObservationIgnored var watchdogReleased: UUID?
+  /// The dictation a keyboard's release or cancel was accepted for
+  /// (`stopped` / `cancelled` answered): its end is on its way through the
+  /// session, so the watchdog has nothing to add — the keyboard's own release
+  /// as it disappears must not be followed by a second one.
+  @ObservationIgnored var stopAccepted: UUID?
   /// A recording is in flight, as the window was told.
   @ObservationIgnored private var utteranceOpen = false
   @ObservationIgnored private var lastLevelPublish = ContinuousClock.now
@@ -111,15 +126,22 @@ final class DictationCoordinator {
   @ObservationIgnored private(set) var recordingSince: Date?
   @ObservationIgnored private var lastSpokenSeconds: Double = 0
 
-  init(apiKey: APIKeyModel = APIKeyModel(), window: ListeningWindow = ListeningWindow()) {
+  /// `transcriber` and `clock` are seams for the tests, which drive a press
+  /// through the real session against a stub transcript and a clock they
+  /// advance; the app keeps both defaults.
+  init(
+    apiKey: APIKeyModel = APIKeyModel(), window: ListeningWindow = ListeningWindow(),
+    transcriber: any TranscriberProtocol = AssemblyAITranscriber(), clock: any Clock<Duration> = ContinuousClock()
+  ) {
     self.window = window
     self.apiKey = apiKey
+    self.clock = clock
     let (recents, continuation) = AsyncStream.makeStream(
       of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1))
     self.recents = recents
     session = DictationSession(
       mic: window.source,
-      transcriber: AssemblyAITranscriber(),
+      transcriber: transcriber,
       // The words go to the keyboard that sent the accepted stop, else to
       // the one whose press started the dictation.
       injector: KeyboardRelayInjector(presser: { Self.claimedPress.withLock { $0.stopRecipient ?? $0.keyboard } }),
@@ -140,13 +162,20 @@ final class DictationCoordinator {
     window.onStateChanged = { [weak self] _ in self?.clearError() }
   }
 
+  deinit {
+    watchdog?.cancel()
+    errorDwell?.cancel()
+    for task in tasks { task.cancel() }
+  }
+
   func start() {
     // `.task` on the root view runs this once; a scene reconnect must not
     // start a second set of observers publishing every phase twice.
     guard tasks.isEmpty else { return }
     // Whatever the last run left in the App Group is over: a fresh launch,
-    // no window, and the phase idle under it.
-    SharedStore.publish(ListeningState.launched(window.launchID))
+    // no window, and the phase idle under it. The window's heartbeat runs
+    // from here for as long as the process does.
+    window.start()
     observers = [
       DarwinObserver(name: BlurtShared.Signal.command) { [weak self] in
         Task { @MainActor in self?.handleCommand() }
@@ -159,7 +188,7 @@ final class DictationCoordinator {
       },
     ]
     reloadLexicon()
-    tasks = [observePhases(), observeLevels(), observeRecents(), watchOwner()]
+    tasks = [observePhases(), observeLevels(), observeRecents()]
     publish(.idle)
   }
 

@@ -8,21 +8,32 @@ import Testing
 /// The coordinator over a faked window and an in-memory key: what a launch
 /// writes, and how a command is answered without the session hearing of it.
 /// The router's rows are `CommandRouterTests`; this is the ack path around it.
+/// A press the session does take, and what follows it, is
+/// `DictationCoordinatorTests+Dictation.swift`.
 @Suite("Dictation coordinator", .serialized)
 @MainActor
 struct DictationCoordinatorTests {
-  private func coordinator() -> (DictationCoordinator, WindowRig) {
-    let rig = WindowRig()
-    let coordinator = DictationCoordinator(apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()), window: rig.window)
+  /// The words every stub transcript carries.
+  static let transcript = "hello there"
+
+  /// A coordinator over a rig's window, transcribing offline and ticking on
+  /// the rig's clock. `startDelay` holds a press's start, so `.connecting`
+  /// can be seen; `closeDelay` holds the source's close, so a press can land
+  /// while the window is closing.
+  func coordinator(startDelay: Duration = .zero, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
+    let rig = WindowRig(closeDelay: closeDelay, startDelay: startDelay)
+    let coordinator = DictationCoordinator(
+      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()), window: rig.window,
+      transcriber: StubTranscriber(text: Self.transcript), clock: rig.clock)
     return (coordinator, rig)
   }
 
-  private func command(_ kind: KeyboardCommand.Kind, id: UUID = UUID(), keyboard: String = "kb-1") -> KeyboardCommand {
+  func command(_ kind: KeyboardCommand.Kind, id: UUID = UUID(), keyboard: String = "kb-1") -> KeyboardCommand {
     KeyboardCommand(id: id, kind: kind, priorText: "Hi", selectedText: nil, sentAt: Date(), keyboard: keyboard)
   }
 
   /// Writes the command where the keyboard would and lets the coordinator take it.
-  private func send(_ command: KeyboardCommand, to coordinator: DictationCoordinator) {
+  func send(_ command: KeyboardCommand, to coordinator: DictationCoordinator) {
     SharedStore.write(command, forKey: BlurtShared.Key.command)
     coordinator.handleCommand()
   }
@@ -39,6 +50,7 @@ struct DictationCoordinatorTests {
     #expect(record?.sequence == 0)
     #expect(record?.launchID == rig.window.launchID)
     #expect(record?.reason == .sessionOff)
+    #expect(rig.state == record, "the window's own, so its beats renew it")
     #expect(!SharedStore.isListening)
     let phase = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase)
     #expect(phase?.state == .idle)
@@ -70,6 +82,26 @@ struct DictationCoordinatorTests {
     send(press, to: coordinator)
     #expect(SharedStore.commandAck?.outcome == .notListening(.sessionOff))
     #expect(coordinator.answered.count == 1)
+  }
+
+  @Test("a press while the window is closing is refused on the window as it is, never promised the mic on its way out")
+  func pressWhileClosing() async {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (coordinator, rig) = coordinator(closeDelay: .milliseconds(400))
+    coordinator.start()
+    coordinator.apiKey.save("key")
+    #expect(await rig.opened())
+    rig.window.close()
+    #expect(await until { rig.window.liveState.window == .closing })
+    let press = command(.press)
+    send(press, to: coordinator)
+    #expect(SharedStore.commandAck?.commandID == press.id)
+    #expect(SharedStore.commandAck?.outcome == .notListening(.sessionOff))
+    #expect(coordinator.inFlight == nil && coordinator.answers == nil)
+    #expect(rig.source.started == 0, "nothing submitted")
+    #expect(await until { rig.state?.window == .closed })
+    #expect(coordinator.phase == .idle)
   }
 
   @Test("a release or cancel with nothing in flight is acked nothingInFlight")
@@ -115,7 +147,7 @@ struct DictationCoordinatorTests {
     #expect(coordinator.needsFullAccess)
     try? await Task.sleep(for: .milliseconds(100))
     #expect(rig.source.opened == 0)
-    #expect(rig.state == nil, "the window itself published nothing")
+    #expect(rig.state?.window == .closed && rig.state?.sequence == 0, "the window published only its launch")
     #expect(SharedStore.listeningState?.window == .closed)
     SessionAutoStart.setTurnedOff(true)
     coordinator.handle(BlurtShared.startURL(reason: .sessionOff))
@@ -124,6 +156,13 @@ struct DictationCoordinatorTests {
     #expect(await until { coordinator.needsKey })
     #expect(rig.source.opened == 0)
     SessionAutoStart.setTurnedOff(false)
+  }
+
+  @Test("the watchdog's tick keeps a dead keyboard's dictation inside the row: released within the watchdog and a tick")
+  func watchdogCadence() {
+    #expect(DictationCoordinator.watchdogTick == .seconds(2))
+    #expect(BlurtShared.ownerWatchdog + 2 <= 12)
+    #expect(DictationCoordinator.watchdogTick < .seconds(SharedStore.keyboardHeartbeatInterval))
   }
 }
 
