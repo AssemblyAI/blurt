@@ -76,8 +76,11 @@ package nonisolated enum KeyboardLog {
     logger.info("press refused: \(reason.rawValue, privacy: .public)")
   }
 
-  package static func hop(_ url: URL) {
-    logger.info("hop \(url.absoluteString, privacy: .public)")
+  /// The keyboard asked for the app; `asked` is false when the responder
+  /// chain held no application to ask (a model with no controller).
+  package static func hop(_ url: URL, asked: Bool) {
+    logger.info(
+      "hop \(url.absoluteString, privacy: .public) \(asked ? "asked" : "no application to ask", privacy: .public)")
   }
 
   package static func result(_ id: UUID, inserted: Bool, why: String) {

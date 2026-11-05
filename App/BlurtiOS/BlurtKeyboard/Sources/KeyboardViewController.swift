@@ -35,6 +35,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var heightConstraint: NSLayoutConstraint?
   private var hasAppeared = false
   private let floor = UIView()
+  /// The host app leaving — resigning active, going to the background —
+  /// with the keyboard still up: the field goes with it, so the model ends
+  /// a dictation it owns (`KeyboardModel.hostLeaving`). Removed in `deinit`.
+  private var hostObservers: [any NSObjectProtocol] = []
+  private static let hostLeavingNotifications: [Notification.Name] = [
+    .NSExtensionHostWillResignActive, .NSExtensionHostDidEnterBackground,
+  ]
 
   /// The least the floor can be painted and still be the keyboard's to the
   /// host — never zero. In the host material's own colour, so the 1 % adds
@@ -46,9 +53,25 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     view = ClickingInputView(frame: .zero, inputViewStyle: .keyboard)
   }
 
+  /// iOS drops a keyboard's controller without a word once the host is done
+  /// with it: the model's observers, heartbeat and ticks must not fire into
+  /// a keyboard that is gone. A controller is released on the main thread,
+  /// which is what lets the main-actor model be told from here.
+  deinit {
+    MainActor.assumeIsolated {
+      for observer in hostObservers { NotificationCenter.default.removeObserver(observer) }
+      model.detach()
+    }
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     model.attach(to: self)
+    hostObservers = Self.hostLeavingNotifications.map { name in
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in
+        Task { @MainActor in self?.model.hostLeaving() }
+      }
+    }
     // The floor. The host hands the keyboard only the touches that land on
     // pixels it drew: where the keyboard is fully transparent — and the
     // surface is clear, the host's own material showing through — a touch

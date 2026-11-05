@@ -85,17 +85,39 @@ extension KeyboardModel {
     }
   }
 
+  /// A tap: finger down and up at once. Hands-free presses this way, and so
+  /// does a tap on the status line — the line says what the tap does, and
+  /// `micDown` routes it exactly as it would a tap on the mic.
+  package func tapMic() {
+    micDown()
+    micUp()
+  }
+
   /// The term field takes the mic's row, so a dictation in flight is closed
-  /// first — nothing runs on with no key to stop it. `keepWords`: a release,
-  /// the words still land; else a cancel. A press unanswered is taken back
-  /// either way, since nothing has been recorded; a stop already out needs
-  /// no second.
+  /// first — nothing runs on with no key to stop it. What goes out follows
+  /// the phase: a recording is released, so the words still land, unless
+  /// `keepWords` is false (a cancel); words being made are left to land, or
+  /// cancelled; a mic still coming up, or a press unanswered, is cancelled
+  /// either way, since nothing has been recorded. A stop already out needs
+  /// no second. The phase is the handshake's own for a dictation it owns and
+  /// the picture's otherwise: over a press unanswered the picture may show
+  /// another keyboard's recording, which a nameless cancel from the
+  /// keyboard on screen would end.
   package func endDictation(keepWords: Bool) {
+    let phase: PhaseSnapshot.State
     switch handshake.state {
     case .idle, .unready, .stopping: return
-    case .pressing: perform([keepWords ? .sendRelease(dictation: nil) : .sendCancel(dictation: nil)])
-    case .owned(let dictation, _), .foreign(let dictation, _):
+    case .owned(_, let owned): phase = owned
+    case .pressing, .foreign: phase = snapshot.state
+    }
+    let dictation = handshake.dictationID
+    switch phase {
+    case .recording:
       perform([keepWords ? .sendRelease(dictation: dictation) : .sendCancel(dictation: dictation)])
+    case .processing:
+      if !keepWords { perform([.sendCancel(dictation: dictation)]) }
+    case .idle, .connecting, .pasted, .copied, .error:
+      perform([.sendCancel(dictation: dictation)])
     }
   }
 }

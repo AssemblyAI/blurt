@@ -54,7 +54,8 @@ extension KeyboardModel {
     readField()
     readSelection()
     updateShift()
-    KeyboardLog.appeared(pid: Self.pid, process: KeyboardProcess.id, controller: controllerID, fullAccess: hasFullAccess)
+    KeyboardLog.appeared(
+      pid: Self.pid, process: KeyboardProcess.id, controller: controllerID, fullAccess: hasFullAccess)
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (`VoiceRowHost`), but nothing below can
     // run — and nothing from a previous appearance (a phase, a latched gate,
@@ -96,8 +97,7 @@ extension KeyboardModel {
   /// sits dimmed and the first tap opens Blurt.
   private func autoStart() {
     guard isListening, isSettled, gate.isIdle, handshake.isIdle else { return }
-    micDown()
-    micUp()
+    tapMic()
   }
 
   /// The keyboard is leaving the screen. A dictation it owns must not run on
