@@ -375,6 +375,19 @@ struct HTTPClientTests {
     #expect(AssemblyAIError.malformedResponse.errorDescription?.isEmpty == false)
   }
 
+  // MARK: - which transcript gets pasted
+
+  @Test("the rewrite is pasted only over spoken words: no speech means nothing, whatever the model wrote")
+  func chooseTranscript() {
+    let instruction = "No grammatical fixes ever. Just dictate."
+    #expect(AssemblyAITranscriber.chooseTranscript(verbatim: "", rewrite: instruction, enhanced: true) == "")
+    #expect(AssemblyAITranscriber.chooseTranscript(verbatim: "  \n", rewrite: instruction, enhanced: true) == "  \n")
+    #expect(AssemblyAITranscriber.chooseTranscript(verbatim: "hello there", rewrite: "Hello there.", enhanced: true) == "Hello there.")
+    #expect(AssemblyAITranscriber.chooseTranscript(verbatim: "hello there", rewrite: nil, enhanced: true) == "hello there")
+    #expect(AssemblyAITranscriber.chooseTranscript(verbatim: "hello there", rewrite: " ", enhanced: true) == "hello there")
+    #expect(AssemblyAITranscriber.chooseTranscript(verbatim: "hello there", rewrite: "Hello there.", enhanced: false) == "hello there")
+  }
+
   // MARK: - helpers
 
   /// The encoded `config` part re-parsed as a dictionary — the shape every

@@ -192,13 +192,27 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// whitespace-only transcript to `.idle` without pasting or reporting, wasting
   /// the good verbatim `text` beside it.
   private func transcript(from response: DictationResponse, enhanced: Bool) -> String {
-    guard enhanced else { return response.text }
-    if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
-    if let error = response.llmError {
+    let chosen = Self.chooseTranscript(
+      verbatim: response.text, rewrite: response.llmResponse, enhanced: enhanced)
+    if enhanced, chosen != response.llmResponse, let error = response.llmError {
       Self.log.warning(
         "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
     }
-    return response.text
+    return chosen
+  }
+
+  /// The choice itself, pure: the verbatim transcript, or the rewrite when
+  /// enhanced transcripts are on and there is something to rewrite.
+  ///
+  /// A dictation that caught no speech comes back with an empty `text` — and,
+  /// since every request carries the user's style instruction, a rewrite the
+  /// model wrote from the instruction alone: on the phone it pasted the
+  /// instruction's own words ("no grammatical fixes ever…") into the field
+  /// (2026-11-05). Nothing spoken means nothing to paste, whatever the rewrite
+  /// says.
+  static func chooseTranscript(verbatim: String, rewrite: String?, enhanced: Bool) -> String {
+    guard enhanced, verbatim.trimmedNonEmpty() != nil else { return verbatim }
+    return rewrite.trimmedNonEmpty() ?? verbatim
   }
 
   /// The multipart body, in the order the streaming route requires: the whole
