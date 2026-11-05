@@ -1,6 +1,4 @@
 import BlurtEngine
-import Foundation
-import UIKit
 
 // MARK: - The mic key: the handshake, driven by the finger
 

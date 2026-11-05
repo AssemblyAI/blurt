@@ -1,6 +1,5 @@
 import BlurtDesign
 import BlurtiOSCore
-import Foundation
 import Testing
 
 @testable import BlurtiOS
