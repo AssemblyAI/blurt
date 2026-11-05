@@ -7,10 +7,12 @@ import UIKit
 /// sends press / release / cancel with the text around the cursor, shows the
 /// phase the app publishes, and inserts the words that come back.
 ///
-/// The mic key's tap-versus-hold rule is the engine's own `DictationKeyGate`,
-/// driven by the finger instead of a modifier key: finger down is the key going
-/// down, finger up the key coming up, so a tap latches and a hold is
-/// push-to-talk exactly as on the Mac.
+/// The press is `PressHandshake`'s: every finger event, signal and clock tick
+/// goes in as one of its events, and the actions it answers are carried out
+/// here (`KeyboardModel+Handshake.swift`). The mic key's tap-versus-hold rule
+/// is the engine's own `DictationKeyGate`, driven by the finger instead of a
+/// modifier key — the handshake says when a touch is the gate's, and is fed
+/// the same stamps, so the two agree.
 @MainActor
 @Observable
 package final class KeyboardModel {
@@ -23,6 +25,10 @@ package final class KeyboardModel {
   /// the day, and reading thousands of them on every appearance is what the
   /// keyboard's memory budget cannot afford.
   package static let lexiconRefreshInterval: TimeInterval = 60 * 60
+  /// A press or a stop the app has not answered is re-signalled once (a
+  /// Darwin notification can be missed), after this long — the handshake's
+  /// retry delay, well inside its deadlines.
+  package static let commandRetryDelay: Duration = .milliseconds(600)
 
   package var layout: KeyboardLayout = .panel
   /// The panel is a two-page carousel — the mic panel and the full keyboard —
@@ -32,6 +38,19 @@ package final class KeyboardModel {
   /// The direction of the last flip, so the pages slide the way the finger went.
   package var flipTowardsLeading = false
   package var snapshot = PhaseSnapshot.idle
+  /// The app's readiness record as last read (`SharedStore.listeningState`):
+  /// at every appearance, signal, heartbeat and tap. Nil until an app has
+  /// written one, or without Full Access.
+  package var listeningState: ListeningState?
+  /// The keyboard's press, as a state machine (`PressHandshake`). Observable,
+  /// so the status line and the picture follow it.
+  package var handshake = PressHandshake(retryDelay: KeyboardModel.commandRetryDelay / .seconds(1))
+  /// The press went out and the app has not answered: the element works
+  /// from this moment, not from the app's first phase.
+  package var showsConnecting = false
+  /// The last `.error` the app published, kept for the status line after the
+  /// ring's dwell settles the picture back to idle; cleared by the next tap.
+  package var heldError: PhaseSnapshot?
   /// When this keyboard last put the words into the field — the orb's drop.
   package var resultLandedAt: Date?
   /// The key term being typed on the keys, while the voice bar is a field;
@@ -52,6 +71,8 @@ package final class KeyboardModel {
   /// The letter rows for the user's first keyboard language (AZERTY for
   /// French, QWERTZ for German and its neighbours, QWERTY otherwise).
   package var letterRows = LetterLayout.qwerty
+  /// Whether a press would record now, as the readiness record says
+  /// (`readListeningState`). A preview sets it by hand with no record behind it.
   package var isListening = false
   package var hasFullAccess = false
   package var needsGlobe = true
@@ -59,23 +80,43 @@ package final class KeyboardModel {
   package var symbolsPage = false
   /// The symbols' second page (#+=), only while `symbolsPage`.
   package var morePage = false
+  /// Bumped by the notice clock so the status line's timed rows — the
+  /// countdown, the transcription's patience — are read again.
+  package var noticeTick = 0
 
-  // Internal, not private: the model's typing, mic and phase halves live in
-  // KeyboardModel+Typing/+Mic/+Phase.swift.
+  // Internal, not private: the model's typing, mic, phase, handshake,
+  // presence and notice halves live in KeyboardModel+*.swift.
   @ObservationIgnored package weak var controller: UIInputViewController?
-  @ObservationIgnored private var observers: [DarwinObserver] = []
+  @ObservationIgnored package var observers: [DarwinObserver] = []
   @ObservationIgnored package var gate = DictationKeyGate()
-  @ObservationIgnored package let clockStart = ContinuousClock.now
   @ObservationIgnored package var lastResultID: UUID?
   /// What the last dictation put in the field, separator included, so one
   /// delete takes the whole of it back. Any keystroke into the host clears it,
   /// and so does the keyboard leaving the screen.
   @ObservationIgnored package var lastInsertion: Insertion?
-  @ObservationIgnored private var heartbeat: Task<Void, Never>?
+  @ObservationIgnored package var heartbeat: Task<Void, Never>?
   @ObservationIgnored package var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored package var noticeDwell: Task<Void, Never>?
-  /// This keyboard process, for results addressed to it (`DictationResult.recipient`).
-  @ObservationIgnored package let instanceID = UUID().uuidString
+  /// The one-shot ticks at the handshake's retry delay and deadline while a
+  /// press or stop is out, and the command they are for.
+  @ObservationIgnored package var ticks: [Task<Void, Never>] = []
+  @ObservationIgnored package var ticking: UUID?
+  /// The status line's timer: every second through a recording's last
+  /// stretch, once a transcription has run past its patience.
+  @ObservationIgnored package var noticeClock: Task<Void, Never>?
+  /// This controller — one per host field — within the process (`KeyboardProcess.id`).
+  @ObservationIgnored package let controllerID = UUID().uuidString
+  /// The last command written, kept whole for the handshake's resend: the
+  /// same id and stamp again, so an app that did read it ignores the copy.
+  @ObservationIgnored package var lastCommand: KeyboardCommand?
+  /// When the finger touched the mic, on the clock the gate is fed, and
+  /// whether that touch armed the gate from rest: what the lift is judged by.
+  @ObservationIgnored package var touchDown: Duration?
+  @ObservationIgnored package var armedFromIdle = false
+  /// The clock, injected so a test can move it: the handshake's stamps and
+  /// deadlines, the gate's stamps and every freshness check read it.
+  @ObservationIgnored package var now: () -> Date = { Date() }
+  @ObservationIgnored private let clockStart = Date()
   /// How `openApp` asks the application object, once the responder chain
   /// reaches it: a test's capture in place of really opening the app.
   @ObservationIgnored var urlOpener: (UIApplication, URL) -> Void = { application, url in
@@ -86,10 +127,6 @@ package final class KeyboardModel {
     SharedStore.write(command, forKey: BlurtShared.Key.command)
     SharedStore.post(BlurtShared.Signal.command)
   }
-  /// A press that got no phase back is re-signalled once (a Darwin
-  /// notification can be missed), after this long.
-  package static let commandRetryDelay: Duration = .milliseconds(600)
-  @ObservationIgnored package var commandRetry: Task<Void, Never>?
   @ObservationIgnored package var termDraftFromSelection: String?
   /// A highlighted word the chip is done with — added, or its ✓ tapped —
   /// while the host still shows it highlighted: the + is back, and stays
@@ -103,19 +140,6 @@ package final class KeyboardModel {
   @ObservationIgnored package var termHostBaseline: String?
   @ObservationIgnored package var termHostBaselineAfter: String?
   @ObservationIgnored package var termNotice: Task<Void, Never>?
-  /// A release made while the mic was still coming up (the engine drops
-  /// one before it records): held, and sent on the first recording phase.
-  @ObservationIgnored package var releasePending = false
-  /// The press the app has not answered yet. A settled phase that does not
-  /// answer it (the previous dictation's notice landing late) leaves the
-  /// gate alone; anything in flight, or a phase carrying its id, answers it.
-  /// Kept whole, so its id and its age can't disagree: one too old for the
-  /// app to take is never answered (`expireUnansweredPress`).
-  @ObservationIgnored package var unansweredPressCommand: KeyboardCommand?
-  package var unansweredPress: UUID? { unansweredPressCommand?.id }
-  /// What the picture showed when the orb last sent a press — whether that
-  /// press could have started a dictation at all (see `undoPress`).
-  @ObservationIgnored package var pressSentOver: PhaseSnapshot.State?
   /// The `at` of a notice the keyboard already let go of: a re-read of the
   /// same snapshot cannot replay it.
   @ObservationIgnored package var dismissedNoticeAt: Date?
@@ -170,113 +194,18 @@ package final class KeyboardModel {
   /// be reset, since a dictation can end with no finger event to close it.
   package var isSettled: Bool { snapshot.state.isSettled }
 
+  /// The gate's clock: seconds since this model was made, on the same clock
+  /// the handshake's stamps use, so a hold is one length to both.
+  package var elapsed: Duration { .seconds(now().timeIntervalSince(clockStart)) }
+
   package init() {}
-
-  // MARK: - Lifecycle
-
-  package func attach(to controller: UIInputViewController) {
-    self.controller = controller
-    observers = [
-      DarwinObserver(name: BlurtShared.Signal.phase) { [weak self] in
-        Task { @MainActor in self?.phaseChanged() }
-      },
-      DarwinObserver(name: BlurtShared.Signal.result) { [weak self] in
-        Task { @MainActor in self?.resultArrived() }
-      },
-    ]
-  }
-
-  package func appeared() {
-    // Without a controller (a test's model) the access stays as it was set.
-    hasFullAccess = controller?.hasFullAccess ?? hasFullAccess
-    needsGlobe = controller?.needsInputModeSwitchKey ?? true
-    letterRows = LetterLayout.forPreferredLanguages()
-    // Every appearance starts on the mic page with no term half-typed, and on
-    // the page the field asks for: symbols for a number, letters otherwise.
-    panelShowsKeys = false
-    endTermField()
-    dismissedSelection = nil
-    termNotice?.cancel()
-    termSavedAt = nil
-    releasePending = false
-    // `unansweredPress` is not reset here: an appearance can follow another
-    // with no disappearance between (iOS does that), and a press still out
-    // must keep the gate latched so hands-free does not press again over it.
-    // One too old for the app to take is over, though (`expireUnansweredPress`).
-    symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
-    morePage = false
-    readAppearance()
-    readField()
-    readSelection()
-    updateShift()
-    // Without Full Access the App Group is out of reach: the keyboard still
-    // types, and says what it needs (see `VoiceBar`), but nothing below can
-    // run — and nothing from a previous appearance (a phase, a latched gate)
-    // may linger over a keyboard that can't hear the app.
-    guard hasFullAccess else {
-      snapshot = .idle
-      gate.reset()
-      noticeDwell?.cancel()
-      return
-    }
-    layout = SharedStore.layout
-    themeID = SharedStore.themeID
-    storedVoiceKind = SharedStore.voiceElementKind
-    storedMicAlignment = SharedStore.micAlignment
-    SharedStore.keyboardEverSeen = true
-    refresh(haptics: false)
-    // `refresh` may apply no phase at all (none stored, or a notice already
-    // let go of), so a press the app will never answer is let go of here too:
-    // otherwise its latch would skip hands-free on every appearance after.
-    letGoOfExpiredPress()
-    startHeartbeat()
-    requestLexicon()
-    // Words that landed while this keyboard was away, still fresh and meant
-    // for whoever is up, go in now rather than waiting for a signal nobody
-    // will send again.
-    resultArrived()
-    if SharedStore.autoDictate { autoStart() }
-  }
-
-  /// Hands-free: a dictation begins the moment the keyboard is up, as if the
-  /// mic had been tapped — the same synthetic tap through the engine's gate,
-  /// so it latches and the next real tap stops it. Only when the app is
-  /// listening and nothing is in flight; otherwise the orb sits dimmed and the
-  /// first tap opens Blurt.
-  private func autoStart() {
-    guard isListening, isSettled, gate.isIdle else { return }
-    perform(gate.modifierDown(at: elapsed))
-    perform(gate.modifierUp(at: elapsed))
-  }
-
-  /// The keyboard is leaving the screen. A dictation it started must not run
-  /// on without it: a latched recording is released (the words still land, on
-  /// the clipboard if no keyboard is there to take them), anything earlier is
-  /// cancelled. Words already being transcribed are left to finish — the mic
-  /// is off, and a cancel would throw them away. Presence ends, so a result
-  /// that finishes after this goes to the clipboard rather than to a keyboard
-  /// nobody can see.
-  package func disappeared() {
-    heartbeat?.cancel()
-    heartbeat = nil
-    commandRetry?.cancel()
-    if !gate.isIdle || !isSettled {
-      switch snapshot.state {
-      case .recording: send(.release)
-      case .processing: break
-      case .idle, .connecting, .pasted, .copied, .error: send(.cancel)
-      }
-      gate.reset()
-    }
-    SharedStore.keyboardSeenAt = nil
-    lastInsertion = nil
-  }
 
   deinit {
     heartbeat?.cancel()
     noticeDwell?.cancel()
+    noticeClock?.cancel()
     termNotice?.cancel()
-    commandRetry?.cancel()
+    ticks.forEach { $0.cancel() }
   }
 
   /// The cursor moved or the text around it changed, including by our own
@@ -342,30 +271,5 @@ package final class KeyboardModel {
     let trimmed = before.reversed().drop { $0 == " " }
     guard let last = trimmed.first else { return true }
     return last == "\n" || ".?!".contains(last)
-  }
-
-  /// Catches up with whatever the app last published. No haptics: nothing
-  /// just happened, the keyboard merely came up. A notice (pasted, copied,
-  /// error) was for the keyboard that was up when it happened, not this
-  /// appearance; a dictation in flight with the app gone is over.
-  private func refresh(haptics: Bool) {
-    isListening = SharedStore.isListening
-    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
-    apply(current.isStale || current.noticeDwellSeconds != nil ? .idle : current, haptics: haptics)
-  }
-
-  /// Tells the app the keyboard is on screen, so a finished dictation is
-  /// handed here rather than copied to the clipboard.
-  private func startHeartbeat() {
-    heartbeat?.cancel()
-    heartbeat = Task { [weak self] in
-      while !Task.isCancelled {
-        guard let self else { return }
-        SharedStore.keyboardSeenAt = Date()
-        SharedStore.keyboardInstance = instanceID
-        isListening = SharedStore.isListening
-        try? await Task.sleep(for: .seconds(SharedStore.keyboardHeartbeatInterval))
-      }
-    }
   }
 }

@@ -13,29 +13,25 @@ struct ProtocolTests {
     #expect(SharedStore.keyTermsKey == KeyTermsStore.defaultsKey)
   }
 
-  @Test("listening is the record: an open window with a live mic and a fresh lease, and nothing else")
+  @Test("listening is the record's word: an open window with a live mic and a fresh lease")
   func isListening() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let now = Date()
-    let launch = UUID()
-    func record(_ window: ListeningState.Window, micLive: Bool = true, writtenAt: Date = now) -> ListeningState {
-      ListeningState(launchID: launch, sequence: 1, window: window, micLive: micLive, writtenAt: writtenAt)
-    }
-    SharedStore.listeningState = record(.open)
+    KeyboardRig.listening(true, now: now)
     #expect(SharedStore.isListening(now: now))
-    SharedStore.listeningState = record(.closed)
-    #expect(!SharedStore.isListening(now: now), "closed reads false with a fresh lease")
-    SharedStore.listeningState = record(.interrupted)
-    #expect(!SharedStore.isListening(now: now), "interrupted reads false with a fresh lease")
-    SharedStore.listeningState = record(.opening)
+    // Closed or interrupted reads false however fresh the lease.
+    KeyboardRig.record(.closed, reason: .sessionOff)
     #expect(!SharedStore.isListening(now: now))
-    SharedStore.listeningState = record(.open, micLive: false)
-    #expect(!SharedStore.isListening(now: now), "open with the mic not live is not ready")
-    SharedStore.listeningState = record(.open, writtenAt: now.addingTimeInterval(-(ListeningState.lease + 1)))
-    #expect(!SharedStore.isListening(now: now), "a lapsed lease reads false: the app is suspended or gone")
-    #expect(SharedStore.listeningState?.notReady(now: now) == .suspended)
-    // The keys that came before the record still answer for a build that wrote none.
+    KeyboardRig.record(.interrupted, reason: .interrupted)
+    #expect(!SharedStore.isListening(now: now))
+    // Open with the mic not live, or with the lease lapsed, reads false too.
+    KeyboardRig.record(.open, micLive: false)
+    #expect(!SharedStore.isListening(now: now))
+    KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+    #expect(!SharedStore.isListening(now: now))
+    // The record decides whenever there is one; the older keys answer for a
+    // build that has not written it.
     SharedStore.listeningState = nil
     SharedStore.listeningUntil = now.addingTimeInterval(600)
     SharedStore.appSeenAt = now.addingTimeInterval(-2)
@@ -146,34 +142,37 @@ private func takeResultShortly() -> Task<DictationResult?, Never> {
 @MainActor
 struct KeyboardModelProtocolTests {
 
-  @Test("a tap presses and latches; the next tap releases")
+  @Test("a tap presses and latches; answered, the next tap releases the dictation by its id")
   func tapThenTap() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.micUp()
+    model.tapMic()
     #expect(commands.sent.map(\.kind) == [.press])
-    model.apply(snapshot(.recording))
-    model.micDown()
-    model.micUp()
+    #expect(!model.gate.isIdle)
+    let dictation = UUID()
+    rig.answer(.started(dictation))
+    model.apply(snapshot(.recording, dictation: dictation))
+    model.tapMic()
     #expect(commands.sent.map(\.kind) == [.press, .release])
+    #expect(commands.sent.last?.dictationID == dictation)
   }
 
-  @Test("a dictation started elsewhere latches the gate, so one tap stops it")
+  @Test("a dictation started elsewhere, named by the app, latches on the finger so one tap stops it")
   func latchOnInFlight() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.apply(snapshot(.recording))
-    #expect(!model.gate.isIdle)
-    model.micDown()
-    model.micUp()
+    let dictation = UUID()
+    model.apply(snapshot(.recording, dictation: dictation))
+    #expect(model.gate.isIdle)
+    model.tapMic()
     #expect(commands.sent.map(\.kind) == [.release])
+    #expect(commands.sent.last?.dictationID == dictation)
   }
 
   @Test("a press while transcribing is refused rather than dropped by the engine")
@@ -183,25 +182,29 @@ struct KeyboardModelProtocolTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.apply(snapshot(.processing))
-    model.micDown()
-    model.micUp()
+    model.apply(snapshot(.processing, dictation: UUID()))
+    model.tapMic()
     #expect(commands.sent.isEmpty)
     #expect(model.gate.isIdle)
   }
 
-  @Test("leaving the screen releases a latched recording and cancels anything earlier")
+  @Test("leaving the screen releases a recording this keyboard owns, and ends its presence")
   func disappearEndsDictation() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    rig.latchRecording()
+    model.appeared()
+    let dictation = rig.latchRecording()
     model.disappeared()
     #expect(commands.sent.map(\.kind) == [.press, .release])
-    #expect(model.gate.isIdle)
+    #expect(commands.sent.last?.dictationID == dictation)
     #expect(SharedStore.keyboardSeenAt == nil)
+    #expect(SharedStore.keyboardPresence?.onScreen == false)
+    // The gate comes up with the app's answer.
+    rig.answer(.stopped(dictation))
+    #expect(model.gate.isIdle)
   }
 
   @Test("a result is inserted once, only while fresh, only if addressed here")
@@ -227,7 +230,7 @@ struct KeyboardModelProtocolTests {
     deliver("three", to: "someone-else")
     model.resultArrived()
     #expect(proxy.before == "Hi one")
-    deliver("four", to: model.instanceID)
+    deliver("four", to: KeyboardProcess.id)
     model.resultArrived()
     #expect(proxy.before == "Hi one four")
   }

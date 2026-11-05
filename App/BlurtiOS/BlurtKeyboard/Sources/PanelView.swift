@@ -4,7 +4,9 @@ import SwiftUI
 
 /// The voice element, big, dead centre — or at the edge Settings chose — with
 /// the + beside it and cancel × on its other side while something is in
-/// flight; one row of keys at the iPhone's widths. 216 pt.
+/// flight, the status line under it, and the Full Access note in its place
+/// when there is no Full Access (`VoiceRowHost`, as the bar's); one row of
+/// keys at the iPhone's widths. 216 pt.
 struct PanelView: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
@@ -21,10 +23,11 @@ struct PanelView: View {
         // is the margin above the page, so the mic is centred between the
         // keyboard's top edge and the keys. The element's box is capped so
         // the + and the × beside it always have their room on a narrow phone.
-        VoiceRow(
-          model: model, slot: .panel, height: VoiceSlot.panel.box.height, cancels: !atEdge,
-          micCap: Self.micCap(rowWidth: geo.size.width)
-        )
+        VoiceRowHost(model: model, slot: .panel) {
+          VoiceRow(
+            model: model, slot: .panel, height: VoiceSlot.panel.box.height, cancels: !atEdge,
+            micCap: Self.micCap(rowWidth: geo.size.width))
+        }
         .frame(maxHeight: .infinity)
         // The stock bottom row at the full keyboard's widths, so nothing
         // changes size when the carousel flips to the keys and back.

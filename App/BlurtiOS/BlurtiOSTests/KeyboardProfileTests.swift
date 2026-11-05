@@ -136,17 +136,35 @@ struct KeyboardProfileTests {
     // them and the whole height within one, since the surface's top edge is
     // read off an anti-aliased screenshot. Apple's own bottom row carries
     // the globe whatever the phone, so the measured space is the one beside it.
-    let expectations: [(String, CGFloat, Double)] = [
-      ("letter", geometry.letterWidth, 0.5), ("gap", geometry.gap, 0.5), ("sideGap", geometry.sideGap, 0.5),
-      ("side", geometry.sideWidth, 0.5), ("abc", geometry.abcWidth, 0.5), ("return", geometry.returnWidth, 0.5),
-      ("space", geometry.spaceWidth(globe: true), 0.5), ("height", profile.keyHeight, 0.5),
-      ("rowGap", profile.rowGap, 0.5), ("marginSide", profile.marginSide, 0.5), ("radius", profile.keyRadius, 0.5),
-      ("topBand", profile.topBand, 1), ("bottomMargin", profile.bottomInset, 0.5),
-      ("keyboardHeight", KeyboardLayout.full.height(profile: profile), 1),
+    let expectations = [
+      Expectation("letter", geometry.letterWidth), Expectation("gap", geometry.gap),
+      Expectation("sideGap", geometry.sideGap), Expectation("side", geometry.sideWidth),
+      Expectation("abc", geometry.abcWidth), Expectation("return", geometry.returnWidth),
+      Expectation("space", geometry.spaceWidth(globe: true)), Expectation("height", profile.keyHeight),
+      Expectation("rowGap", profile.rowGap), Expectation("marginSide", profile.marginSide),
+      Expectation("radius", profile.keyRadius), Expectation("topBand", profile.topBand, within: 1),
+      Expectation("bottomMargin", profile.bottomInset),
+      Expectation("keyboardHeight", KeyboardLayout.full.height(profile: profile), within: 1),
     ]
-    for (key, value, tolerance) in expectations {
+    for expectation in expectations {
+      let key = expectation.key
       let number = try #require(measured.cap[key], "\(file) has no cap.\(key)")
-      #expect(abs(number - value) < tolerance, "\(file): \(key) is \(number) measured, \(value) in the profile")
+      #expect(
+        abs(number - expectation.value) < expectation.tolerance,
+        "\(file): \(key) is \(number) measured, \(expectation.value) in the profile")
+    }
+  }
+
+  /// One measured number against the profile's, within a tolerance.
+  private struct Expectation {
+    let key: String
+    let value: CGFloat
+    let tolerance: Double
+
+    init(_ key: String, _ value: CGFloat, within tolerance: Double = 0.5) {
+      self.key = key
+      self.value = value
+      self.tolerance = tolerance
     }
   }
 
