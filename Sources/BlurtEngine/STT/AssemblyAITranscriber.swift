@@ -166,53 +166,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       throw AssemblyAIError.malformedResponse
     }
     Self.logServerMetrics(response)
-    return transcript(from: response, enhanced: enhanced)
-  }
-
-  /// Which of the two transcripts in the response to paste.
-  ///
-  /// **This is the enhanced-transcripts switch.** The config always asks for the
-  /// rewrite, so both transcripts are in hand by the time this runs and the
-  /// setting is a pure choice between them: off means paste `text` exactly as
-  /// spoken, on means prefer the rewrite. Read fresh per request, so a toggle
-  /// applies to the next dictation without rebuilding the transcriber.
-  ///
-  /// It used to be a *request* switch — an explicit null `llm`, the only off
-  /// state the route has, since omitting the instruction merely selects the
-  /// service's own default cleanup. Deciding here instead costs a rewrite the
-  /// user never sees: with the setting off they still wait out its ~5 s
-  /// server-side budget and are still billed for it. What it buys is one request
-  /// shape to reason about, and a switch that cannot disagree with the response
-  /// it was applied to.
-  ///
-  /// With the setting on, the rewrite is best-effort, so anything unusable
-  /// degrades to the verbatim transcript rather than an error. Blank counts as
-  /// unusable alongside null: the service nulls out an empty rewrite, but a ""
-  /// slipping through would strand the utterance — the pipeline drops a
-  /// whitespace-only transcript to `.idle` without pasting or reporting, wasting
-  /// the good verbatim `text` beside it.
-  private func transcript(from response: DictationResponse, enhanced: Bool) -> String {
-    let chosen = Self.chooseTranscript(
-      verbatim: response.text, rewrite: response.llmResponse, enhanced: enhanced)
-    if enhanced, chosen != response.llmResponse, let error = response.llmError {
-      Self.log.warning(
-        "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
-    }
-    return chosen
-  }
-
-  /// The choice itself, pure: the verbatim transcript, or the rewrite when
-  /// enhanced transcripts are on and there is something to rewrite.
-  ///
-  /// A dictation that caught no speech comes back with an empty `text` — and,
-  /// since every request carries the user's style instruction, a rewrite the
-  /// model wrote from the instruction alone: on the phone it pasted the
-  /// instruction's own words ("no grammatical fixes ever…") into the field
-  /// (2026-11-05). Nothing spoken means nothing to paste, whatever the rewrite
-  /// says.
-  static func chooseTranscript(verbatim: String, rewrite: String?, enhanced: Bool) -> String {
-    guard enhanced, verbatim.trimmedNonEmpty() != nil else { return verbatim }
-    return rewrite.trimmedNonEmpty() ?? verbatim
+    return transcript(
+      from: response, enhanced: enhanced,
+      instruction: cleanupInstruction(appending: context?.styleInstructions))
   }
 
   /// The multipart body, in the order the streaming route requires: the whole

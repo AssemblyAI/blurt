@@ -6,7 +6,7 @@
 #
 #   scripts/ios-device.sh preflight                 # the phone, Developer Mode, and the checklist
 #   scripts/ios-device.sh install                   # xcodegen, build for the phone, install
-#   scripts/ios-device.sh launch [args…]            # launch Blurt (default args: -BlurtDeveloperMode YES)
+#   scripts/ios-device.sh launch [args…]            # launch Blurt (default args: -BlurtDeveloperMode YES -BlurtDeviceTrace YES)
 #   scripts/ios-device.sh kill blurt|keyboard       # SIGKILL the app or the keyboard extension
 #   scripts/ios-device.sh pull DIR [--syslog] [--last 15m]
 #                                                   # Blurt's own logs → DIR/Logs; with --syslog the
@@ -70,7 +70,7 @@ usage() {
   cat >&2 <<'EOF'
 usage: ios-device.sh preflight
        ios-device.sh install
-       ios-device.sh launch [args…]                   (default: -BlurtDeveloperMode YES)
+       ios-device.sh launch [args…]                   (default: -BlurtDeveloperMode YES -BlurtDeviceTrace YES)
        ios-device.sh kill blurt|keyboard
        ios-device.sh pull DIR [--syslog] [--last 15m]  (--syslog asks for an administrator password:
                                                         log collect needs root)
@@ -213,7 +213,7 @@ install_app() {
 
 launch_app() {
   resolve_device
-  [ $# -gt 0 ] || set -- -BlurtDeveloperMode YES
+  [ $# -gt 0 ] || set -- -BlurtDeveloperMode YES -BlurtDeviceTrace YES
   echo "launch: $BUNDLE_ID $* on $NAME"
   # `--` keeps devicectl from reading the app's `-Blurt…` arguments as its own.
   if ! xcrun devicectl device process launch --terminate-existing --device "$UDID" "$BUNDLE_ID" -- "$@" \

@@ -178,8 +178,11 @@ iPhone 13.
    (derived data in `$TMPDIR/blurt-device-dd-<checkout hash>`, one per checkout), then
    `devicectl device install app`. It replaces whatever Blurt is on the phone (same bundle id). On
    the phone, trust the developer app once (Settings › General › VPN & Device Management).
-3. `scripts/ios-device.sh launch` — Blurt with `-BlurtDeveloperMode YES` (the engine then logs to
-   `Library/Logs/Blurt`); any arguments you pass replace that. A locked phone is reported plainly:
+3. `scripts/ios-device.sh launch` — Blurt with `-BlurtDeveloperMode YES -BlurtDeviceTrace YES` (the
+   engine's dictation log and the trace, both under `Library/Logs/Blurt`); any arguments you pass
+   replace that. A Debug build keeps each flag's value in its defaults (`LaunchFlags`), so the hop's
+   relaunch — SpringBoard, no arguments — goes on logging; `… NO` turns one off. A locked phone is
+   reported plainly:
    unlock it and run `launch` again. On a fresh install: **Paste your key** (or
    `DEVICECTL_CHILD_BLURT_DEBUG_API_KEY=<key> scripts/ios-device.sh launch`, which a Debug build
    takes from its environment), **Allow** sending your voice to AssemblyAI, **Allow** the microphone,
@@ -191,7 +194,7 @@ iPhone 13.
    keyboard reads the choice the next time it comes up). `scripts/ios-device.sh kill blurt` or
    `kill keyboard` ends either process mid-dictation (the relaunch and dead-keyboard flows).
 5. `scripts/ios-device.sh pull <dir> --syslog` — Blurt's own logs under `<dir>/Logs` (none on the
-   phone yet is not a failure; `trace.jsonl` is among them when the app was launched with
+   phone yet is not a failure; `trace.jsonl` is among them once the app has been launched with
    `-BlurtDeviceTrace YES`) and the phone's system log into `<dir>/device.logarchive`
    (`--last 15m` by default). `log collect` needs root, so macOS asks for an administrator
    password: the one way to run it from a script without typing a password into the terminal.

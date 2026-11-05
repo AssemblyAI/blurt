@@ -34,6 +34,8 @@ struct BlurtiOSApp: App {
       if let key = ProcessInfo.processInfo.environment["BLURT_DEBUG_API_KEY"], !key.isEmpty, !Self.isTestHost {
         _ = APIKeyStore.save(key)
       }
+      // The developer log and the device trace survive the hop's relaunch.
+      if !Self.isTestHost { LaunchFlags.persist() }
     #endif
     // The unit tests are hosted by this app: they get a coordinator that
     // touches neither the Keychain nor the App Group (the Mac's UITestSupport
