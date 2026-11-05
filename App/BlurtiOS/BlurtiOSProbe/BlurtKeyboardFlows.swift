@@ -29,6 +29,11 @@ final class BlurtKeyboardFlows: XCTestCase {
     // The app listens from launch, so the keyboard's mic key is live.
     app.launchArguments =
       ["-BlurtProbeField"] + arguments + ["-BlurtStartListening", "-BlurtProbeResetTerms", "-BlurtProbeText", "Rizz"]
+    // A simulator with no key in its Keychain can't open the window: the key
+    // the script was given (TEST_RUNNER_BLURT_DEBUG_API_KEY) goes to the app.
+    if let key = ProcessInfo.processInfo.environment["BLURT_DEBUG_API_KEY"], !key.isEmpty {
+      app.launchEnvironment["BLURT_DEBUG_API_KEY"] = key
+    }
     app.launch()
     try bringUpBlurt()
     shot("up")
