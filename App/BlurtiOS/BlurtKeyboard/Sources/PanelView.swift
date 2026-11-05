@@ -23,10 +23,9 @@ struct PanelView: View {
         // is the margin above the page, so the mic is centred between the
         // keyboard's top edge and the keys. The element's box is capped so
         // the + and the × beside it always have their room on a narrow phone.
-        VoiceRowHost(model: model, slot: .panel) {
+        VoiceRowHost(model: model, slot: .panel, rowHeight: VoiceSlot.panel.box.height) { height in
           VoiceRow(
-            model: model, slot: .panel, height: VoiceSlot.panel.box.height, cancels: !atEdge,
-            micCap: Self.micCap(rowWidth: geo.size.width))
+            model: model, slot: .panel, height: height, cancels: !atEdge, micCap: Self.micCap(rowWidth: geo.size.width))
         }
         .frame(maxHeight: .infinity)
         // The stock bottom row at the full keyboard's widths, so nothing

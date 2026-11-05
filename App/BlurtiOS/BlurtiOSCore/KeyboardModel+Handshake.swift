@@ -12,6 +12,9 @@ extension KeyboardModel {
   package func perform(_ actions: [PressHandshake.Action]) {
     for action in actions { act(on: action) }
     if handshake.pressID == nil { showsConnecting = false }
+    // The stop a leave was held behind is answered, or given up at its
+    // deadline: presence ends now rather than at the grace (`disappeared`).
+    if leaving != nil, handshake.stopID == nil { leave() }
     syncTicks()
   }
 

@@ -28,6 +28,9 @@ extension KeyboardModel {
   package func detach() {
     heartbeat?.cancel()
     heartbeat = nil
+    // A leave still waiting on the app's answer ends now: the process is
+    // dropping the controller, and nothing will be there to write it later.
+    if leaving != nil { leave() }
     noticeDwell?.cancel()
     noticeClock?.cancel()
     termNotice?.cancel()
@@ -37,6 +40,10 @@ extension KeyboardModel {
   }
 
   package func appeared() {
+    // Back before a leave held behind a stop could land: the record this
+    // appearance writes is the truth, and the pending one must not undo it.
+    leaving?.cancel()
+    leaving = nil
     // Without a controller (a test's model) the access stays as it was set.
     hasFullAccess = controller?.hasFullAccess ?? hasFullAccess
     needsGlobe = controller?.needsInputModeSwitchKey ?? true
@@ -108,21 +115,46 @@ extension KeyboardModel {
   /// another keyboard started. Presence ends, so a result that finishes
   /// after this goes to the clipboard rather than to a keyboard nobody can
   /// see; the app's watchdog ends a dictation whose keyboard was killed.
+  ///
+  /// With a release or cancel of ours still out — the one just sent, or an
+  /// earlier one — presence does not end yet. The command is answered by the
+  /// app reading it; a record off screen is answered by its watchdog, which
+  /// reads a dictation whose keyboard is gone as one to release. Posted
+  /// together they race, and the watchdog's release lands on the dictation
+  /// the command is already ending: a second release, logged as a dead
+  /// keyboard. So the record stays on screen until the app's ack settles the
+  /// stop, or `leaveGrace` passes — whichever first (`leave`).
   package func disappeared() {
     heartbeat?.cancel()
     heartbeat = nil
     noticeClock?.cancel()
     endOwnedDictation()
     KeyboardLog.disappeared(pid: Self.pid, process: KeyboardProcess.id, controller: controllerID)
-    // Only over this controller's own record: a keyboard leaving in one host
-    // must not erase the one that just appeared in another — nor, within
-    // one process, the controller that came up as this one went down.
+    lastInsertion = nil
+    guard handshake.stopID != nil else {
+      leave()
+      return
+    }
+    leaving?.cancel()
+    leaving = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(Self.leaveGrace))
+      guard !Task.isCancelled, let self else { return }
+      leave()
+    }
+  }
+
+  /// Presence ends: the record off screen, the `keyboard` signal, the older
+  /// key cleared. Only over this controller's own record: a keyboard leaving
+  /// in one host must not erase the one that just appeared in another — nor,
+  /// within one process, the controller that came up as this one went down.
+  package func leave() {
+    leaving?.cancel()
+    leaving = nil
     if SharedStore.keyboardPresence?.controllerID == controllerID {
       SharedStore.writeKeyboardPresence(presence(onScreen: false), ifOwnedBy: KeyboardProcess.id)
     }
     SharedStore.post(BlurtShared.Signal.keyboard)
     SharedStore.keyboardSeenAt = nil
-    lastInsertion = nil
   }
 
   /// The host app is resigning or going to the background: the field is

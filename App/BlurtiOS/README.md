@@ -80,7 +80,10 @@ the build): the core's logic — the App Group contract (key terms, stale snapsh
 the keyboard's rules (sentence start, the double space, the term field, return labels, letter
 rows) against a fake text field, the gate against the app's phases, the Darwin signals, term
 packs — and what the UI builds on it (palettes, the voice element, the gallery). The engine's
-own tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here.
+own tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here; every
+number in `DESIGN.md` › The two processes has one in `SessionContractNumbersTests`, which reads
+it off its named constant and greps the table for the constant's name beside the value the code
+holds, so the table and the code cannot drift apart silently.
 
 The suite holds the same gates as the engine's: warnings are errors, a plain run fails when
 `BlurtiOSCore` drops below the engine's own line-coverage floor (`MIN_IOS_COVERAGE`, 88%, in the

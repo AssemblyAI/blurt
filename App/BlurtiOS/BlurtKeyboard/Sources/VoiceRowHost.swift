@@ -13,16 +13,28 @@ import SwiftUI
 /// the same path as a tap on the mic (`KeyboardModel.tapMic`), so the words
 /// and the tap can never disagree.
 ///
-/// Where the line goes: `voicebar/note-gap` under the element's box in the
-/// panel, which has the room. The bar's row is the token's 44 pt around a
-/// 32 pt box, and the keyboard's height is the layout's, so nothing can sit
-/// under the element there without the keyboard growing: the line sits on
-/// the row's bottom edge instead, over the band the element leaves below it.
+/// Where the line goes (DESIGN.md › The two processes: the line's place):
+/// `voicebar/note-gap` under the element's box in the panel, which has the
+/// room. The bar's row is the token's 44 pt around a 32 pt box, and the
+/// keyboard's height is the layout's, so nothing can sit under the element
+/// there without the keyboard growing: the line takes the row's bottom text
+/// line instead, at `size/line`, and the row is handed the band above it —
+/// the element draws in the band, so the grille's 28 pt sits clear of the
+/// words rather than under them. The row keeps its identity either way (one
+/// view, a height that changes): a finger on the mic as the line comes up
+/// is never dropped by the row being rebuilt.
 struct VoiceRowHost<Row: View>: View {
   var model: KeyboardModel
   let slot: VoiceSlot
-  @ViewBuilder let row: () -> Row
+  /// The slot's row height: what the row gets, less the line in the bar.
+  let rowHeight: CGFloat
+  /// The row, built for the height it has.
+  @ViewBuilder let row: (CGFloat) -> Row
   @Environment(\.keyboardPalette) private var palette
+
+  /// Whether the line takes the row's bottom text line (the bar) rather than
+  /// sitting under the element's box (the panel).
+  private var lineTakesBand: Bool { slot == .bar && model.statusLine != nil }
 
   var body: some View {
     ZStack {
@@ -33,8 +45,21 @@ struct VoiceRowHost<Row: View>: View {
         note
           .transition(.opacity)
       } else {
-        row()
-          .overlay(alignment: slot == .panel ? .center : .bottom) { line }
+        let band = lineTakesBand ? rowHeight - VoiceBar.lineHeight : rowHeight
+        row(band)
+          .frame(height: band)
+          // The panel: the line hangs under the row's own bottom edge, a gap
+          // away, wherever the row sits in the room above the keys — moved
+          // down by its own height and the gap from the edge it is aligned to
+          // (an alignment guide written on a conditional view is not read).
+          .overlay(alignment: .bottom) {
+            if slot == .panel { line.offset(y: VoiceBar.lineHeight + DesignTokens.Metrics.voicebarNoteGap) }
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: slot == .bar ? .top : .center)
+          // The bar: the row at the top of its 44 pt, the line on the bottom.
+          .overlay(alignment: .bottom) {
+            if slot == .bar { line }
+          }
           .transition(.opacity)
       }
     }
@@ -48,7 +73,7 @@ struct VoiceRowHost<Row: View>: View {
       model.tapMic()
     } label: {
       Text(model.statusLine?.text ?? VoiceNotice.Copy.fullAccess)
-        .font(.footnote)
+        .font(.system(size: DesignTokens.Typography.sizeLine))
         .foregroundStyle(palette.notice)
         .lineLimit(1)
         .minimumScaleFactor(0.8)  // literal-ok: the note may shrink a little on a narrow phone
@@ -58,27 +83,25 @@ struct VoiceRowHost<Row: View>: View {
     .accessibilityLabel("Start Blurt")
   }
 
-  /// One footnote under the element, in the notice colour, or nothing: ready
-  /// and idle is wordless, as Apple's keyboard is.
+  /// One line under the element, in the notice colour, or nothing: ready
+  /// and idle is wordless, as Apple's keyboard is. One text line tall; in
+  /// the bar the whole bottom band is the line's key, as the row above it
+  /// is the mic's.
   @ViewBuilder private var line: some View {
     if let line = model.statusLine {
-      // The line's top a gap under the element's box: the guide moves its
-      // centre down by half the box and the gap. The bar aligns to the
-      // bottom instead, where this guide is not consulted.
-      let drop = slot.box.height / 2 + DesignTokens.Metrics.voicebarNoteGap  // literal-ok: half the box
       Button {
         model.tapMic()
       } label: {
         Text(line.text)
-          .font(.footnote)
+          .font(.system(size: DesignTokens.Typography.sizeLine))
           .foregroundStyle(palette.notice)
           .lineLimit(1)
           .minimumScaleFactor(0.8)  // literal-ok: a long line may shrink a little on a narrow phone
-          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: slot == .bar ? .infinity : nil)
       }
       .buttonStyle(KeyPressStyle())
       .accessibilityIdentifier("blurt-line")
-      .alignmentGuide(VerticalAlignment.center) { dimensions in dimensions[.top] - drop }
+      .frame(height: VoiceBar.lineHeight)
       .transition(.opacity)
     }
   }
