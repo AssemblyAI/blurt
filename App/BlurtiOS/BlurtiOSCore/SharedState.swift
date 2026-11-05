@@ -225,15 +225,20 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
 
   package static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
 
-  private static let longestNoticeDwell = 2.0
+  /// How long the words-landed notice stays on the orb before it settles back
+  /// to idle: the Mac's 0.8 s, a little longer since a phone has no hover to
+  /// reveal more (DESIGN.md › The two processes: notice dwell).
+  package static let pastedDwell: TimeInterval = 1.2
+  /// And the copied and error notices, the Mac's 1.6 s the same way: the
+  /// longest a notice dwells.
+  package static let noticeDwell: TimeInterval = 2
 
-  /// How long a notice stays on the orb before it settles back to idle — the
-  /// Mac's 0.8 s / 1.6 s dwell, a little longer since a phone has no hover to
-  /// reveal more. Nil for the states that end on their own.
+  /// How long this notice stays on the orb before it settles back to idle.
+  /// Nil for the states that end on their own.
   package var noticeDwellSeconds: Double? {
     switch state {
-    case .pasted: 1.2
-    case .copied, .error: Self.longestNoticeDwell
+    case .pasted: Self.pastedDwell
+    case .copied, .error: Self.noticeDwell
     case .idle, .connecting, .recording, .processing: nil
     }
   }
@@ -256,7 +261,7 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   }
 
   /// The longest notice dwell plus a second of slack.
-  package static let noticeStaleAfter: TimeInterval = longestNoticeDwell + 1
+  package static let noticeStaleAfter: TimeInterval = noticeDwell + 1
   /// The engine's cap on one dictation, plus ten seconds for the transcript
   /// to come back.
   package static let inFlightStaleAfter: TimeInterval = SyncSTTLimits.maxAudioSeconds + 10

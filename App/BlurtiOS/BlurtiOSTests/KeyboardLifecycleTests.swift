@@ -9,12 +9,13 @@ import UIKit
 /// and its heartbeat, the app's Darwin signals, the dwell that lets a notice
 /// go and the error line it leaves, the host app leaving, the word list
 /// handed to the app, and the responder walk that brings the app forward.
+/// Leaving with a stop out is in `KeyboardLifecycleTests+Leave.swift`.
 @Suite("Keyboard model: lifecycle and the app's signals", .serialized)
 @MainActor
 struct KeyboardLifecycleTests {
 
   /// Polls until `condition` holds or `timeout` passes; true when it held.
-  private func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
+  func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
       if condition() { return true }

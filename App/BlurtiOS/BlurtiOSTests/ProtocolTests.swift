@@ -188,7 +188,7 @@ struct KeyboardModelProtocolTests {
     #expect(model.gate.isIdle)
   }
 
-  @Test("leaving the screen releases a recording this keyboard owns, and ends its presence")
+  @Test("leaving the screen releases a recording this keyboard owns, and ends its presence once that is answered")
   func disappearEndsDictation() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
@@ -200,11 +200,15 @@ struct KeyboardModelProtocolTests {
     model.disappeared()
     #expect(commands.sent.map(\.kind) == [.press, .release])
     #expect(commands.sent.last?.dictationID == dictation)
-    #expect(SharedStore.keyboardSeenAt == nil)
-    #expect(SharedStore.keyboardPresence?.onScreen == false)
-    // The gate comes up with the app's answer.
+    // Presence holds behind the release (DESIGN.md: leaving with a stop
+    // out), so the app's watchdog has nothing to release a second time.
+    #expect(SharedStore.keyboardSeenAt != nil)
+    #expect(SharedStore.keyboardPresence?.onScreen == true)
+    // The gate comes up with the app's answer, and presence ends with it.
     rig.answer(.stopped(dictation))
     #expect(model.gate.isIdle)
+    #expect(SharedStore.keyboardSeenAt == nil)
+    #expect(SharedStore.keyboardPresence?.onScreen == false)
   }
 
   @Test("a result is inserted once, only while fresh, only if addressed here")

@@ -29,6 +29,14 @@ package final class KeyboardModel {
   /// Darwin notification can be missed), after this long — the handshake's
   /// retry delay, well inside its deadlines.
   package static let commandRetryDelay: Duration = .milliseconds(600)
+  /// How long a keyboard that left the screen with its own release or cancel
+  /// still out keeps its presence record on screen while it waits for the
+  /// app's answer: the stop's own deadline (`BlurtShared.stopDeadline`). The
+  /// record going off screen is what the app's watchdog reads as a dead
+  /// keyboard, and the dictation this keyboard is ending itself must not be
+  /// released a second time by the watchdog racing its command
+  /// (`disappeared`, DESIGN.md › The two processes: leaving with a stop out).
+  package static let leaveGrace: TimeInterval = BlurtShared.stopDeadline
 
   package var layout: KeyboardLayout = .panel
   /// The panel is a two-page carousel — the mic panel and the full keyboard —
@@ -95,6 +103,10 @@ package final class KeyboardModel {
   /// and so does the keyboard leaving the screen.
   @ObservationIgnored package var lastInsertion: Insertion?
   @ObservationIgnored package var heartbeat: Task<Void, Never>?
+  /// The leave held back behind a stop still out (`disappeared`): ends
+  /// presence at `leaveGrace` unless the app's answer, or a return to the
+  /// screen, gets there first.
+  @ObservationIgnored package var leaving: Task<Void, Never>?
   @ObservationIgnored package var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored package var noticeDwell: Task<Void, Never>?
   /// The one-shot ticks at the handshake's retry delay and deadline while a
@@ -202,6 +214,7 @@ package final class KeyboardModel {
 
   deinit {
     heartbeat?.cancel()
+    leaving?.cancel()
     noticeDwell?.cancel()
     noticeClock?.cancel()
     termNotice?.cancel()

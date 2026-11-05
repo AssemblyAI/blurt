@@ -1,8 +1,8 @@
 import BlurtDesign
-import BlurtEngine
 import BlurtiOSCore
 import SwiftUI
 import UIKit
+import os
 
 /// The keyboard's entry point — what iOS instantiates when the user picks Blurt
 /// from the globe key. Thin on purpose: it hosts the SwiftUI keyboard, sizes it
@@ -21,8 +21,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// One line per appearance under the `Container` category: the inset the
   /// host leaves around the keyboard and the profile it decided —
   /// `log show --predicate 'subsystem == "com.assemblyai.blurt.iphone" AND
-  /// category == "Container"'` on the simulator reads it (DESIGN.md).
-  nonisolated private static let log = HostIdentity.current.logger("Container")
+  /// category == "Container"'` on the simulator reads it (DESIGN.md). Under
+  /// the contract's subsystem, as `KeyboardLog` is: the engine's
+  /// `HostIdentity` is never configured in the keyboard's process, so its
+  /// logger would write under the Mac app's name, where that predicate
+  /// never looks.
+  nonisolated private static let log = Logger(subsystem: BlurtShared.logSubsystem, category: "Container")
+  /// The keyboard's height constraint sits at just under required: iOS
+  /// honours a keyboard's height there and fights one at required
+  /// (DESIGN.md › The two processes: height change).
+  private static let heightPriority: UILayoutPriority = .required - 1
 
   /// The input view says it wants clicks, so `UIDevice.playInputClick()` on
   /// each key press plays the system's keyboard click — and only if the
@@ -105,7 +113,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // draws *around* the keyboard — iOS 26's rounded container, inset above
     // and below — is the host's, and nothing here changes it.
     let height = view.heightAnchor.constraint(equalToConstant: model.effectiveLayout.height(profile: profile))
-    height.priority = .required - 1
+    height.priority = Self.heightPriority
     heightConstraint = height
     // The panel's carousel changes the keyboard's height when it flips.
     model.onLayoutChange = { [weak self] in self?.updateHeight(animated: true) }

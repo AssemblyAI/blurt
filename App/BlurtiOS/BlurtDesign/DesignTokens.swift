@@ -575,6 +575,8 @@ package enum DesignTokens {
     package nonisolated static let sizeLegend: CGFloat = 16
     /// Letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json).
     package nonisolated static let sizeLetter: CGFloat = 24
+    /// The one line of words under the mic (the status line, the Full Access note): in the bar its text line leaves the grille its 28 pt inside the 44 pt row.
+    package nonisolated static let sizeLine: CGFloat = 12
     /// The × on a key-term pill.
     package nonisolated static let sizePillGlyph: CGFloat = 10
     /// The letter pop-up.
@@ -956,6 +958,7 @@ package enum DesignTokens {
     "type.size/label": "12",
     "type.size/legend": "16",
     "type.size/letter": "24",
+    "type.size/line": "12",
     "type.size/pill-glyph": "10",
     "type.size/popup": "32",
     "type.size/remove-glyph": "12",

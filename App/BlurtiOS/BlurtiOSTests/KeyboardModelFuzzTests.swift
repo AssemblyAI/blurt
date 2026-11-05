@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import BlurtiOSCore
 
@@ -144,10 +145,14 @@ struct KeyboardModelFuzzTests {
       let held = !model.handshake.isIdle && model.handshake.unreadyReason == nil
       #expect(held, "gate latched with nothing of ours in flight — \(context)")
     }
-    // Not ready, the line says why — unless the handshake has a press or a
-    // dictation in hand, which is its deadline's business and the picture's.
-    if !model.isReady, model.handshake.isIdle || model.handshake.unreadyReason != nil {
-      #expect(model.statusLine != nil, "not ready with no line — \(context)")
+    // Not ready, the line says why. With a press, a dictation or a stop in
+    // the handshake's hands the line may be nil — that is the deadline's
+    // business and the picture's; from rest or refused it never is.
+    switch model.handshake.state {
+    case .pressing, .owned, .foreign, .stopping:
+      break
+    case .idle, .unready:
+      if !model.isReady { #expect(model.statusLine != nil, "not ready with no line — \(context)") }
     }
     #expect(!model.panelShowsKeys || model.layout == .panel, "keys page off the panel — \(context)")
     #expect(
@@ -170,8 +175,16 @@ struct KeyboardModelFuzzTests {
     // appearance started.
     SharedStore.autoDictate = false
     model.appeared()
+    // A controller in a window for the hop to walk to the application —
+    // attached only around the tap: an appearance would read Full Access off
+    // it, and outside an extension there is none.
+    let (hops, window) = rig.capturingHops()
+    defer { window.isHidden = true }
+    let controller = model.controller
+    model.controller = nil
     for round in 0..<200 {
       for _ in 0..<25 { drive(rig, random.pick(Event.allCases), &random) }
+      appDies(rig, hops, controller: controller, round: round, &random)
       // The keyboard goes away; whatever it had out runs to its deadline;
       // the app ends whatever dictation was still in flight (its own end, or
       // the watchdog's) and it comes back with the app idle and listening.
@@ -210,5 +223,35 @@ struct KeyboardModelFuzzTests {
       model.apply(snapshot(.pasted, dictation: dictation))
       model.apply(snapshot(.idle))
     }
+  }
+
+  /// The app dies under whatever was going on: its lease lapses, the next
+  /// read of the record refuses whatever the handshake held (a stop out runs
+  /// to its own deadline first), the line says to tap, and the tap hops —
+  /// with `suspended`, or with the held notice's own reason, since the words
+  /// and the tap never disagree — and the gate comes up.
+  private func appDies(
+    _ rig: KeyboardRig, _ hops: KeyboardRig.Hops, controller: UIInputViewController?, round: Int,
+    _ random: inout Random
+  ) {
+    let model = rig.model
+    KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+    model.stateChanged()
+    if model.handshake.stopID != nil {
+      drive(rig, .deadline, &random)
+      model.stateChanged()
+    }
+    #expect(model.handshake.unreadyReason == .suspended, "a dead app not seen (round \(round))")
+    #expect(model.gate.isIdle, "gate held over a dead app (round \(round))")
+    let line = model.statusLine
+    #expect(line != nil, "a dead app with no line (round \(round))")
+    let expected: FailureReason? =
+      if case .hop(let reason) = line?.tapOpens { reason ?? .suspended } else { .suspended }
+    let hopsBefore = hops.opened.count
+    model.controller = controller
+    model.tapMic()
+    model.controller = nil
+    #expect(hops.opened.count == hopsBefore + 1, "the tap over a dead app did not hop (round \(round))")
+    #expect(hops.opened.last == BlurtShared.startURL(reason: expected), "the hop's reason (round \(round))")
   }
 }

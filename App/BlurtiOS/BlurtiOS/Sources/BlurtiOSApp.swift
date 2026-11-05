@@ -1,4 +1,5 @@
 import BlurtEngine
+import BlurtiOSCore
 import SwiftUI
 
 @main
@@ -12,12 +13,14 @@ struct BlurtiOSApp: App {
   /// separate from the Mac app's by construction, since Keychains are per
   /// device, but naming it separately keeps the two builds' data apart the day
   /// they share an iCloud Keychain. The defaults prefix stays `Blurt` so the
-  /// engine's stores read and write the same keys they do on the Mac.
+  /// engine's stores read and write the same keys they do on the Mac. The log
+  /// subsystem is the contract's (`BlurtShared.logSubsystem`): the keyboard
+  /// logs under the same string, so one predicate reads both processes.
   init() {
     HostIdentity.configure(
       HostIdentity(
         productName: "Blurt",
-        subsystem: "com.assemblyai.blurt.iphone",
+        subsystem: BlurtShared.logSubsystem,
         keychainService: "blurt-ios",
         defaultsPrefix: "Blurt",
         logDirectoryName: "Blurt",
