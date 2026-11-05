@@ -1,4 +1,3 @@
-import BlurtEngine
 import BlurtiOSCore
 import Foundation
 
@@ -15,6 +14,7 @@ extension ListeningWindow {
     for effect in effects { await perform(effect) }
   }
 
+  /// The work — the source, the session, the dictation — awaited; the rest at once.
   private func perform(_ effect: Machine.Effect) async {
     switch effect {
     case .activateSession: activateSession()
@@ -23,12 +23,20 @@ extension ListeningWindow {
     case .endUtterance(let keepWords): await onEndingUtterance?(keepWords)
     case .closeSource(let generation): await closeSource(generation)
     case .deactivateSession(let skipIfInterrupted): deactivateSession(skipIfInterrupted: skipIfInterrupted)
+    case .scheduleExpiry, .cancelExpiry, .beginBackgroundTask, .endBackgroundTask, .publish, .log: keep(effect)
+    }
+  }
+
+  /// The timers, the background task, the record and the log: no work to wait on.
+  private func keep(_ effect: Machine.Effect) {
+    switch effect {
     case .scheduleExpiry(let date, let generation): scheduleExpiry(date, generation)
     case .cancelExpiry: cancelExpiry()
     case .beginBackgroundTask: backgroundTasks.begin(Self.interruptionTask)
     case .endBackgroundTask: backgroundTasks.end(Self.interruptionTask)
     case .publish(let record): publish(record)
     case .log(let line): Self.log.notice("\(line, privacy: .public)")
+    case .activateSession, .openSource, .tryResume, .endUtterance, .closeSource, .deactivateSession: break
     }
   }
 
@@ -62,18 +70,20 @@ extension ListeningWindow {
 
   /// Opens the source under the new generation, then lets the idle mode take
   /// over. A mode that can't (no Picture in Picture here) leaves the window
-  /// held, which is the base the record already says.
+  /// held, which is the base the record already says. The heartbeat runs from
+  /// here until the source closes, so the lease is renewed while the window
+  /// opens, waits out an interruption, or closes — a stale "ready" is the one
+  /// thing it must never say, and a lapsed lease says "suspended" instead.
   private func openSource(_ generation: Machine.Generation) async {
     guard !activationFailed else {
       activationFailed = false
       feed(.openFailed(generation, .micBusy))
       return
     }
+    startHeartbeat()
     do {
       try await source.open()
-      lastError = nil
       feed(.opened(generation))
-      startHeartbeat()
       await takeIdleMode()
     } catch {
       lastError = CaptureFailure.sentence(for: error)
@@ -106,8 +116,8 @@ extension ListeningWindow {
         return
       }
     }
-    let deadline = clock.now.advanced(by: Self.resumePoll)
-    while !source.isOpen, clock.now < deadline {
+    let polls = Int(Self.resumePoll / Self.resumePollStep)
+    for _ in 0..<polls where !source.isOpen {
       try? await clock.sleep(for: Self.resumePollStep)
     }
     guard source.isOpen else {
@@ -115,7 +125,6 @@ extension ListeningWindow {
       feed(.resumeFailed(generation, .interrupted))
       return
     }
-    lastError = nil
     feed(.resumed(generation))
     if mayStart { await takeIdleMode() }
   }
@@ -171,21 +180,20 @@ extension ListeningWindow {
     heartbeat = nil
   }
 
-  /// A heartbeat's turn on the loop.
-  func beat() {
-    inbox.yield(.heartbeat)
-  }
-
   // MARK: The record
 
+  /// Writes the record for the keyboard and remembers it for the home
+  /// screen. A window opening or open again is past whatever failed last.
   private func publish(_ record: ListeningState) {
     let changed = state?.window != record.window
     state = record
+    if [.opening, .open].contains(record.window) { lastError = nil }
     SharedStore.publish(record)
-    DeviceTrace.record(
-      "state",
-      ["window": record.window.rawValue, "idle": record.idle.rawValue, "micLive": String(record.micLive),
-        "seq": String(record.sequence), "reason": record.reason?.rawValue ?? ""])
+    let fields = [
+      "window": record.window.rawValue, "idle": record.idle.rawValue, "micLive": String(record.micLive),
+      "seq": String(record.sequence), "reason": record.reason?.rawValue ?? "",
+    ]
+    DeviceTrace.record("state", fields)
     if changed { onStateChanged?(record) }
   }
 }

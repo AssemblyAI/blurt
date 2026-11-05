@@ -55,9 +55,22 @@ struct KeyboardRig {
     model.apply(snapshot(.recording))
   }
 
-  /// The app listening — an open window and a fresh heartbeat — or not.
+  /// The app process the fixture's records come from.
+  static let launchID = UUID()
+
+  /// The app listening, or not, as the app would write it: the readiness
+  /// record (`SharedStore.listeningState`) — open with a live mic, a fresh
+  /// lease and ten minutes to go, or closed with the session off — and, for
+  /// a reader of the keys that came before it, `listeningUntil` and
+  /// `appSeenAt` saying the same.
   static func listening(_ on: Bool) {
     let now = Date()
+    SharedStore.listeningState =
+      on
+      ? ListeningState(
+        launchID: launchID, sequence: 1, window: .open, micLive: true, windowUntil: now.addingTimeInterval(600),
+        writtenAt: now)
+      : ListeningState(launchID: launchID, sequence: 2, window: .closed, reason: .sessionOff, writtenAt: now)
     SharedStore.listeningUntil = on ? now.addingTimeInterval(600) : nil
     SharedStore.appSeenAt = on ? now : nil
   }

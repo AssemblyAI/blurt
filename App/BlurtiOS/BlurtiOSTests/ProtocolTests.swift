@@ -13,19 +13,41 @@ struct ProtocolTests {
     #expect(SharedStore.keyTermsKey == KeyTermsStore.defaultsKey)
   }
 
-  @Test("listening needs both a live window and a live app")
+  @Test("listening is the record: an open window with a live mic and a fresh lease, and nothing else")
   func isListening() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let now = Date()
+    let launch = UUID()
+    func record(_ window: ListeningState.Window, micLive: Bool = true, writtenAt: Date = now) -> ListeningState {
+      ListeningState(launchID: launch, sequence: 1, window: window, micLive: micLive, writtenAt: writtenAt)
+    }
+    SharedStore.listeningState = record(.open)
+    #expect(SharedStore.isListening(now: now))
+    SharedStore.listeningState = record(.closed)
+    #expect(!SharedStore.isListening(now: now), "closed reads false with a fresh lease")
+    SharedStore.listeningState = record(.interrupted)
+    #expect(!SharedStore.isListening(now: now), "interrupted reads false with a fresh lease")
+    SharedStore.listeningState = record(.opening)
+    #expect(!SharedStore.isListening(now: now))
+    SharedStore.listeningState = record(.open, micLive: false)
+    #expect(!SharedStore.isListening(now: now), "open with the mic not live is not ready")
+    SharedStore.listeningState = record(.open, writtenAt: now.addingTimeInterval(-(ListeningState.lease + 1)))
+    #expect(!SharedStore.isListening(now: now), "a lapsed lease reads false: the app is suspended or gone")
+    #expect(SharedStore.listeningState?.notReady(now: now) == .suspended)
+    // The keys that came before the record still answer for a build that wrote none.
+    SharedStore.listeningState = nil
     SharedStore.listeningUntil = now.addingTimeInterval(600)
     SharedStore.appSeenAt = now.addingTimeInterval(-2)
     #expect(SharedStore.isListening(now: now))
     SharedStore.appSeenAt = now.addingTimeInterval(-(SharedStore.presenceWindow + 1))
     #expect(!SharedStore.isListening(now: now))
-    SharedStore.appSeenAt = now
-    SharedStore.listeningUntil = now.addingTimeInterval(-1)
-    #expect(!SharedStore.isListening(now: now))
+  }
+
+  @Test("the lease outlasts two missed app heartbeats and is never open-ended")
+  func leaseRatio() {
+    #expect(ListeningState.lease > 2 * SharedStore.appHeartbeatInterval)
+    #expect(ListeningState(launchID: UUID(), sequence: 0, window: .open).leaseUntil < .distantFuture)
   }
 
   @Test("the presence windows outlast two missed heartbeats")

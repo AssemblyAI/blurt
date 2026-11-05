@@ -44,16 +44,20 @@ final class ListeningWindow {
   let launchID: UUID
   @ObservationIgnored let audioSession: any AudioSessionControlling
   @ObservationIgnored let appState: () -> UIApplication.State
+  /// Shared with the coordinator, which holds its release task beside the
+  /// window's interruption task.
   @ObservationIgnored let backgroundTasks: any BackgroundTasking
   @ObservationIgnored let clock: any Clock<Duration>
   @ObservationIgnored let idle: any IdleMode
-  private(set) var machine: Machine
+  @ObservationIgnored private(set) var machine: Machine
   /// The last record published: what the keyboard reads, and what the home
-  /// screen draws the session from.
-  private(set) var state: ListeningState?
+  /// screen draws the session from. Set only by `publish`
+  /// (`ListeningWindow+Effects.swift`; internal because the split keeps
+  /// `private(set)` out).
+  var state: ListeningState?
   /// Why the last open or resume failed, in the source's own words, for the
-  /// home screen; nil once one succeeds.
-  private(set) var lastError: String?
+  /// home screen; nil once a window is opening or open again.
+  var lastError: String?
   /// Run before the source closes or pauses with a dictation in flight: the
   /// coordinator ends it through the session — released with its words, or
   /// cancelled — while the feed still holds its audio.
@@ -107,7 +111,7 @@ final class ListeningWindow {
   /// The phone's window: its capture source (the simulator's in the
   /// simulator), the system audio session, the application's own state, and
   /// the idle mode the device supports.
-  convenience init(backgroundTasks: any BackgroundTasking) {
+  convenience init() {
     #if targetEnvironment(simulator)
       // The simulator's capture session carries no audio; see SimulatorAudioSource.
       let source: any ListeningSource = SimulatorAudioSource()
@@ -116,8 +120,9 @@ final class ListeningWindow {
     #endif
     let appState = { UIApplication.shared.applicationState }
     self.init(
-      source: source, audioSession: SystemAudioSession(), appState: appState, backgroundTasks: backgroundTasks,
-      clock: ContinuousClock(), idle: IdleModes.production(appState: appState))
+      source: source, audioSession: SystemAudioSession(), appState: appState,
+      backgroundTasks: SystemBackgroundTasks(), clock: ContinuousClock(),
+      idle: IdleModes.production(appState: appState))
   }
 
   deinit {
@@ -128,9 +133,6 @@ final class ListeningWindow {
   }
 
   // MARK: What the app asks
-
-  /// The source is open: the only state in which a press records.
-  var isOpen: Bool { machine.state.isOpen }
 
   /// A window exists — opening, open, paused or closing — as the session
   /// switch shows it.
@@ -170,7 +172,7 @@ final class ListeningWindow {
     withGeneration { .utteranceStarted($0) }
   }
 
-  /// A dictation ended, however it ended: the lifetime counts from now.
+  /// A dictation stopped recording, however it ended: the lifetime counts from now.
   func utteranceEnded() {
     idle.utteranceDidEnd()
     withGeneration { .utteranceEnded($0) }
@@ -188,6 +190,11 @@ final class ListeningWindow {
 
   func feed(_ event: Machine.Event) {
     inbox.yield(.event(event))
+  }
+
+  /// A heartbeat's turn on the loop.
+  func beat() {
+    inbox.yield(.heartbeat)
   }
 
   /// An event about the source carries the generation it is about; none, no event.
@@ -213,10 +220,11 @@ final class ListeningWindow {
     Self.log.notice(
       "window \(from.window.rawValue, privacy: .public) → \(to.window.rawValue, privacy: .public) on \(event.name, privacy: .public) gen=\(generation, privacy: .public) launch=\(self.launchID, privacy: .public)"
     )
-    DeviceTrace.record(
-      "window",
-      ["from": from.window.rawValue, "to": to.window.rawValue, "event": event.name, "gen": generation,
-        "launch": launchID.uuidString])
+    let fields = [
+      "from": from.window.rawValue, "to": to.window.rawValue, "event": event.name, "gen": generation,
+      "launch": launchID.uuidString,
+    ]
+    DeviceTrace.record("window", fields)
   }
 
   // MARK: What the source, the session and the idle mode say

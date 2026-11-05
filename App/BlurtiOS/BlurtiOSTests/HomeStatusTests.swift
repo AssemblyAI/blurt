@@ -1,54 +1,63 @@
-import BlurtEngine
+import Foundation
 import Testing
 
 @testable import BlurtiOSCore
 
 @Suite("Home status")
 struct HomeStatusTests {
+  private static let launch = UUID()
+
+  private func record(_ window: ListeningState.Window, idle: ListeningState.Idle = .held, until: Date? = Date())
+    -> ListeningState
+  {
+    ListeningState(launchID: Self.launch, sequence: 1, window: window, idle: idle, micLive: true, windowUntil: until)
+  }
+
   private func status(
-    _ overlay: OverlayUIState = .idle, open: Bool = true, minutes: Int = 15, denied: Bool = false, key: Bool = true,
+    _ state: ListeningState?, minutes: Int = 15, error: String? = nil, denied: Bool = false, key: Bool = true,
     mic: Bool = true, keyboard: Bool = true
   ) -> HomeStatus {
     HomeStatus(
-      overlay: overlay, windowOpen: open, windowMinutes: minutes, micDenied: denied, hasKey: key, micGranted: mic,
+      state: state, windowMinutes: minutes, error: error, micDenied: denied, hasKey: key, micGranted: mic,
       keyboardSeen: keyboard)
   }
 
-  @Test("the session is on while the window is open, off when it isn't, whatever the dictation is doing")
+  @Test("the session is on while the record says a window exists — opening, open or paused — and off otherwise")
   func session() {
-    #expect(status().label == "Session on" && status().isOn)
-    #expect(status(open: false).label == "Session off" && !status(open: false).isOn)
-    #expect(status(.recording).label == "Session on")
+    #expect(status(record(.open)).label == "Session on" && status(record(.open)).isOn)
+    #expect(status(record(.opening)).isOn)
+    #expect(status(record(.interrupted)).isOn)
+    #expect(status(record(.closed)).label == "Session off" && !status(record(.closed)).isOn)
+    #expect(!status(record(.closing)).isOn)
+    #expect(!status(nil).isOn)
   }
 
-  @Test("the line says what to do, and how long an idle session lasts")
+  @Test("the line says what to do, how long an idle session lasts, and what the mic does between dictations")
   func message() {
-    #expect(status(open: false).message.hasPrefix("Start a session"))
-    #expect(status().message.hasSuffix("Ends after 15 idle minutes."))
-    #expect(status(minutes: 1).message.hasSuffix("Ends after 1 idle minute."))
-    #expect(status(minutes: 0).message.hasSuffix("Stays on until you end it."))
-    #expect(status(denied: true).message.hasPrefix("Blurt needs microphone access"))
+    #expect(status(nil).message.hasPrefix("Start a session"))
+    #expect(status(record(.closed)).message.hasPrefix("Start a session"))
+    #expect(status(record(.opening)).message == "Starting the session…")
+    #expect(status(record(.interrupted)).message.hasPrefix("The mic is paused"))
+    #expect(status(record(.open)).message.contains("Ends after 15 idle minutes."))
+    #expect(status(record(.open), minutes: 1).message.contains("Ends after 1 idle minute."))
+    #expect(status(record(.open, until: nil), minutes: 0).message.contains("Stays on until you end it."))
+    #expect(status(record(.open)).message.hasSuffix("The mic stays open while the session is on."))
+    #expect(status(record(.open, idle: .pip)).message.hasSuffix("The mic opens only while you dictate."))
+    #expect(status(record(.open), denied: true).message.hasPrefix("Blurt needs microphone access"))
   }
 
-  @Test("a failed dictation says why; nothing else is an error")
+  @Test("a failed dictation's sentence is the card's error, held for the dwell DESIGN.md names")
   func error() {
-    #expect(status(.error(message: "No network.")).error == "No network.")
-    #expect(status(.pasted).error == nil && status(.recording).error == nil)
-  }
-
-  @Test("\"the session is off\" shows while it is, and goes once a session is on")
-  func sessionOffError() {
-    let sessionOff = OverlayUIState.error(message: HomeStatus.sessionOffError)
-    #expect(status(sessionOff, open: false).error == HomeStatus.sessionOffError)
-    #expect(status(sessionOff, open: true).error == nil)
-    #expect(status(.error(message: "No network."), open: true).error == "No network.")
+    #expect(status(record(.open), error: "No network.").error == "No network.")
+    #expect(status(record(.open)).error == nil)
+    #expect(HomeStatus.errorDwell == 3)
   }
 
   @Test("setup needs the key, the microphone and the keyboard")
   func setup() {
-    #expect(status().isSetUp)
-    #expect(!status(key: false).isSetUp)
-    #expect(!status(mic: false).isSetUp)
-    #expect(!status(keyboard: false).isSetUp)
+    #expect(status(record(.open)).isSetUp)
+    #expect(!status(record(.open), key: false).isSetUp)
+    #expect(!status(record(.open), mic: false).isSetUp)
+    #expect(!status(record(.open), keyboard: false).isSetUp)
   }
 }

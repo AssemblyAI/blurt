@@ -50,6 +50,12 @@ final class PictureInPictureIdle: IdleMode {
     closing = false
     guard PictureInPictureKeeper.isSupported else { throw Unsupported() }
     keeper.arm()
+    // A resume under a keeper that never stopped gets no `didStart`: the
+    // source was just held again, so it parks here instead.
+    guard !keeper.isActive else {
+      keeperStarted()
+      return
+    }
     keeper.start()
   }
 

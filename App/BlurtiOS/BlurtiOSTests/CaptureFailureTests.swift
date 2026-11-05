@@ -107,10 +107,12 @@ struct SilenceWatchdogTests {
     return (UtteranceFeed(onSilence: { silences.bump() }), silences)
   }
 
-  @Test("the second is a second of 16 kHz mono 16-bit")
+  @Test("the second is a second of 16 kHz mono 16-bit; a start's grace is the parked bring-up's budget")
   func constant() {
     #expect(UtteranceFeed.silenceSeconds == 1)
     #expect(UtteranceFeed.silenceBytes == 32_000)
+    #expect(UtteranceFeed.startGraceSeconds == 3)
+    #expect(UtteranceFeed.startGraceBytes == 96_000)
   }
 
   @Test("a second of zeros in an open utterance says silent, once per run; a live chunk starts the count over")
@@ -119,6 +121,7 @@ struct SilenceWatchdogTests {
     feed.deliver(Self.zeros(seconds: 2))
     #expect(count.value == 0, "nothing between utterances")
     _ = feed.begin()
+    feed.deliver(Self.live)
     for _ in 0..<9 { feed.deliver(Self.zeros(seconds: 0.1)) }
     #expect(count.value == 0, "0.9 s is not a second")
     feed.deliver(Self.zeros(seconds: 0.1))
@@ -134,6 +137,7 @@ struct SilenceWatchdogTests {
     feed.deliver(Self.zeros(seconds: 2))
     #expect(count.value == 2, "nothing after the utterance")
     _ = feed.begin()
+    feed.deliver(Self.live)
     feed.deliver(Self.zeros(seconds: 1))
     #expect(count.value == 3, "the next utterance counts afresh")
     feed.end()
@@ -151,20 +155,24 @@ struct SilenceWatchdogTests {
     #expect(received == UtteranceFeed.silenceBytes)
   }
 
-  @Test("a parked start holds the watchdog until the first live frame")
-  func parked() {
+  @Test("a start or a route change holds the watchdog until a live chunk; only zeros are said after the grace")
+  func startHoldsWatchdog() {
     let (feed, count) = Self.feed()
-    _ = feed.begin(watchingSilence: false)
-    feed.deliver(Self.zeros(seconds: 2.5))
-    #expect(count.value == 0, "a route coming up delivers zeros")
-    feed.watchSilence()
-    feed.deliver(Self.zeros(seconds: 1))
-    #expect(count.value == 1)
-    feed.end()
-    // `begin` without the flag watches from the first chunk again.
     _ = feed.begin()
+    feed.deliver(Self.zeros(seconds: 2.5))
+    #expect(count.value == 0, "a route coming up delivers zeros, held or parked")
+    feed.deliver(Self.live)
     feed.deliver(Self.zeros(seconds: 1))
-    #expect(count.value == 2)
+    #expect(count.value == 1, "a second of zeros once the route is live")
+    feed.holdSilence()
+    feed.deliver(Self.zeros(seconds: 2.5))
+    #expect(count.value == 1, "the new route is coming up")
+    feed.deliver(Self.zeros(seconds: 0.5))
+    #expect(count.value == 2, "a route that never comes up is said after the grace")
+    feed.end()
+    _ = feed.begin()
+    feed.deliver(Self.zeros(seconds: 3))
+    #expect(count.value == 3, "a mic that only ever delivers zeros is said, not recorded")
     feed.end()
   }
 }
@@ -235,7 +243,7 @@ struct SilenceWatchdogTests {
       #expect(CaptureFailure.reason(for: try #require(failure)) == .sessionOff, "no window: never opened")
     }
 
-    @Test("refuseBackgroundStart: the window opens and holds; a parked press is refused, typed, and reported")
+    @Test("refuseBackgroundStart: the window opens and holds; a parked press is refused, typed")
     func refuseBackgroundStart() async throws {
       let source = SimulatorAudioSource(fault: .refuseBackgroundStart, usesMicrophone: false)
       try await source.open()
@@ -252,22 +260,21 @@ struct SilenceWatchdogTests {
       } else {
         Issue.record("not the engine's wrapper: \(failure)")
       }
-      var failed = source.failedStarts.makeAsyncIterator()
-      #expect(await failed.next() != nil, "reported on failedStarts")
       try await source.hold()
       _ = try await source.start()
       _ = source.stop()
       await source.close()
     }
 
-    @Test("silentFrames: an utterance of zeros trips the watchdog, and the zeros still flow")
+    @Test("silentFrames: an utterance of zeros trips the watchdog after the start's grace, and the zeros still flow")
     func silentFrames() async throws {
       let source = SimulatorAudioSource(fault: .silentFrames, usesMicrophone: false)
       try await source.open()
       let stream = try await source.start()
-      for _ in 0..<10 { source.deliverForTesting(Self.live) }
+      let chunks = UtteranceFeed.startGraceBytes / Self.live.count
+      for _ in 0..<chunks { source.deliverForTesting(Self.live) }
       #expect(await Self.next(source.events) == .silent)
-      #expect(source.stop() == 10 * Self.live.count)
+      #expect(source.stop() == chunks * Self.live.count)
       var zeros = true
       for await chunk in stream { zeros = zeros && UtteranceFeed.isDigitalSilence(chunk) }
       #expect(zeros)
@@ -311,6 +318,7 @@ struct SilenceWatchdogTests {
       try await source.open()
       // Delivered before the route timer fires: the watchdog's event lands first.
       _ = try await source.start()
+      source.deliverForTesting(Self.live)
       source.deliverForTesting(Data(count: UtteranceFeed.silenceBytes))
       #expect(await Self.next(source.events) == .silent)
       #expect(await Self.next(source.events) == .routeChanged(reason: Fault.routeChangeReason, input: Fault.routeInput))

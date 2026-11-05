@@ -44,7 +44,9 @@ final class SystemAudioSession: AudioSessionControlling {
 
   private let session = AVAudioSession.sharedInstance()
   let events: AsyncStream<AudioSessionEvent>
-  private var observers: [any NSObjectProtocol] = []
+  /// Registered once in `init`, removed in `deinit`, which is nonisolated:
+  /// the same arrangement `WindowedAudioSource` keeps for its observers.
+  nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
 
   init() {
     let (events, sink) = AsyncStream<AudioSessionEvent>.makeStream()
@@ -52,11 +54,10 @@ final class SystemAudioSession: AudioSessionControlling {
     let center = NotificationCenter.default
     observers = [
       center.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: nil) { note in
-        guard let event = Self.interruption(note.userInfo) else { return }
+        guard let event = Self.interruption(note.userInfo ?? [:]) else { return }
         sink.yield(event)
       },
-      center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: nil) {
-        _ in
+      center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: nil) { _ in
         sink.yield(.mediaReset)
       },
     ]
@@ -67,13 +68,13 @@ final class SystemAudioSession: AudioSessionControlling {
   }
 
   /// The notification's type and option, as an event; nil for a type this build doesn't know.
-  private nonisolated static func interruption(_ userInfo: [AnyHashable: Any]?) -> AudioSessionEvent? {
-    let raw = userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+  private nonisolated static func interruption(_ userInfo: [AnyHashable: Any]) -> AudioSessionEvent? {
+    let raw = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt
     switch raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) {
     case .began:
       return .interruptionBegan
     case .ended:
-      let options = (userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt).map(
+      let options = (userInfo[AVAudioSessionInterruptionOptionKey] as? UInt).map(
         AVAudioSession.InterruptionOptions.init(rawValue:))
       return .interruptionEnded(shouldResume: options?.contains(.shouldResume) ?? false)
     case nil:

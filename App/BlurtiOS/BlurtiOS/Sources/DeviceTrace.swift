@@ -18,6 +18,11 @@ nonisolated enum DeviceTrace {
   private static let queue = DispatchQueue(label: HostIdentity.current.subsystem + ".trace")
   private static let encoder = JSONEncoder()
 
+  /// `~/Library/Logs/<logDirectoryName>/trace.jsonl`, beside the engine's `errors.jsonl`.
+  static var url: URL {
+    URL.libraryDirectory.appending(path: "Logs/\(HostIdentity.current.logDirectoryName)/\(fileName)")
+  }
+
   /// Appends one line, off the caller's thread. Nothing when the flag is off.
   static func record(_ kind: String, _ fields: [String: String] = [:]) {
     guard isEnabled else { return }
@@ -37,10 +42,12 @@ nonisolated enum DeviceTrace {
   }
 
   private static func append(_ line: Data) {
-    let url = HostIdentity.current.logURL(fileName)
+    let url = url
     do {
       try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-      if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil) }
+      if !FileManager.default.fileExists(atPath: url.path) {
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+      }
       let handle = try FileHandle(forWritingTo: url)
       defer { try? handle.close() }
       try handle.seekToEnd()

@@ -44,21 +44,27 @@ struct HomeHero: View {
       if coordinator.needsKey {
         note("Add your API key first (Settings → Account).")
       }
+      if coordinator.needsFullAccess {
+        note("The Blurt keyboard needs Full Access to dictate: Settings › Apps › Blurt › Keyboards.")
+      }
     }
     .padding(DesignTokens.Metrics.appCardPad)
     .frame(maxWidth: .infinity, alignment: .leading)
     .card(radius: DesignTokens.Metrics.radiusHero)
   }
 
-  /// The switch is the session, which is the listening window: on opens it
-  /// (with its key, consent and microphone gates), off closes it and keeps it
-  /// closed until the user asks again (`SessionAutoStart`).
+  /// The switch is the session, which is the listening window as its record
+  /// says it (opening, open or paused): on opens it (with its key, consent
+  /// and microphone gates), off closes it and keeps it closed until the user
+  /// asks again (`SessionAutoStart`).
   private var session: Binding<Bool> {
     Binding(
-      get: { coordinator.window.isOpen },
+      get: { status.isOn },
       set: { on in
-        Task {
-          if on { await coordinator.turnSessionOn() } else { await coordinator.turnSessionOff() }
+        if on {
+          Task { await coordinator.turnSessionOn() }
+        } else {
+          coordinator.turnSessionOff()
         }
       })
   }

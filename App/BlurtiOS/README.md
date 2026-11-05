@@ -112,6 +112,23 @@ mic. The keyboard's crash logs, if any, land in `~/Library/Logs/DiagnosticReport
 and `xcrun simctl spawn booted log show --last 5m --predicate 'process == "BlurtKeyboard"'`
 shows its console.
 
+The listening window is one state machine (`BlurtiOSCore/ListeningWindowMachine.swift`) read by one
+interpreter (`BlurtiOS/Sources/ListeningWindow.swift`): what the app publishes for the keyboard is the
+`listeningState` record (DESIGN.md › The two processes, and every number — the readiness record, its
+15 s lease, the lifetime from the last word, the interruption rules), and every transition is one log
+line, `window <from> → <to> on <event> gen=<n> launch=<uuid>`, under the `ListeningWindow` category.
+Two debug launch arguments shape it: `-BlurtIdleMode held|pip` picks what the mic does between
+dictations (held open, or parked under the zero-height Picture in Picture keeper, which is the
+default wherever Picture in Picture is supported; the mode in use is logged at launch), and
+`-BlurtDeviceTrace YES` writes one JSON line per transition, command, ack, watchdog release, result
+and hop to `Library/Logs/Blurt/trace.jsonl` — ids, states, reasons and times, never the dictated text.
+The console for both processes is one predicate:
+
+```bash
+xcrun simctl spawn booted log show --last 5m \
+  --predicate 'subsystem == "com.assemblyai.blurt.iphone" AND category IN {"ListeningWindow", "Capture", "Commands", "Relay", "Keyboard"}'
+```
+
 Two environment variables shape the simulator's microphone in a debug build. They reach the
 app through `simctl launch`, which forwards every `SIMCTL_CHILD_*` variable it finds, so
 `SIMCTL_CHILD_BLURT_SIM_FAULT=refuseStart scripts/ios-sim.sh` sets one for the launch.
@@ -171,7 +188,8 @@ iPhone 13.
    keyboard reads the choice the next time it comes up). `scripts/ios-device.sh kill blurt` or
    `kill keyboard` ends either process mid-dictation (the relaunch and dead-keyboard flows).
 5. `scripts/ios-device.sh pull <dir> --syslog` — Blurt's own logs under `<dir>/Logs` (none on the
-   phone yet is not a failure) and the phone's system log into `<dir>/device.logarchive`
+   phone yet is not a failure; `trace.jsonl` is among them when the app was launched with
+   `-BlurtDeviceTrace YES`) and the phone's system log into `<dir>/device.logarchive`
    (`--last 15m` by default). `log collect` needs root, so macOS asks for an administrator
    password: the one way to run it from a script without typing a password into the terminal.
 6. `scripts/ios-device.sh syslog <dir>/device.logarchive --negative` — the negative system
