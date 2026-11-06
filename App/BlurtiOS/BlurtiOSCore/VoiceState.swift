@@ -122,8 +122,8 @@ extension PhaseSnapshot.State {
   nonisolated package init(_ overlay: OverlayUIState) {
     self =
       switch overlay {
-      // Reading aloud, rewriting and commands are the Mac's alone, so the iPhone never sees them.
-      case .idle, .speaking, .rewriting, .commanding, .done, .noted: .idle
+      // Reading aloud, rewriting, composing and commands are the Mac's alone, so the iPhone never sees them.
+      case .idle, .speaking, .rewriting, .composing, .commanding, .done, .noted: .idle
       case .connecting: .connecting
       case .recording: .recording
       case .processing: .processing
@@ -140,8 +140,8 @@ extension PhaseSnapshot {
   nonisolated package static func message(for overlay: OverlayUIState) -> String? {
     switch overlay {
     case .error(let message, _): message
-    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .commanding, .pasted, .noTarget,
-      .done, .noted:
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding, .pasted,
+      .noTarget, .done, .noted:
       nil
     }
   }

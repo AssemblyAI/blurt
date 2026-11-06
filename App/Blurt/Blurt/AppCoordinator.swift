@@ -165,7 +165,7 @@ final class AppCoordinator {
     let router =
       triggerKeySeams.map {
         SelectionSpeechRouter(
-          session: session, speaker: $0.speaker, rewriter: $0.rewriter, planner: $0.planner,
+          session: session, speaker: $0.speaker, rewriter: $0.rewriter, composer: $0.composer, planner: $0.planner,
           performer: $0.performer, readSelection: $0.readSelection)
       }
       ?? SelectionSpeechRouter(

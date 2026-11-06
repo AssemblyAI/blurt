@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Testing
 
 @testable import BlurtEngine
@@ -50,7 +49,7 @@ struct SelectionSpeechRouterRewriteTests {
     let rig = try await rewrite(rewriter)
     let injector = rig.injector
     #expect(try await rig.outcomes() == [.pasted])
-    #expect(rewriter.calls == [StubRewriter.Call(selection: "hey all", request: "Make it more formal.")])
+    #expect(rewriter.calls == [RewriteCall(selection: "hey all", request: "Make it more formal.")])
     #expect(await injector.inserted == ["Dear all,"])
     // Nothing for the separator to go on: the paste replaces, never follows.
     #expect(await injector.insertedPrior == [nil])
@@ -88,34 +87,5 @@ struct SelectionSpeechRouterRewriteTests {
     #expect(rig.events.pills == [.rewriting, nil])
     #expect(rig.events.resets == resetsBefore)
     #expect(await rig.injector.inserted.isEmpty)
-  }
-}
-
-/// A rewriter that records each call and answers with `reply`, or throws
-/// `error` — or, `hangs`, writes until cancelled.
-final class StubRewriter: SelectionRewriting {
-  struct Call: Equatable {
-    let selection: String
-    let request: String
-  }
-
-  private let reply: String
-  private let error: (any Error & Sendable)?
-  private let hangs: Bool
-  private let recorded = Mutex<[Call]>([])
-
-  init(reply: String = "", error: (any Error & Sendable)? = nil, hangs: Bool = false) {
-    self.reply = reply
-    self.error = error
-    self.hangs = hangs
-  }
-
-  var calls: [Call] { recorded.withLock { $0 } }
-
-  func rewrite(_ selection: String, as request: String) async throws -> String {
-    recorded.withLock { $0.append(Call(selection: selection, request: request)) }
-    if hangs { try await Task.sleep(for: .seconds(60)) }
-    if let error { throw error }
-    return reply
   }
 }

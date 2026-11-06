@@ -126,6 +126,9 @@ struct OverlayView: View {
     case .rewriting:
       waitingContent("Rewriting")
         .transition(.opacity)
+    case .composing:
+      waitingContent("Writing")
+        .transition(.opacity)
     case .commanding:
       waitingContent("Working")
         .transition(.opacity)

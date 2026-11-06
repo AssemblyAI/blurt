@@ -122,8 +122,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           triggerKeys: TriggerKeySeams(
             speaker: UITestReadAloudSpeaker(),
             readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection },
-            // Rewrite and command keys offline too: no gateway, nothing acted on.
-            rewriter: UITestRewriter(), planner: UITestPlanner(), performer: UITestPerformer()),
+            // Rewrite, compose and command keys offline too: no gateway, nothing acted on.
+            rewriter: UITestRewriter(), composer: UITestComposer(), planner: UITestPlanner(),
+            performer: UITestPerformer()),
           // A fresh history per run — never the user's saved transcripts —
           // seeded with known entries when the suite asks, and the canned
           // transport behind transcription and the LLM.

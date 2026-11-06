@@ -247,7 +247,7 @@ final class SettingsUITests: BlurtUITestCase {
 
     let actions = [
       "Dictate", "Dictate: No custom style", KeyActionName.readAloud, KeyActionName.ask,
-      KeyActionName.rewrite, KeyActionName.command,
+      KeyActionName.rewrite, KeyActionName.compose, KeyActionName.command,
     ]
     for action in actions {
       XCTAssertTrue(

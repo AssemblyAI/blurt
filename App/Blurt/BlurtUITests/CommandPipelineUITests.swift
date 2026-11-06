@@ -116,4 +116,14 @@ final class CommandPipelineUITests: BlurtUITestCase {
     waitForText(
       pastedLabel(in: harness), containing: "Rewritten (Make it shorter)", timeout: 15, "The rewrite should paste")
   }
+
+  /// A compose key: no selection needed; what the spoken instructions describe is pasted at the cursor.
+  func testComposeKeyPastesTheComposition() {
+    let harness = readyHarness()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetCompose, in: harness)
+    command("Tell Dan we should ship it", in: harness)
+    waitForText(
+      pastedLabel(in: harness), containing: "Composed (Tell Dan we should ship it)", timeout: 15,
+      "The composition should paste")
+  }
 }

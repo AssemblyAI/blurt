@@ -161,6 +161,11 @@ public actor DictationSession {
   /// The style this press resolved (`pressStyleProvider`), named on its Recent row.
   var pressStyle = PressStyle.none
 
+  /// The name of the app the last press pinned as its paste target
+  /// (`injector.setTarget`): what a composition is written for, since it is
+  /// pasted there — never the app in front by the time it is written.
+  public internal(set) var pinnedAppName: String?
+
   /// The production entry point: the real log, and the real focus capture unless the host
   /// supplies its own (`hostFocusCapture`: the iOS app, whose keyboard knows the text before
   /// the cursor). Delegates to the seam-carrying initializer below, which can't be public.

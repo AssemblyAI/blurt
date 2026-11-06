@@ -90,6 +90,7 @@ enum UITestIdentifiers {
   static func keySoundPicker(_ keyCode: Int) -> String { "settings.keySound.picker.\(keyCode)" }
   static let harnessSetCommand = "harness.key.setCommand"
   static let harnessSetRewrite = "harness.key.setRewrite"
+  static let harnessSetCompose = "harness.key.setCompose"
   /// What the stub planner was asked to plan, and what the stub performer did.
   static let plannedLabel = "harness.planned"
   static let performedLabel = "harness.performed"

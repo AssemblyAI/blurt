@@ -42,6 +42,7 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
       case .readAloud: "listen"
       case .ask: "ask"
       case .rewrite: "rewrite"
+      case .compose: "give instructions"
       case .command: "give a command"
       case .dictate, .off: "talk"
       }

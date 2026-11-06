@@ -227,7 +227,9 @@ extension DictationSession {
   }
 
   /// Pastes `text` over the selection in the app the last hand-back press
-  /// captured: the Rewrite Selection key's rewrite. Through this session's
+  /// captured: the Rewrite Selection key's rewrite, and the Compose From
+  /// Instructions key's writing (over whatever is selected, else at the
+  /// cursor). Through this session's
   /// injector, so it queues behind any dictation paste still settling rather
   /// than racing it on the pasteboard. No prior text and no window title, so
   /// no separating space is added: the paste replaces the selection rather

@@ -6,7 +6,9 @@ import Foundation
   /// set to read aloud reads the selected text; a press of a key set to ask
   /// records a spoken request about it and reads the answer; a press of a key
   /// set to rewrite records a spoken instruction and pastes the selection,
-  /// rewritten that way, over it; a press of a key set to command records a
+  /// rewritten that way, over it; a press of a key set to compose records
+  /// spoken instructions and pastes what they describe at the cursor; a press
+  /// of a key set to command records a
   /// spoken command and carries it out; a dictating key's
   /// commands go straight to `DictationSession.submit` (see `TriggerKeyBindings`
   /// for which key does what).
@@ -26,6 +28,7 @@ import Foundation
     private let session: DictationSession
     private let speaker: any ReadAloudSpeaker
     private let rewriter: any SelectionRewriting
+    private let composer: any MessageComposing
     private let planner: any VoiceCommandPlanning
     private let performer: any VoiceCommandPerforming
     private let readSelection: @Sendable () async -> String?
@@ -35,8 +38,8 @@ import Foundation
     private let clock: any Clock<Duration>
     private var routing = SelectionSpeechRouting()
     private var speech: Task<Void, Never>?
-    /// The job in flight — a rewrite until it pastes, a command until its
-    /// last step. Cancelled by any press.
+    /// The job in flight — a rewrite or a composition until it pastes, a
+    /// command until its last step. Cancelled by any press.
     private var job: Task<Void, Never>?
     /// The screen read a command's release started (`.readScreen`), running
     /// while the command transcribes; `.runCommand` plans with its result.
@@ -63,7 +66,7 @@ import Foundation
     /// A read, answer or voice sample failed (it's already logged): the app
     /// beeps, since the pill just goes away.
     public var speechFailed: (any Error) -> Void = { _ in }
-    /// What the pill shows for a job: `.rewriting` or `.commanding` as it
+    /// What the pill shows for a job: `.rewriting`, `.composing` or `.commanding` as it
     /// starts, then its outcome — Pasted (Done, for a command), Copied, or the
     /// error — or nil when a press abandoned it, and the pill goes back to
     /// what the session is doing.
@@ -81,7 +84,7 @@ import Foundation
         session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection)
     }
 
-    /// The seams: what speaks, what rewrites, what plans and carries out a
+    /// The seams: what speaks, what rewrites, what composes, what plans and carries out a
     /// command, how the selection is read, where the
     /// settings each press reads come from, and the clock its timers run on.
     /// Public so a host can run the whole read-aloud path offline (Blurt's UI
@@ -89,6 +92,7 @@ import Foundation
     public init(
       session: DictationSession, speaker: any ReadAloudSpeaker,
       rewriter: any SelectionRewriting = SelectionRewriter(),
+      composer: any MessageComposing = MessageComposer(),
       planner: any VoiceCommandPlanning = VoiceCommandPlanner(),
       performer: any VoiceCommandPerforming = SystemVoiceCommandPerformer(),
       readSelection: @escaping @Sendable () async -> String?, defaults: UserDefaults = .standard,
@@ -97,6 +101,7 @@ import Foundation
       self.session = session
       self.speaker = speaker
       self.rewriter = rewriter
+      self.composer = composer
       self.planner = planner
       self.performer = performer
       self.readSelection = readSelection
@@ -163,13 +168,13 @@ import Foundation
         case .startHoldTimer: startHoldTimer()
         case .syncGateAfterSession: syncGateAfterSession()
         case .resetGate: resetGate()
-        case .speak, .answer, .stopSpeech, .rewrite, .runCommand, .stopJob: performTask(action)
+        case .speak, .answer, .stopSpeech, .rewrite, .compose, .runCommand, .stopJob: performTask(action)
         }
       }
     }
 
     /// The actions that start or stop a task of this router's own: a read, an
-    /// answer, a rewrite, a command.
+    /// answer, a rewrite, a composition, a command.
     private func performTask(_ action: SelectionSpeechRouting.Action) {
       switch action {
       case .speak(let text):
@@ -190,11 +195,12 @@ import Foundation
         // by this read's late end.
         endSpeech()
       case .rewrite(let request, let selection): rewrite(selection, as: request)
+      case .compose(let request): compose(request)
       case .runCommand(let command): run(command)
       case .stopJob:
         // A stopped command's own end never runs, so stop its screen read and
-        // undo its preparation here — before it ran, too; for a rewrite
-        // there's neither, and this does nothing.
+        // undo its preparation here — before it ran, too; for a rewrite or a
+        // composition there's neither, and this does nothing.
         screenRead?.cancel()
         screenRead = nil
         Task { [performer] in await performer.commandEnded() }
@@ -227,17 +233,37 @@ import Foundation
     /// rewrite this router stopped reports nothing more: `.stopJob` already
     /// ended it.
     private func rewrite(_ selection: String, as request: String) {
-      jobPill(.rewriting)
-      job = Task { [weak self, rewriter, session] in
+      paste(as: .rewriting, named: "rewrite") { [rewriter] in try await rewriter.rewrite(selection, as: request) }
+    }
+
+    /// Writes what the spoken `instructions` describe and pastes it at the
+    /// cursor as a rewrite is pasted (`replaceSelection`: the hand-back
+    /// press's target, no separating space). Written for that same target
+    /// ("Slack" gets a chat message, "Mail" an email) — the app the press
+    /// pinned, not whatever the user switched to while it transcribed.
+    private func compose(_ instructions: String) {
+      paste(as: .composing, named: "compose") { [composer, session] in
+        try await composer.compose(instructions, for: await session.pinnedAppName)
+      }
+    }
+
+    /// One rewrite or composition as the router's job: `pill` while `write`
+    /// runs, then its text pasted through the session's injector and the
+    /// outcome on the pill.
+    private func paste(
+      as pill: OverlayUIState, named name: String, _ write: @escaping @Sendable () async throws -> String
+    ) {
+      jobPill(pill)
+      job = Task { [weak self, session] in
         let outcome: OverlayUIState
         do {
-          let text = try await rewriter.rewrite(selection, as: request)
+          let text = try await write()
           try Task.checkCancellation()
           outcome = try await session.replaceSelection(with: text).overlayState
         } catch {
           // A cancelled request answers `URLError.cancelled`: abandoned, not failed.
           if Self.isCancellation(error) { return }
-          Self.logger.error("rewrite failed: \(error.localizedDescription, privacy: .public)")
+          Self.logger.error("\(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
           outcome = Self.failure(error)
         }
         guard !Task.isCancelled, let self else { return }
@@ -286,13 +312,13 @@ import Foundation
       }
     }
 
-    /// Whether a read, answer, rewrite or command is wearing the pill — what
+    /// Whether a read, answer, rewrite, composition or command is wearing the pill — what
     /// `PipelinePhase.overlayState(whileSpeaking:)` asks, so a session phase
     /// arriving under any of them can't cover it.
     public var ownsPill: Bool { activeGeneration != nil || job != nil }
 
     /// What the session's transcription shows as when it's a job's spoken
-    /// words — "Rewriting", "Working" — or nil for a dictation's "Transcribing":
+    /// words — "Rewriting", "Writing", "Working" — or nil for a dictation's "Transcribing":
     /// what `PipelinePhase.overlayState(whileSpeaking:processingAs:)` asks.
     public var processingState: OverlayUIState? { routing.processingState }
 

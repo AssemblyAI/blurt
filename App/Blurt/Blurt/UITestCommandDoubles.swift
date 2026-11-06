@@ -2,7 +2,7 @@
   import BlurtEngine
   import Foundation
 
-  // The rewrite and command keys' stand-ins under UI testing, beside the
+  // The rewrite, compose and command keys' stand-ins under UI testing, beside the
   // pipeline doubles in UITestSupport.swift: no gateway, nothing acted on.
 
   /// Stub rewriter: the rewrite a spoken instruction asks for, as a marked
@@ -10,6 +10,14 @@
   nonisolated struct UITestRewriter: SelectionRewriting {
     func rewrite(_ selection: String, as request: String) async throws -> String {
       "Rewritten (\(request)): \(selection)"
+    }
+  }
+
+  /// Stub composer: the instructions as a marked echo, so a test sees them
+  /// reach it and the result pasted.
+  nonisolated struct UITestComposer: MessageComposing {
+    func compose(_ instructions: String, for app: String?) async throws -> String {
+      "Composed (\(instructions))"
     }
   }
 

@@ -15,6 +15,8 @@ extension SelectionSpeechRouting {
     case answer(request: String, selection: String)
     /// Rewrite `selection` as the spoken `request` asks, and paste it over the selection.
     case rewrite(request: String, selection: String)
+    /// Write what the spoken `request` describes, and paste it at the cursor.
+    case compose(request: String)
     case stopSpeech
     /// Carry out the spoken `command`.
     case runCommand(String)
@@ -24,8 +26,8 @@ extension SelectionSpeechRouting {
     /// A command's recording ended: read the screen while it transcribes, for
     /// `.runCommand` to plan with.
     case readScreen
-    /// Abandon the job in flight — a rewrite before it pastes, a command
-    /// before its next step.
+    /// Abandon the job in flight — a rewrite or a composition before it
+    /// pastes, a command before its next step.
     case stopJob
     /// A dictation ended without a key event: `DictationKeyTap.syncAfterTerminalPhase`.
     case syncGateAfterSession
@@ -36,7 +38,7 @@ extension SelectionSpeechRouting {
   }
 
   enum Intent: Sendable, Equatable {
-    case read, ask, rewrite, command
+    case read, ask, rewrite, compose, command
 
     /// Whether the press records a spoken request (`.asking`) rather than reading.
     var records: Bool { self != .read }
@@ -68,7 +70,7 @@ extension SelectionSpeechRouting {
     /// was let go of before the mic ever opened).
     case transcribing(Intent, String, started: Bool)
     case speaking
-    /// A rewrite or a command is under way: the router's one job. Like
+    /// A rewrite, a composition or a command is under way: the router's one job. Like
     /// `.speaking`, the gate is free under it, and any press abandons it.
     case working
   }

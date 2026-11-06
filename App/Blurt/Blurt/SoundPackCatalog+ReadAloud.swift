@@ -19,12 +19,12 @@ extension SoundPackStore {
 
   /// The setting a key with no voice of its own follows: its action's. A read
   /// key sounds like a read and a command key like a command, and any other
-  /// key — dictate, ask, rewrite, each a recording — like a dictation.
+  /// key — dictate, ask, rewrite, compose, each a recording — like a dictation.
   static func fallback(for action: TriggerKeyAction) -> SoundPackStore {
     switch action {
     case .readAloud: .readAloud
     case .command: .command
-    case .off, .dictate, .ask, .rewrite: .dictation
+    case .off, .dictate, .ask, .rewrite, .compose: .dictation
     }
   }
 }

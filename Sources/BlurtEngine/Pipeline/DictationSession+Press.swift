@@ -156,6 +156,7 @@ extension DictationSession {
     let captureFrontmost = seams.captureFrontmost
     let captured = await captureFrontmost()
     await injector.setTarget(captured)
+    pinnedAppName = captured?.processName
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()
