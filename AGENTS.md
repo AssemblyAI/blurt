@@ -978,10 +978,14 @@ cue-sound picker off CI's screen).
 before read and ask, encoded through `TriggerKeyMap`) and `TriggerActivationStore`
 (`BlurtTriggerActivation`) are the writes; the action rows are a view over the keycode map. An
 absent choice is the key's default — the bound key dictating with the current style, left ⌥
-reading aloud, the rest off — so Off is stored explicitly where it isn't the default. The
-bound key (`TriggerKeyStore`, the one the ready screen and menu bar name) always dictates:
-`TriggerKeyStyleStore.setChoice` refuses to take the only dictating key off dictation, and taking
-the bound key off it moves the binding to the next dictating key first. A key's entries mean the
+reading aloud, the rest off — so Off is stored explicitly where it isn't the default. Every
+row offers None, Dictate included (owner-directed, 2026-11-06), so no key need dictate. The one
+rule `TriggerKeyStyleStore.setChoice` keeps is that while any key dictates, the bound key
+(`TriggerKeyStore`, the one the ready screen and menu bar name — `TriggerKeyBindings.dictationKey`)
+is one of them: taking the bound key off dictation moves the binding to the next dictating key
+first, and with none it stays put and nothing dictates, until the first key set to dictate again
+takes it. With no dictation key, the main window's Dictate row reads None, and the menu bar, the
+empty Library and the permissions step point to Settings › Keys rather than name a key. A key's entries mean the
 same in either role, so moving the binding moves nothing else. Changing another key doesn't reset
 the router, so a recording latched while Settings is open survives it. The press command carries its key
 (`DictationSession.Command.press(key:)`), and the session resolves that key's style once, on the

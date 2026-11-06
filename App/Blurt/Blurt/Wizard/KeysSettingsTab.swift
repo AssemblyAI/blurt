@@ -15,7 +15,7 @@ import SwiftUI
 /// Reads go through `TriggerKeyBindings` (one decode per render) and writes
 /// through the stores, never the raw `@AppStorage` slots: the stores own how a
 /// choice and a mode are encoded, and the rules — choosing a key moves it off
-/// its old action, and some key always dictates — live in
+/// its old action, and the bound key follows dictation — live in
 /// `TriggerKeyStyleStore.assign(_:to:)`, where they are tested. Assigning a
 /// raw slot directly would leave the store's write with no production caller,
 /// so an encoding change would keep `swift test` green while this view kept
@@ -91,19 +91,13 @@ struct KeysSettingsTab: View {
 
   private func keyRow(_ row: ActionRow, bindings: TriggerKeyBindings, profiles: [StyleProfile]) -> some View {
     let holder = TriggerKey.allCases.first { bindings.choice(for: $0, profiles: profiles) == row.choice }
-    // The only dictating key can't be left without dictation, so its row
-    // offers no None — left out rather than disabled, since a menu pop-up
-    // doesn't reliably disable single items.
-    let canClear = holder.map { !bindings.isOnlyDictatingKey($0) } ?? true
     return PickerSettingRow(
       title: row.title, systemImage: row.choice.action.systemImage,
       accessibilityID: UITestIdentifiers.actionKeyPicker(row.title),
       pickerLabel: "Key for \(row.title)", selection: key(for: row.choice, holder: holder)
     ) {
-      if canClear {
-        Text("None").tag(TriggerKey?.none)
-        Divider()
-      }
+      Text("None").tag(TriggerKey?.none)
+      Divider()
       ForEach(TriggerKey.allCases, id: \.self) { key in
         Text(key.spokenName).tag(TriggerKey?.some(key))
       }
@@ -116,9 +110,7 @@ struct KeysSettingsTab: View {
     Binding(
       get: { holder },
       set: { newValue in
-        // Refused only when it would leave no key dictating, which the
-        // pop-ups already keep out of reach.
-        guard TriggerKeyStyleStore().assign(newValue, to: choice) else { return }
+        TriggerKeyStyleStore().assign(newValue, to: choice)
         coordinator.dictationBindingChanged()
       })
   }

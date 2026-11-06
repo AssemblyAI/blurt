@@ -62,28 +62,42 @@ struct TriggerKeyStyleTests {
     #expect(TriggerKeyChoice(raw: "current") == .dictate)
   }
 
-  @Test("the bound key dictates whatever its entry says")
-  func boundKeyAlwaysDictates() {
-    let bindings = TriggerKeyBindings(
+  @Test("the bound key does what its entry says; with nothing dictating there is no dictation key")
+  func boundKeyFollowsItsEntry() {
+    let reading = TriggerKeyBindings(
       boundKeyCode: TriggerKey.rightCommand.keyCode, choicesRaw: #"{"54":"read-aloud"}"#, activationRaw: "")
-    #expect(bindings.choice(for: .rightCommand) == .dictate)
+    #expect(reading.choice(for: .rightCommand) == .readAloud)
+    #expect(reading.dictationKey == nil)
+    #expect(reading.dictatingKeys.isEmpty)
+    // It still shows on the main window, as the reading key it now is.
+    #expect(reading.extraKeys == [.rightCommand, .leftOption])
+    let untouched = TriggerKeyBindings(boundKeyCode: TriggerKey.rightCommand.keyCode, choicesRaw: "", activationRaw: "")
+    #expect(untouched.dictationKey == .rightCommand)
   }
 
   @Test("taking the bound key off dictation moves the binding to the next dictating key")
   func movingTheBinding() {
     choices.setChoice(.dictate(style: casual.id.uuidString), for: .function)
-    #expect(choices.setChoice(.readAloud, for: .rightCommand))
+    choices.setChoice(.readAloud, for: .rightCommand)
     #expect(bindings.bound == .function)
     #expect(bindings.action(for: .rightCommand) == .readAloud)
     // The new bound key keeps the style it dictated with.
     #expect(bindings.choice(for: .function) == .dictate(style: casual.id.uuidString))
   }
 
-  @Test("the only dictating key can't be taken off dictation")
-  func lastDictatingKeyStays() {
-    #expect(!choices.setChoice(.off, for: .rightCommand))
-    #expect(bindings.bound == .rightCommand)
-    #expect(bindings.dictatingKeys == [.rightCommand])
+  @Test("the last dictating key can be turned off, and the next key to dictate takes the binding")
+  func lastDictatingKeyTurnsOff() {
+    choices.setChoice(.off, for: .rightCommand)
+    #expect(bindings.dictatingKeys.isEmpty)
+    #expect(bindings.dictationKey == nil)
+    #expect(bindings.enabledKeys == [.leftOption])
+    // A styled dictation is still a dictation: it takes the binding, so the
+    // ready screen and menu bar name it.
+    choices.setChoice(.dictate(style: casual.id.uuidString), for: .leftControl)
+    #expect(bindings.bound == .leftControl)
+    #expect(bindings.dictationKey == .leftControl)
+    #expect(bindings.choice(for: .leftControl) == .dictate(style: casual.id.uuidString))
+    #expect(bindings.action(for: .rightCommand) == .off)
   }
 
   @Test("a corrupt value or an unknown keycode binds nothing new")
@@ -122,32 +136,39 @@ struct TriggerKeyStyleTests {
   @Test("an action row's key: it alone holds the action, and the key gives up its old one")
   func assignMovesTheAction() {
     // Left ⌃ takes reading aloud from left ⌥, which turns off.
-    #expect(choices.assign(.leftControl, to: .readAloud))
+    choices.assign(.leftControl, to: .readAloud)
     #expect(bindings.action(for: .leftControl) == .readAloud)
     #expect(bindings.action(for: .leftOption) == .off)
     // Left ⌃ moves on to asking; nothing reads aloud any more.
-    #expect(choices.assign(.leftControl, to: .ask))
+    choices.assign(.leftControl, to: .ask)
     #expect(bindings.action(for: .leftControl) == .ask)
     #expect(!TriggerKey.allCases.contains { bindings.action(for: $0) == .readAloud })
     // No key asks.
-    #expect(choices.assign(nil, to: .ask))
+    choices.assign(nil, to: .ask)
     #expect(bindings.action(for: .leftControl) == .off)
   }
 
-  @Test("Dictate's key becomes the bound key; the last dictating key can't be left without dictation")
-  func assignKeepsADictatingKey() {
-    #expect(!choices.assign(nil, to: .dictate), "Right ⌘ is the only dictating key")
-    #expect(bindings.bound == .rightCommand)
-    #expect(!choices.assign(.rightCommand, to: .readAloud), "…nor can it be given another action")
-    #expect(choices.assign(.function, to: .dictate))
+  @Test("Dictate's key becomes the bound key, and Dictate can be set to None")
+  func assignDictation() {
+    choices.assign(.function, to: .dictate)
     #expect(bindings.bound == .function)
     #expect(bindings.action(for: .rightCommand) == .off)
     // A styled dictation key keeps the binding where it is.
-    #expect(choices.assign(.rightOption, to: .dictate(style: casual.id.uuidString)))
+    choices.assign(.rightOption, to: .dictate(style: casual.id.uuidString))
     #expect(bindings.bound == .function)
-    #expect(choices.assign(nil, to: .dictate), "Right ⌥ still dictates")
-    #expect(bindings.dictatingKeys == [.rightOption])
+    choices.assign(nil, to: .dictate)
+    #expect(bindings.dictatingKeys == [.rightOption], "Right ⌥ still dictates")
     #expect(bindings.bound == .rightOption)
+    // None for the last one: nothing dictates, and right ⌥ is free.
+    choices.assign(nil, to: .dictate(style: casual.id.uuidString))
+    #expect(bindings.dictationKey == nil)
+    #expect(bindings.enabledKeys == [.leftOption])
+    // The only dictating key can take another action too.
+    choices.assign(.function, to: .dictate)
+    choices.assign(.function, to: .readAloud)
+    #expect(bindings.action(for: .function) == .readAloud)
+    #expect(bindings.action(for: .leftOption) == .off)
+    #expect(bindings.dictationKey == nil)
   }
 
   @Test("each press resolves under its own key's mode")
