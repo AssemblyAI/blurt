@@ -85,11 +85,14 @@ public enum TriggerKeyChoice: Hashable, Sendable {
 /// (`TriggerKeyStore`), each key's choice (`TriggerKeyStyleStore`) and the one
 /// tap/hold mode they're all pressed under (`TriggerActivationStore`). Every
 /// reader — the tap, the read-aloud router, the press's style, and each view —
-/// asks this, so the rules are written once: the bound key always dictates;
-/// with no entry, the bound key dictates with the main window's style, left ⌥
-/// reads aloud, and every other key is off.
+/// asks this, so the rules are written once: with no entry, the bound key
+/// dictates with the main window's style, left ⌥ reads aloud, and every other
+/// key is off. Any key can be set to None, the last dictating one included;
+/// when some key still dictates, the bound key is one of them
+/// (`TriggerKeyStyleStore.setChoice` keeps that).
 public struct TriggerKeyBindings: Sendable, Equatable {
-  /// The key the ready screen and menu bar name, which always dictates.
+  /// The key the ready screen and menu bar name — when it dictates
+  /// (`dictationKey`). Kept on a dictating key while there is one.
   public let bound: TriggerKey
   private let choices: [TriggerKey: TriggerKeyChoice]
   /// How every key is pressed.
@@ -117,11 +120,14 @@ public struct TriggerKeyBindings: Sendable, Equatable {
     return key == .leftOption ? .readAloud : .off
   }
 
-  /// `key`'s choice. The bound key always dictates, whatever its entry says.
+  /// `key`'s choice: its entry, else its default.
   public func choice(for key: TriggerKey) -> TriggerKeyChoice {
-    let choice = choices[key] ?? Self.defaultChoice(for: key, bound: bound)
-    return key == bound && choice.action != .dictate ? .dictate : choice
+    choices[key] ?? Self.defaultChoice(for: key, bound: bound)
   }
+
+  /// The dictation key the ready screen and menu bar name: the bound key, or
+  /// nil when no key dictates.
+  public var dictationKey: TriggerKey? { action(for: bound) == .dictate ? bound : nil }
 
   /// `key`'s choice as its pop-up shows it: a style since deleted shows as the
   /// main window's, which is what a press of that key then dictates with (see
@@ -139,17 +145,15 @@ public struct TriggerKeyBindings: Sendable, Equatable {
   /// The keys the tap watches: every key that does something.
   public var enabledKeys: Set<TriggerKey> { Set(TriggerKey.allCases.filter { action(for: $0) != .off }) }
 
-  /// The keys that dictate, in `TriggerKey` order — the bound key among them.
+  /// The keys that dictate, in `TriggerKey` order — the bound key among them,
+  /// unless there are none.
   public var dictatingKeys: [TriggerKey] { TriggerKey.allCases.filter { action(for: $0) == .dictate } }
 
-  /// Whether `key` is the only key that dictates, so it can't be set to
-  /// anything else (`TriggerKeyStyleStore.setChoice` refuses it).
-  public func isOnlyDictatingKey(_ key: TriggerKey) -> Bool { dictatingKeys == [key] }
-
-  /// The keys besides the bound one that do something, in `TriggerKey` order:
-  /// the ready screen's extra rows.
+  /// The keys besides the dictation key that do something, in `TriggerKey`
+  /// order: the ready screen's extra rows. With nothing dictating, the bound
+  /// key is among them if it does something else.
   public var extraKeys: [TriggerKey] {
-    TriggerKey.allCases.filter { $0 != bound && action(for: $0) != .off }
+    TriggerKey.allCases.filter { $0 != dictationKey && action(for: $0) != .off }
   }
 
   /// Whether some key reads aloud or asks — read-aloud's settings do something.

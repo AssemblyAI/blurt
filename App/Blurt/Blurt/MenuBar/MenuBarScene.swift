@@ -32,13 +32,22 @@ struct MenuBarContent: View {
   // Observed (as the ready screen does) so the reminder line updates live when
   // the dictation key or its mode changes in Settings (`ObservedKeyBindings`).
   @ObservedKeyBindings private var bindings
-  private var triggerKey: TriggerKey { bindings.bound }
+  private var triggerKey: TriggerKey? { bindings.dictationKey }
   private var activation: TriggerActivation { bindings.activation }
 
   var body: some View {
     // Disabled informational row: the dictation trigger is an invisible lone
     // modifier, so spell it out here as the menu bar's discoverability anchor.
-    Text("\(activation.label) \(triggerKey.spokenName) to dictate and paste")
+    if let triggerKey {
+      Text("\(activation.label) \(triggerKey.spokenName) to dictate and paste")
+    } else {
+      // A command, not a disabled instruction: nothing dictates, so the fix
+      // is the one thing this row should offer.
+      Button("Choose Dictation Key…") {
+        NSApp.activate()
+        openSettings()
+      }
+    }
 
     Divider()
 
