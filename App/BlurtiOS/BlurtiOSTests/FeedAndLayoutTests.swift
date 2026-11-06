@@ -80,7 +80,8 @@ struct LayoutArithmeticTests {
     let ink = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "ink"])
     #expect(ink[0].model.palette(for: Self.profile).face == .dark)
     #expect(
-      KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0].model.palette(for: Self.profile).face == .light)
+      KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0]
+        .model.palette(for: Self.profile).face == .light)
   }
 
   @Test("the capture switches ride along, and a switch where the theme would be is not a theme")

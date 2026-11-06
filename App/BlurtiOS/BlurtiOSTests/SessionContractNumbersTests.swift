@@ -258,7 +258,9 @@ struct SessionContractNumbersTests {
     #expect(BlurtShared.hopHost(fromMessages) == "com.apple.MobileSMS")
     #expect(BlurtShared.hopHost(BlurtShared.startURL(reason: .sessionOff)) == nil)
     #expect(BlurtShared.startURL(reason: .sessionOff, host: " ") == BlurtShared.startURL(reason: .sessionOff))
-    #expect(BlurtShared.hopHost(BlurtShared.startURL(reason: nil, host: "com.apple.mobilenotes")) == "com.apple.mobilenotes")
+    #expect(
+      BlurtShared.hopHost(BlurtShared.startURL(reason: nil, host: "com.apple.mobilenotes"))
+        == "com.apple.mobilenotes")
   }
 
   @Test("hop return: open and live goes back; a keeper expected waits for pip or the cap")
