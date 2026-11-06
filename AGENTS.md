@@ -57,6 +57,20 @@ For embedding or extending the engine's public API — seam contracts, error tab
 see [`Sources/BlurtEngine/README.md`](./Sources/BlurtEngine/README.md). This file covers repo-wide
 workflow and the _why_ behind the design; the engine's README covers the _what_ of the API surface.
 
+**The iPhone's platform scope.** iOS lets a capture start only while the app is in front
+(`'!rec'`, 561145187, otherwise), so the listening window opens on the keyboard's hop or the app's
+switch and is carried between dictations by an `IdleMode`: the Picture in Picture keeper
+(`PictureInPictureIdle`, a zero-height `AVSampleBufferDisplayLayer` that keeps the process
+`UserInteractiveFocal`, so a press from another app starts capture with no hop and the orange dot is
+off between dictations) or a held mic (`HeldIdle`). The idle layer is separable; the window
+(`ListeningWindowMachine`), the keyboard contract (`SessionContract.swift`, `CommandRouter`,
+`PressHandshake`) and the capture path are the same under either. The simulator enforces none of
+this, so a change under `App/BlurtiOS/BlurtiOS/Sources/{ListeningWindow,AudioSource,DictationCoordinator}*.swift`
+or `App/BlurtiOS/BlurtiOSCore/{SessionContract,KeyboardModel*}.swift` is verified on a phone with
+`scripts/ios-device.sh` (install → launch → dictate from Messages → `pull` → `syslog --negative`),
+not only by `ios-check.sh`. `App/BlurtiOS/README.md` ("Testing on a phone") is the protocol;
+`App/BlurtiOS/DESIGN.md` ("The two processes, and every number") holds every number the contract uses.
+
 ## Repository map
 
 ```text
