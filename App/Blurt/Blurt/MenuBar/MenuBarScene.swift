@@ -10,7 +10,7 @@ import SwiftUI
 /// just draws what the engine resolves, mirroring how `OverlayView` renders
 /// `OverlayUIState`.
 struct MenuBarLabel: View {
-  var appDelegate: AppDelegate
+  let appDelegate: AppDelegate
 
   var body: some View {
     let status = appDelegate.coordinator?.menuBarStatus ?? .idle
@@ -26,19 +26,19 @@ struct MenuBarLabel: View {
 /// invisible) dictation hotkey for discoverability and a one-click way back to
 /// the window.
 struct MenuBarContent: View {
-  var appDelegate: AppDelegate
+  let appDelegate: AppDelegate
   @Environment(\.openSettings) private var openSettings
 
   // Observed (as the ready screen does) so the reminder line updates live when
   // the dictation key or its mode changes in Settings (`ObservedKeyBindings`).
   @ObservedKeyBindings private var bindings
   private var triggerKey: TriggerKey { bindings.bound }
-  private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
+  private var activation: TriggerActivation { bindings.activation }
 
   var body: some View {
     // Disabled informational row: the dictation trigger is an invisible lone
     // modifier, so spell it out here as the menu bar's discoverability anchor.
-    Text("\(activation.label) \(triggerKey.label) to dictate and paste")
+    Text("\(activation.label) \(triggerKey.spokenName) to dictate and paste")
 
     Divider()
 
@@ -56,7 +56,7 @@ struct MenuBarContent: View {
     Divider()
 
     Button("Quit Blurt") {
-      NSApplication.shared.terminate(nil)
+      NSApp.terminate(nil)
     }
     .keyboardShortcut("q", modifiers: .command)
   }

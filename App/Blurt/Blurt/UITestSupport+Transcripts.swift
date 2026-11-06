@@ -105,7 +105,9 @@
     /// A small file to stand for audio: the canned transport never reads it.
     static func sampleFile() -> URL {
       let url = FileManager.default.temporaryDirectory.appending(path: "blurt-uitest-sample.m4a")
-      if !FileManager.default.fileExists(atPath: url.path) { try? Data("uitest".utf8).write(to: url) }
+      if !FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+        try? Data("uitest".utf8).write(to: url)
+      }
       return url
     }
   }

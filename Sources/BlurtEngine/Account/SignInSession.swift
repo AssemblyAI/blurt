@@ -95,9 +95,14 @@ public struct SignInStore: Sendable {
     self.write = write
   }
 
+  /// The Keychain account the session is stored under, beside the key's.
+  /// `scripts/reset-lib.sh` deletes it by name; `ResetScriptContractTests` pins
+  /// the two together.
+  static let keychainAccount = "AssemblyAISignIn"
+
   /// The production item, in the host's Keychain service.
   public static let production: SignInStore = {
-    let keychain = KeychainStore(service: HostIdentity.current.keychainService, account: "AssemblyAISignIn")
+    let keychain = KeychainStore(service: HostIdentity.current.keychainService, account: keychainAccount)
     return SignInStore(read: { keychain.read() }, write: { keychain.write($0) })
   }()
 

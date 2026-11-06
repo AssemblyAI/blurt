@@ -80,7 +80,26 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   (`STT/TranscriptTransform.swift`, also exempt): summary, key points and the
   other stock transforms over a saved transcript. It is never in the
   dictation path and nothing it writes is pasted: it runs only on a history
-  entry the user opens and asks for a task, past dictations included.
+  entry the user opens and asks for a task, past dictations included. The
+  third is the Rewrite Selection key's (`Rewrite/SelectionRewriter.swift`,
+  through `GatewayConnection.send`): highlighted text rewritten as a spoken
+  instruction asks, and pasted over the selection — the one gateway output
+  that is pasted, owner-directed (2026-11-03). It never touches a dictation's
+  words; the instruction it is given is a hand-back press's, never pasted.
+  The fourth is the Control Your Mac key's (`Command/VoiceCommandPlanner.swift`,
+  through `GatewayConnection.send`): a spoken command turned into steps from a
+  closed list (`VoiceCommandStep`) that Blurt carries out itself — the one
+  gateway output acted on, owner-directed (2026-11-03). Keep it data, never
+  script: no AppleScript, shell or arbitrary URL schemes, and a typed step
+  still pastes through the injector. Its steps target elements on screen —
+  a listed element, a named button, a menu path — never a coordinate the model
+  chose; a click at an element's centre is only the fallback for one that
+  refuses `AXPress`, and the destructive-action ban stays in code
+  (`DestructiveGuard`, checked on every action and click), not only the
+  prompt. It sees the screen through the Accessibility tree (`ScreenContext`:
+  labels of actionable elements), owner-directed: no screenshots, so no Screen
+  Recording permission, and never a field's contents or a password field. It
+  never sees a dictation's words.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **There is no `config.conversation_context`.** `config.stt_prompt`
@@ -164,6 +183,11 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 - The dictation trigger is a **single lone modifier** (right ⌘ default), home-
   grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
   key+modifier chord.
+- **Pasting an API key stays beside Sign in with AssemblyAI.** Don't hide it
+  from new installs or remove it: teams share one key rather than adding every
+  member to their AssemblyAI account. `CredentialRows.resolve` offers it
+  whenever the user isn't signed in — "Use API Key…" in the `.choice` row, or
+  the key row once one is stored.
 - **Updates go through Sparkle** (`UpdaterModel`, app-side only) — an
   EdDSA-signed `appcast.xml` published with each release, Sparkle's own UI,
   daily checks. Don't hand-roll a second updater or a GitHub-API checker beside

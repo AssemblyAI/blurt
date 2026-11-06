@@ -1,36 +1,50 @@
 import BlurtEngine
 import SwiftUI
 
-/// A quiet keyboard legend. The real key lights it during capture.
+/// A key's name drawn as a keycap — a small raised key, as shortcut hints are
+/// drawn — so it reads as a key to press on the keyboard, not a control to
+/// click. It stays as it is while the key is down.
 struct KeyCap: View {
   var label: String
-  var isLit = false
 
   var body: some View {
     Text(label)
-      .font(.system(.caption, design: .rounded, weight: .medium))
+      .font(.callout)
       .padding(.horizontal, 7)
-      .padding(.vertical, 3)
-      .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-      .foregroundStyle(isLit ? AnyShapeStyle(BlurtBrand.accent) : AnyShapeStyle(.secondary))
-      .animation(.easeOut(duration: 0.1), value: isLit)
+      .padding(.vertical, 2)
+      .background(
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .fill(Color(nsColor: .textBackgroundColor))
+          .shadow(color: .black.opacity(0.18), radius: 0, y: 1)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .strokeBorder(Color(nsColor: .separatorColor))
+      )
   }
 }
 
 extension TriggerKey {
-  /// The keycap's face, e.g. "Right ⌘": `label` with its leading capital,
-  /// since a key's legend is a title rather than mid-sentence prose — except
-  /// `fn`, which Apple keyboards print lowercase.
-  var keycapLabel: String {
-    if self == .function { return label }
-    return label.prefix(1).uppercased() + label.dropFirst()
-  }
-
   /// The key named in words, e.g. "Right Command": `fullName` without its
-  /// parenthesised symbol. VoiceOver hears it without the symbol read as
-  /// the name a second time.
+  /// parenthesised symbol. The one name a key goes by on screen — the main
+  /// window's legend, the menu bar, and every Settings row — and what VoiceOver
+  /// hears, without the symbol read as the name a second time.
   var spokenName: String {
     guard let symbol = fullName.range(of: " (") else { return fullName }
     return String(fullName[..<symbol.lowerBound])
+  }
+}
+
+extension TriggerKeyAction {
+  /// The action's row icon — the main window's key rows and the Keys tab's
+  /// action rows, so an action looks the same in both.
+  var systemImage: String {
+    switch self {
+    case .readAloud: LibraryKind.readAloud.systemImage
+    case .ask: LibraryKind.ask.systemImage
+    case .rewrite: "pencil.line"
+    case .command: "command"
+    case .dictate, .off: "keyboard"
+    }
   }
 }

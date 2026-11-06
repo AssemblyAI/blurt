@@ -33,6 +33,14 @@ public enum OverlayUIState: Equatable, Sendable {
   /// the app shows it for as long as a read plays, with the recording pill's
   /// orb and meter, the meter following the voice rather than the mic.
   case speaking
+  /// Rewriting the selection (the Rewrite Selection key). Not a pipeline
+  /// phase either: the app shows it from the spoken instruction's hand-back
+  /// until the rewrite pastes, then the notice a dictation ends with.
+  case rewriting
+  /// Carrying out a spoken command (the Control Your Mac key): planning it,
+  /// then its steps. Not a pipeline phase: the app shows it from the
+  /// command's hand-back until the last step is done, then `.done` or the error.
+  case commanding
   /// A dictation attempt failed. The shell shows this as a brief red flash on
   /// the pill before settling back to `.idle`; `message` is the human-readable
   /// reason (e.g. "AssemblyAI error 401…"), surfaced via the pill's hover
@@ -54,6 +62,12 @@ public enum OverlayUIState: Equatable, Sendable {
   /// copied to the clipboard instead of typed. The shell shows this as a brief,
   /// neutral "Copied" notice (not the red error flash) before settling to `.idle`.
   case noTarget
+  /// A spoken command was carried out. A brief, neutral "Done" notice, the
+  /// command's "Pasted".
+  case done
+  /// A complaint about the last command ("that didn't work") was logged
+  /// against it rather than planned: a brief "Noted".
+  case noted
 
   /// The VoiceOver label for the pill in this state. Owned here (not in the
   /// AppKit shell) so the wording is in one place: the shell reads it both as the
@@ -65,10 +79,14 @@ public enum OverlayUIState: Equatable, Sendable {
     case .connecting: "Connecting to the microphone."
     case .recording: "Recording."
     case .speaking: "Reading aloud."
+    case .rewriting: "Rewriting the selection."
+    case .commanding: "Carrying out your command."
     case .processing: "Processing."
     case .error(let message, _): message
     case .pasted: "Your dictation was pasted."
     case .noTarget: "No text field focused. Your dictation was copied to the clipboard."
+    case .done: "Your command was carried out."
+    case .noted: "Noted: the last command was marked as not working."
     }
   }
 
@@ -81,11 +99,11 @@ public enum OverlayUIState: Equatable, Sendable {
   /// is unit-tested and a new notice can't ship without one.
   public var noticeDwellSeconds: Double? {
     switch self {
-    case .pasted: 0.8
+    case .pasted, .done, .noted: 0.8
     // A sentence, not a word: long enough to read the device name.
     case .error(_, _?): 3.0
     case .error, .noTarget: 1.6
-    case .idle, .connecting, .recording, .processing, .speaking: nil
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .commanding: nil
     }
   }
 
@@ -145,8 +163,18 @@ extension PipelinePhase {
   /// pill as it is. A read wears the pill until it ends (`.speaking`); only a
   /// new capture takes it over — a press stops the read first — so an earlier
   /// dictation finishing mid-read can neither cover nor hide it.
-  public func overlayState(whileSpeaking speaking: Bool) -> OverlayUIState? {
-    speaking && !isCapturing ? nil : overlayState
+  ///
+  /// `processingAs`: what this phase's transcription shows as when it's a
+  /// job's spoken words rather than a dictation — `.rewriting` for a Rewrite
+  /// Selection press's instruction, `.commanding` for a command — so the pill
+  /// reads as one step from release to the job's end.
+  public func overlayState(whileSpeaking speaking: Bool, processingAs: OverlayUIState? = nil) -> OverlayUIState? {
+    if speaking && !isCapturing { return nil }
+    // A rewrite's or a command's words handed back: the router shows its own
+    // state ("Rewriting", "Working") the moment it takes them, so hiding the
+    // pill here only made it blink — and, mid-fade, vanish (2026-11-04).
+    if case .handedBack = self, processingAs != nil { return nil }
+    return overlayState == .processing ? processingAs ?? overlayState : overlayState
   }
 
   /// The pill once a read ends, this being the session's last phase. A steady

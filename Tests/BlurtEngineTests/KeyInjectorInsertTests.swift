@@ -163,6 +163,42 @@
       #expect(clip.string == "user-clipboard")
     }
 
+    @Test("a paste at focus into an opaque app in front pastes on no signal, as a pinned one does")
+    func atFocusJudgesTheAppInFront() async throws {
+      let clip = FakeClipboard(string: "user-clipboard")
+      let posted = ValueBox<Bool>(false)
+      let injector = KeyInjector(
+        pasteSettleDuration: .zero,
+        postPaste: posted.recordingPaste,
+        hasEditableTarget: { false },  // a just-opened Electron app: nothing focused yet
+        isAXOpaqueApp: { $0 != nil },  // the app in front is opaque; no app at all isn't
+        frontmostApp: { NSRunningApplication.current },
+        clipboard: clip)
+
+      // A voice command's `type` step: no pinned target, so the app judged is
+      // the one in front, not a nil that reads as "not opaque".
+      try await injector.insertAtFocus("hello")
+      await injector.pendingSettle?.value
+      #expect(posted.value == true)
+    }
+
+    @Test("a pinned paste whose app is gone is judged by the app in front too")
+    func lostTargetJudgesTheAppInFront() async throws {
+      let posted = ValueBox<Bool>(false)
+      let injector = KeyInjector(
+        pasteSettleDuration: .zero,
+        postPaste: posted.recordingPaste,
+        hasEditableTarget: { false },
+        isAXOpaqueApp: { $0 != nil },
+        frontmostApp: { NSRunningApplication.current },
+        clipboard: FakeClipboard(string: "user-clipboard"))
+      // No capture, so no target: the paste lands where focus is, and that app
+      // is the one asked whether it hides its fields.
+      try await injector.insert("hello")
+      await injector.pendingSettle?.value
+      #expect(posted.value == true)
+    }
+
     @Test("opaque editor: a second dictation into the same window gets a separating space")
     func opaqueEditorSameWindowInsertsSeparated() async throws {
       let (injector, pasted) = makeRecordingInjector()

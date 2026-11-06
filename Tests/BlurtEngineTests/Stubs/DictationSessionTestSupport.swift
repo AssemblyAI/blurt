@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import Testing
 
 @testable import BlurtEngine
 
@@ -60,7 +61,7 @@ func testSeams(
   DictationSession.Seams(
     captureFrontmost: { frontmost },
     captureFieldContext: { field },
-    logTranscript: { log.recordTranscript($0, context: $1) },
+    logTranscript: { log.recordTranscript($0, context: $1, outcome: $2) },
     logFailure: { log.recordFailure($0, context: $1) })
 }
 
@@ -126,6 +127,8 @@ final class RecordedLog: Sendable {
   struct Transcript: Sendable, Equatable {
     let text: String
     let context: TranscriptionContext?
+    /// The phase the dictation ended in, which the log names.
+    let outcome: PipelinePhase
   }
 
   struct Failure: Sendable {
@@ -146,8 +149,8 @@ final class RecordedLog: Sendable {
   /// aggregate on, and the readable form for an assertion.
   var failureNames: [String] { failures.map { $0.error.diagnosticName } }
 
-  func recordTranscript(_ text: String, context: TranscriptionContext?) {
-    state.withLock { $0.transcripts.append(Transcript(text: text, context: context)) }
+  func recordTranscript(_ text: String, context: TranscriptionContext?, outcome: PipelinePhase) {
+    state.withLock { $0.transcripts.append(Transcript(text: text, context: context, outcome: outcome)) }
   }
 
   func recordFailure(_ error: BlurtError, context: TranscriptionContext?) {
@@ -193,5 +196,52 @@ extension DictationSession {
   /// request that never arrives fails as a timeout instead of passing quietly.
   func awaitCancelRequest() async {
     while !cancelRequested { await Task.yield() }
+  }
+}
+
+/// Waits (up to 5 s) for the fixture's mic to start: a hand-back press has
+/// opened it, so a release now ends a recording rather than racing the press.
+func waitForMicStart(_ fixture: SessionFixture) async throws {
+  let deadline = ContinuousClock.now + .seconds(5)
+  while await fixture.mic.startCalls == 0, ContinuousClock.now < deadline {
+    try await Task.sleep(for: .milliseconds(5))
+  }
+}
+
+/// One held hand-back press of right ⌥ through `router` — a rewrite's
+/// instruction or a command — recorded by `fixture`'s session and let go, the
+/// session's phases wired to the router first. Returns that wiring, for the
+/// caller to cancel.
+@MainActor
+func speakHeldPress(_ router: SelectionSpeechRouter, on fixture: SessionFixture) async throws -> Task<Void, Never> {
+  let phases = Task {
+    for await phase in await fixture.session.phaseStream() { router.sessionPhaseChanged(phase) }
+  }
+  router.press(key: .rightOption)
+  try await waitForMicStart(fixture)
+  router.submit(.release)
+  return phases
+}
+
+/// What a job press — a rewrite or a command — told the pill and the gate:
+/// shared by the rewrite and command router suites.
+@MainActor
+final class JobEvents {
+  var pills: [OverlayUIState?] = []
+  var resets = 0
+
+  /// Records `router`'s job pill and gate resets.
+  init(watching router: SelectionSpeechRouter) {
+    router.jobPill = { [weak self] in self?.pills.append($0) }
+    router.resetGate = { [weak self] in self?.resets += 1 }
+  }
+
+  /// What the pill showed after the job's working state (`first`), once the
+  /// job has ended; stops `phases` either way.
+  func outcomes(after first: OverlayUIState, stopping phases: Task<Void, Never>) async throws -> [OverlayUIState?] {
+    defer { phases.cancel() }
+    try await waitUntil { self.pills.count > 1 }
+    #expect(pills.first == first)
+    return Array(pills.dropFirst())
   }
 }

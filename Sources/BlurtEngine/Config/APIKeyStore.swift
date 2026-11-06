@@ -14,11 +14,16 @@ public enum APIKeyStore {
   /// Where users go to create / copy their AssemblyAI API key.
   public static let dashboardURL = URL(staticString: "https://www.assemblyai.com/dashboard/api-keys")
 
+  /// The Keychain account the key is stored under, in the host's service.
+  /// `scripts/reset-lib.sh` deletes it by name; `ResetScriptContractTests` pins
+  /// the two together.
+  static let keychainAccount = "AssemblyAIAPIKey"
+
   /// The production keychain item, memoized. Tests never reach this — they build
   /// their own `MemoizedKeyStore`, and `KeychainStoreTests` uses an isolated
   /// service/account — so the real key is never read or written by a test run.
   private static let memo = MemoizedKeyStore(
-    keychain: KeychainStore(service: HostIdentity.current.keychainService, account: "AssemblyAIAPIKey"))
+    keychain: KeychainStore(service: HostIdentity.current.keychainService, account: keychainAccount))
 
   /// The stored key, or `nil` if none has been saved (or it's empty).
   public static var current: String? { memo.current }

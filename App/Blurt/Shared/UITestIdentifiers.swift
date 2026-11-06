@@ -22,6 +22,8 @@ enum UITestIdentifiers {
   // Window titles the XCUITest suite queries, sourced from the `Window(_:id:)`
   // declarations in `App.swift`.
   static let mainWindowTitle = "Blurt"
+  /// The main window's toolbar Filter menu, over the Library.
+  static let libraryFilterMenu = "main.toolbar.filter"
   static let harnessWindowTitle = "Blurt UI Test Harness"
   /// The harness `Window`'s scene id.
   static let harnessWindowID = "uitest.harness"
@@ -32,6 +34,7 @@ enum UITestIdentifiers {
   // opening title (see `settingsWindowTitle` in BlurtUITestSupport).
   static let generalSettingsTab = "General"
   static let keysSettingsTab = "Keys"
+  static let soundsSettingsTab = "Sounds"
   static let readAloudSettingsTab = "Read Aloud"
   static let stylesSettingsTab = "Styles"
   static let advancedSettingsTab = "Advanced"
@@ -77,12 +80,20 @@ enum UITestIdentifiers {
   static let apiKeyCancel = "settings.apiKey.cancel"
   static let apiKeyError = "settings.apiKey.error"
   static let keyTermsField = "settings.keyTerms.field"
-  /// One pair per trigger key on the Keys tab, suffixed with its keycode.
-  static func keyStylePicker(_ keyCode: Int) -> String { "settings.keyStyles.picker.\(keyCode)" }
-  static func keyActivationPicker(_ keyCode: Int) -> String { "settings.keyStyles.activation.\(keyCode)" }
+  /// One per action row on the Keys tab — its key pop-up — suffixed with the
+  /// row's title ("Dictate", "Read Selection Aloud", "Dictate: Casual").
+  static func actionKeyPicker(_ action: String) -> String { "settings.actionKey.picker.\(action)" }
+  /// The one tap/hold mode for every key, under the Keys tab's table.
+  static let activationPicker = "settings.activation.picker"
   static let micPicker = "settings.mic.picker"
-  static let soundPicker = "settings.sound.picker"
-  static let readAloudSoundPicker = "settings.readAloudSound.picker"
+  /// One per trigger key that does something, on the Sounds tab, suffixed with its keycode.
+  static func keySoundPicker(_ keyCode: Int) -> String { "settings.keySound.picker.\(keyCode)" }
+  static let harnessSetCommand = "harness.key.setCommand"
+  static let harnessSetRewrite = "harness.key.setRewrite"
+  /// What the stub planner was asked to plan, and what the stub performer did.
+  static let plannedLabel = "harness.planned"
+  static let performedLabel = "harness.performed"
+  static let noticeLabel = "harness.notice"
   static let developerToggle = "settings.developer.toggle"
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
@@ -173,10 +184,10 @@ enum UITestIdentifiers {
   /// What the canned gateway returns for any task.
   static let cannedTaskResult = "Canned task result for the transcript."
   static let recentList = "recent.list"
-  static let recentSearchField = "recent.search"
   static let transcribeRecordButton = "transcribe.record"
   static let transcribeBrowseButton = "transcribe.browse"
   static let autoRecordToggle = "settings.autoRecordMeetings"
   /// A transcript sheet chip: this prefix, then the facet's raw value.
-  static let facetChipPrefix = "facet."
+  /// The open item's toolbar View menu.
+  static let facetPicker = "facet.picker"
 }

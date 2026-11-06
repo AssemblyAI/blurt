@@ -119,14 +119,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           account: AssemblyAIAccount(configuration: nil, apiKey: apiKey, store: .inMemory()),
           // Read-aloud offline: a canned selection, and a speaker that records
           // what it's asked to read instead of streaming TTS.
-          readAloud: ReadAloudSeams(
+          triggerKeys: TriggerKeySeams(
             speaker: UITestReadAloudSpeaker(),
-            readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection }),
+            readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection },
+            // Rewrite and command keys offline too: no gateway, nothing acted on.
+            rewriter: UITestRewriter(), planner: UITestPlanner(), performer: UITestPerformer()),
           // A fresh history per run — never the user's saved transcripts —
           // seeded with known entries when the suite asks, and the canned
           // transport behind transcription and the LLM.
           transcripts: .uiTest(store: UITestMode.historyStore()))
-        if ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.transcribeSampleLaunchArgument) {
+        if UITestMode.isTranscribeSampleRequested {
           coord.transcripts.transcribe(UITestHistorySeed.sampleFile())
         }
       } else {
@@ -193,6 +195,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await self.runLeakExercise(coord) }
       }
     #endif
+    // A launch to open files hears of them before the models above existed.
+    openPendingFiles()
   }
 
   /// One-shot startup migration: if the signing identity changed since the last
@@ -275,6 +279,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       coord.hideOverlay()
     }
   #endif
+
+  /// Audio or video files opened in Blurt — dropped on the Dock icon, or from
+  /// Finder's Open With — waiting for the models, which a launch to open them
+  /// creates only in `applicationDidFinishLaunching`.
+  @ObservationIgnored private var pendingFileURLs: [URL] = []
+
+  func application(_ application: NSApplication, open urls: [URL]) {
+    pendingFileURLs += urls
+    openPendingFiles()
+  }
+
+  /// Brings the window up over the files opened in Blurt and transcribes the
+  /// first audio or video one — once the models exist, and only once setup is
+  /// done; until then the window comes up on setup and the files are let go.
+  private func openPendingFiles() {
+    guard !pendingFileURLs.isEmpty, let coordinator, let wizardController else { return }
+    surfaceMainWindow()
+    if wizardController.isReady { coordinator.transcripts.openFiles(pendingFileURLs) }
+    pendingFileURLs = []
+  }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     // Blurt keeps running with the overlay pill after its window is closed;

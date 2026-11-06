@@ -152,7 +152,15 @@
         kAudioAggregateDeviceMainSubDeviceKey: input,
         kAudioAggregateDeviceIsPrivateKey: true,
         kAudioAggregateDeviceIsStackedKey: false,
-        kAudioAggregateDeviceTapAutoStartKey: true,
+        // Off, so the input device's clock alone drives the IO cycle. On, the
+        // aggregate's IO waits on the tap, and a tap only produces while the
+        // output device is running: with nothing playing, the IOProc was never
+        // called at all — no system audio *and* no microphone — until something
+        // made a sound or the output device changed. Measured 2026-11-02 with a
+        // standalone copy of this setup: auto-start on, 0 callbacks in silence
+        // (140 while audio played); off, 141 either way, and the tap still
+        // carries system audio, including audio that starts mid-recording.
+        kAudioAggregateDeviceTapAutoStartKey: false,
         kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: input]],
         kAudioAggregateDeviceTapListKey: [
           [kAudioSubTapUIDKey: tapUUID.uuidString, kAudioSubTapDriftCompensationKey: true]

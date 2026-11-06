@@ -46,7 +46,7 @@ enum SpeechSegmenter {
     var pending = ""
     for sentence in sentences {
       pending = pending.isEmpty ? sentence : pending + " " + sentence
-      if wordCount(pending) >= minWords {
+      if pending.wordCount >= minWords {
         merged.append(pending)
         pending = ""
       }
@@ -74,9 +74,5 @@ enum SpeechSegmenter {
     }
     if let tail = String(rest).trimmedNonEmpty() { pieces.append(tail) }
     return pieces
-  }
-
-  private static func wordCount(_ text: String) -> Int {
-    text.split(whereSeparator: \.isWhitespace).count
   }
 }

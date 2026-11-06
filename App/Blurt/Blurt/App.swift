@@ -21,7 +21,8 @@ struct BlurtApp: App {
   /// *not* its own Keychain item, since Keychain items are per login keychain
   /// rather than per app. Shared, a dev build read the shipping app's API key,
   /// could overwrite it, and could delete it outright through Settings → Reset.
-  /// `.blurtDev` differs from `.blurt` in exactly that one field.
+  /// Nor its own Library folder, Blurt being unsandboxed. `.blurtDev` differs
+  /// from `.blurt` in exactly those two fields.
   ///
   /// Decided from the **running bundle id** rather than `#if DEBUG`: the id is
   /// what actually makes these two apps to macOS, and it follows
@@ -31,8 +32,7 @@ struct BlurtApp: App {
   /// someone forgot a compilation condition. `HostIdentity.blurt.subsystem` is
   /// the shipping id — the one place that string is written down.
   init() {
-    let isShippingBuild = Bundle.main.bundleIdentifier == HostIdentity.blurt.subsystem
-    HostIdentity.configure(isShippingBuild ? .blurt : .blurtDev)
+    HostIdentity.configure(HostIdentity.isShippingBundle ? .blurt : .blurtDev)
   }
 
   var body: some Scene {
@@ -97,4 +97,13 @@ struct BlurtApp: App {
       .defaultPosition(.topLeading)
     #endif
   }
+}
+
+extension HostIdentity {
+  /// Whether this process is the shipping app, read straight off the running
+  /// bundle id. `BlurtApp.init` picks the identity from it, and `UpdaterModel`
+  /// asks it whether to start Sparkle — deliberately not via `current`, which
+  /// still holds its default if the app delegate (and so the updater) is built
+  /// before `BlurtApp.init` configures it, and would start Sparkle in a dev build.
+  static var isShippingBundle: Bool { Bundle.main.bundleIdentifier == blurt.subsystem }
 }

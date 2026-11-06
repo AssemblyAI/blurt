@@ -14,4 +14,16 @@ public protocol InjectorProtocol: Sendable {
   /// `priorText` is unreadable (see `InsertionSeparator.basis`); nil when the
   /// window exposes no title.
   func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws
+  /// Insert text wherever focus is now, leaving the pinned target (`setTarget`)
+  /// as it is: a voice command's typed step, after its earlier steps brought
+  /// another app forward. No separator, as `replaceSelection`'s paste has none.
+  func insertAtFocus(_ text: String) async throws
+}
+
+extension InjectorProtocol {
+  /// A host with no notion of a target app (the iPhone keyboard) has no other
+  /// focus to insert at.
+  public func insertAtFocus(_ text: String) async throws {
+    try await insert(text, after: nil, windowTitle: nil)
+  }
 }

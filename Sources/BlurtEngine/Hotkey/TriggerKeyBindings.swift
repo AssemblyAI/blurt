@@ -9,6 +9,12 @@ public enum TriggerKeyAction: Sendable, Hashable {
   case readAloud
   /// Records a spoken request about the selected text and reads the answer aloud.
   case ask
+  /// Records a spoken instruction ("make it more formal") and pastes the
+  /// selected text, rewritten that way, over it.
+  case rewrite
+  /// Records a spoken command ("open Slack and start a new message") and
+  /// carries it out (`VoiceCommandPlanner`, `VoiceCommandPerforming`).
+  case command
 }
 
 /// What one trigger key is set to in the Keys tab. Persisted as a string
@@ -22,6 +28,8 @@ public enum TriggerKeyChoice: Hashable, Sendable {
   case dictate(style: String)
   case readAloud
   case ask
+  case rewrite
+  case command
 
   /// The style id for "use the main window's selection". Not a UUID, and not
   /// `StyleProfileStore.defaultStyleID`, so it can collide with neither.
@@ -35,16 +43,20 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .dictate: .dictate
     case .readAloud: .readAloud
     case .ask: .ask
+    case .rewrite: .rewrite
+    case .command: .command
     }
   }
 
   /// The stored form. Any string that isn't one of the action markers is a
-  /// style id — the encoding from before read and ask existed.
+  /// style id — the encoding from before read, ask, rewrite and command existed.
   init(raw: String) {
     switch raw {
     case "": self = .off
     case "read-aloud": self = .readAloud
     case "ask": self = .ask
+    case "rewrite": self = .rewrite
+    case "command": self = .command
     default: self = .dictate(style: raw)
     }
   }
@@ -55,40 +67,38 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .dictate(let style): style
     case .readAloud: "read-aloud"
     case .ask: "ask"
+    case .rewrite: "rewrite"
+    case .command: "command"
     }
   }
 }
 
 /// One read of everything the trigger keys are set to: the bound key
-/// (`TriggerKeyStore`), each key's choice (`TriggerKeyStyleStore`) and each
-/// key's tap/hold mode (`TriggerKeyActivationStore`, with
-/// `TriggerActivationStore` as the mode of a key that has none). Every reader —
-/// the tap, the read-aloud router, the press's style, and each view — asks
-/// this, so the rules are written once: the bound key always dictates; with no
-/// entry, the bound key dictates with the main window's style, left ⌥ reads
-/// aloud, and every other key is off; a key with no mode of its own reads
-/// aloud on a tap or hold, or else follows the shared mode.
+/// (`TriggerKeyStore`), each key's choice (`TriggerKeyStyleStore`) and the one
+/// tap/hold mode they're all pressed under (`TriggerActivationStore`). Every
+/// reader — the tap, the read-aloud router, the press's style, and each view —
+/// asks this, so the rules are written once: the bound key always dictates;
+/// with no entry, the bound key dictates with the main window's style, left ⌥
+/// reads aloud, and every other key is off.
 public struct TriggerKeyBindings: Sendable, Equatable {
   /// The key the ready screen and menu bar name, which always dictates.
   public let bound: TriggerKey
   private let choices: [TriggerKey: TriggerKeyChoice]
-  private let modes: [TriggerKey: TriggerActivation]
-  private let sharedMode: TriggerActivation
+  /// How every key is pressed.
+  public let activation: TriggerActivation
 
   public init(defaults: UserDefaults = .standard) {
     self.init(
       boundKeyCode: defaults.integer(forKey: TriggerKeyStore.defaultsKey),
       choicesRaw: defaults.string(forKey: TriggerKeyStyleStore.defaultsKey) ?? "",
-      modesRaw: defaults.string(forKey: TriggerKeyActivationStore.defaultsKey) ?? "",
-      sharedModeRaw: defaults.string(forKey: TriggerActivationStore.defaultsKey) ?? "")
+      activationRaw: defaults.string(forKey: TriggerActivationStore.defaultsKey) ?? "")
   }
 
   /// From the raw slots a view has already observed through `@AppStorage`.
-  public init(boundKeyCode: Int, choicesRaw: String, modesRaw: String, sharedModeRaw: String) {
+  public init(boundKeyCode: Int, choicesRaw: String, activationRaw: String) {
     bound = TriggerKey.fromPersisted(boundKeyCode)
     choices = TriggerKeyMap.decode(choicesRaw).mapValues(TriggerKeyChoice.init(raw:))
-    modes = TriggerKeyMap.decode(modesRaw).compactMapValues(TriggerActivation.init(rawValue:))
-    sharedMode = TriggerActivation.fromPersisted(sharedModeRaw)
+    activation = TriggerActivation.fromPersisted(activationRaw)
   }
 
   /// What `key` does with no choice of its own. Left ⌥ rather than left ⌘
@@ -118,12 +128,6 @@ public struct TriggerKeyBindings: Sendable, Equatable {
   /// What a press of `key` does.
   public func action(for key: TriggerKey) -> TriggerKeyAction { choice(for: key).action }
 
-  /// `key`'s tap/hold mode.
-  public func activation(for key: TriggerKey) -> TriggerActivation {
-    if let mode = modes[key] { return mode }
-    return key != bound && action(for: key) == .readAloud ? .tapOrHold : sharedMode
-  }
-
   /// The keys the tap watches: every key that does something.
   public var enabledKeys: Set<TriggerKey> { Set(TriggerKey.allCases.filter { action(for: $0) != .off }) }
 
@@ -140,13 +144,11 @@ public struct TriggerKeyBindings: Sendable, Equatable {
     TriggerKey.allCases.filter { $0 != bound && action(for: $0) != .off }
   }
 
-  /// Whether some key reads aloud or asks — read-aloud's settings do something
-  /// — and whether some key asks, which sends what's said to the LLM Gateway.
+  /// Whether some key reads aloud or asks — read-aloud's settings do something.
   public var readsOrAsks: Bool { TriggerKey.allCases.contains { [.readAloud, .ask].contains(action(for: $0)) } }
-  public var asks: Bool { TriggerKey.allCases.contains { action(for: $0) == .ask } }
 
-  /// Every key the tap watches, with its mode — the router's binding.
+  /// Every key the tap watches, with the mode — the router's binding.
   public var activations: [TriggerKey: TriggerActivation] {
-    Dictionary(uniqueKeysWithValues: enabledKeys.map { ($0, activation(for: $0)) })
+    Dictionary(uniqueKeysWithValues: enabledKeys.map { ($0, activation) })
   }
 }

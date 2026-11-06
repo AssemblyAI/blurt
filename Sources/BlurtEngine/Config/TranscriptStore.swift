@@ -109,26 +109,31 @@ public struct SavedTranscript: Codable, Identifiable, Equatable, Sendable {
     case .dictation, .readAloud: text
     }
   }
+
+  /// The transcript's length in words, counted on the plain text where there
+  /// is one so a recording's "Speaker A:" labels don't pad it.
+  public var wordCount: Int { (plainText ?? text).wordCount }
 }
 
 /// The saved history: one JSON array, newest first, every entry kept. Read
 /// once at launch and rewritten whole on each change — text only, so even
 /// thousands of entries stay a few megabytes.
 public struct TranscriptStore: Sendable {
-  /// `~/Library/Application Support/<product>/history.json`.
+  /// `~/Library/Application Support/<data directory>/history.json` — `Blurt`,
+  /// or `Blurt Dev` for a debug build (`HostIdentity.dataDirectoryName`).
   public static var defaultURL: URL {
     URL.applicationSupportDirectory
-      .appending(path: HostIdentity.current.productName, directoryHint: .isDirectory)
+      .appending(path: HostIdentity.current.dataDirectoryName, directoryHint: .isDirectory)
       .appending(path: "history.json")
   }
 
   /// Where the main window's recordings are written, beside the history that
-  /// points at them: `~/Library/Application Support/<product>/Recordings`.
+  /// points at them: `…/<data directory>/Recordings`.
   public static var recordingsDirectory: URL {
     defaultURL.deletingLastPathComponent().appending(path: "Recordings", directoryHint: .isDirectory)
   }
 
-  /// Where read-aloud clips are kept: `…/<product>/Read Aloud`.
+  /// Where read-aloud clips are kept: `…/<data directory>/Read Aloud`.
   public static var readAloudDirectory: URL {
     defaultURL.deletingLastPathComponent().appending(path: "Read Aloud", directoryHint: .isDirectory)
   }

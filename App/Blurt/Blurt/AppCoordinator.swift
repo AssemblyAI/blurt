@@ -41,10 +41,7 @@ final class AppCoordinator {
 
   @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
-
-  /// The injector the pipeline pastes through, kept past session construction
-  /// for the one feature that inserts without a dictation — see
-  /// `AppCoordinator+LoopbackInsert.swift`, which owns the rest of that wiring.
+  /// The pipeline's injector, kept for local insertion (`AppCoordinator+LoopbackInsert.swift`).
   @ObservationIgnored let injector: any InjectorProtocol
   /// The local-insertion listener, built in `start()`. Off unless switched on.
   @ObservationIgnored var loopback: LoopbackInsertListener?
@@ -55,8 +52,9 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
   /// Whether the mic is being brought up or capturing (`PipelinePhase
-  /// .isCapturing`) — the ready screen disables the style switcher on it, and
-  /// its `.recording` half (via `menuBarStatus`) drives the listening state.
+  /// .isCapturing`) — while it is, Esc in the ready screen cancels the
+  /// dictation. Nothing on that screen changes with it: the pill shows how a
+  /// dictation is going.
   private(set) var isCapturing = false
   /// The last phase rendered, so the pill can go back to it when a read ends.
   @ObservationIgnored private var lastPhase = PipelinePhase.idle
@@ -64,7 +62,7 @@ final class AppCoordinator {
   private(set) var isReadingAloud = false
   /// What reads aloud and how the selection is read, when not the real ones:
   /// UI tests run the whole read-aloud path offline. Nil in production.
-  @ObservationIgnored private let readAloudSeams: ReadAloudSeams?
+  @ObservationIgnored private let triggerKeySeams: TriggerKeySeams?
   /// The saved history — every dictation, dropped or browsed-for file and
   /// recording — and the transcript sheet's state for whichever is open.
   let transcripts: TranscriptsModel
@@ -80,11 +78,11 @@ final class AppCoordinator {
     components: DictationComponents? = nil,
     apiKey: APIKeyModel = APIKeyModel(),
     account: AssemblyAIAccount? = nil,
-    readAloud: ReadAloudSeams? = nil,
+    triggerKeys: TriggerKeySeams? = nil,
     transcripts: TranscriptsModel? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
-    self.readAloudSeams = readAloud
+    self.triggerKeySeams = triggerKeys
     self.apiKey = apiKey
     let info = Bundle.main.infoDictionary ?? [:]
     let account =
@@ -171,8 +169,10 @@ final class AppCoordinator {
     // a dictating key's commands to `session.submit` and handles read and ask
     // keys itself.
     let router =
-      readAloudSeams.map {
-        SelectionSpeechRouter(session: session, speaker: $0.speaker, readSelection: $0.readSelection)
+      triggerKeySeams.map {
+        SelectionSpeechRouter(
+          session: session, speaker: $0.speaker, rewriter: $0.rewriter, planner: $0.planner,
+          performer: $0.performer, readSelection: $0.readSelection)
       }
       ?? SelectionSpeechRouter(
         session: session,
@@ -183,7 +183,12 @@ final class AppCoordinator {
     keyTap = DictationKeyTap(
       // The key rides the press, and the session resolves its style for that one
       // dictation (`PressStyle`); the main window's selection is never written.
-      onStart: { key in router.press(key: key) },
+      // The cues hear of the key first, so the recording or read it starts
+      // opens in that key's voice.
+      onStart: { [weak self] key in
+        self?.cues.keyPressed(key)
+        router.press(key: key)
+      },
       onStop: { router.submit(.release) },
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
@@ -207,6 +212,14 @@ final class AppCoordinator {
       // under way — and never a dictation's old notice (the engine's rule).
       self.overlay?.show(state: self.lastPhase.overlayStateAfterSpeech)
       self.cues.speechEnded()
+    }
+    // A rewrite or a command shows as working while it runs, then as its
+    // outcome: Pasted (Done, for a command), Copied or the error, the notices a
+    // dictation ends with. Abandoned by a press, the pill goes back to what the
+    // session is doing.
+    router.jobPill = { [weak self] state in
+      guard let self else { return }
+      self.overlay?.show(state: state ?? self.lastPhase.overlayStateAfterSpeech)
     }
     router.speechLevel = { [weak self] level in self?.overlay?.pushLevel(level) }
     // The pill just goes away on a failed read, so say something went wrong.
@@ -234,7 +247,7 @@ final class AppCoordinator {
   }
 
   private func observePhases() -> Task<Void, Never> {
-    Task { @MainActor [weak self] in
+    Task { [weak self] in
       guard let phases = await self?.session.phaseStream() else { return }
       for await phase in phases {
         guard let self else { return }
@@ -252,7 +265,7 @@ final class AppCoordinator {
     _ stream: AsyncStream<Value>,
     _ action: @escaping @MainActor (AppCoordinator, Value) -> Void
   ) -> Task<Void, Never> {
-    Task { @MainActor [weak self] in
+    Task { [weak self] in
       for await value in stream {
         guard let self else { return }
         if Task.isCancelled { return }
@@ -305,6 +318,9 @@ final class AppCoordinator {
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
     syncGlobeKeyOverride()
+    // A key with no voice of its own follows its action's, so a new action
+    // can mean a new voice to load.
+    cues.refresh()
   }
 
   /// Turns macOS's own 🌐 action off while `fn` is a trigger, and back on
@@ -324,15 +340,10 @@ final class AppCoordinator {
   /// The record start/stop chimes (see `CueSoundPlayer` below).
   private let cues = CueSoundPlayer()
 
-  /// Called when the user changes the sound pack in Settings: reload the cue
-  /// players and preview the new voice so the choice is audible immediately.
-  func soundPackChanged() {
-    cues.packChanged()
-  }
-
-  /// Read-aloud's cue pack changed in Settings: reload and preview it.
-  func readAloudSoundPackChanged() {
-    cues.readPackChanged()
+  /// Called when the user changes a key's sound in Settings: reload that key's
+  /// cue players and preview the new voice so the choice is audible immediately.
+  func keySoundChanged(_ key: TriggerKey) {
+    cues.packChanged(for: key)
   }
 
   /// The Read Aloud tab picked a voice or a speed: play a sample in it, as a cue
@@ -357,14 +368,18 @@ final class AppCoordinator {
     // A read wears the pill until it ends (the engine's rule — see
     // `overlayState(whileSpeaking:)`).
     lastPhase = phase
-    if let state = phase.overlayState(whileSpeaking: speechRouter?.isSpeaking ?? false) {
+    // A rewrite press's instruction transcribes as "Rewriting", and a command
+    // press's as "Working", not "Transcribing".
+    if let state = phase.overlayState(
+      whileSpeaking: speechRouter?.ownsPill ?? false, processingAs: speechRouter?.processingState)
+    {
       overlay?.show(state: state)
     }
     // Mirror the phase onto the menu bar indicator (mapping lives in the engine,
     // unit-tested alongside `overlayState`).
     menuBarStatus = phase.menuBarStatus
-    // And onto the ready screen: the listening state and the style-switch lock
-    // both follow the same stream the pill renders, never a second source.
+    // And onto the ready screen, for its Esc-to-cancel: the same stream the
+    // pill renders, never a second source.
     isCapturing = phase.isCapturing
 
     cues.transition(for: phase)
@@ -382,11 +397,4 @@ final class AppCoordinator {
     // still finishing from the end of a request it is waiting on.
     speechRouter?.sessionPhaseChanged(phase)
   }
-}
-
-/// Stand-ins for read-aloud's speaker and selection read, so a host can run the
-/// read-aloud path with no network, audio or Accessibility (Blurt's UI tests).
-struct ReadAloudSeams {
-  let speaker: any ReadAloudSpeaker
-  let readSelection: @Sendable () async -> String?
 }

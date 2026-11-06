@@ -14,11 +14,12 @@ struct SelectionSpeechRouterLifecycleTests {
   /// A router over `speaker`, the selection read returning `selection()` each
   /// time, recording every callback it makes.
   private func router(
-    _ speaker: GatedSpeaker, selection: @escaping @Sendable () -> String? = { "Hello there." }
+    _ speaker: GatedSpeaker, selection: @escaping @Sendable () -> String? = { "Hello there." },
+    clock: any Clock<Duration> = ContinuousClock()
   ) -> Rig {
     let fixture = makeSession()
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults)
+      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults, clock: clock)
     let events = Events()
     router.speechStarted = { events.started += 1 }
     router.speechEnded = { events.ended += 1 }
@@ -58,7 +59,7 @@ struct SelectionSpeechRouterLifecycleTests {
     let (router, events) = (rig.router, rig.events)
     try await readThenStop(router, speaker)
     #expect(events.ended == 1)
-    #expect(!router.isSpeaking)
+    #expect(!router.ownsPill)
     try await waitUntil { speaker.cancellations == 1 }
     try await Task.sleep(for: .milliseconds(50))
     #expect(events.ended == 1, "the cancelled task's end mustn't report again")
@@ -76,7 +77,7 @@ struct SelectionSpeechRouterLifecycleTests {
     try await Task.sleep(for: .milliseconds(50))
     #expect(events.started == 2)
     #expect(events.ended == 1)
-    #expect(router.isSpeaking)
+    #expect(router.ownsPill)
   }
 
   @Test("a level from a read that's over never reaches the pill")
@@ -117,7 +118,7 @@ struct SelectionSpeechRouterLifecycleTests {
     tapRead(router)
     try await waitUntil { speaker.calls.count == 1 }
     speaker.finishAll()
-    try await waitUntil { !router.isSpeaking }
+    try await waitUntil { !router.ownsPill }
     defaults.set(2.0, forKey: ReadAloudStyleStore.speedDefaultsKey)
     defaults.set("aai-buford", forKey: ReadAloudStyleStore.voiceDefaultsKey)
     tapRead(router)
@@ -138,10 +139,7 @@ struct SelectionSpeechRouterLifecycleTests {
     }
     defer { phases.cancel() }
     router.press(key: .leftControl)
-    let deadline = ContinuousClock.now + .seconds(5)
-    while await fixture.mic.startCalls == 0, ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(5))
-    }
+    try await waitForMicStart(fixture)
     router.submit(.release)
     try await waitUntil { speaker.calls.count == 1 }
     #expect(speaker.calls[0].kind == "answer: Hello world.")
@@ -193,14 +191,20 @@ struct SelectionSpeechRouterLifecycleTests {
     let speaker = GatedSpeaker()
     let reads = Counter()
     // The first press finds nothing selected; the second finds text.
-    let rig = router(speaker, selection: { reads.next() == 1 ? nil : "Hello there." })
+    let clock = TestClock()
+    let rig = router(speaker, selection: { reads.next() == 1 ? nil : "Hello there." }, clock: clock)
     let (router, events) = (rig.router, rig.events)
+    let hold = SelectionSpeechRouting.holdDelay
     router.press(key: .leftOption)
-    try await Task.sleep(for: .milliseconds(200))
-    let second = ContinuousClock.now
+    await clock.waitUntilSleeping(for: hold)
+    clock.advance(by: hold - .milliseconds(150))
     router.press(key: .leftOption)
+    await clock.waitUntilSleeping(for: hold)
+    // The first press's timer, 150 ms from firing, is gone: only the second's
+    // full delay is left.
+    #expect(clock.sleepingFor == [hold], "the first press's timer outlived the second press")
+    clock.advance(by: hold)
     try await waitUntil { events.started == 1 }
-    #expect(ContinuousClock.now - second >= .milliseconds(300), "the first press's timer fired for the second")
   }
 }
 

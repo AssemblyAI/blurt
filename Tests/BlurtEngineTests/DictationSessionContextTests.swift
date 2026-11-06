@@ -42,7 +42,9 @@ struct DictationSessionContextTests {
     // The injector gets the two fields its separator decision runs on.
     #expect(await fixture.injector.insertedPrior == ["Hi Sam,"])
     #expect(await fixture.injector.insertedWindowTitles == ["Re: Q3 pricing"])
-    #expect(fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected)])
+    // Logged once the paste ended, with how it did.
+    #expect(
+      fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected, outcome: .pasted)])
   }
 
   @Test("a press's trigger key style rides its request and names its Recent row")

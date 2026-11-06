@@ -19,16 +19,13 @@ final class KeysLiveUpdateUITests: BlurtUITestCase {
       app.windows[UITestIdentifiers.mainWindowTitle].waitForExistence(timeout: 10), "Ready window not presented")
     harness.buttons[UITestIdentifiers.setKeyButton].click()
 
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     XCTAssertTrue(
       row("\(KeyActionName.ask): Left Control.").waitForExistence(timeout: 5),
       "The ready screen should gain a row for the key that asks")
 
-    pick("right ⌥", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetDictate].click()
-    pick("right ⌘", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetReadAloud].click()
+    bind("right ⌥", with: UITestIdentifiers.harnessSetDictate, in: harness)
+    bind("right ⌘", with: UITestIdentifiers.harnessSetReadAloud, in: harness)
     XCTAssertTrue(
       row("Dictate: Right Option.").waitForExistence(timeout: 5),
       "Dictation moved to right ⌥, so the dictation row should name it")
@@ -37,8 +34,8 @@ final class KeysLiveUpdateUITests: BlurtUITestCase {
     let statusItem = app.menuBars.statusItems.firstMatch
     XCTAssertTrue(statusItem.waitForExistence(timeout: 15))
     statusItem.click()
-    let hint = app.menuItems.matching(NSPredicate(format: "title CONTAINS %@", "right ⌥ to dictate")).firstMatch
-    XCTAssertTrue(hint.waitForExistence(timeout: 5), "The menu bar's reminder should name right ⌥")
+    let hint = app.menuItems.matching(NSPredicate(format: "title CONTAINS %@", "Right Option to dictate")).firstMatch
+    XCTAssertTrue(hint.waitForExistence(timeout: 5), "The menu bar's reminder should name Right Option")
     app.typeKey(.escape, modifierFlags: [])
   }
 }

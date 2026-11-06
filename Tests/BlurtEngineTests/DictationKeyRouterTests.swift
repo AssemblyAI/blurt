@@ -322,4 +322,24 @@ struct DictationKeyRouterTests {
     let discarded = router.recoverFromDroppedEvents(heldFlags: TriggerKey.rightCommand.deviceModifierMask)
     #expect(discarded)
   }
+
+  @Test("a flagsChanged for a key that is no trigger never reads as down, whatever the flags")
+  func nonTriggerFlagsReadUp() {
+    let keyA = 0
+    #expect(TriggerKey(rawValue: keyA) == nil)
+    #expect(
+      DictationKeyRouter.Event.fromFlags(keyCode: keyA, rawFlags: .max)
+        == .flagsChanged(keyCode: keyA, triggerFlagIsOn: false))
+  }
+
+  @Test("recovery can't read a held bit for a bound keycode that is no trigger key, so it resets")
+  func recoveryResetsUnreadableKey() {
+    let keyA = 0
+    var router = DictationKeyRouter(triggerKeyCodes: [keyA])
+    #expect(router.handle(downEvent(keyA), at: .zero) == .start)
+    // Every bit set, yet none of them is this key's: the key-up may still have been dropped.
+    let discarded = router.recoverFromDroppedEvents(heldFlags: .max)
+    #expect(discarded)
+    #expect(router.activeKeyCode == nil)
+  }
 }

@@ -544,14 +544,15 @@ fi
 
 # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
 # prose-wrapping rules are off there since prettier owns Markdown formatting).
-# CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
-# lint the canonical doc once and skip the alias file. docs/ (plans + marketing
-# drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
-# filtered here as well since the file list is passed to markdownlint as args).
+# What it skips — CLAUDE.md (a shim pointing at AGENTS.md), docs/ (plans and
+# drafts), local scratch — is .markdownlint-cli2.jsonc's `ignores`, which
+# markdownlint-cli2 applies to the files passed here too. markdownlint-cli2,
+# the engine the VS Code extension bundles, so the editor, the pre-commit hook
+# (.githooks/pre-commit) and this gate apply one rule set and one scope.
 check_markdownlint() {
-  git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
+  git ls-files '*.md' | xargs markdownlint-cli2
 }
-if tool_ready markdownlint 'brew install markdownlint-cli'; then
+if tool_ready markdownlint-cli2 'brew install markdownlint-cli2'; then
   run_check "markdownlint" check_markdownlint
 fi
 
@@ -565,7 +566,7 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
   # resolve instead of raising SC1091. (shfmt below deliberately still covers only
   # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
-  run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh
+  run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit
 fi
 
 if tool_ready shfmt 'brew install shfmt'; then
@@ -611,6 +612,10 @@ if tool_ready pytest 'brew install pytest'; then
   # DSPy lives in program.py, which these tests assert never gets imported. That
   # property is why this is cheap enough to gate on.
   run_check "pytest (evals/dictation-prompt)" pytest -q evals/dictation-prompt/test_eval.py
+  # The planner eval's log importer and corpus shape: stdlib only, no network.
+  # Its own invocation: two rootdirs' bare-name imports (`import corpus`,
+  # `import import_log`) can't share one pytest run's sys.path cleanly.
+  run_check "pytest (evals/command-planner)" pytest -q evals/command-planner/test_import.py
 fi
 
 cd "$REPO_ROOT"
@@ -706,13 +711,33 @@ else
   #                        CaptureSessionRecorder. The mix, the 16 kHz conversion
   #                        and the file and PCM output live in SystemAudioMix.swift,
   #                        which IS covered.
+  #  - Command/SystemVoiceCommandPerformer*.swift : the Control Your Mac
+  #                        key's system shell — launching and raising other apps,
+  #                        Accessibility reads and presses against a live target
+  #                        process, and synthesized clicks. It needs Accessibility
+  #                        trust and a real app to act on, and run under `swift
+  #                        test` it would click and type into the machine. Same
+  #                        justification as AudioRoute. A pattern, not a list: a
+  #                        new shell extension needs no edit here, and anything
+  #                        named otherwise is counted. The policy the shell serves
+  #                        — the step parse, name matching, the snapshot walk and
+  #                        its role and label rules, visibility, the click point,
+  #                        window layout, the destructive guard, the key chords,
+  #                        and when a press falls back to a click or a focus
+  #                        selects — lives in VoiceCommandStep, CommandMatching,
+  #                        ScreenContext, ScreenRead, WindowLayout,
+  #                        VoiceCommandKeys and ElementActions, which ARE
+  #                        covered — ScreenRead against real apps' recorded
+  #                        trees (Tests/ScreenTrees). The shell itself
+  #                        runs against a fixture app in LivePerformerTests
+  #                        (BLURT_LIVE_AX_TESTS=1).
   #  - MeetingMicProbe.swift : the microphone-user probe — Core Audio process
   #                        objects, which only a real machine has. Same
   #                        justification as AudioInputDevices. The policy that
   #                        turns its answer into start and stop (MeetingAutoRecord)
   #                        IS covered.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift|Command/SystemVoiceCommandPerformer[^/]*\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

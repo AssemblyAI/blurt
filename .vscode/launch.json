@@ -1,4 +1,25 @@
 {
   "version": "0.2.0",
-  "configurations": []
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:blurt}",
+      "name": "Debug CommandFixture",
+      "target": "CommandFixture",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug CommandFixture"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:blurt}",
+      "name": "Release CommandFixture",
+      "target": "CommandFixture",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release CommandFixture"
+    }
+  ]
 }

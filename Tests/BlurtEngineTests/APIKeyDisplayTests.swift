@@ -121,7 +121,7 @@ struct APIKeyDisplayTests {
 
   @Test("the sheet's rationale explains the first connect, then the rotation")
   func rationale() {
-    #expect(APIKeyDisplay.resolve(key: nil).rationale.contains("needs an AssemblyAI API key"))
+    #expect(APIKeyDisplay.resolve(key: nil).rationale.contains("Paste an API key"))
     #expect(APIKeyDisplay.resolve(key: realKey).rationale.contains("replace"))
   }
 }

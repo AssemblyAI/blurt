@@ -20,13 +20,13 @@ extension View {
     // for the moment the dialog animates out after the entry is cleared.
     confirmationDialog(
       "Delete this item?",
-      isPresented: Binding(get: { entry.wrappedValue != nil }, set: { if !$0 { entry.wrappedValue = nil } }),
+      isPresented: entry.isPresent(),
       presenting: entry.wrappedValue
     ) { entry in
       Button("Delete", role: .destructive) {
         willDelete(entry)
         if closesSheet {
-          Task { @MainActor in
+          Task {
             try? await Task.sleep(for: .milliseconds(350))
             model.delete(entry)
           }
@@ -37,10 +37,9 @@ extension View {
       // Explicit, so Return lands on Cancel and never on the destructive button.
       Button("Cancel", role: .cancel) {}
     } message: { entry in
-      Text(
-        "\u{201C}\(entry.title)\u{201D} "
-          + (entry.ownsAudio
-            ? "and its audio will be deleted. This can't be undone." : "will be deleted. This can't be undone."))
+      // No title: the item is the one just chosen, and a long title made the
+      // dialog about the words rather than the choice.
+      Text(entry.ownsAudio ? "Its audio will be deleted too. This can't be undone." : "This can't be undone.")
     }
   }
 }

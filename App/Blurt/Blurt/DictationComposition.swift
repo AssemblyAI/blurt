@@ -40,5 +40,4 @@ struct DictationComponents {
 // one set of conformances.
 //
 // The UI-test sentinel API keys live in the shared `UITestIdentifiers`
-// (Shared/UITestIdentifiers.swift), alongside the other test-facing constants —
-// no longer an unconditionally-compiled enum here.
+// (Shared/UITestIdentifiers.swift), alongside the other test-facing constants.

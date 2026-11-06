@@ -36,6 +36,12 @@
       ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.readyLaunchArgument)
     }
 
+    /// Whether the runner asked for a sample file to be transcribed at launch
+    /// (`transcribeSampleLaunchArgument`).
+    static var isTranscribeSampleRequested: Bool {
+      ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.transcribeSampleLaunchArgument)
+    }
+
     /// A throwaway history for this run, seeded when the runner asks
     /// (`seedHistoryLaunchArgument`).
     static func historyStore() -> TranscriptStore {
@@ -50,8 +56,7 @@
 
   // Accessibility identifiers, the launch argument, and the sentinel API keys
   // live in the shared `UITestIdentifiers` (Shared/UITestIdentifiers.swift),
-  // compiled into both this target and the XCUITest bundle so there's one source
-  // of truth instead of the values duplicated across three places.
+  // compiled into both this target and the XCUITest bundle.
 
   /// Shared, observable state the harness window renders and the stub injector /
   /// transcriber read. Main-actor (the app target's default isolation) because
@@ -90,6 +95,23 @@
     private(set) var spokenStyle = "—"
 
     func recordSpokenStyle(_ style: ReadAloudStyle) { spokenStyle = "\(style.voiceID) @ \(style.rate)" }
+
+    /// The last command the stub planner was asked to plan, and each step the
+    /// stub performer carried out, in order.
+    var plannedCommand: String?
+    var performedSteps: [String] = []
+    func recordPlanned(_ command: String) { plannedCommand = command }
+    func recordPerformed(_ step: String) { performedSteps.append(step) }
+
+    /// The pill's last brief notice ("Your command was carried out."), kept
+    /// after the pill clears it: a notice dwells under a second, shorter than
+    /// XCUITest's predicate polling, so a test reads it here instead.
+    var lastNotice: String?
+
+    /// Keeps `state`'s words when it's a brief notice, under the UI-test harness.
+    func recordNotice(of state: OverlayUIState) {
+      if UITestMode.isActive, state.noticeDwellSeconds != nil { lastNotice = state.accessibilityLabel }
+    }
 
     /// The trigger key the harness's press/release buttons drive.
     var selectedKey = TriggerKey.rightCommand
@@ -213,7 +235,7 @@
   /// everything the XCUITest suite needs to observe the record → transcribe →
   /// paste flow deterministically.
   struct UITestHarnessView: View {
-    var appDelegate: AppDelegate
+    let appDelegate: AppDelegate
     @Environment(\.openWindow) private var openWindow
 
     private var coordinator: AppCoordinator? { appDelegate.coordinator }
@@ -264,7 +286,11 @@
             .accessibilityIdentifier(UITestIdentifiers.harnessSetAsk)
           Button("Off") { coordinator?.setKeyChoiceForTesting(.off, for: state.selectedKey) }
             .accessibilityIdentifier(UITestIdentifiers.harnessSetOff)
-          Button("Tap Mode") { coordinator?.setKeyActivationForTesting(.tap, for: state.selectedKey) }
+          Button("Command") { coordinator?.setKeyChoiceForTesting(.command, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetCommand)
+          Button("Rewrite") { coordinator?.setKeyChoiceForTesting(.rewrite, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetRewrite)
+          Button("Tap Mode") { coordinator?.setActivationForTesting(.tap) }
             .accessibilityIdentifier(UITestIdentifiers.harnessSetTapMode)
         }
         HStack(spacing: 8) {
@@ -307,6 +333,21 @@
         LabeledContent("Style") {
           Text(state.sentStyle)
             .accessibilityIdentifier(UITestIdentifiers.sentStyleLabel)
+        }
+
+        // Control Your Mac: what the stub planner was asked, and what the
+        // stub performer did, steps joined in order ("—" for none yet).
+        LabeledContent("Planned") {
+          Text(state.plannedCommand ?? "—")
+            .accessibilityIdentifier(UITestIdentifiers.plannedLabel)
+        }
+        LabeledContent("Performed") {
+          Text(state.performedSteps.isEmpty ? "—" : state.performedSteps.joined(separator: "; "))
+            .accessibilityIdentifier(UITestIdentifiers.performedLabel)
+        }
+        LabeledContent("Notice") {
+          Text(state.lastNotice ?? "—")
+            .accessibilityIdentifier(UITestIdentifiers.noticeLabel)
         }
 
         // Mirrors the newest dictation in the saved history (the ready

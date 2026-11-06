@@ -35,11 +35,8 @@ private struct DecodedEntry: Decodable {
 /// Each test that genuinely needs a file gets a fresh empty one in a unique temp
 /// directory so the host's real `~/Library/Logs/Blurt/dictations.jsonl` is never
 /// touched. File-scoped so the gate suite below shares it.
-private func makeTempLogURL() -> URL {
-  let dir = FileManager.default.temporaryDirectory
-    .appendingPathComponent("BlurtDictationLogTests-\(UUID().uuidString)", isDirectory: true)
-  try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-  return dir.appendingPathComponent("dictations.jsonl")
+func makeTempLogURL() -> URL {
+  makeTempLogDirectory().appendingPathComponent("dictations.jsonl")
 }
 
 private func readLog(_ url: URL) -> String {
@@ -70,6 +67,24 @@ struct DictationLogEntryTests {
       transcript: "Polished.", context: nil, now: Date(timeIntervalSince1970: 1_700_000_000))
     #expect(entry.transcript == "Polished.")
     #expect(entry.ts.hasPrefix("2023-11-14"))
+  }
+
+  @Test("an entry names how the dictation ended, by the phase it ended in")
+  func outcomeNames() {
+    let names = [PipelinePhase.pasted, .noTarget, .handedBack("x"), .cancelled, .failed(.targetAppLost)]
+      .map(DictationLog.outcomeName)
+    #expect(names == ["pasted", "copied", "handed back", "cancelled", "failed: targetAppLost"])
+    #expect(
+      DictationLog.makeEntry(transcript: "p", context: nil, outcome: .noTarget, now: Date()).outcome == "copied")
+  }
+
+  @Test("a transcript dictated into a password field is withheld: the entry says so, and holds no word of it")
+  func withholdsSecureTranscript() {
+    let secure = TranscriptionContext(appName: "1Password", priorText: nil, targetIsSecure: true)
+    let entry = DictationLog.makeEntry(transcript: "hunter2 correct horse", context: secure, now: Date())
+    #expect(entry.transcript == DictationLog.withheldTranscript)
+    #expect(entry.app == "1Password")
+    #expect(DictationLog.makeEntry(transcript: "hunter2", context: context, now: Date()).transcript == "hunter2")
   }
 
   @Test("threads every focus-context field, including the selected text")
@@ -330,71 +345,5 @@ struct DictationLogDisplayPathTests {
     #expect(
       (DictationLog.defaultDisplayPath as NSString).expandingTildeInPath
         == DictationLog.defaultURL.path(percentEncoded: false))
-  }
-}
-
-/// The delete half of the log: `InstallReset` (and `scripts/reset-install.sh`)
-/// both exist to return the machine to a preinstall state, and the transcript
-/// corpus is the most sensitive thing an install leaves behind — so "removed it"
-/// has to mean removed, and "there was nothing to remove" has to read as success
-/// rather than as a failed reset.
-@Suite("DictationLog.removeStoredLogs")
-struct DictationLogRemovalTests {
-  /// Both files in one directory, as the real pair are — so the empty-directory
-  /// sweep is exercised the way it runs in production.
-  private func makeTempPair() -> (dictations: URL, errors: URL) {
-    let dictations = makeTempLogURL()
-    return (dictations, dictations.deletingLastPathComponent().appendingPathComponent("errors.jsonl"))
-  }
-
-  @Test("removes both halves of the log")
-  func removesBothFiles() throws {
-    let (dictations, errors) = makeTempPair()
-    DictationLog.write(transcript: "hello", to: dictations, now: Date())
-    DictationLog.writeError(.apiKeyMissing, to: errors, now: Date())
-    try #require(FileManager.default.fileExists(atPath: dictations.path))
-    try #require(FileManager.default.fileExists(atPath: errors.path))
-
-    #expect(DictationLog.removeStoredLogs(dictations: dictations, errors: errors))
-
-    #expect(!FileManager.default.fileExists(atPath: dictations.path))
-    #expect(!FileManager.default.fileExists(atPath: errors.path))
-  }
-
-  @Test("an absent log is already in the state being asked for")
-  func absentFilesSucceed() {
-    let (dictations, errors) = makeTempPair()
-    // Nothing written: the normal case for anyone who never switched developer
-    // mode on. Reporting that as a failure would put a "wasn't fully reset"
-    // alert in front of every such user.
-    #expect(DictationLog.removeStoredLogs(dictations: dictations, errors: errors))
-  }
-
-  @Test("removes the log directory once it is empty")
-  func removesEmptyDirectory() throws {
-    let (dictations, errors) = makeTempPair()
-    DictationLog.write(transcript: "hello", to: dictations, now: Date())
-    let directory = dictations.deletingLastPathComponent()
-    try #require(FileManager.default.fileExists(atPath: directory.path))
-
-    DictationLog.removeStoredLogs(dictations: dictations, errors: errors)
-
-    #expect(!FileManager.default.fileExists(atPath: directory.path))
-  }
-
-  @Test("leaves a directory holding anything else alone")
-  func keepsNonEmptyDirectory() throws {
-    let (dictations, errors) = makeTempPair()
-    DictationLog.write(transcript: "hello", to: dictations, now: Date())
-    let directory = dictations.deletingLastPathComponent()
-    // `~/Library/Logs/Blurt` is the app's directory, not this function's: a file
-    // Blurt didn't write is not a reset's to delete.
-    let bystander = directory.appendingPathComponent("crash.log")
-    try Data("boom".utf8).write(to: bystander)
-
-    DictationLog.removeStoredLogs(dictations: dictations, errors: errors)
-
-    #expect(FileManager.default.fileExists(atPath: bystander.path))
-    #expect(!FileManager.default.fileExists(atPath: dictations.path))
   }
 }

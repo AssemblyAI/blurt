@@ -80,6 +80,13 @@ final class TestClock: Clock, Sendable {
     while !isParked() { await Task.yield() }
   }
 
+  /// How far from now each parked sleeper's deadline is, soonest first — so a
+  /// test can assert a timer was *cancelled* (its sleeper is gone) rather than
+  /// waiting to see that it doesn't fire.
+  var sleepingFor: [Duration] {
+    state.withLock { s in s.sleepers.map { s.now.duration(to: $0.deadline) }.sorted() }
+  }
+
   /// Advance virtual time, waking every sleeper whose deadline has now passed.
   func advance(by duration: Duration) {
     let toWake = state.withLock { s -> [CheckedContinuation<Void, any Error>] in

@@ -241,6 +241,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       let producer = Task {
         continuation.yield(DictationMultipart.configHead(config: config, boundary: boundary))
         continuation.yield(DictationMultipart.audioPartHeader(boundary: boundary))
+        // `frames` is `relay`'s output, already whole 16-bit samples (`FrameAligner`).
         for await frame in frames {
           progress.recordFrame(bytes: frame.count)
           continuation.yield(frame)

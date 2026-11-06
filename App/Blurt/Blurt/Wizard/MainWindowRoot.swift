@@ -37,15 +37,12 @@ enum MainWindow {
 struct MainWindowRoot: View {
   var appDelegate: AppDelegate
   @Environment(\.openWindow) private var openWindow
-  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
       Group {
         if controller.isReady {
-          ReadyView(
-            coordinator: coordinator,
-            openSettings: { openSettings() })
+          ReadyView(coordinator: coordinator)
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }

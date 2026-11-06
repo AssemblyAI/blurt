@@ -29,9 +29,16 @@ let package = Package(
       // than let it land in the target's unhandled-files list.
       exclude: ["README.md"]
     ),
+    // The window the live performer suite acts on (`LivePerformerTests`, gated
+    // on BLURT_LIVE_AX_TESTS=1): a test dependency so `swift test` builds it,
+    // never a product, and never linked into the app.
+    .executableTarget(
+      name: "CommandFixture",
+      path: "Tests/CommandFixture"
+    ),
     .testTarget(
       name: "BlurtEngineTests",
-      dependencies: ["BlurtEngine", "AssemblyAI"]
+      dependencies: ["BlurtEngine", "AssemblyAI", "CommandFixture"]
     ),
   ]
 )

@@ -38,7 +38,7 @@ final class TranscriptsModel {
   /// The facet on show. Always `.full` when a transcript opens.
   private(set) var selection = TranscriptFacet.full
   /// Every facet in hand for the open transcript; `.full` is the transcript.
-  var contents: [TranscriptFacet: Content] = [:]
+  private(set) var contents: [TranscriptFacet: Content] = [:]
   /// The open transcript's speaker turns, parsed once (`showTranscript`);
   /// empty for anything without speakers told apart.
   private(set) var fullTurns: [SpeakerTurn] = []
@@ -52,19 +52,21 @@ final class TranscriptsModel {
   /// partial being spoken.
   var live = LiveTranscript()
 
-  @ObservationIgnored let transcriber: FileTranscriber
-  @ObservationIgnored private let llm: TranscriptLLM
-  @ObservationIgnored private let store: TranscriptStore
+  let transcriber: FileTranscriber
+  private let llm: TranscriptLLM
+  private let store: TranscriptStore
   /// The key the model's own checks read — the same one the transcriber and
   /// the LLM are given, so a test's in-memory key is the only one consulted.
-  @ObservationIgnored let apiKey: @Sendable () -> String?
-  @ObservationIgnored let recorder = SystemAudioRecorder()
+  let apiKey: @Sendable () -> String?
+  let recorder = SystemAudioRecorder()
   /// Plays saved audio from the Recent list and the sheet.
   let player = ClipPlayer()
   /// Reads a task result aloud (`TranscriptsModel+Playback.swift`).
-  @ObservationIgnored let reader = TextReader()
+  let reader = TextReader()
   /// The task result being read aloud now, if any.
   var readingFacet: TranscriptFacet?
+  /// Whether that reading's first word has played; before, it's preparing.
+  var readingStarted = false
   @ObservationIgnored var readingTask: Task<Void, Never>?
   /// Meetings' switch, policy, probe loop and last answer (`+Meetings.swift`).
   @ObservationIgnored var autoRecordMeetings = false

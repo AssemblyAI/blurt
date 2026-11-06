@@ -123,6 +123,12 @@ struct OverlayView: View {
       // surface progressing rather than three unrelated states.
       waitingContent("Transcribing")
         .transition(.opacity)
+    case .rewriting:
+      waitingContent("Rewriting")
+        .transition(.opacity)
+    case .commanding:
+      waitingContent("Working")
+        .transition(.opacity)
     case .error(let message, nil):
       // "Try again" tells the user what to do; the full failure reason is too
       // long for the pill, so expose it on hover. The VoiceOver announcement
@@ -165,6 +171,16 @@ struct OverlayView: View {
       StatusLineText("Copied")
         .transition(.opacity)
         .help(state.accessibilityLabel)
+    case .done:
+      // A command's "Pasted": the same quiet status line.
+      StatusLineText("Done")
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
+    case .noted:
+      // A complaint about the last command, logged against it.
+      StatusLineText("Noted")
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
     }
   }
 
@@ -181,7 +197,7 @@ struct OverlayView: View {
   /// so "Connecting" and "Transcribing" can't drift into two different layouts
   /// — the whole point of the orb is that it doesn't move between them.
   private func waitingContent(_ text: String) -> some View {
-    HStack(spacing: 8) {
+    HStack(spacing: Self.contentSpacing) {
       BrandOrb(animated: !reduceMotion)
       StatusLineText(text)
       Spacer(minLength: 0)

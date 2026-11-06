@@ -36,8 +36,7 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
   /// the hold delay; let go, it stops.
   func testHeldReadOnAnotherKey() {
     let harness = readyHarness()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetReadAloud].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetReadAloud, in: harness)
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     waitForLabel(reading(in: harness), equals: "yes", "Holding the key should start the read")
     waitForLabel(spoken(in: harness), equals: UITestIdentifiers.cannedSelection)
@@ -51,8 +50,7 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
   /// then reads the answer.
   func testTappedAsk() {
     let harness = readyHarness()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     harness.buttons[UITestIdentifiers.harnessSetTapMode].click()
     setTranscript("What does this mean?", in: harness)
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
@@ -67,38 +65,29 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
   /// An ask with nothing said answers nothing — and leaves the key working.
   func testAskWithNothingSaidLeavesTheKeyWorking() {
     let harness = readyHarness()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     setTranscript("", in: harness)
-    holdAsk(in: harness)
+    hold(in: harness)
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusIdle, timeout: 15)
     XCTAssertEqual(text(of: spoken(in: harness)), "—", "Nothing said, so nothing answered")
 
     setTranscript("Try again.", in: harness)
-    holdAsk(in: harness)
+    hold(in: harness)
     waitForLabel(spoken(in: harness), equals: "Answer to: Try again.", timeout: 15, "The key should still ask")
   }
 
   /// Pressing the dictation key while an answer plays stops it and dictates.
   func testPressStopsAnAnswer() {
     let harness = readyHarness()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     setTranscript("Summarize.", in: harness)
-    holdAsk(in: harness)
+    hold(in: harness)
     waitForLabel(reading(in: harness), equals: "yes", timeout: 15, "The answer should play")
 
     pick("right ⌘", in: harness)
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     waitForLabel(reading(in: harness), equals: "no", "The press should stop the answer")
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "…and dictate")
-    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
-  }
-
-  /// Holds the picked ask key through a request: press, recording, release.
-  private func holdAsk(in harness: XCUIElement) {
-    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
-    waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "A held ask should record")
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
   }
 }

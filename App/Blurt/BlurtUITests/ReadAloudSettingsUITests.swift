@@ -1,8 +1,8 @@
 import XCTest
 
 /// The Read Aloud tab and read-aloud's own sound: each setting persists, the
-/// controls follow whether any key reads aloud, the privacy notes follow what
-/// the keys do, and the voice and speed picked are the ones a read uses.
+/// controls follow whether any key reads aloud, and the voice and speed picked
+/// are the ones a read uses.
 final class ReadAloudSettingsUITests: BlurtUITestCase {
   private func readAloudTab() -> XCUIElement {
     selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.readAloudSettingsTab)
@@ -17,12 +17,13 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
 
   // MARK: - U1: the read-aloud sound
 
-  /// Read-aloud's sound starts on the Juno's Brass and is its own setting:
-  /// changing it leaves dictation's alone, and it sticks.
+  /// The read-aloud key's sound starts on the Juno's Brass and is its own
+  /// setting: changing it leaves the dictating key's alone, and it sticks.
   func testReadAloudSoundIsItsOwnSetting() {
-    let general = openSettingsWindow()
-    let read = general.popUpButtons[UITestIdentifiers.readAloudSoundPicker]
-    let dictation = general.popUpButtons[UITestIdentifiers.soundPicker]
+    let sounds = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.soundsSettingsTab)
+    // Left ⌥ (58) reads aloud and right ⌘ (54) dictates on an untouched install.
+    let read = sounds.popUpButtons[UITestIdentifiers.keySoundPicker(58)]
+    let dictation = sounds.popUpButtons[UITestIdentifiers.keySoundPicker(54)]
     XCTAssertTrue(read.waitForExistence(timeout: 5))
     XCTAssertEqual(read.value as? String, "Brass")
     XCTAssertEqual(dictation.value as? String, "Orchestra")
@@ -35,9 +36,11 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
     XCTAssertEqual(read.value as? String, "Clav 1", "…nor dictation's change read-aloud's")
 
     let reopened = selectSettingsTab(
-      selectSettingsTab(general, named: UITestIdentifiers.readAloudSettingsTab),
-      named: UITestIdentifiers.generalSettingsTab)
-    XCTAssertEqual(reopened.popUpButtons[UITestIdentifiers.readAloudSoundPicker].value as? String, "Clav 1")
+      selectSettingsTab(sounds, named: UITestIdentifiers.readAloudSettingsTab),
+      named: UITestIdentifiers.soundsSettingsTab)
+    XCTAssertEqual(
+      reopened.popUpButtons[UITestIdentifiers.keySoundPicker(58)].value as? String,
+      "Clav 1")
   }
 
   // MARK: - U2: the Read Aloud tab
@@ -56,30 +59,22 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
     XCTAssertEqual(reopened.popUpButtons[UITestIdentifiers.readAloudSpeedPicker].value as? String, "1.5×")
   }
 
-  /// With no key reading aloud or asking, the controls are disabled and the tab
-  /// says how to turn read-aloud on; a key that asks adds the gateway note.
-  func testControlsAndNotesFollowTheKeys() {
+  /// With no key reading aloud or asking, the controls are disabled; a key
+  /// that asks enables them again.
+  func testControlsFollowTheKeys() {
     let harness = readyHarness()
-    pick("left ⌥", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetOff].click()
+    bind("left ⌥", with: UITestIdentifiers.harnessSetOff, in: harness)
 
     let tab = readAloudTab()
     let voice = tab.popUpButtons[UITestIdentifiers.readAloudVoicePicker]
     XCTAssertTrue(voice.waitForExistence(timeout: 5))
     XCTAssertFalse(voice.isEnabled, "With no read or ask key, the voice can't be picked")
-    let hint = "to enable playback"
-    let assign = NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", hint, hint)
-    XCTAssertTrue(tab.staticTexts.matching(assign).firstMatch.exists, "The tab should say how to turn it on")
 
     harness.click()
-    pick("left ⌃", in: harness)
-    harness.buttons[UITestIdentifiers.harnessSetAsk].click()
-    let tabAgain = readAloudTab()
-    let gateway = NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "spoken request", "spoken request")
-    XCTAssertTrue(
-      tabAgain.staticTexts.matching(gateway).firstMatch.waitForExistence(timeout: 5),
-      "A key that asks should add the LLM Gateway note")
-    XCTAssertTrue(tabAgain.popUpButtons[UITestIdentifiers.readAloudVoicePicker].isEnabled)
+    bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
+    let voiceAgain = readAloudTab().popUpButtons[UITestIdentifiers.readAloudVoicePicker]
+    XCTAssertTrue(voiceAgain.waitForExistence(timeout: 5))
+    XCTAssertTrue(voiceAgain.isEnabled, "A key that asks should enable the voice")
   }
 
   /// The voice and speed picked are the ones the next read speaks with.

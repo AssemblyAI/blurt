@@ -1,27 +1,38 @@
 import AVFoundation
 import BlurtEngine
 
-/// Owns the cue chimes — dictation's start/stop pair and read-aloud's own, each
-/// a `CuePair` from its own setting: loading the selected pack, pre-rolling so
-/// the first chime never stalls the pill, previewing on a pack change, and
-/// firing on the recording edge or a read's start and end. Kept out of
-/// `AppCoordinator`'s body so chime behavior can change without churning the
-/// session↔UI wiring.
+/// Owns the cue chimes — a start/stop `CuePair` per trigger key, each from that
+/// key's voice (`TriggerKeySoundStore.soundPack(for:)`): loading the selected
+/// pack, pre-rolling so the first chime never stalls the pill, previewing on a
+/// pack change, and firing on the recording edge or a read's start and end, in
+/// the voice of the key that started it. Kept out of `AppCoordinator`'s body so
+/// chime behavior can change without churning the session↔UI wiring.
 final class CueSoundPlayer {
-  private let dictation = CuePair(store: .dictation)
-  private let readAloud = CuePair(store: .readAloud)
+  private let pairs: [TriggerKey: CuePair] = Dictionary(
+    uniqueKeysWithValues: TriggerKey.allCases.map { key in
+      (key, CuePair { TriggerKeySoundStore().soundPack(for: key) })
+    })
+  /// The key whose press came last (`keyPressed(_:)`): the voice the next
+  /// recording or read starts in. The bound key until a press says otherwise.
+  private var pressedKey = TriggerKeyStore().triggerKey
+  /// The key a recording's start cue played for, so its stop cue matches even
+  /// if another key is pressed before it lands.
+  private var recordingKey: TriggerKey?
+  /// The same for a read, between `speechStarted()` and `speechEnded()`.
+  private var speakingKey: TriggerKey?
   /// Edge-detector deciding when the start/stop chimes fire. The mapping from a
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
   private var cueGate = RecordingCueGate()
+  /// When each pair reloads after an output-route change (the engine's
+  /// `CueReprimeSchedule`; see `transition(for:)` for why dictation's waits).
+  private var reprime = CueReprimeSchedule()
   /// Fires when the output route changes under the pre-rolled players. Blurt's
   /// own capture is the usual cause: opening the mic flips AirPods out of their
   /// output-only profile, which drops the output format the players were primed
   /// against — so the very next chime is the one that stalls, and that's the
   /// chime at the start of a dictation.
-  /// When each pair reloads after an output-route change (the engine's
-  /// `CueReprimeSchedule`; see `transition(for:)` for why dictation's waits).
-  private var reprime = CueReprimeSchedule()
+  ///
   /// Kept alive for the app's lifetime; assignment is the use. Nil until
   /// `prime()` starts it, which is also what makes starting idempotent.
   private var routeObserver: Task<Void, Never>?
@@ -40,11 +51,22 @@ final class CueSoundPlayer {
   /// dictation*, which is always well after this launch-time call, so the AAC
   /// decode never sits on the main thread during startup.
   func prime() {
-    Task {
-      await dictation.load()
-      await readAloud.load()
-    }
+    refresh()
     startObservingRoute()
+  }
+
+  /// Loads any key whose voice changed under it — a new action moves a key
+  /// with no voice of its own to that action's. Cheap when nothing did: each
+  /// pair skips a load of the pack it already holds.
+  func refresh() {
+    Task {
+      for key in TriggerKey.allCases { await pairs[key]?.load() }
+    }
+  }
+
+  /// A trigger key's press started something; its voice is the next one heard.
+  func keyPressed(_ key: TriggerKey) {
+    pressedKey = key
   }
 
   /// The player is owned for the whole app session, so this never runs in
@@ -93,23 +115,23 @@ final class CueSoundPlayer {
     AudioRouteMonitor()
   }
 
-  /// Previews a newly selected dictation pack (`CuePair.preview`).
-  func packChanged() {
-    Task { await dictation.preview() }
+  /// Previews `key`'s newly selected pack (`CuePair.preview`).
+  func packChanged(for key: TriggerKey) {
+    Task { await pairs[key]?.preview() }
   }
 
-  /// Previews a newly selected read-aloud pack.
-  func readPackChanged() {
-    Task { await readAloud.preview() }
-  }
-
-  /// Fires the start/stop cue on the recording edge. Call once per rendered
-  /// phase; only the idle↔recording transitions make a sound (the edge logic is
-  /// the engine's `RecordingCueGate`).
+  /// Fires the start/stop cue on the recording edge, in the voice of the key
+  /// whose press started the recording. Call once per rendered phase; only the
+  /// idle↔recording transitions make a sound (the edge logic is the engine's
+  /// `RecordingCueGate`).
   func transition(for phase: PipelinePhase) {
     switch cueGate.cue(for: phase) {
-    case .start: dictation.playStart()
-    case .stop: dictation.playStop()
+    case .start:
+      recordingKey = pressedKey
+      pairs[pressedKey]?.playStart()
+    case .stop:
+      pairs[recordingKey ?? pressedKey]?.playStop()
+      recordingKey = nil
     case nil: break
     }
     // A pending route re-prime is acted on at exactly two points.
@@ -141,22 +163,41 @@ final class CueSoundPlayer {
     reload(reprime.phase(phase))
   }
 
-  /// Reloads the pairs `reloads` names, each against the current route.
+  /// Reloads the pairs `reloads` names, each against the current route. The
+  /// schedule's two halves are the keys that record (cued on capture edges)
+  /// and the keys that speak (cued around a read); an ask key does both.
   private func reload(_ reloads: CueReprimeSchedule.Reloads) {
-    if reloads.dictation { Task { await dictation.load(force: true) } }
-    if reloads.readAloud { Task { await readAloud.load(force: true) } }
+    let bindings = TriggerKeyBindings()
+    let keys = TriggerKey.allCases.filter { key in
+      let action = bindings.action(for: key)
+      let records = action != .readAloud
+      let speaks = action == .readAloud || action == .ask
+      return (reloads.dictation && records) || (reloads.readAloud && speaks)
+    }
+    guard !keys.isEmpty else { return }
+    Task {
+      for key in keys { await pairs[key]?.load(force: true) }
+    }
   }
 
-  /// Read-aloud's start and stop, from its own pack, so a read never sounds
-  /// like a recording starting.
-  func speechStarted() { readAloud.playStart() }
-  func speechEnded() { readAloud.playStop() }
+  /// A read's start and stop, in the voice of the key that asked for it.
+  func speechStarted() {
+    speakingKey = pressedKey
+    pairs[pressedKey]?.playStart()
+  }
+
+  func speechEnded() {
+    pairs[speakingKey ?? pressedKey]?.playStop()
+    speakingKey = nil
+  }
 }
 
-/// One setting's start/stop chimes: its store, the decoded players, and the
-/// load that keeps them current.
+/// One key's start/stop chimes: where its pack comes from, the decoded
+/// players, and the load that keeps them current.
 private final class CuePair {
-  private let store: SoundPackStore
+  /// Reads the key's current pack — re-read on every load, so a changed voice
+  /// or action is picked up without rebuilding the pair.
+  private let currentPack: () -> SoundPack
   private var start: AVAudioPlayer?
   private var stop: AVAudioPlayer?
   /// The pack the current players were decoded from, so a repeat load can skip
@@ -178,8 +219,8 @@ private final class CuePair {
   /// rather than blasting at the system output level.
   private nonisolated static let cueVolume: Float = 0.35
 
-  init(store: SoundPackStore) {
-    self.store = store
+  init(currentPack: @escaping () -> SoundPack) {
+    self.currentPack = currentPack
   }
 
   /// Decodes and installs the players for the current selection if they aren't
@@ -188,7 +229,7 @@ private final class CuePair {
   /// for a re-prime where the selection is unchanged and only the output route
   /// moved.
   func load(force: Bool = false) async {
-    let pack = store.soundPack
+    let pack = currentPack()
     guard force || pack != loaded else { return }
     generation += 1
     let ticket = generation

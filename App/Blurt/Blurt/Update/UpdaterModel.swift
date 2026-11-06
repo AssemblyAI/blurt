@@ -25,7 +25,6 @@ import Sparkle
 /// `BlurtApp.init` picks the host identity that way: the id is what makes the two
 /// apps different to macOS, so a configuration added later can't start updating
 /// itself because someone forgot a compilation condition.
-@MainActor
 @Observable
 final class UpdaterModel {
   @ObservationIgnored private let controller: SPUStandardUpdaterController
@@ -104,9 +103,7 @@ final class UpdaterModel {
 
   /// The shipping build updates itself; debug builds (Blurt Dev, the UI-test
   /// build) never do — see the type comment.
-  private static var startsUpdater: Bool {
-    Bundle.main.bundleIdentifier == HostIdentity.blurt.subsystem
-  }
+  private static var startsUpdater: Bool { HostIdentity.isShippingBundle }
 
   private static func bundleVersionLabel() -> String {
     let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Blurt"

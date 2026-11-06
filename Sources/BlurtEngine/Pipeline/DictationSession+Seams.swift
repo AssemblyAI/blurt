@@ -52,8 +52,10 @@ extension DictationSession {
     /// Records a completed dictation in the developer-mode log. Gated on the
     /// switch inside `DictationLog.append`, which also dispatches the file I/O
     /// off this actor.
-    var logTranscript: @Sendable (String, TranscriptionContext?) -> Void = {
-      DictationLog.append(transcript: $0, context: $1)
+    /// The third argument: the phase the dictation ended in, which the log
+    /// names (`DictationLog.outcomeName`).
+    var logTranscript: @Sendable (String, TranscriptionContext?, PipelinePhase) -> Void = {
+      DictationLog.append(transcript: $0, context: $1, outcome: $2)
     }
 
     /// Records a failure in the sibling error log, from the one place every

@@ -15,10 +15,16 @@ struct MeetingAutoRecordSection: View {
       Toggle(isOn: $isOn) {
         SettingLabel(
           title: "Auto-record meetings", systemImage: "video",
-          subtitle: "Records your mic and Mac audio while a meeting app or browser call uses the microphone.")
+          subtitle: "Records your mic and Mac audio.")
       }
       .accessibilityIdentifier(UITestIdentifiers.autoRecordToggle)
       .onChange(of: isOn) { _, isOn in model.setAutoRecordMeetings(isOn) }
+    } header: {
+      Text("Meetings")
+    } footer: {
+      // The when, below the row as the Microphone section's fallback note is,
+      // so the subtitle stays one line.
+      Text("Recording starts when a meeting app or browser call uses the microphone.")
     }
   }
 }

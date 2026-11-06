@@ -15,27 +15,50 @@
       app.activate()
     }
 
+    /// How long a paste waits for its target to come frontmost, and how often it
+    /// looks. On the press→paste path, so the budget is what bounds the freeze.
+    static let frontmostWaitBudget: Duration = .milliseconds(350)
+    static let frontmostPollInterval: Duration = .milliseconds(10)
+
     static func waitUntilFrontmost(_ app: NSRunningApplication) async -> Bool {
       let pid = app.processIdentifier
-      let clock = ContinuousClock()
-      let deadline = clock.now.advanced(by: .milliseconds(350))
+      return await poll(
+        for: frontmostWaitBudget, every: frontmostPollInterval, clock: ContinuousClock(),
+        until: { await isFrontmost(pid) })
+    }
+
+    /// The frontmost-wait's loop on an injected clock (as `MicLiveness`'s wait
+    /// takes one): checks until `check` holds or `budget` has passed, sleeping
+    /// `interval` between. Separate so the bound is tested on a `TestClock` — on
+    /// the real one the test measured the machine (a main-actor hop on a loaded
+    /// CI box took seconds), not the loop.
+    static func poll(
+      for budget: Duration, every interval: Duration, clock: some Clock<Duration>,
+      until check: @Sendable () async -> Bool
+    ) async -> Bool {
+      let deadline = clock.now.advanced(by: budget)
       while clock.now < deadline {
-        if await isFrontmost(pid) { return true }
-        try? await Task.sleep(for: .milliseconds(10))
+        if await check() { return true }
+        // Cancelled, the sleep returns at once: without this the loop would
+        // spin on `check` (a main-actor hop) for the rest of the budget.
+        do { try await clock.sleep(for: interval) } catch { return false }
       }
       // One last read: the final sleep may have carried us past the deadline just
       // before the activation landed.
-      return await isFrontmost(pid)
+      return await check()
     }
 
     /// Whether `pid` owns the frontmost application right now. Named rather than
     /// inlined so the poll and the post-deadline check share one expression — and so
-    /// neither needs `MainActor.run`'s explicit `body:` label, which a trailing
-    /// closure in an `if` condition can't use.
+    /// neither needs a main-actor hop of its own in an `if` condition.
     private static func isFrontmost(_ pid: pid_t) async -> Bool {
-      await MainActor.run {
-        NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
-      }
+      await frontmostApp()?.processIdentifier == pid
+    }
+
+    /// The app in front now — what a paste at focus (`insertAtFocus`, with no
+    /// pinned target) is judged against.
+    static func frontmostApp() async -> NSRunningApplication? {
+      await MainActor.run { NSWorkspace.shared.frontmostApplication }
     }
 
     static func accessibilityTrusted() -> Bool {
@@ -64,23 +87,25 @@
     /// paste) is asserted in `KeyInjectorSystemActionsTests`, and only the two
     /// `.post` calls below stay covered by running the app.
     static func cmdVEvents() -> (down: CGEvent, up: CGEvent)? {
-      commandEvents(virtualKey: 0x09)  // kVK_ANSI_V
+      keyEvents(virtualKey: 0x09, flags: .maskCommand)  // kVK_ANSI_V
     }
 
     /// The Cmd-C pair, for the read-aloud press's copy fallback (`SelectionCopy`).
     static func cmdCEvents() -> (down: CGEvent, up: CGEvent)? {
-      commandEvents(virtualKey: 0x08)  // kVK_ANSI_C
+      keyEvents(virtualKey: 0x08, flags: .maskCommand)  // kVK_ANSI_C
     }
 
-    private static func commandEvents(virtualKey: CGKeyCode) -> (down: CGEvent, up: CGEvent)? {
+    /// A key-down/key-up pair for `virtualKey` with `flags` on both — the
+    /// paste's ⌘V, the copy's ⌘C, a voice command's shortcut.
+    static func keyEvents(virtualKey: CGKeyCode, flags: CGEventFlags) -> (down: CGEvent, up: CGEvent)? {
       guard let source = CGEventSource(stateID: .combinedSessionState),
         let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
         let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
       else { return nil }
       // Set on both: a key-up carrying no ⌘ reads as the modifier having been
       // released mid-chord, which some apps treat as cancelling the shortcut.
-      down.flags = .maskCommand
-      up.flags = .maskCommand
+      down.flags = flags
+      up.flags = flags
       return (down, up)
     }
 
@@ -99,7 +124,7 @@
       post(cmdCEvents())
     }
 
-    private static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
+    static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
       guard let (down, up) = events else { return false }
       // Post to the annotated session tap rather than the HID tap: the session tap
       // honors exactly the flags set above instead of OR-ing in the live hardware

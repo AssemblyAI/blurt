@@ -36,7 +36,7 @@ extension DictationLog {
   }
 
   /// Where failures land. Sibling of `defaultURL` in the same directory, so the
-  /// one "delete my logs" gesture (`scripts/reset-install.sh`) covers both.
+  /// one "delete my logs" gesture (`scripts/reset-lib.sh`) covers both.
   static var defaultErrorURL: URL { HostIdentity.current.logURL("errors.jsonl") }
 
   /// `defaultErrorURL` as a home-abbreviated path, for the Advanced pane's
@@ -44,7 +44,7 @@ extension DictationLog {
   /// as `defaultDisplayPath`: the displayed path can't drift from the write
   /// target.
   public static var defaultErrorDisplayPath: String {
-    (defaultErrorURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+    displayPath(of: defaultErrorURL)
   }
 
   /// Append a failed dictation to the error log. **Gated on developer mode**, so

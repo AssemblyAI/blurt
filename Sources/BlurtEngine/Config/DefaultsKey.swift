@@ -30,11 +30,13 @@ enum DefaultsKey: String, CaseIterable {
   /// What each trigger key does — dictate with a style, read aloud, ask, or
   /// nothing (`TriggerKeyStyleStore`). The raw value predates read and ask.
   case triggerKeyStyles = "TriggerKeyStyles"
-  /// Each trigger key's tap/hold mode (`TriggerKeyActivationStore`).
-  case triggerKeyActivations = "TriggerKeyActivations"
+  /// Each trigger key's own start/stop cue voice (`TriggerKeySoundStore`).
+  case triggerKeySounds = "TriggerKeySounds"
   case soundPack = "SoundPack"
   /// Read-aloud's start/stop cue voice (`SoundPackStore`, `.readAloud`).
   case readAloudSoundPack = "ReadAloudSoundPack"
+  /// Control Your Mac's start/stop cue voice (`SoundPackStore`, `.command`).
+  case commandSoundPack = "CommandSoundPack"
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"
   case enhancedTranscripts = "EnhancedTranscripts"

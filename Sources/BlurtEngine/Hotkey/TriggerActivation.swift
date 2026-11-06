@@ -41,6 +41,8 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
       switch action {
       case .readAloud: "listen"
       case .ask: "ask"
+      case .rewrite: "rewrite"
+      case .command: "give a command"
       case .dictate, .off: "talk"
       }
     switch self {
@@ -57,18 +59,6 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
     switch self {
     case .tapOrHold, .tap: return "tap"
     case .hold: return "hold"
-    }
-  }
-
-  /// How to finish a dictation that is recording, e.g. "Tap again or release
-  /// to finish." — only the gestures this mode actually stops on.
-  public var finishHint: String { "\(stopGesture) to finish." }
-
-  private var stopGesture: String {
-    switch self {
-    case .tapOrHold: "Tap again or release"
-    case .tap: "Tap again"
-    case .hold: "Release"
     }
   }
 

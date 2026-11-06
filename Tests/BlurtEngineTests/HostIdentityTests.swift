@@ -18,39 +18,35 @@ struct HostIdentityTests {
 
   @Test("the reverse-DNS identity matches the value scripts hard-code")
   func subsystemPinned() {
-    // `scripts/reset-install.sh` hard-codes the same string for its
-    // `defaults`/`security` cleanup (bash can't read this constant), so a drift
-    // here would silently break that script's Keychain/log cleanup. Changing
-    // this value requires updating the script in the same change.
+    // `scripts/reset-lib.sh` hard-codes the same string (bash can't read this
+    // constant); `ResetScriptContractTests` holds the script to it.
     #expect(HostIdentity.blurt.subsystem == "dev.alex.blurt")
   }
 
   @Test("the Keychain service matches the value scripts hard-code")
   func keychainServicePinned() {
-    // `scripts/reset-install.sh` hard-codes the same string for its `security`
-    // cleanup (bash can't read this constant), so a drift here would silently
-    // break that script's Keychain cleanup. Changing this value requires
-    // updating the script in the same change.
+    // `scripts/reset-lib.sh` hard-codes the same string (bash can't read this
+    // constant); `ResetScriptContractTests` holds the script to it.
     #expect(HostIdentity.blurt.keychainService == "blurt")
   }
 
   @Test("the debug build's Keychain service matches the value scripts hard-code")
   func devKeychainServicePinned() {
-    // Same contract as the shipping service above: `scripts/reset-install.sh`
-    // lists this string in `KEYCHAIN_SERVICES`, and bash can't read the
-    // constant. Renaming it here means renaming it there in the same change.
+    // Same contract as the shipping service above.
     #expect(HostIdentity.blurtDev.keychainService == "blurt-dev")
   }
 
   /// The whole point of the debug identity, stated as an invariant: a dev build
-  /// must not reach the shipping app's Keychain item, and must not gain a second
+  /// must not reach the shipping app's Keychain item or Library, and must not gain a second
   /// log subsystem, defaults namespace or log directory in the process — one
   /// subsystem across both builds is what keeps the documented `log show`
   /// predicates valid, and a different defaults prefix would abandon every dev
   /// install's settings for nothing.
-  @Test("the debug identity differs from the shipping one only in the Keychain service")
-  func devDiffersOnlyInTheKeychainService() {
+  @Test("the debug identity differs from the shipping one only in the Keychain service and Library folder")
+  func devDiffersOnlyInTheSharedStores() {
     #expect(HostIdentity.blurtDev.keychainService != HostIdentity.blurt.keychainService)
+    #expect(HostIdentity.blurtDev.dataDirectoryName != HostIdentity.blurt.dataDirectoryName)
+    #expect(HostIdentity.blurt.dataDirectoryName == HostIdentity.blurt.productName)
     #expect(HostIdentity.blurtDev.subsystem == HostIdentity.blurt.subsystem)
     #expect(HostIdentity.blurtDev.defaultsPrefix == HostIdentity.blurt.defaultsPrefix)
     #expect(HostIdentity.blurtDev.logDirectoryName == HostIdentity.blurt.logDirectoryName)
@@ -65,11 +61,12 @@ struct HostIdentityTests {
     #expect(HostIdentity.current == .blurt)
   }
 
-  @Test("a host's style limit defaults to Blurt's, and is never below one")
+  @Test("a host's style limit and Library folder default to Blurt's rule, and the limit is never below one")
   func styleProfileLimit() {
     let identity = HostIdentity(
       productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host")
     #expect(identity.styleProfileLimit == StyleProfileStore.profileLimit)
+    #expect(identity.dataDirectoryName == "Host", "the Library folder defaults to the product name")
     let none = HostIdentity(
       productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host",
       styleProfileLimit: 0)

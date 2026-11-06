@@ -41,15 +41,15 @@ open -a "Blurt Dev"
 
 That's the whole setup. Everything else is one of these scripts:
 
-| Script                        | What it does                                                                                                                                                                                                                                                                                   |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/bootstrap.sh`        | `brew bundle install` from `Brewfile` — xcodegen, swiftlint, prettier, shellcheck, markdownlint, periphery, xcbeautify, node — then `npm ci --prefix tools/jscpd` for the pinned jscpd, and verifies each one answers on PATH, because `check.sh` _skips_ a missing linter rather than failing |
-| `scripts/dev-build.sh`        | Clean signed `Debug-Local` build, installed as `/Applications/Blurt Dev.app`. The everyday loop.                                                                                                                                                                                               |
-| `scripts/check.sh`            | The full health check CI runs. The source of truth for "is this green?"                                                                                                                                                                                                                        |
-| `scripts/check.sh --portable` | Just the platform-independent subset (docs, site, scripts, workflows) — the part that runs off a Mac                                                                                                                                                                                           |
-| `swift test`                  | Engine unit tests only (Swift Testing), no app build                                                                                                                                                                                                                                           |
-| `scripts/uitest.sh`           | The XCUITest suite that drives the real app                                                                                                                                                                                                                                                    |
-| `scripts/leaks.sh`            | Whole-app leak check                                                                                                                                                                                                                                                                           |
+| Script                        | What it does                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/bootstrap.sh`        | `brew bundle install` from `Brewfile` — xcodegen, swiftlint, prettier, shellcheck, markdownlint-cli2, periphery, xcbeautify, node — then `npm ci --prefix tools/jscpd` for the pinned jscpd, and turns on the repo's pre-commit hook (`.githooks/pre-commit`: formats and lints staged Markdown), and verifies each one answers on PATH, because `check.sh` _skips_ a missing linter rather than failing |
+| `scripts/dev-build.sh`        | Clean signed `Debug-Local` build, installed as `/Applications/Blurt Dev.app`. The everyday loop.                                                                                                                                                                                                                                                                                                         |
+| `scripts/check.sh`            | The full health check CI runs. The source of truth for "is this green?"                                                                                                                                                                                                                                                                                                                                  |
+| `scripts/check.sh --portable` | Just the platform-independent subset (docs, site, scripts, workflows) — the part that runs off a Mac                                                                                                                                                                                                                                                                                                     |
+| `swift test`                  | Engine unit tests only (Swift Testing), no app build                                                                                                                                                                                                                                                                                                                                                     |
+| `scripts/uitest.sh`           | The XCUITest suite that drives the real app                                                                                                                                                                                                                                                                                                                                                              |
+| `scripts/leaks.sh`            | Whole-app leak check                                                                                                                                                                                                                                                                                                                                                                                     |
 
 `dev-build.sh` installs to `/Applications` on purpose: macOS refuses to register
 Accessibility and Input-Monitoring grants for an app living in a build
@@ -70,9 +70,14 @@ Each keeps its own AssemblyAI key in the Keychain — `blurt` for the release,
 `blurt-dev` for the dev build — so a dev build can't read, overwrite or (through
 Settings → Advanced → Reset) delete the key you dictate with. You'll enter the
 key once in each, and neither one triggers the "another app wants to use your
-confidential information" prompt the shared item used to.
+confidential information" prompt the shared item used to. The Library (saved
+transcripts, recordings, read-aloud clips) is split the same way:
+`~/Library/Application Support/Blurt` for the release, `Blurt Dev` beside it
+for the dev build.
 
-`scripts/reset-install.sh` wipes both. Settings → Advanced → **Reset** does the same from
+`scripts/reset-install.sh` wipes the release and `scripts/reset-dev-install.sh`
+wipes the dev build — its Library included, so it starts empty; the release's
+history is kept — each leaving the other alone (both run `scripts/reset-lib.sh`). Settings → Advanced → **Reset** does the same from
 inside the app, for whichever build you're running — and restarts it, so the
 permission prompts come back.
 

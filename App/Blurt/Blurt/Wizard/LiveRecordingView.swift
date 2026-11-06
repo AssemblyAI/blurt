@@ -41,7 +41,7 @@ struct LiveRecordingView: View {
       }
       .textSelection(.enabled)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(8)
+      .padding(.vertical, 4)
     }
     // Follows the newest line as the transcript grows.
     .defaultScrollAnchor(.bottom)

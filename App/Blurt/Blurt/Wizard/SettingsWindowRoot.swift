@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Root view of the `Settings` scene. A `TabView` at the root of a `Settings`
 /// scene renders as the standard macOS preferences window — a segmented toolbar
-/// of panes (General / Keys / Read Aloud / Styles / Vocabulary / Advanced), each sized to its own content. This is the
+/// of panes (General / Keys / Sounds / Read Aloud / Styles / Vocabulary / Advanced), each sized to its own content. This is the
 /// HIG-native answer to a settings screen that outgrows one pane: keeping every
 /// pane short means the window never has to grow past a small display (a single
 /// stacked `Form` did, stranding the bottom section off-screen). Each pane
@@ -22,6 +22,8 @@ struct SettingsWindowRoot: View {
           .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
         KeysSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.keysSettingsTab, systemImage: "keyboard") }
+        SoundsSettingsTab(coordinator: coordinator)
+          .tabItem { Label(UITestIdentifiers.soundsSettingsTab, systemImage: "bell") }
         ReadAloudSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.readAloudSettingsTab, systemImage: "speaker.wave.2") }
         StylesSettingsTab()
@@ -40,22 +42,9 @@ struct SettingsWindowRoot: View {
   }
 }
 
-/// The chrome every settings pane shares: a grouped, non-scrolling `Form` that
-/// hugs its content, so each pane sizes the window to exactly its sections and
-/// the panes can't drift apart in layout.
-struct SettingsPane<Content: View>: View {
-  @ViewBuilder var content: Content
-
-  var body: some View {
-    Form { content }
-      .formStyle(.grouped)
-      .scrollDisabled(true)
-      .fixedSize(horizontal: false, vertical: true)
-  }
-}
-
 /// The everyday setup a user changes: the AssemblyAI account, the microphone,
-/// the cue sounds, and whether meetings record themselves. The trigger keys are their own tab (`KeysSettingsTab`). Key terms live on Vocabulary,
+/// and whether meetings record themselves. The trigger keys and their cue
+/// sounds are their own tabs (`KeysSettingsTab`, `SoundsSettingsTab`). Key terms live on Vocabulary,
 /// beside the text shortcuts — both are "words Blurt should know".
 private struct GeneralSettingsTab: View {
   let coordinator: AppCoordinator
@@ -64,7 +53,6 @@ private struct GeneralSettingsTab: View {
     SettingsPane {
       APIKeyStepView(apiKey: coordinator.apiKey, account: coordinator.account)
       MicrophoneStepView()
-      SoundStepView(coordinator: coordinator)
       MeetingAutoRecordSection(model: coordinator.transcripts)
     }
   }

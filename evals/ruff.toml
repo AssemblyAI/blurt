@@ -17,7 +17,7 @@ line-length = 100
 # (`import corpus`). Telling ruff where that root is makes isort classify them as
 # first-party, so the existing stdlib / third-party / local grouping is what it
 # expects rather than something it wants to rewrite.
-src = ["dictation-prompt"]
+src = ["dictation-prompt", "command-planner"]
 
 [lint]
 # Pyflakes + pycodestyle for correctness, then three additions that pay for

@@ -8,7 +8,6 @@
   "swift.package.toolchainPath": null,
   "editor.formatOnSave": false,
   "editor.defaultFormatter": "swift-lang.swift",
-  "markdownlint.ignore": ".markdownlintignore",
   "files.watcherExclude": {
     "**/DerivedData/**": true,
     "**/build/**": true,

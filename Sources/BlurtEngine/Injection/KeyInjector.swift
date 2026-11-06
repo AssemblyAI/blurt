@@ -113,6 +113,14 @@
     /// which apps are installed (defaults to "not opaque").
     private let isAXOpaqueApp: @Sendable (NSRunningApplication?) -> Bool
 
+    /// The app in front, for a paste with no target (`insertAtFocus`, or a
+    /// capture whose app is gone): its opacity is what `isAXOpaqueApp` judges
+    /// then, since there is no captured app to ask about. A voice command's `type` step lands here,
+    /// often in an app an earlier step just opened — one whose Chromium tree
+    /// isn't built yet, so it reports nothing focused. Injectable so tests
+    /// don't depend on what's in front (defaults to nothing).
+    private let frontmostApp: @Sendable () async -> NSRunningApplication?
+
     /// The pasteboard the paste reads, writes, and restores. Behind a seam so
     /// tests exercise the save/restore + changeCount logic against an in-memory
     /// fake instead of the real system pasteboard — whose contents another process
@@ -129,6 +137,7 @@
         isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
         hasEditableTarget: FocusCapture.hasEditableFocusedElement,
         isAXOpaqueApp: FocusCapture.isAXOpaqueApp,
+        frontmostApp: KeyInjector.frontmostApp,
         secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput)
     }
 
@@ -140,6 +149,7 @@
       isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
       hasEditableTarget: @escaping @Sendable () -> Bool = { true },
       isAXOpaqueApp: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
+      frontmostApp: @escaping @Sendable () async -> NSRunningApplication? = { nil },
       secondsSinceUserInput: @escaping @Sendable () -> TimeInterval = { .infinity },
       clipboard: any ClipboardAccess = SystemClipboard()
     ) {
@@ -150,6 +160,7 @@
       self.isAccessibilityTrusted = isAccessibilityTrusted
       self.hasEditableTarget = hasEditableTarget
       self.isAXOpaqueApp = isAXOpaqueApp
+      self.frontmostApp = frontmostApp
       self.secondsSinceUserInput = secondsSinceUserInput
       self.clipboard = clipboard
     }
@@ -181,6 +192,17 @@
     }
 
     public func insert(_ text: String, after priorText: String? = nil, windowTitle: String? = nil) async throws {
+      try await enqueue(text, after: priorText, windowTitle: windowTitle, pinned: true)
+    }
+
+    /// Pastes where focus is now rather than at the pinned target: the snapshot
+    /// `performInsert` takes is nil for this one paste, and `targetApp` is
+    /// untouched, so a press pinning its own target in the meantime keeps it.
+    public func insertAtFocus(_ text: String) async throws {
+      try await enqueue(text, after: nil, windowTitle: nil, pinned: false)
+    }
+
+    private func enqueue(_ text: String, after priorText: String?, windowTitle: String?, pinned: Bool) async throws {
       guard !text.isEmpty else { return }
       // Serialize the whole paste critical section by chaining behind the previous
       // insert's link (which includes its settle/restore — see `pendingSettle`).
@@ -192,7 +214,7 @@
       let timeout = pasteSettleDuration
       let paste = Task<(@Sendable () -> Void)?, any Error> {
         await previous?.value
-        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle)
+        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
       }
       // Strong `self` captures, deliberately: each link is bounded (one paste, one
       // settle sleep — no cycle), and a weak capture would let an injector torn
@@ -218,14 +240,14 @@
     /// insert (or its settle) is mid-flight. Returns the deferred clipboard-restore
     /// action for the settle link to run once the paste has landed.
     private func performInsert(
-      _ text: String, after priorText: String?, windowTitle: String?
+      _ text: String, after priorText: String?, windowTitle: String?, pinned: Bool
     ) async throws -> @Sendable () -> Void {
       try Task.checkCancellation()
       // Snapshot the target at entry and use only the local below: this method
       // suspends (activation settle), the actor is reentrant, and a
       // setTarget() interleaving mid-insert must not make us activate one app
       // while judging editability and recording `lastInserted` for another.
-      let target = targetApp
+      let target = pinned ? targetApp : nil
       // Our last paste only still precedes the caret if the user hasn't typed or
       // clicked since; otherwise forget it, same as a window change.
       let continuity = lastInserted.flatMap { last in
@@ -246,6 +268,12 @@
         clipboard.write(finalText)
         throw error
       }
+      // The app whose opacity is judged below: the target, or — when there is
+      // none (a paste at focus, or a capture whose app is gone) — the one in
+      // front, since a nil would read as "not opaque" and copy instead. Looked
+      // up ahead of the gate below, so its main-actor hop can't let a cancel
+      // slip past it.
+      let judged = if let target { target } else { await frontmostApp() }
       // Final cancellation gate before the irreversible paste: a cancel() that
       // landed during activation must not type into the focused app.
       try Task.checkCancellation()
@@ -256,7 +284,10 @@
       // app — an Electron editor (VS Code, Slack) or a web browser — which can
       // report no editable signal even for a real text field; there we still paste
       // rather than drop the user's words.
-      guard hasEditableTarget() || isAXOpaqueApp(target) else {
+      // The app check first: a string prefix, where the focus read is several
+      // cross-process calls — and the apps that check answers for (Chrome,
+      // Slack, VS Code) are the ones whose focus read is slowest.
+      guard isAXOpaqueApp(judged) || hasEditableTarget() else {
         clipboard.write(finalText)
         throw BlurtError.noEditableTarget
       }

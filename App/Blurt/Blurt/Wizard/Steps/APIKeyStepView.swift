@@ -24,10 +24,10 @@ import SwiftUI
 /// stored, how to get one, and what went wrong when AssemblyAI rejects one —
 /// lives in the sheet, which has room for it without crowding the form.
 ///
-/// With sign-in configured (`AssemblyAIAccount.isAvailable`), an account row
-/// comes first: signing in fills the same key a paste would, so once signed in
-/// the key row gives way to "Signed in as …" and a Sign Out button, and the key
-/// is the connection's to rotate, not the user's to change.
+/// With sign-in configured (`AssemblyAIAccount.isAvailable`), signing in fills
+/// the same key a paste would. Which single row the section shows — the choice
+/// between the two, the key row, or the signed-in account row — is the engine's
+/// `CredentialRows`, where the reasons for each are.
 struct APIKeyStepView: View {
   var apiKey: APIKeyModel
   var account: AssemblyAIAccount
@@ -42,25 +42,28 @@ struct APIKeyStepView: View {
   /// This view just renders what it resolves to.
   private var display: APIKeyDisplay { .resolve(key: savedKey) }
 
-  /// Which rows show and which button is filled — the engine's
-  /// `CredentialRows`, so the rule is tested rather than restated here.
+  /// Which row shows — the engine's `CredentialRows`, so the rule is tested
+  /// rather than restated here.
   private var rows: CredentialRows {
     .resolve(isKeyStored: display.isConnected, isSignInAvailable: account.isAvailable, status: account.status)
   }
 
   var body: some View {
     Section {
-      if rows.showsAccountRow {
-        AccountRowView(account: account, isPrimary: rows.primary == .signIn)
-      }
-      if rows.showsKeyRow {
+      switch rows {
+      case .choice, .accountRow:
+        // One view for both: the sign-in's state (the web session, the
+        // in-flight flag, the last failure) lives in it, and must survive the
+        // row turning from the choice into "Signed in as …".
+        AccountRowView(account: account, isPresentingKeyEditor: $isPresentingEditor)
+      case .keyRow(let connectIsPrimary):
         SettingRow(title: "API Key", systemImage: "key.fill") {
           HStack(spacing: 12) {
             statusLabel
             Button(display.editButtonTitle) { isPresentingEditor = true }
               // Prominent (brand-green fill) only while it is the one thing
-              // setup is waiting on; see `CredentialRows.primary`.
-              .glassButtonStyleCompat(prominent: rows.primary == .connect)
+              // setup is waiting on.
+              .glassButtonStyleCompat(prominent: connectIsPrimary)
               .accessibilityIdentifier(
                 display.isConnected ? UITestIdentifiers.apiKeyChange : UITestIdentifiers.apiKeyConnect
               )
@@ -177,12 +180,6 @@ private struct APIKeyEditorSheet: View {
     let message: String
   }
 
-  /// Presentation binding for the fault alert: clearing it on dismiss is what
-  /// lets a later fault present again.
-  private var isPresentingSaveFault: Binding<Bool> {
-    Binding(get: { saveFault != nil }, set: { if !$0 { saveFault = nil } })
-  }
-
   /// Enabled for any non-empty key while no validation is in flight. We don't
   /// gate on "differs from the saved key" — re-submitting an unchanged key is a
   /// harmless re-validate against AssemblyAI, and a button that's disabled for a
@@ -227,7 +224,7 @@ private struct APIKeyEditorSheet: View {
     // Catch every dismissal, not just the button.
     .onDisappear { submitTask?.cancel() }
     .alert(
-      saveFault?.title ?? "", isPresented: isPresentingSaveFault, presenting: saveFault
+      saveFault?.title ?? "", isPresented: $saveFault.isPresent(), presenting: saveFault
     ) { _ in
       Button("OK", role: .cancel) {}
     } message: { fault in

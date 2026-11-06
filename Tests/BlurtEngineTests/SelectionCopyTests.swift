@@ -75,7 +75,7 @@ final class FakeCopyPasteboard: CopyPasteboard {
   var restoreCount: Int { state.withLock(\.restoreCount) }
 }
 
-@Suite("SelectionCopy")
+@Suite("SelectionCopy", .timeLimit(.minutes(1)))
 struct SelectionCopyTests {
   private func copy(_ pasteboard: FakeCopyPasteboard, answering copied: String?) -> SelectionCopy {
     SelectionCopy(pasteboard: pasteboard, postCopy: pasteboard.answerCopy(with: copied), timeout: .milliseconds(50))
@@ -136,18 +136,41 @@ struct SelectionCopyTests {
     #expect(pasteboard.string == "user's clipboard")
   }
 
+  /// A copy whose ⌘C nobody answers, on a `TestClock` stepped through its
+  /// 20 ms wait (two 10 ms polls), returning the late-copy watch it leaves
+  /// behind.
+  private func unansweredCopy(
+    _ pasteboard: FakeCopyPasteboard, lateCopyWindow: Duration, clock: TestClock
+  ) async throws -> Task<Void, Never> {
+    let copy = SelectionCopy(
+      pasteboard: pasteboard, postCopy: { true }, timeout: .milliseconds(20), lateCopyWindow: lateCopyWindow,
+      clock: clock)
+    async let result = copy.copySelectionWatchingLate(maxCharacters: 100)
+    for _ in 1...2 {
+      await clock.waitUntilSleeping(for: .milliseconds(10))
+      clock.advance(by: .milliseconds(10))
+    }
+    let (text, lateWatch) = await result
+    #expect(text == nil)
+    return try #require(lateWatch)
+  }
+
+  /// Lets the late-copy watch make one poll, then waits for it to end — which
+  /// it must, having seen the change, or the suite's time limit fails the test.
+  private func pollOnce(_ watch: Task<Void, Never>, clock: TestClock) async {
+    await clock.waitUntilSleeping(for: .milliseconds(20))
+    clock.advance(by: .milliseconds(20))
+    await watch.value
+  }
+
   @Test("a copy that lands after the timeout still gets the user's clipboard back")
   func lateCopyRestored() async throws {
     let pasteboard = FakeCopyPasteboard()
+    let clock = TestClock()
     // The app answers nothing in time; its copy lands once the press has given up.
-    let copy = SelectionCopy(
-      pasteboard: pasteboard, postCopy: { true }, timeout: .milliseconds(20), lateCopyWindow: .seconds(5))
-    #expect(await copy.copySelection(maxCharacters: 100) == nil)
+    let watch = try await unansweredCopy(pasteboard, lateCopyWindow: .seconds(5), clock: clock)
     _ = pasteboard.answerCopy(with: "the highlighted text")()
-    let deadline = ContinuousClock.now + .seconds(5)
-    while pasteboard.restoreCount == 0, ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    await pollOnce(watch, clock: clock)
     #expect(pasteboard.string == "user's clipboard")
   }
 
@@ -169,14 +192,12 @@ struct SelectionCopyTests {
   @Test("a paste inside the late-copy window is left alone and ends the watch")
   func lateWatchSparesOwnWrite() async throws {
     let pasteboard = FakeCopyPasteboard()
-    let copy = SelectionCopy(
-      pasteboard: pasteboard, postCopy: { true }, timeout: .milliseconds(20), lateCopyWindow: .milliseconds(300))
-    #expect(await copy.copySelection(maxCharacters: 100) == nil)
+    let clock = TestClock()
+    let watch = try await unansweredCopy(pasteboard, lateCopyWindow: .milliseconds(300), clock: clock)
     pasteboard.ownWrite("the dictation")
+    await pollOnce(watch, clock: clock)
     // A copy after Blurt's write must not be restored either: the watch is over.
-    try await Task.sleep(for: .milliseconds(60))
     _ = pasteboard.answerCopy(with: "the highlighted text")()
-    try await Task.sleep(for: .milliseconds(400))
     #expect(pasteboard.restoreCount == 0)
     #expect(pasteboard.string == "the highlighted text")
   }

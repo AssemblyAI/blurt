@@ -163,12 +163,20 @@
     /// payload), or `nil` when it's some other CF type or a non-range `AXValue`
     /// (`AXValueGetValue` checks the payload type and refuses a mismatch).
     nonisolated static func axRange(_ ref: CFTypeRef) -> CFRange? {
+      axValue(ref, .cfRange, CFRange())
+    }
+
+    /// `ref` decoded as an `AXValue` of `type` — a range, a point, a size —
+    /// or `nil` when it's some other CF type or holds another kind of value.
+    /// `empty` is the storage `AXValueGetValue` writes into — plain bytes
+    /// (`BitwiseCopyable`), as every `AXValueType` payload is.
+    nonisolated static func axValue<T: BitwiseCopyable>(_ ref: CFTypeRef, _ type: AXValueType, _ empty: T) -> T? {
       guard CFGetTypeID(ref) == AXValueGetTypeID() else { return nil }
       // swiftlint:disable:next force_cast
       let value = ref as! AXValue
-      var range = CFRange()
-      guard AXValueGetValue(value, .cfRange, &range) else { return nil }
-      return range
+      var decoded = empty
+      guard AXValueGetValue(value, type, &decoded) else { return nil }
+      return decoded
     }
 
     /// The element's selected text range — a zero-length range when there's just a
@@ -289,7 +297,7 @@
     }
 
     /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
-    private nonisolated static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+    nonisolated static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
       var ref: CFTypeRef?
       guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
         let ref

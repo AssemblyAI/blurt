@@ -1,0 +1,242 @@
+[
+  {
+    "app" : "1Password",
+    "facts" : {
+      "bundleID" : "com.1password.1password",
+      "electron" : true,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : true,
+      "role" : "AXTextField",
+      "subrole" : "AXSecureTextField",
+      "valueSettable" : true
+    },
+    "name" : "1password-unlock",
+    "pastes" : true
+  },
+  {
+    "app" : "Calculator",
+    "facts" : {
+      "bundleID" : "com.apple.calculator",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : false,
+      "inWebArea" : false,
+      "role" : "AXUnknown",
+      "valueSettable" : false
+    },
+    "name" : "calculator",
+    "pastes" : false
+  },
+  {
+    "app" : "Google Chrome",
+    "facts" : {
+      "bundleID" : "com.google.Chrome",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextField",
+      "valueSettable" : true
+    },
+    "name" : "chrome-address-bar",
+    "pastes" : true
+  },
+  {
+    "app" : "Claude",
+    "facts" : {
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "electron" : true,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "claude-prompt",
+    "pastes" : true
+  },
+  {
+    "app" : "Finder",
+    "facts" : {
+      "bundleID" : "com.apple.finder",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : false,
+      "inWebArea" : false,
+      "role" : "AXOutline",
+      "valueSettable" : false
+    },
+    "name" : "finder-window",
+    "pastes" : false
+  },
+  {
+    "app" : "Google Chrome",
+    "facts" : {
+      "bundleID" : "com.google.Chrome",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : true,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "google-docs-body",
+    "pastes" : true
+  },
+  {
+    "app" : "Messages",
+    "facts" : {
+      "bundleID" : "com.apple.MobileSMS",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextField",
+      "valueSettable" : true
+    },
+    "name" : "messages-composer",
+    "pastes" : true
+  },
+  {
+    "app" : "Muse",
+    "facts" : {
+      "bundleID" : "com.meta.endo",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : false,
+      "inWebArea" : true,
+      "role" : "AXButton",
+      "valueSettable" : false
+    },
+    "name" : "muse-composer",
+    "pastes" : true
+  },
+  {
+    "app" : "Notes",
+    "facts" : {
+      "bundleID" : "com.apple.Notes",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "notes-body",
+    "pastes" : true
+  },
+  {
+    "app" : "Obsidian",
+    "facts" : {
+      "bundleID" : "md.obsidian",
+      "electron" : true,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : true,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "obsidian-editor",
+    "pastes" : true
+  },
+  {
+    "app" : "Safari",
+    "facts" : {
+      "bundleID" : "com.apple.Safari",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextField",
+      "valueSettable" : true
+    },
+    "name" : "safari-address-bar",
+    "pastes" : true
+  },
+  {
+    "app" : "Slack",
+    "facts" : {
+      "bundleID" : "com.tinyspeck.slackmacgap",
+      "electron" : true,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "slack-composer",
+    "pastes" : true
+  },
+  {
+    "app" : "System Settings",
+    "facts" : {
+      "bundleID" : "com.apple.systempreferences",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextField",
+      "subrole" : "AXSearchField",
+      "valueSettable" : true
+    },
+    "name" : "system-settings-search",
+    "pastes" : true
+  },
+  {
+    "app" : "Terminal",
+    "facts" : {
+      "bundleID" : "com.apple.Terminal",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextArea",
+      "valueSettable" : false
+    },
+    "name" : "terminal-shell",
+    "pastes" : true
+  },
+  {
+    "app" : "TextEdit",
+    "facts" : {
+      "bundleID" : "com.apple.TextEdit",
+      "electron" : false,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "textedit-document",
+    "pastes" : true
+  },
+  {
+    "app" : "Visual Studio Code",
+    "facts" : {
+      "bundleID" : "com.microsoft.VSCode",
+      "electron" : true,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : true,
+      "role" : "AXStaticText",
+      "valueSettable" : false
+    },
+    "name" : "vscode-command-palette",
+    "pastes" : true
+  },
+  {
+    "app" : "Visual Studio Code",
+    "facts" : {
+      "bundleID" : "com.microsoft.VSCode",
+      "electron" : true,
+      "focused" : true,
+      "hasInsertionPoint" : true,
+      "inWebArea" : false,
+      "role" : "AXTextArea",
+      "valueSettable" : true
+    },
+    "name" : "vscode-editor",
+    "pastes" : true
+  }
+]
