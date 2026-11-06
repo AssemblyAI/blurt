@@ -22,7 +22,7 @@ struct ReadAloudSection: View {
   var coordinator: AppCoordinator
 
   // Observed so the section follows the Keys tab: with no key reading aloud
-  // or asking, these settings do nothing, and asking adds its own note.
+  // or asking, these settings do nothing, so they're disabled.
   @ObservedKeyBindings private var bindings
 
   @AppStorage(ReadAloudStyleStore.speedDefaultsKey) private var speed = ReadAloudStyleStore.defaultSpeed
@@ -57,7 +57,6 @@ struct ReadAloudSection: View {
   var body: some View {
     let bindings = bindings
     let readsOrAsks = bindings.readsOrAsks
-    let asks = bindings.asks
     Section {
       Group {
         PickerSettingRow(
@@ -90,26 +89,6 @@ struct ReadAloudSection: View {
         .accessibilityIdentifier(UITestIdentifiers.readAloudSkipsJargonToggle)
       }
       .disabled(!readsOrAsks)
-    } header: {
-      Text("Playback")
-    } footer: {
-      // Each note is its own paragraph, and each says where the text goes: reading
-      // aloud is on by default (left ⌥), so the first one always shows.
-      if TriggerKey.allCases.contains(where: { bindings.action(for: $0) == .readAloud }) {
-        Text("Select text, then use a key assigned to \(KeyActionName.readAloud).")
-      } else if !readsOrAsks {
-        Text("Assign a \(KeyActionName.readAloud) or \(KeyActionName.ask) key in Keys to enable playback.")
-      }
-      if asks {
-        Text("Select text, then use an \(KeyActionName.ask) key and speak your request.")
-        Text("Your selection and spoken request are sent to AssemblyAI’s LLM Gateway to generate an answer.")
-      }
-      if readsOrAsks {
-        Text("Selected text is sent to AssemblyAI to read aloud.")
-        if skipsJargon {
-          Text("Skip technical text also sends your selection to AssemblyAI’s LLM Gateway before playback.")
-        }
-      }
     }
   }
 }

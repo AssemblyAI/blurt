@@ -62,20 +62,20 @@ final class SettingsUITests: BlurtUITestCase {
       "Show key should expose a plain (non-secure) text field")
   }
 
-  /// Taking the bound key off dictation moves the binding to the other dictating
-  /// key: turn right ⌥ on, set right ⌘ to read aloud, and both stick.
+  /// Dictation moves to another key, and the key it left can take another
+  /// action: dictate with right ⌥, read aloud with right ⌘, and both stick.
   func testDictationMovesToAnotherKey() {
     let keys = openKeys()
-    let option = keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)]
-    let command = keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightCommand)]
+    let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
+    let read = keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)]
 
-    option.click()
-    app.menuItems["Dictate"].click()
-    command.click()
-    app.menuItems[KeyActionName.readAloud].click()
+    dictate.click()
+    app.menuItems["Right Option"].click()
+    read.click()
+    app.menuItems["Right Command"].click()
 
-    XCTAssertEqual(command.value as? String, KeyActionName.readAloud)
-    XCTAssertEqual(option.value as? String, "Dictate")
+    XCTAssertEqual(read.value as? String, "Right Command")
+    XCTAssertEqual(dictate.value as? String, "Right Option")
   }
 
   /// The microphone picker exists and defaults to following the system input.
@@ -95,11 +95,12 @@ final class SettingsUITests: BlurtUITestCase {
   }
 
   /// The sound-cue picker changes the persisted selection. Selecting "None"
-  /// works regardless of the runner's persisted starting value.
+  /// works regardless of the runner's persisted starting value. The sounds
+  /// are their own pane, so switch to it first.
   func testSoundPickerChangesSelection() {
-    let settings = openSettingsWindow()
+    let settings = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.soundsSettingsTab)
 
-    let picker = settings.popUpButtons[UITestIdentifiers.soundPicker]
+    let picker = settings.popUpButtons[UITestIdentifiers.keySoundPicker(54)]
     XCTAssertTrue(picker.waitForExistence(timeout: 10), "Sound picker not found")
     picker.click()
     app.menuItems["None"].click()
@@ -238,57 +239,44 @@ final class SettingsUITests: BlurtUITestCase {
 
   // MARK: - Keys
 
-  /// The trigger keys' keycodes (`TriggerKey`'s raw values), which suffix each
-  /// pop-up's identifier in the Keys tab. Spelled out because this bundle
-  /// doesn't link the engine.
-  private let rightCommand = 54
-  private let rightOption = 61
-  private let fnKey = 63
-  private let leftCommand = 55
-  private let leftOption = 58
-  private let leftControl = 59
-
-  /// The Keys tab has an action and a mode pop-up per trigger key. On a reset
-  /// launch right ⌘ dictates and, as the only dictating key, can't be turned
-  /// off; left ⌥ reads aloud on a tap or hold; the rest are off, with no mode
-  /// to pick.
-  func testKeysTabListsEveryKey() {
+  /// The Keys tab has a key pop-up per action, and one activation pop-up. On
+  /// a reset launch right ⌘ dictates and, as the only dictating key, can't be
+  /// cleared; left ⌥ reads aloud; nothing asks.
+  func testKeysTabListsEveryAction() {
     let keys = openKeys()
 
-    for keyCode in [rightCommand, rightOption, fnKey, leftCommand, leftOption, leftControl] {
+    let actions = [
+      "Dictate", "Dictate: No custom style", KeyActionName.readAloud, KeyActionName.ask,
+      KeyActionName.rewrite, KeyActionName.command,
+    ]
+    for action in actions {
       XCTAssertTrue(
-        keys.popUpButtons[UITestIdentifiers.keyStylePicker(keyCode)].exists,
-        "The tab should list an action pop-up for keycode \(keyCode)")
-      XCTAssertTrue(
-        keys.popUpButtons[UITestIdentifiers.keyActivationPicker(keyCode)].exists,
-        "The tab should list a mode pop-up for keycode \(keyCode)")
+        keys.popUpButtons[UITestIdentifiers.actionKeyPicker(action)].exists,
+        "The tab should list a key pop-up for \(action)")
     }
-    XCTAssertEqual(keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].value as? String, "Off")
-    XCTAssertFalse(keys.popUpButtons[UITestIdentifiers.keyActivationPicker(rightOption)].isEnabled)
+    XCTAssertTrue(keys.popUpButtons[UITestIdentifiers.activationPicker].exists)
     XCTAssertEqual(
-      keys.popUpButtons[UITestIdentifiers.keyStylePicker(leftOption)].value as? String, KeyActionName.readAloud)
-    XCTAssertEqual(
-      keys.popUpButtons[UITestIdentifiers.keyActivationPicker(leftOption)].value as? String, "Tap or hold")
+      keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)].value as? String, "Left Option")
+    XCTAssertEqual(keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.ask)].value as? String, "None")
 
-    let bound = keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightCommand)]
-    XCTAssertEqual(bound.value as? String, "Dictate")
-    bound.click()
-    XCTAssertTrue(bound.menuItems["Dictate"].waitForExistence(timeout: 5))
-    XCTAssertFalse(bound.menuItems["Off"].exists, "The only dictating key can't be turned off")
-    XCTAssertFalse(bound.menuItems[KeyActionName.readAloud].exists, "…nor set to read aloud")
+    let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
+    XCTAssertEqual(dictate.value as? String, "Right Command")
+    dictate.click()
+    XCTAssertTrue(dictate.menuItems["Right Command"].waitForExistence(timeout: 5))
+    XCTAssertFalse(dictate.menuItems["None"].exists, "The only dictating key can't be cleared")
     // Close the menu by re-choosing the current item, leaving the setting as it was.
-    bound.menuItems["Dictate"].click()
+    dictate.menuItems["Right Command"].click()
   }
 
-  /// A key's mode persists: the tab shows it again after another pane.
-  func testKeyModePersists() {
-    openKeys().popUpButtons[UITestIdentifiers.keyActivationPicker(leftOption)].click()
+  /// The activation mode persists: the tab shows it again after another pane.
+  func testActivationPersists() {
+    openKeys().popUpButtons[UITestIdentifiers.activationPicker].click()
     app.menuItems["Hold"].click()
 
     let settings = openSettingsWindow()
     let reopened = selectSettingsTab(settings, named: UITestIdentifiers.keysSettingsTab)
     XCTAssertEqual(
-      reopened.popUpButtons[UITestIdentifiers.keyActivationPicker(leftOption)].value as? String, "Hold",
+      reopened.popUpButtons[UITestIdentifiers.activationPicker].value as? String, "Hold",
       "The mode should survive leaving the tab")
   }
 

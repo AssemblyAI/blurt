@@ -88,6 +88,64 @@ struct TextShortcutExpanderTests {
     #expect(TextShortcutExpander.redactingExpansions(in: "cal.com/me.com/me", using: [cal]) == "cal.com/me")
   }
 
+  /// The redacted text rides `stt_prompt` as priming, so a match inside a
+  /// longer word garbles the very context it is there to supply.
+  @Test("redacting never matches inside a longer word")
+  func redactsWholeWordsOnly() {
+    let okay = TextShortcut(trigger: "thumbs", expansion: "ok")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "I booked a token for the joker", using: [okay])
+        == "I booked a token for the joker")
+    #expect(TextShortcutExpander.redactingExpansions(in: "ok, see you", using: [okay]) == "thumbs, see you")
+
+    let name = TextShortcut(trigger: "my name", expansion: "Rupok")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "Rupoks book was great", using: [name])
+        == "Rupoks book was great")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "Rupok's book was great", using: [name])
+        == "my name's book was great")
+  }
+
+  @Test("redacting still catches an expansion glued to punctuation")
+  func redactsNextToPunctuation() {
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "(https://cal.com/someone).", using: [cal])
+        == "(personal cal.com).")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "write to me@example.com, thanks", using: [email])
+        == "write to personal email, thanks")
+  }
+
+  /// Each side is fenced only where the expansion's own edge is a letter or digit.
+  @Test("redacting checks each edge of the expansion on its own")
+  func redactsByEachEdge() {
+    let thanks = TextShortcut(trigger: "sign off", expansion: "Thanks!")
+    #expect(TextShortcutExpander.redactingExpansions(in: "NoThanks! button", using: [thanks]) == "NoThanks! button")
+    #expect(TextShortcutExpander.redactingExpansions(in: "Thanks!See you", using: [thanks]) == "sign offSee you")
+  }
+
+  @Test("redacting puts the trigger back literally, template characters and all")
+  func redactsWithLiteralTrigger() {
+    let price = TextShortcut(trigger: "cost $1 \\0", expansion: "one dollar")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "it was one dollar.", using: [price])
+        == "it was cost $1 \\0.")
+  }
+
+  @Test("a clipped expansion is caught only where it ends a word")
+  func redactsClippedExpansionAtWordEnd() {
+    let name = TextShortcut(trigger: "my name", expansion: "Rupok Ghosh")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "k Ghosh said hi", using: [name]) == "my name said hi")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "k Ghoshal said hi", using: [name]) == "k Ghoshal said hi")
+    #expect(TextShortcutExpander.redactingExpansions(in: "k Ghosh", using: [name]) == "my name")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: ".community is great", using: [email])
+        == ".community is great")
+  }
+
   @Test("never matches inside a longer word")
   func wholeWords() {
     let text = "That was impersonal emails, honestly."

@@ -290,7 +290,7 @@
             .accessibilityIdentifier(UITestIdentifiers.harnessSetCommand)
           Button("Rewrite") { coordinator?.setKeyChoiceForTesting(.rewrite, for: state.selectedKey) }
             .accessibilityIdentifier(UITestIdentifiers.harnessSetRewrite)
-          Button("Tap Mode") { coordinator?.setKeyActivationForTesting(.tap, for: state.selectedKey) }
+          Button("Tap Mode") { coordinator?.setActivationForTesting(.tap) }
             .accessibilityIdentifier(UITestIdentifiers.harnessSetTapMode)
         }
         HStack(spacing: 8) {

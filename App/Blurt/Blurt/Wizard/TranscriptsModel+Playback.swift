@@ -23,7 +23,7 @@ extension TranscriptsModel {
   }
 
   /// Full, on an entry that has audio of its own: Play plays that, not a reading.
-  private var showsOriginalAudio: Bool {
+  var showsOriginalAudio: Bool {
     selection == .full && openEntry?.hasAudio == true
   }
 
@@ -33,6 +33,12 @@ extension TranscriptsModel {
       return openEntry.map(isPlaying) ?? false
     }
     return readingFacet == selection
+  }
+
+  /// The showing content is being read aloud, but its speech is still being
+  /// generated — nothing has played yet.
+  var isPreparingShown: Bool {
+    !showsOriginalAudio && readingFacet == selection && !readingStarted
   }
 
   /// Plays (or stops) what's showing.
@@ -51,8 +57,16 @@ extension TranscriptsModel {
     player.stop()
     let facet = selection
     readingFacet = facet
+    readingStarted = false
+    // Heard off the main actor, when the first audio plays.
+    let started: @Sendable () -> Void = { [weak self] in
+      Task { @MainActor [weak self] in
+        guard let self, self.readingFacet == facet else { return }
+        self.readingStarted = true
+      }
+    }
     readingTask = Task { [weak self, reader] in
-      try? await reader.read(text)
+      try? await reader.read(text, onStart: started)
       guard !Task.isCancelled, let self, readingFacet == facet else { return }
       readingFacet = nil
     }
@@ -64,5 +78,6 @@ extension TranscriptsModel {
     readingTask?.cancel()
     readingTask = nil
     readingFacet = nil
+    readingStarted = false
   }
 }

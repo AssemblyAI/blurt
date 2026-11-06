@@ -191,9 +191,3 @@ struct EmptyListMessage: View {
     .accessibilityElement(children: .combine)
   }
 }
-
-/// A grouped form section's shape, for what's drawn to match one: the Library's
-/// panel and the record row's drop-target outline.
-enum FormPanel {
-  static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-}

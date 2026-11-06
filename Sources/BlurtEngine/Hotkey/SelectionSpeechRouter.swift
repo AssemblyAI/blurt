@@ -109,7 +109,7 @@ import Foundation
     public func press(key: TriggerKey) {
       let bindings = TriggerKeyBindings(defaults: defaults)
       let action = bindings.action(for: key)
-      let holds = bindings.activation(for: key) != .tap
+      let holds = bindings.activation != .tap
       perform(routing.press(key: key, action: action, holds: holds))
     }
 

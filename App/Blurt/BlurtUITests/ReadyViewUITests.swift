@@ -29,27 +29,19 @@ final class ReadyViewUITests: BlurtUITestCase {
       app.descendants(matching: .any).matching(readPredicate).firstMatch.exists,
       "Ready screen should list the read-aloud key")
 
-    // The style row is always present. With no custom styles there isn't a real
-    // choice, so it reads Default without drawing a one-item pop-up.
+    // With no custom styles there's no choice to make, so there's no style row.
     let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    XCTAssertTrue(main.staticTexts["Default"].exists, "The style row should show Default")
-    XCTAssertFalse(
-      main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain].exists,
-      "The style row should not offer a pop-up until there is another choice")
-    // The Library, empty on a fresh launch, shows its header and the
-    // first-dictation prompt that fills the reserved list area.
-    XCTAssertTrue(
-      app.staticTexts["Library"].exists,
-      "Ready screen should have a Library section")
+    XCTAssertFalse(main.staticTexts["Writing style"].exists, "No style row without a custom style")
+    XCTAssertFalse(main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain].exists)
+    // The Library, empty on a fresh launch, shows the first-dictation prompt
+    // that fills the reserved list area.
     XCTAssertTrue(
       emptyRecentPrompt(in: main).exists,
       "An empty Library should prompt the first dictation")
 
-    // The Settings button at the window's foot — the main window's own route
-    // to the Settings scene, alongside ⌘, and the menu-bar item.
-    XCTAssertTrue(
-      main.buttons["Settings…"].exists,
-      "Ready screen should offer its Settings button")
+    // The toolbar's Settings button — the main window's own route to the
+    // Settings scene, alongside ⌘, and the menu-bar item.
+    XCTAssertTrue(main.buttons["Settings"].exists, "Ready screen should offer its Settings button")
   }
 
   func testCompletedDictationPopulatesRecentList() {
@@ -89,11 +81,10 @@ final class ReadyViewUITests: BlurtUITestCase {
     pasteboard.clearContents()
     pasteboard.setString("sentinel-before-copy", forType: .string)
 
-    // Select the row, then right-click it for its "Copy" contextual menu item.
-    // Selecting first keeps the assertion honest whichever "Copy" the query
-    // lands on: the context menu copies the row it was opened on, and Edit ›
-    // Copy (which `app.menus` can also match) copies the selected row — and
-    // nothing without a selection, which a right-click doesn't make.
+    // Select the card, then right-click it for its "Copy" contextual menu
+    // item. Selecting first keeps the assertion honest whichever "Copy" the
+    // query lands on: the context menu copies the card it was opened on, and
+    // Edit › Copy copies the selected one.
     row.click()
     row.rightClick()
     let copyItem = app.menus.menuItems["Copy"].firstMatch
@@ -149,7 +140,7 @@ final class ReadyViewUITests: BlurtUITestCase {
     XCTAssertTrue(
       picker.waitForNonExistence(timeout: 5),
       "Deleting the final custom style should remove the ready-window pop-up immediately")
-    XCTAssertTrue(main.staticTexts["Default"].exists, "The style row should fall back to Default")
+    XCTAssertFalse(main.staticTexts["Writing style"].exists, "…and the style row with it")
   }
 
   // MARK: - Shared choreography
@@ -190,6 +181,6 @@ final class ReadyViewUITests: BlurtUITestCase {
   private func recentRow(in main: XCUIElement) -> XCUIElement {
     let text = UITestIdentifiers.defaultCannedTranscript
     let rowPredicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
-    return main.outlines[UITestIdentifiers.recentList].staticTexts.matching(rowPredicate).firstMatch
+    return main.descendants(matching: .any).matching(rowPredicate).firstMatch
   }
 }

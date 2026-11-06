@@ -2,7 +2,7 @@ import Foundation
 
 /// The on-disk form of a per-key setting — one JSON object, keycode → string —
 /// shared by `TriggerKeyStyleStore` (actions and styles) and
-/// `TriggerKeyActivationStore` (tap/hold modes), so the encoding and its one
+/// `TriggerKeySoundStore` (cue voices), so the encoding and its one
 /// safety rule are written once.
 enum TriggerKeyMap {
   /// The map behind a raw slot value. Blank or undecodable reads as empty, and

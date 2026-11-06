@@ -48,8 +48,9 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
   /// Whether the mic is being brought up or capturing (`PipelinePhase
-  /// .isCapturing`) — the ready screen disables the style switcher on it, and
-  /// its `.recording` half (via `menuBarStatus`) drives the listening state.
+  /// .isCapturing`) — while it is, Esc in the ready screen cancels the
+  /// dictation. Nothing on that screen changes with it: the pill shows how a
+  /// dictation is going.
   private(set) var isCapturing = false
   /// The last phase rendered, so the pill can go back to it when a read ends.
   @ObservationIgnored private var lastPhase = PipelinePhase.idle
@@ -176,7 +177,12 @@ final class AppCoordinator {
     keyTap = DictationKeyTap(
       // The key rides the press, and the session resolves its style for that one
       // dictation (`PressStyle`); the main window's selection is never written.
-      onStart: { key in router.press(key: key) },
+      // The cues hear of the key first, so the recording or read it starts
+      // opens in that key's voice.
+      onStart: { [weak self] key in
+        self?.cues.keyPressed(key)
+        router.press(key: key)
+      },
       onStop: { router.submit(.release) },
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
@@ -306,6 +312,9 @@ final class AppCoordinator {
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
     syncGlobeKeyOverride()
+    // A key with no voice of its own follows its action's, so a new action
+    // can mean a new voice to load.
+    cues.refresh()
   }
 
   /// Turns macOS's own 🌐 action off while `fn` is a trigger, and back on
@@ -325,20 +334,10 @@ final class AppCoordinator {
   /// The record start/stop chimes (see `CueSoundPlayer` below).
   private let cues = CueSoundPlayer()
 
-  /// Called when the user changes the sound pack in Settings: reload the cue
-  /// players and preview the new voice so the choice is audible immediately.
-  func soundPackChanged() {
-    cues.packChanged()
-  }
-
-  /// Read-aloud's cue pack changed in Settings: reload and preview it.
-  func readAloudSoundPackChanged() {
-    cues.readPackChanged()
-  }
-
-  /// Control Your Mac's cue pack changed in Settings: reload and preview it.
-  func commandSoundPackChanged() {
-    cues.commandPackChanged()
+  /// Called when the user changes a key's sound in Settings: reload that key's
+  /// cue players and preview the new voice so the choice is audible immediately.
+  func keySoundChanged(_ key: TriggerKey) {
+    cues.packChanged(for: key)
   }
 
   /// The Read Aloud tab picked a voice or a speed: play a sample in it, as a cue
@@ -373,11 +372,11 @@ final class AppCoordinator {
     // Mirror the phase onto the menu bar indicator (mapping lives in the engine,
     // unit-tested alongside `overlayState`).
     menuBarStatus = phase.menuBarStatus
-    // And onto the ready screen: the listening state and the style-switch lock
-    // both follow the same stream the pill renders, never a second source.
+    // And onto the ready screen, for its Esc-to-cancel: the same stream the
+    // pill renders, never a second source.
     isCapturing = phase.isCapturing
 
-    cues.transition(for: phase, commanding: speechRouter?.processingState == .commanding)
+    cues.transition(for: phase)
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the

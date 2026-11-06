@@ -64,7 +64,7 @@ struct PersistedSettingsTests {
       TriggerKeyStore.defaultsKey,
       TriggerActivationStore.defaultsKey,
       TriggerKeyStyleStore.defaultsKey,
-      TriggerKeyActivationStore.defaultsKey,
+      TriggerKeySoundStore.defaultsKey,
       SoundPackStore.defaultsKey,
       SoundPackStore.readAloudDefaultsKey,
       SoundPackStore.commandDefaultsKey,

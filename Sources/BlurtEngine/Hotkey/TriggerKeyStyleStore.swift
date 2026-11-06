@@ -37,4 +37,25 @@ public struct TriggerKeyStyleStore {
     TriggerKeyMap.write(entries, to: Self.defaultsKey, in: defaults)
     return true
   }
+
+  /// Gives `choice` to `key` alone, or with `key` nil to no key — the Keys
+  /// tab's action rows, one key each. Every other key that held `choice` is
+  /// turned off, and `key` gives up whatever it did before. Dictating with the
+  /// main window's style also makes `key` the bound key, the one the ready
+  /// screen names. Refused, with nothing written, when it would leave no key
+  /// dictating.
+  @discardableResult
+  public func assign(_ key: TriggerKey?, to choice: TriggerKeyChoice) -> Bool {
+    let before = TriggerKeyBindings(defaults: defaults)
+    let holders = TriggerKey.allCases.filter { $0 != key && before.choice(for: $0) == choice }
+    let dictatingAfter = before.dictatingKeys.filter { !holders.contains($0) && $0 != key }
+    guard (choice.action == .dictate && key != nil) || !dictatingAfter.isEmpty else { return false }
+    // `key` first, so a holder turned off below is never the last dictating key.
+    if let key {
+      setChoice(choice, for: key)
+      if choice == .dictate { TriggerKeyStore(defaults: defaults).triggerKey = key }
+    }
+    for holder in holders { setChoice(.off, for: holder) }
+    return true
+  }
 }

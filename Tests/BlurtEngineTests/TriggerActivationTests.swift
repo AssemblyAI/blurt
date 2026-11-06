@@ -8,9 +8,9 @@ import Testing
 /// act, in `DictationKeyGateTests`.
 @Suite("TriggerActivation")
 struct TriggerActivationTests {
-  /// The bound key's mode with no entry of its own: the shared slot.
+  /// The one mode every key is pressed under.
   private func sharedMode(_ defaults: UserDefaults) -> TriggerActivation {
-    TriggerKeyBindings(defaults: defaults).activation(for: .rightCommand)
+    TriggerKeyBindings(defaults: defaults).activation
   }
 
   @Test("defaults to tap-or-hold when unset")
@@ -21,10 +21,10 @@ struct TriggerActivationTests {
     #expect(TriggerActivation.fromPersisted("") == .tapOrHold)
   }
 
-  @Test("an existing install's shared mode is still honoured")
+  @Test("a mode set is the mode read")
   func roundTrips() {
     let defaults = freshDefaults()
-    defaults.set(TriggerActivation.hold.rawValue, forKey: TriggerActivationStore.defaultsKey)
+    TriggerActivationStore(defaults: defaults).setActivation(.hold)
     #expect(sharedMode(defaults) == .hold)
   }
 
@@ -45,8 +45,6 @@ struct TriggerActivationTests {
     #expect(TriggerActivation.tapOrHold.hint(for: .dictate) == "Tap to start and stop. Hold to talk.")
     #expect(TriggerActivation.hold.hint(for: .readAloud) == "Hold to listen. Release to stop.")
     #expect(TriggerActivation.tapOrHold.hint(for: .ask) == "Tap to start and stop. Hold to ask.")
-    #expect(
-      Set(TriggerActivation.allCases.map(\.finishHint)).count == TriggerActivation.allCases.count)
   }
 
   @Test func mainWindowWordingNamesOnlyTheConfiguredGestures() {
@@ -55,8 +53,5 @@ struct TriggerActivationTests {
     #expect(TriggerActivation.tapOrHold.startVerb == "tap")
     #expect(TriggerActivation.tap.startVerb == "tap")
     #expect(TriggerActivation.hold.startVerb == "hold")
-    #expect(TriggerActivation.tapOrHold.finishHint == "Tap again or release to finish.")
-    #expect(TriggerActivation.tap.finishHint == "Tap again to finish.")
-    #expect(TriggerActivation.hold.finishHint == "Release to finish.")
   }
 }

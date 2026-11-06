@@ -5,6 +5,7 @@ import SwiftUI
 struct BlurtCommands: Commands {
   var appDelegate: AppDelegate
   @FocusedValue(\.focusHistorySearch) private var focusHistorySearch
+  @FocusedValue(\.importAudioFile) private var importAudioFile
 
   var body: some Commands {
     // "Check for Updates…" sits just below "About Blurt" in the app menu — the
@@ -23,6 +24,14 @@ struct BlurtCommands: Commands {
     // reading as an ad. No ellipses: they open a page and ask nothing more, the
     // way Apple's own Help-menu links read. Each omits itself if its URL fails
     // to build.
+    // File › Open… (⌘O): the main window's file panel, to transcribe an audio
+    // or video file — the menu's way to what the toolbar's Browse does. In
+    // place of New, which a single-window app has nothing to offer.
+    CommandGroup(replacing: .newItem) {
+      Button("Open…") { importAudioFile?() }
+        .keyboardShortcut("o")
+        .disabled(importAudioFile == nil)
+    }
     // Edit › Find (⌘F): focuses the Recent list's search field, as any Mac
     // window with a search field answers to.
     CommandGroup(after: .textEditing) {
