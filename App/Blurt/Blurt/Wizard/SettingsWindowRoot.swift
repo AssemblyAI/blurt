@@ -72,7 +72,8 @@ private struct StylesSettingsTab: View {
 }
 
 /// The occasional stuff: checking for an update, the developer-mode log
-/// toggle, and the
+/// toggle, local insertion (letting another app on this Mac hand Blurt text),
+/// and the
 /// start-over button. Kept out of General so
 /// the common pane stays short.
 private struct AdvancedSettingsTab: View {
@@ -83,6 +84,7 @@ private struct AdvancedSettingsTab: View {
     SettingsPane {
       UpdatesSection(model: updaterModel)
       MaintenanceSection()
+      LoopbackInsertSection(coordinator: coordinator)
       ResetSection(coordinator: coordinator)
     }
   }

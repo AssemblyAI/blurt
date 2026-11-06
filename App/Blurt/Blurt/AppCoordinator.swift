@@ -41,6 +41,10 @@ final class AppCoordinator {
 
   @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
+  /// The pipeline's injector, kept for local insertion (`AppCoordinator+LoopbackInsert.swift`).
+  @ObservationIgnored let injector: any InjectorProtocol
+  /// The local-insertion listener, built in `start()`. Off unless switched on.
+  @ObservationIgnored var loopback: LoopbackInsertListener?
 
   /// Live dictation status for the menu bar indicator (see `MenuBarLabel`).
   /// Updated in `render(_:)` alongside the overlay pill. The menu bar item is a
@@ -103,6 +107,7 @@ final class AppCoordinator {
     self.transcriptStream = transcriptStream
 
     self.mic = components.mic
+    self.injector = components.injector
     self.transcripts = transcripts ?? TranscriptsModel()
     self.transcripts.setAutoRecordMeetings(MeetingAutoRecordStore().isEnabled)
     self.session = DictationSession(
@@ -150,6 +155,7 @@ final class AppCoordinator {
     // transition into "ready" (and `hideOverlay()` if it later breaks).
     startDictationDriver()
     startPipelineObservers()
+    startLoopbackListener()
   }
 
   /// Builds the key tap, wired straight into the session's synchronous

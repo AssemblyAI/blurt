@@ -37,6 +37,7 @@
 		1088FECB82D84AD0951CA1E2 /* juno-83-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 920F5A55960A00E2AECF1362 /* juno-83-stop.m4a */; };
 		10EA68562CE70506895CB2FE /* rom1b-31-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */; };
 		1275CFCDBF1D593B545C8A84 /* rom1b-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */; };
+		13EA8894AD85C53F5EC78DB9 /* LoopbackInsertListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2792C9A705C08372B596E8 /* LoopbackInsertListener.swift */; };
 		15210F6BE968D3E2EF771DE0 /* rom1a-5-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2CA6F4E6A10AE93F169DF19B /* rom1a-5-stop.m4a */; };
 		152452FE264E453808327885 /* juno-122-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */; };
 		1678C191033752690B8D54B7 /* juno-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5F23A12A7A73E12FAB6DBD14 /* juno-27-start.m4a */; };
@@ -191,6 +192,7 @@
 		625949CE5B21104715419724 /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75844EDF6969530EFB56CF4 /* AccountRowView.swift */; };
 		643FE1E9922319122B1C087D /* rom1a-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */; };
 		645A40A3B0E75729A0E3D1AC /* juno-66-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0CDBED88D2D7CE84776B7574 /* juno-66-start.m4a */; };
+		658B1211818898B35854F17C /* LoopbackInsertStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAAA930AB416E338E276E3F /* LoopbackInsertStore.swift */; };
 		65B01C04BC66F1F633EEA966 /* juno-124-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 143E94106D9A6342EFD4F909 /* juno-124-start.m4a */; };
 		65B7C6E1A9A118B0245E76AE /* rom1a-19-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 792258F8AAF3AF35104EE0CF /* rom1a-19-start.m4a */; };
 		661B457D5EAE88E9349B04EF /* juno-108-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 66E090797FE75C600EDE541F /* juno-108-stop.m4a */; };
@@ -332,6 +334,7 @@
 		B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */; };
 		B3D0BB7BB889FA8C8E0D2B56 /* juno-14-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 32AAFF585AF1A77D0D872F11 /* juno-14-start.m4a */; };
 		B3FC1877229B7510E656EEFC /* rom1a-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D79CA18872ADF342DE5426CA /* rom1a-7-stop.m4a */; };
+		B4017F998E3612C0618074BB /* AppCoordinator+LoopbackInsert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D163E47B401DB865201A267 /* AppCoordinator+LoopbackInsert.swift */; };
 		B56AB7FEAEC9E9ECE36B400E /* juno-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8A319EF914358A938C87389D /* juno-28-stop.m4a */; };
 		B599DD24EE5B50CDAC2F41C8 /* TranscriptsModel+Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F283DDEBF2695F53B402F17 /* TranscriptsModel+Playback.swift */; };
 		B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */; };
@@ -384,6 +387,7 @@
 		CD5741A3E363BC743A15DCAB /* juno-61-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 002FB9F5FD28A66C04993007 /* juno-61-start.m4a */; };
 		CDCB0D52276EE24B86BDF4BF /* juno-92-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9340A2B70F834204FE6C6C68 /* juno-92-start.m4a */; };
 		CE0C9F1CDF923D899AAE7464 /* rom1b-6-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 99B45E82D3DF744DF2031238 /* rom1b-6-stop.m4a */; };
+		CE4F9E8A31D677202A4E781D /* LoopbackInsertSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01D08D07959F3C795D64C21 /* LoopbackInsertSection.swift */; };
 		CE59A466CBD2C2D93BEA15D3 /* rom1b-18-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 989E9BBEA9AFED21774E0230 /* rom1b-18-stop.m4a */; };
 		CE73DE20498B04ED1DDE6BAE /* DictationPipelineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0A58F1CA999E6DF7742A87 /* DictationPipelineUITests.swift */; };
 		CFD810EE32E689113D026B0B /* rom1b-27-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4FEFFC17F6198DB4F43A71F1 /* rom1b-27-stop.m4a */; };
@@ -403,6 +407,7 @@
 		D3E4BAEFF91B635E197B39C2 /* rom1a-26-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EB504AAB7330EE4D4C1E4948 /* rom1a-26-start.m4a */; };
 		D4392247B72EA5E269CA6093 /* SettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DEF4A7379A8E14E20A7639 /* SettingsPane.swift */; };
 		D4782F83F43693371724011D /* rom1b-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */; };
+		D55A485567DE407D59909D46 /* LoopbackInsertWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D525BF9A4EF9FEFA0906CA9 /* LoopbackInsertWire.swift */; };
 		D5927A391D26CAB212D6FBB4 /* rom1b-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */; };
 		D5A84975628548A076CEB3D7 /* juno-118-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */; };
 		D6DFF322638007525EBA02B2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3BE06CE59B6A662701C56CE5 /* Sparkle */; };
@@ -541,6 +546,7 @@
 		1A3D5DAAD31F8C7F67CAD5BB /* juno-32-start.m4a */ = {isa = PBXFileReference; path = "juno-32-start.m4a"; sourceTree = "<group>"; };
 		1C72B7BEF6CFEC52928C6CED /* juno-100-stop.m4a */ = {isa = PBXFileReference; path = "juno-100-stop.m4a"; sourceTree = "<group>"; };
 		1CF1F098A8DC41DD8508480E /* juno-8-start.m4a */ = {isa = PBXFileReference; path = "juno-8-start.m4a"; sourceTree = "<group>"; };
+		1D163E47B401DB865201A267 /* AppCoordinator+LoopbackInsert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppCoordinator+LoopbackInsert.swift"; sourceTree = "<group>"; };
 		1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-31-stop.m4a"; sourceTree = "<group>"; };
 		1D88DB176EEA1B7058433DE6 /* rom1a-14-start.m4a */ = {isa = PBXFileReference; path = "rom1a-14-start.m4a"; sourceTree = "<group>"; };
 		1DE1622660807FF440D18D34 /* rom1a-14-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-14-stop.m4a"; sourceTree = "<group>"; };
@@ -616,6 +622,7 @@
 		3BE2AAC76DB0FCE662C63EB6 /* juno-93-start.m4a */ = {isa = PBXFileReference; path = "juno-93-start.m4a"; sourceTree = "<group>"; };
 		3C54A0D394CE71150BB0DBA8 /* juno-92-stop.m4a */ = {isa = PBXFileReference; path = "juno-92-stop.m4a"; sourceTree = "<group>"; };
 		3CC6911B92F8B5D8C0997AA4 /* juno-37-stop.m4a */ = {isa = PBXFileReference; path = "juno-37-stop.m4a"; sourceTree = "<group>"; };
+		3D525BF9A4EF9FEFA0906CA9 /* LoopbackInsertWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackInsertWire.swift; sourceTree = "<group>"; };
 		3D7637960DAA5355CDCA8A6A /* juno-49-stop.m4a */ = {isa = PBXFileReference; path = "juno-49-stop.m4a"; sourceTree = "<group>"; };
 		3DA3A304528FD1C7FE6C2B94 /* APIKeyStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStepView.swift; sourceTree = "<group>"; };
 		3E628046B76633200813B0E4 /* juno-13-start.m4a */ = {isa = PBXFileReference; path = "juno-13-start.m4a"; sourceTree = "<group>"; };
@@ -660,6 +667,7 @@
 		4DB6065E9D1F64F3AF0FD03B /* juno-5-start.m4a */ = {isa = PBXFileReference; path = "juno-5-start.m4a"; sourceTree = "<group>"; };
 		4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */ = {isa = PBXFileReference; path = "rom1a-2-start.m4a"; sourceTree = "<group>"; };
 		4E414413BCDA4C613782919D /* juno-66-stop.m4a */ = {isa = PBXFileReference; path = "juno-66-stop.m4a"; sourceTree = "<group>"; };
+		4F2792C9A705C08372B596E8 /* LoopbackInsertListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackInsertListener.swift; sourceTree = "<group>"; };
 		4FB6BF9F449D954A52952C6B /* juno-94-stop.m4a */ = {isa = PBXFileReference; path = "juno-94-stop.m4a"; sourceTree = "<group>"; };
 		4FEFFC17F6198DB4F43A71F1 /* rom1b-27-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-27-stop.m4a"; sourceTree = "<group>"; };
 		5041BF8B32BEB59D5539E48A /* juno-16-stop.m4a */ = {isa = PBXFileReference; path = "juno-16-stop.m4a"; sourceTree = "<group>"; };
@@ -680,6 +688,7 @@
 		573212CC5EC3393A990E10A1 /* rom1a-0-start.m4a */ = {isa = PBXFileReference; path = "rom1a-0-start.m4a"; sourceTree = "<group>"; };
 		5B56D4D2910BBB44EEB4690A /* juno-20-stop.m4a */ = {isa = PBXFileReference; path = "juno-20-stop.m4a"; sourceTree = "<group>"; };
 		5B5B261F4D195B5E6E3B5567 /* rom1b-3-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-3-stop.m4a"; sourceTree = "<group>"; };
+		5CAAA930AB416E338E276E3F /* LoopbackInsertStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackInsertStore.swift; sourceTree = "<group>"; };
 		5D1E0161AF60ADB6D903535E /* juno-67-start.m4a */ = {isa = PBXFileReference; path = "juno-67-start.m4a"; sourceTree = "<group>"; };
 		5DB9D5866E9743B12589DFF4 /* rom1a-21-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-21-stop.m4a"; sourceTree = "<group>"; };
 		5E2309BDEF30ED9EFED5B849 /* Blurt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Blurt.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -870,6 +879,7 @@
 		CE3BEBDADD5DD54629837F34 /* juno-26-stop.m4a */ = {isa = PBXFileReference; path = "juno-26-stop.m4a"; sourceTree = "<group>"; };
 		CF851DB4CC78B8F16D2E7565 /* juno-38-stop.m4a */ = {isa = PBXFileReference; path = "juno-38-stop.m4a"; sourceTree = "<group>"; };
 		CFA57E6B7B3A81E2531990B5 /* juno-40-start.m4a */ = {isa = PBXFileReference; path = "juno-40-start.m4a"; sourceTree = "<group>"; };
+		D01D08D07959F3C795D64C21 /* LoopbackInsertSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackInsertSection.swift; sourceTree = "<group>"; };
 		D06381A69EEEC336CB847783 /* juno-96-stop.m4a */ = {isa = PBXFileReference; path = "juno-96-stop.m4a"; sourceTree = "<group>"; };
 		D19740AC9AF44D8E172CFD37 /* juno-46-stop.m4a */ = {isa = PBXFileReference; path = "juno-46-stop.m4a"; sourceTree = "<group>"; };
 		D1D56A6899994805C9F0DBBD /* juno-71-stop.m4a */ = {isa = PBXFileReference; path = "juno-71-stop.m4a"; sourceTree = "<group>"; };
@@ -1013,6 +1023,7 @@
 				7CA2656E9B37C9A6BAEA1E0E /* UITestSupport+Transcripts.swift */,
 				7D6DE85EA50E7CD4CC977211 /* Branding */,
 				DF92BBDB4B9C15FAE100B783 /* Hotkey */,
+				2D005D9C294D5647A914E518 /* Loopback */,
 				8C67CBF637D85C0F642E53B5 /* MenuBar */,
 				912505E1D0FBD5D5CA591BA2 /* Overlay */,
 				DB755555AE4E89FE376399BF /* Resources */,
@@ -1021,6 +1032,17 @@
 				77C72856311952343339E7BE /* Wizard */,
 			);
 			path = Blurt;
+			sourceTree = "<group>";
+		};
+		2D005D9C294D5647A914E518 /* Loopback */ = {
+			isa = PBXGroup;
+			children = (
+				1D163E47B401DB865201A267 /* AppCoordinator+LoopbackInsert.swift */,
+				4F2792C9A705C08372B596E8 /* LoopbackInsertListener.swift */,
+				5CAAA930AB416E338E276E3F /* LoopbackInsertStore.swift */,
+				3D525BF9A4EF9FEFA0906CA9 /* LoopbackInsertWire.swift */,
+			);
+			path = Loopback;
 			sourceTree = "<group>";
 		};
 		37EA71F5138E2E63171AFFBD = {
@@ -1472,6 +1494,7 @@
 				A1E4E6475D21A5D03D21B1B2 /* LibraryParts.swift */,
 				64C90BFCBE7F97C6FB19F861 /* LibrarySection.swift */,
 				324768A585509378B2AF8A8A /* LiveRecordingView.swift */,
+				D01D08D07959F3C795D64C21 /* LoopbackInsertSection.swift */,
 				01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */,
 				46E7FDC7169255096BD040D4 /* MeetingAutoRecordSection.swift */,
 				EB55696AF62110C04E63B601 /* ObservedKeyBindings.swift */,
@@ -2151,6 +2174,7 @@
 				625949CE5B21104715419724 /* AccountRowView.swift in Sources */,
 				3182C793A397A4AC6BF4F24D /* AccountSignIn.swift in Sources */,
 				73FA46BD466212E9AE09C847 /* App.swift in Sources */,
+				B4017F998E3612C0618074BB /* AppCoordinator+LoopbackInsert.swift in Sources */,
 				B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */,
 				3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */,
 				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
@@ -2176,6 +2200,10 @@
 				58FAFE916586BFC0CBCC0EB9 /* LibrarySection.swift in Sources */,
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				223C5150193302A11CE7074B /* LiveRecordingView.swift in Sources */,
+				13EA8894AD85C53F5EC78DB9 /* LoopbackInsertListener.swift in Sources */,
+				CE4F9E8A31D677202A4E781D /* LoopbackInsertSection.swift in Sources */,
+				658B1211818898B35854F17C /* LoopbackInsertStore.swift in Sources */,
+				D55A485567DE407D59909D46 /* LoopbackInsertWire.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,
 				FFCEED254CC097D05D0E48EC /* MeetingAutoRecordSection.swift in Sources */,
 				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,

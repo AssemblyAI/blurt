@@ -1523,7 +1523,7 @@ restating them.
   never at launch. General holds the everyday setup (account, mic, meeting auto-record); Keys holds an action-per-row table with one activation mode; Sounds holds each key's cue voice; Styles leads with the
   enhanced-transcripts switch (styles only shape that rewrite) above the style profiles; Vocabulary
   holds the key terms and the text-shortcut table (+ / −, double-click to edit); Advanced holds
-  the update check, the developer-mode toggle, and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
+  the update check, the developer-mode toggle, **local insertion** (see below), and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
   `scripts/reset-install.sh` / `scripts/reset-dev-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
   first and then **restarts the app** (a detached `sh -c 'sleep 1; open -n <bundle>'`, since whatever
   reopens Blurt has to outlive it). The restart is load-bearing, not a courtesy: macOS prompts for a
@@ -1539,6 +1539,47 @@ restating them.
   label, notices. Geometry and phase mapping come from the engine (`OverlayPlacement`,
   `MeterBarGeometry`, `OverlayUIState`); Reduce Motion is honored.
 - **UI-test harness window** — `#if UITEST_HOOKS` only; see [Tests](#tests).
+
+### Local insertion
+
+The app shell's one path that inserts text with no dictation behind it: another process on this Mac
+hands Blurt a finished transcript and Blurt lands it where the user is typing. It exists so a
+companion that already _has_ the words — a pocket recorder relaying over USB, a script, a shortcut —
+stops re-implementing the careful part. `AppCoordinator` hands it **the pipeline's own injector**,
+not a second one: the spacing memory, the pasteboard save/restore and the chain that serializes two
+pastes are all `KeyInjector`'s per-instance state, so a second instance would race the first on the
+global pasteboard.
+
+`LoopbackInsertListener` (`App/Blurt/Blurt/Loopback/`) is the whole of it — nothing about a socket
+belongs in the dependency-free engine. A `SOCK_STREAM` **Unix domain socket** at
+`~/Library/Application Support/<product>/insert.sock`, newline-delimited UTF-8: the Settings token
+as the first line of every connection, then one transcript per line with `\n` for a newline and
+`\\` for a backslash. Blurt answers a line per line — `OK`, `COPIED` (nothing editable was focused,
+so the text is on the clipboard — `KeyInjector`'s own behaviour, not a loss), or
+`ERR <reason>`. `LoopbackInsertWire` holds the two pure decisions, the token compare and the
+unescape.
+
+The posture is **off by default, authenticated, and not a TCP port**, in that order of importance. A
+listener that types into whatever the user has focused is aimed at their terminal, their password
+manager and their messages, so a fresh install binds nothing. A socket rather than `127.0.0.1` means
+there is no port for a page or another machine to reach, and the kernel gates the node: it sits
+under `~/Library` (0700 on macOS) and is chmodded 0600 as soon as it is ready. The token is defence
+in depth and no more — a process running as this user can read it out of `UserDefaults` — but it
+means a client has to be configured on purpose rather than stumble onto a socket, and revoking
+access is a button.
+
+`priorText` and `windowTitle` are passed as nil, so `InsertionSeparator` runs with no basis and adds
+no leading space between consecutive handed-over transcripts. The Accessibility reads that fill them
+are `FocusCapture`'s, internal to the engine, and worth neither a second implementation in the shell
+nor a second copy of the password-field guard that comes with the real one. Making
+`captureFieldContext` reachable would close it.
+
+Its two defaults keys are the **app's**, not cases in the engine's `DefaultsKey`: nothing in
+`BlurtEngine` knows there is a socket, and that enum is the roster `PersistedSettings.resetAll`
+sweeps. They still carry the host's `defaultsPrefix`, so a dev build and a release each get their
+own switch, and Settings → Reset still clears them (`InstallReset` removes the whole defaults
+domain, not just the roster). The one consequence worth knowing: a UI-test launch resets the roster
+and _not_ these, which is why `startLoopbackListener()` returns early under `UITestMode`.
 
 ## Updates
 
