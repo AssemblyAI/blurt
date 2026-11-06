@@ -12,6 +12,10 @@ public enum TriggerKeyAction: Sendable, Hashable {
   /// Records a spoken instruction ("make it more formal") and pastes the
   /// selected text, rewritten that way, over it.
   case rewrite
+  /// Records spoken instructions for something to write ("a Slack reply to
+  /// Dan saying we should…") and pastes what they describe at the cursor
+  /// (`MessageComposer`). Needs no selection.
+  case compose
   /// Records a spoken command ("open Slack and start a new message") and
   /// carries it out (`VoiceCommandPlanner`, `VoiceCommandPerforming`).
   case command
@@ -29,6 +33,7 @@ public enum TriggerKeyChoice: Hashable, Sendable {
   case readAloud
   case ask
   case rewrite
+  case compose
   case command
 
   /// The style id for "use the main window's selection". Not a UUID, and not
@@ -44,18 +49,20 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .readAloud: .readAloud
     case .ask: .ask
     case .rewrite: .rewrite
+    case .compose: .compose
     case .command: .command
     }
   }
 
   /// The stored form. Any string that isn't one of the action markers is a
-  /// style id — the encoding from before read, ask, rewrite and command existed.
+  /// style id — the encoding from before read, ask, rewrite, compose and command existed.
   init(raw: String) {
     switch raw {
     case "": self = .off
     case "read-aloud": self = .readAloud
     case "ask": self = .ask
     case "rewrite": self = .rewrite
+    case "compose": self = .compose
     case "command": self = .command
     default: self = .dictate(style: raw)
     }
@@ -68,6 +75,7 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .readAloud: "read-aloud"
     case .ask: "ask"
     case .rewrite: "rewrite"
+    case .compose: "compose"
     case .command: "command"
     }
   }

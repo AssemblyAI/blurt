@@ -62,6 +62,7 @@ struct KeysSettingsTab: View {
         ActionRow(choice: .readAloud, title: KeyActionName.readAloud),
         ActionRow(choice: .ask, title: KeyActionName.ask),
         ActionRow(choice: .rewrite, title: KeyActionName.rewrite),
+        ActionRow(choice: .compose, title: KeyActionName.compose),
         ActionRow(choice: .command, title: KeyActionName.command),
       ]
   }

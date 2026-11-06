@@ -173,7 +173,7 @@ extension DictationLog {
     case .pasted: "pasted"
     case .noTarget: "copied"
     case .noted: "noted"
-    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .commanding, .error: "failed"
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding, .error: "failed"
     }
   }
 }

@@ -83,9 +83,16 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   entry the user opens and asks for a task, past dictations included. The
   third is the Rewrite Selection key's (`Rewrite/SelectionRewriter.swift`,
   through `GatewayConnection.send`): highlighted text rewritten as a spoken
-  instruction asks, and pasted over the selection — the one gateway output
-  that is pasted, owner-directed (2026-11-03). It never touches a dictation's
-  words; the instruction it is given is a hand-back press's, never pasted.
+  instruction asks, and pasted over the selection — owner-directed
+  (2026-11-03). It never touches a dictation's words; the instruction it is
+  given is a hand-back press's, never pasted. Its sibling, the Compose From
+  Instructions key's (`Rewrite/MessageComposer.swift`, also through
+  `GatewayConnection.send`), writes the text a hand-back press's spoken
+  instructions describe ("a Slack reply to Dan saying…") for the app in front,
+  pasted at the cursor — owner-directed (2026-11-06). Those two are the only
+  gateway outputs that are pasted. Neither is a door back to a cleanup pass:
+  the words they are given are instructions to work _from_, never the text
+  pasted tidied up.
   The fourth is the Control Your Mac key's (`Command/VoiceCommandPlanner.swift`,
   through `GatewayConnection.send`): a spoken command turned into steps from a
   closed list (`VoiceCommandStep`) that Blurt carries out itself — the one

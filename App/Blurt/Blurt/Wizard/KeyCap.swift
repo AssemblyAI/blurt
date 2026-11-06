@@ -43,6 +43,7 @@ extension TriggerKeyAction {
     case .readAloud: LibraryKind.readAloud.systemImage
     case .ask: LibraryKind.ask.systemImage
     case .rewrite: "pencil.line"
+    case .compose: "square.and.pencil"
     case .command: "command"
     case .dictate, .off: "keyboard"
     }

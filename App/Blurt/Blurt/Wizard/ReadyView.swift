@@ -205,6 +205,7 @@ struct ReadyView: View {
       case .readAloud: LibraryKind.readAloud.name
       case .ask: LibraryKind.ask.name
       case .rewrite: KeyActionName.rewrite
+      case .compose: KeyActionName.compose
       case .command: KeyActionName.command
       case .dictate(TriggerKeyChoice.mainWindowStyle), .off: "Dictate"
       case .dictate(let style):
