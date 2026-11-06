@@ -5,7 +5,7 @@ import BlurtiOSCore
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (layout, theme, hands-free), listening, transcription, the account, and
+/// (layout, theme, hands-free, delete), listening, transcription, the account, and
 /// about — a form on the brand's page, its sections under mono eyebrows.
 /// Presented from either tab's gear.
 struct SettingsView: View {
@@ -14,6 +14,7 @@ struct SettingsView: View {
   @State private var layout = SharedStore.layout
   @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
+  @State private var deleteWholeDictation = SharedStore.deleteWholeDictation
   @State private var windowMinutes = SharedStore.windowMinutes
   @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = SharedStore.defaultThemeID
   /// TEMPORARY: which mic concept to try. Goes with the losers.
@@ -124,6 +125,8 @@ struct SettingsView: View {
       }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
+      Toggle("Delete whole dictation", isOn: $deleteWholeDictation)
+        .onChange(of: deleteWholeDictation) { _, value in SharedStore.deleteWholeDictation = value }
       // TEMPORARY: the three mic concepts, to try each in use. Goes with the losers.
       Picker("Mic", selection: $voiceRaw) {
         Text("Grille").tag(VoiceElementKind.grille.rawValue)
@@ -136,6 +139,8 @@ struct SettingsView: View {
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
+          + "Delete whole dictation makes delete right after a dictation take all of it back; "
+          + "off, delete removes one character. "
           + "Mic is a temporary switch between the three concepts while one is chosen. "
           + "The keyboard picks up changes the next time it appears.")
     }

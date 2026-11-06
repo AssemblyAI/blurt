@@ -29,7 +29,8 @@ extension KeyboardModel {
   /// field it landed in, while the caret still sits at its end with nothing
   /// highlighted. Another field, a moved caret, a selection, or a host that
   /// shows less context than the dictation's length falls back to deleting one
-  /// character: text that merely ends the same way isn't the dictation.
+  /// character: text that merely ends the same way isn't the dictation. With
+  /// Settings' "Delete whole dictation" off, it is always one character.
   package func deleteBackward() {
     UIDevice.current.playInputClick()
     if termDraft != nil {
@@ -37,7 +38,7 @@ extension KeyboardModel {
       updateShift()
       return
     }
-    if let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy) {
+    if SharedStore.deleteWholeDictation, let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy) {
       for _ in inserted.text { proxy.deleteBackward() }
     } else {
       proxy?.deleteBackward()
