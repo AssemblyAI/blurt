@@ -1,4 +1,3 @@
-import AssemblyAI
 import BlurtEngine
 import Foundation
 
@@ -34,6 +33,8 @@ package nonisolated enum BlurtShared {
     package static let micAlignment = "micAlignment"
     package static let listeningUntil = "listeningUntil"
     package static let windowMinutes = "listeningWindowMinutes"
+    /// "Use AirPods mic": the session allows a Bluetooth microphone.
+    package static let airPodsMic = "airPodsMic"
     package static let phase = "phase"
     package static let command = "command"
     package static let result = "result"
@@ -43,6 +44,10 @@ package nonisolated enum BlurtShared {
     package static let keyboardEverSeen = "keyboardEverSeen"
     package static let lexicon = "lexicon"
     package static let lexiconRefreshedAt = "lexiconRefreshedAt"
+    /// The session contract (`SessionContract.swift`).
+    package static let listeningState = "listeningState"
+    package static let ack = "commandAck"
+    package static let keyboardPresence = "keyboardPresence"
   }
 
   /// Darwin notification names. Reverse-DNS so they can't collide with another
@@ -52,6 +57,12 @@ package nonisolated enum BlurtShared {
     package static let phase = "com.assemblyai.blurt.iphone.phase"
     package static let result = "com.assemblyai.blurt.iphone.result"
     package static let lexicon = "com.assemblyai.blurt.iphone.lexicon"
+    /// The app's `ListeningState` changed: opened, closed, interrupted, relaunched.
+    package static let state = "com.assemblyai.blurt.iphone.state"
+    /// The app answered a command (`CommandAck`).
+    package static let ack = "com.assemblyai.blurt.iphone.ack"
+    /// A keyboard appeared or left (`KeyboardPresenceRecord`).
+    package static let keyboard = "com.assemblyai.blurt.iphone.keyboard"
   }
 }
 
@@ -108,9 +119,35 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   package let priorText: String?
   package let selectedText: String?
   package let sentAt: Date
-  /// The keyboard process that sent it (`KeyboardModel.instanceID`): the
-  /// words come back to the field the press was made in, not whichever is up.
+  /// The keyboard process that sent it (`KeyboardProcess.id`): the words
+  /// come back to the field the press was made in, not whichever is up.
   package let keyboard: String?
+  /// Per-process sequence number, so the app can tell a resend from a new
+  /// press even if the id were reused.
+  package let seq: UInt64?
+  /// The controller (one per host field) within the process.
+  package let controllerID: String?
+  /// For a release or cancel: the dictation it ends (`CommandAck.started`),
+  /// so an ending can't land on a later dictation.
+  package let dictationID: UUID?
+  /// The `ListeningState.sequence` the keyboard decided on, for the log.
+  package let stateSequence: UInt64?
+
+  package init(
+    id: UUID, kind: Kind, priorText: String?, selectedText: String?, sentAt: Date, keyboard: String?,
+    seq: UInt64? = nil, controllerID: String? = nil, dictationID: UUID? = nil, stateSequence: UInt64? = nil
+  ) {
+    self.id = id
+    self.kind = kind
+    self.priorText = priorText
+    self.selectedText = selectedText
+    self.sentAt = sentAt
+    self.keyboard = keyboard
+    self.seq = seq
+    self.controllerID = controllerID
+    self.dictationID = dictationID
+    self.stateSequence = stateSequence
+  }
 
   /// Young enough for the app to act on. A notification held while the app
   /// was suspended can deliver one from minutes ago, which the app drops
@@ -156,26 +193,51 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   /// from the *previous* dictation landing a moment after a new press must
   /// not read as that press being over.
   package let command: UUID?
+  /// Why an `.error` happened, typed, so the keyboard can show one line and
+  /// decide whether the next tap hops.
+  package let reason: FailureReason?
+  /// The press this in-flight phase answers (set when the session accepts
+  /// it): a lost ack can't time out a dictation the keyboard can see running.
+  package let answers: UUID?
+  /// The dictation in flight and its owner.
+  package let dictation: DictationRef?
+  /// The app process that published this.
+  package let launchID: UUID?
+  /// When the recording in flight started, for the keyboard's countdown.
+  package let recordingSince: Date?
 
-  package init(state: State, message: String?, level: Double, at: Date, command: UUID? = nil) {
+  package init(
+    state: State, message: String?, level: Double, at: Date, command: UUID? = nil, reason: FailureReason? = nil,
+    answers: UUID? = nil, dictation: DictationRef? = nil, launchID: UUID? = nil, recordingSince: Date? = nil
+  ) {
     self.state = state
     self.message = message
     self.level = level
     self.at = at
     self.command = command
+    self.reason = reason
+    self.answers = answers
+    self.dictation = dictation
+    self.launchID = launchID
+    self.recordingSince = recordingSince
   }
 
   package static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
 
-  private static let longestNoticeDwell = 2.0
+  /// How long the words-landed notice stays on the orb before it settles back
+  /// to idle: the Mac's 0.8 s, a little longer since a phone has no hover to
+  /// reveal more (DESIGN.md › The two processes: notice dwell).
+  package static let pastedDwell: TimeInterval = 1.2
+  /// And the copied and error notices, the Mac's 1.6 s the same way: the
+  /// longest a notice dwells.
+  package static let noticeDwell: TimeInterval = 2
 
-  /// How long a notice stays on the orb before it settles back to idle — the
-  /// Mac's 0.8 s / 1.6 s dwell, a little longer since a phone has no hover to
-  /// reveal more. Nil for the states that end on their own.
+  /// How long this notice stays on the orb before it settles back to idle.
+  /// Nil for the states that end on their own.
   package var noticeDwellSeconds: Double? {
     switch state {
-    case .pasted: 1.2
-    case .copied, .error: Self.longestNoticeDwell
+    case .pasted: Self.pastedDwell
+    case .copied, .error: Self.noticeDwell
     case .idle, .connecting, .recording, .processing: nil
     }
   }
@@ -198,7 +260,7 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   }
 
   /// The longest notice dwell plus a second of slack.
-  package static let noticeStaleAfter: TimeInterval = longestNoticeDwell + 1
+  package static let noticeStaleAfter: TimeInterval = noticeDwell + 1
   /// The engine's cap on one dictation, plus ten seconds for the transcript
   /// to come back.
   package static let inFlightStaleAfter: TimeInterval = SyncSTTLimits.maxAudioSeconds + 10
@@ -304,97 +366,13 @@ package nonisolated enum SharedStore {
     set { defaults.set(newValue, forKey: BlurtShared.Key.listeningUntil) }
   }
 
-  // MARK: Presence — the contract between the two processes
-
-  /// Each side writes a timestamp every few seconds while it is there (the app
-  /// while its microphone is open, the keyboard while it is on screen), and
-  /// the other side counts it present while that timestamp is younger than
-  /// the window. The window is more than twice the heartbeat, so one missed
-  /// beat — a busy main thread, a suspended process resuming — doesn't read
-  /// as absence, while a killed process reads as absent within seconds.
-  package static let appHeartbeatInterval: TimeInterval = 5
-  package static let keyboardHeartbeatInterval: TimeInterval = 4
-  package static let presenceWindow: TimeInterval = 15
-
-  /// Whether the app currently has the microphone open for the keyboard: the
-  /// window has not lapsed, and the app is still there to hear — iOS may have
-  /// killed it, or a phone call taken the microphone, with the window's end
-  /// still in the future. The keyboard then opens the app rather than sending
-  /// a press nobody would answer.
-  package static var isListening: Bool { isListening(now: Date()) }
-
-  package static func isListening(now: Date) -> Bool {
-    guard (listeningUntil ?? .distantPast) > now else { return false }
-    return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
-  }
-
-  /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
-  package static var isKeyboardPresent: Bool {
-    Date().timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
-  }
-
-  /// Which keyboard process is on screen — a fresh id per process, written
-  /// with its heartbeat — so a result can be addressed to it.
-  package static var keyboardInstance: String? {
-    get { defaults.string(forKey: BlurtShared.Key.keyboardInstance) }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardInstance) }
-  }
-
-  // MARK: Key terms
-
-  /// The user's own key terms — names and jargon the request should spell
-  /// right — under the engine's own key (`KeyTermsStore.defaultsKey`,
-  /// `BlurtKeyTerms`, comma-separated) but in the App Group, so the keyboard
-  /// can add one on the spot and the app reads it on the very next press.
-  package static var keyTerms: [String] {
-    get { KeyTerms.parse(defaults.string(forKey: keyTermsKey) ?? "") }
-    set { defaults.set(KeyTerms.join(newValue), forKey: keyTermsKey) }
-  }
-
-  /// `BlurtKeyTerms` — spelled out here rather than imported from the engine so
-  /// the keyboard, which links it too, and the app can't disagree.
-  package static let keyTermsKey = "BlurtKeyTerms"
-
-  /// Adds a term unless it is already there (case-insensitively). Returns
-  /// whether the list changed.
-  @discardableResult
-  package static func addKeyTerm(_ term: String) -> Bool {
-    let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return false }
-    var terms = keyTerms
-    guard !terms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return false }
-    terms.append(trimmed)
-    keyTerms = terms
-    return true
-  }
-
-  package static var appSeenAt: Date? {
-    get { defaults.object(forKey: BlurtShared.Key.appSeenAt) as? Date }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.appSeenAt) }
-  }
-
-  package static var keyboardSeenAt: Date? {
-    get { defaults.object(forKey: BlurtShared.Key.keyboardSeenAt) as? Date }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardSeenAt) }
-  }
-
-  /// When the keyboard last copied the phone's word list into the App Group.
-  package static var lexiconRefreshedAt: Date? {
-    get { defaults.object(forKey: BlurtShared.Key.lexiconRefreshedAt) as? Date }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.lexiconRefreshedAt) }
-  }
-
-  /// Set by the keyboard the first time it runs with Full Access — the only
-  /// public-API way the app can tell that the keyboard was added and allowed.
-  package static var keyboardEverSeen: Bool {
-    get { defaults.bool(forKey: BlurtShared.Key.keyboardEverSeen) }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardEverSeen) }
-  }
-
-  /// Fires a Darwin notification. Carries nothing: the receiver reads the
-  /// payload back out of these defaults.
-  package static func post(_ signal: String) {
-    CFNotificationCenterPostNotification(
-      CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(signal as CFString), nil, nil, true)
+  /// Whether AirPods (any Bluetooth headset) may be the microphone while a
+  /// session is on. Off by default: the session then prefers the phone's own
+  /// mic and allows only A2DP, so music on AirPods stays stereo for the whole
+  /// window; on, the session allows HFP and takes their mic. Read when the
+  /// session is set up, so a change applies to the next session.
+  package static var airPodsMic: Bool {
+    get { defaults.bool(forKey: BlurtShared.Key.airPodsMic) }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.airPodsMic) }
   }
 }

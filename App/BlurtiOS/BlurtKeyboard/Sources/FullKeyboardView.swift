@@ -13,6 +13,7 @@ import SwiftUI
 /// password fields, so those never reach here.
 struct FullKeyboardView: View {
   var model: KeyboardModel
+  @Environment(\.keyboardProfile) private var profile
 
   private static let symbols = ["1234567890", "-/:;()$&@\"", ".,?!'"]
   private static let more = ["[]{}#%^*+=", "_\\|~<>€£¥•", ".,?!'"]
@@ -20,13 +21,13 @@ struct FullKeyboardView: View {
   var body: some View {
     GeometryReader { geo in
       // The root has already taken the side margins off; the rest is the row.
-      let geometry = KeyGeometry(rowWidth: geo.size.width)
+      let geometry = KeyGeometry(rowWidth: geo.size.width, profile: profile)
       let gap = geometry.gap
       VStack(spacing: 0) {
         // The voice row sits where the system's suggestion bar does, and the
         // first key row starts right under it, as the iPhone's does.
         VoiceBar(model: model)
-        VStack(spacing: KeyboardPalette.rowGap) {
+        VStack(spacing: profile.rowGap) {
           ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
             let third = index == 2  // literal-ok: the third row
             // The third row's keys fill what shift and delete leave: seven
@@ -48,7 +49,9 @@ struct FullKeyboardView: View {
             }
             .frame(maxWidth: .infinity)
           }
-          // The stock bottom row; voice lives only in the bar above.
+          // The stock bottom row; voice lives only in the bar above. On a
+          // Face ID phone the system draws the globe under the keyboard, so
+          // the row is 123 · space · return and space takes the globe's width.
           HStack(spacing: gap) {
             KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: geometry.abcWidth) {
               model.toggleSymbols()
@@ -61,6 +64,10 @@ struct FullKeyboardView: View {
           }
         }
       }
+      // The rows sit on the keyboard's bottom margin whatever height the
+      // reader is given (a carousel page mid-resize): the extra, if any, is
+      // above the voice row, never under the keys.
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
   }
 
@@ -97,13 +104,14 @@ private struct LetterKey: View {
   @GestureState private var pressed = false
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.keyboardInContainer) private var inContainer
+  @Environment(\.keyboardProfile) private var profile
 
   var body: some View {
     Text(label)
       .font(.system(size: DesignTokens.Typography.sizeLetter, weight: DesignTokens.Typography.weightLetter))
       .foregroundStyle(palette.keyText)
-      .frame(width: width, height: KeyCap.height)
-      .keyCap(palette.keyFill(modifier: false, inContainer: inContainer))
+      .frame(width: width, height: profile.keyHeight)
+      .keyCap(palette.keyFill(modifier: false, inContainer: inContainer), radius: profile.keyRadius)
       .overlay(alignment: .top) {
         if pressed { popup }
       }
@@ -119,7 +127,7 @@ private struct LetterKey: View {
             // one that ended on the key was, wherever the thumb rolled.
             guard
               KeyboardInteraction.isTap(
-                value.translation, endedAt: value.location, in: CGSize(width: width, height: KeyCap.height))
+                value.translation, endedAt: value.location, in: CGSize(width: width, height: profile.keyHeight))
             else { return }
             action()
           }

@@ -21,6 +21,13 @@ struct UtteranceFeedTests {
     #expect(mid > 0 && mid < 1)
   }
 
+  @Test("digital silence is all zeros; a quiet room's noise floor is not")
+  func digitalSilence() {
+    #expect(UtteranceFeed.isDigitalSilence(pcm([0, 0, 0, 0])))
+    #expect(!UtteranceFeed.isDigitalSilence(pcm([0, 1, 0, 0])))
+    #expect(!UtteranceFeed.isDigitalSilence(pcm([3, -3, 2, -2])))
+  }
+
   @Test("chunks reach the utterance between begin and end, the tally counts them, and nothing outside")
   func tally() async {
     let feed = UtteranceFeed()
@@ -43,12 +50,18 @@ struct UtteranceFeedTests {
 
 @Suite("Layout arithmetic")
 struct LayoutArithmeticTests {
-  @Test("the full layout's height is its rows at the theme spacing (DESIGN.md)")
+  /// The gallery's stand-in profile: the brand's faces are the same on
+  /// either generation, which is all these rows check.
+  private static let profile = KeyboardProfile.standIn(width: 390)
+
+  @Test("the full layout's height is its rows at the profile's spacing (DESIGN.md)")
   func fullHeight() {
-    let expected =
-      KeyboardRootView.verticalMargin + VoiceBar.height + 4 * KeyCap.height + 3 * KeyboardPalette.rowGap
-      + KeyboardRootView.bottomMarginKeys
-    #expect(KeyboardLayout.full.height == expected)
+    for generation in [KeyboardProfile.Generation.classic, .glass] {
+      let profile = KeyboardProfile(generation: generation, width: 390, hasGlobe: false)
+      let expected = profile.topBand + 4 * profile.keyHeight + 3 * profile.rowGap + profile.bottomInset
+      #expect(KeyboardLayout.full.height(profile: profile) == expected, "\(generation)")
+      #expect(profile.topBand == profile.marginTop + VoiceBar.height)
+    }
   }
 
   @Test("the gallery reads a layout, states and an optional theme from the launch arguments")
@@ -60,20 +73,21 @@ struct LayoutArithmeticTests {
     #expect(rows.count == 3)
     #expect(rows[1].model.effectiveLayout == .full)
     #expect(rows[2].model.termDraft == "Rizz")
-    #expect(rows[0].model.palette.face == .dark)
+    #expect(rows[0].model.palette(for: Self.profile).face == .dark)
     // The old theme words still land on a face, so a capture script never breaks.
     let dark = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "system-dark"])
-    #expect(dark[0].model.palette.keyText == DesignTokens.Themes.darkLegend)
+    #expect(dark[0].model.palette(for: Self.profile).keyText == DesignTokens.Themes.darkLegend)
     let ink = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "ink"])
-    #expect(ink[0].model.palette.face == .dark)
+    #expect(ink[0].model.palette(for: Self.profile).face == .dark)
     #expect(
-      KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0].model.palette.face == .light)
+      KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0]
+        .model.palette(for: Self.profile).face == .light)
   }
 
   @Test("the capture switches ride along, and a switch where the theme would be is not a theme")
   func galleryOptions() {
     let args = ["app", "-BlurtGallery", "panel", "idle", "-BlurtGalleryStill", "-BlurtGalleryBare"]
-    #expect(KeyboardGalleryView.rows(from: args)[0].model.palette.face == .light)
+    #expect(KeyboardGalleryView.rows(from: args)[0].model.palette(for: Self.profile).face == .light)
     #expect(KeyboardGalleryView.Options.parse(args) == .init(still: true, bare: true))
     #expect(KeyboardGalleryView.Options.parse(["app", "-BlurtGallery", "panel", "idle", "dark"]) == .init())
     #expect(KeyboardGalleryView.rows(from: args)[0].model.voiceKind == .shipped)

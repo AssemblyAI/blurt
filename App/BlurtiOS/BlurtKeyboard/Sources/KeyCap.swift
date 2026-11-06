@@ -9,7 +9,8 @@ import SwiftUI
 /// they're given, `width` fixes one — the layouts pass `KeyGeometry`'s, so
 /// a key is the same size on every page — and a key with neither is at least
 /// the iPhone's 123 key wide, its legend padded inside that. `height` fixes
-/// the cap's height where a row is not the standard 43 (the slim bar).
+/// the cap's height where a row is not the profile's key height (the slim
+/// bar).
 struct KeyCap: View {
   var title: String?
   var systemImage: String?
@@ -22,8 +23,7 @@ struct KeyCap: View {
   var action: () -> Void
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.keyboardInContainer) private var inContainer
-
-  static let height = DesignTokens.Metrics.keyHeight
+  @Environment(\.keyboardProfile) private var profile
 
   init(
     title: String? = nil, systemImage: String? = nil, tint: Color? = nil, flexible: Bool = false,
@@ -65,18 +65,18 @@ struct KeyCap: View {
     .padding(.horizontal, flexible || width != nil ? 0 : DesignTokens.Metrics.keyPad)
     .frame(maxWidth: flexible ? .infinity : nil)
     .frame(width: width, height: height)
-    .frame(minWidth: width == nil ? DesignTokens.Metrics.keyMinWidth : nil, minHeight: height ?? Self.height)
-    .keyCap(bare ? .clear : palette.keyFill(modifier: dark, inContainer: inContainer))
+    .frame(minWidth: width == nil ? DesignTokens.Metrics.keyMinWidth : nil, minHeight: height ?? profile.keyHeight)
+    .keyCap(bare ? .clear : palette.keyFill(modifier: dark, inContainer: inContainer), radius: profile.keyRadius)
     .keyPress(action)
     .accessibilityLabel(title ?? systemImage ?? "")
   }
 }
 
 extension View {
-  /// The cap under a key's legend: the palette's fill at the corner radius and
-  /// nothing else — flat. No drop, no edge, no gloss.
-  func keyCap(_ fill: Color) -> some View {
-    background(fill, in: RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius))
+  /// The cap under a key's legend: the palette's fill at the profile's
+  /// corner radius and nothing else — flat. No drop, no edge, no gloss.
+  func keyCap(_ fill: Color, radius: CGFloat) -> some View {
+    background(fill, in: RoundedRectangle(cornerRadius: radius))
   }
 
   /// A key's touch: lights while the finger is down, acts on release — and

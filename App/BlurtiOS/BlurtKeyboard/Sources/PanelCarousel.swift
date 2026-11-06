@@ -10,7 +10,9 @@ import SwiftUI
 /// apart, the two can never cross, whichever way the flips come — left then
 /// right, or left twice. A flip back before the slide has settled retreats
 /// rather than starting a second slide over the first. `PanelCarouselState`
-/// holds the rules (tested); this view only animates what it says.
+/// holds the rules (tested); this view only animates what it says. A page is
+/// the keyboard's full width and carries the side margin itself, so it
+/// slides in flush with the keyboard's edges.
 struct PanelCarousel: View {
   var model: KeyboardModel
   let reduceMotion: Bool
@@ -19,6 +21,7 @@ struct PanelCarousel: View {
   /// a slide. The only animated value.
   @State private var slide: CGFloat = 0
   @State private var onScreen = false
+  @Environment(\.keyboardProfile) private var profile
 
   init(model: KeyboardModel, reduceMotion: Bool) {
     self.model = model
@@ -46,15 +49,20 @@ struct PanelCarousel: View {
   }
 
   /// One page at its own height, so neither is stretched while the keyboard
-  /// is resizing under the slide.
+  /// is resizing under the slide, with the side margin inside it.
   @ViewBuilder private func page(keys: Bool, width: CGFloat) -> some View {
     let height =
-      (keys ? KeyboardLayout.full : .panel).height - KeyboardRootView.verticalMargin
-      - KeyboardRootView.bottomMarginKeys
+      (keys ? KeyboardLayout.full : .panel).height(profile: profile) - profile.marginTop - profile.bottomInset
     if keys {
-      FullKeyboardView(model: model).id("keys").frame(width: width, height: height, alignment: .bottom)
+      FullKeyboardView(model: model)
+        .padding(.horizontal, profile.marginSide)
+        .id("keys")
+        .frame(width: width, height: height, alignment: .bottom)
     } else {
-      PanelView(model: model).id("panel").frame(width: width, height: height, alignment: .bottom)
+      PanelView(model: model)
+        .padding(.horizontal, profile.marginSide)
+        .id("panel")
+        .frame(width: width, height: height, alignment: .bottom)
     }
   }
 

@@ -15,6 +15,7 @@ struct SettingsView: View {
   @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
+  @State private var airPodsMic = SharedStore.airPodsMic
   @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = SharedStore.defaultThemeID
   /// TEMPORARY: which mic concept to try. Goes with the losers.
   @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
@@ -120,7 +121,9 @@ struct SettingsView: View {
       NavigationLink {
         ThemePickerView()
       } label: {
-        LabeledContent("Theme", value: KeyboardPalette.resolve(themeID, dark: false).name)
+        LabeledContent(
+          "Theme",
+          value: KeyboardPalette.resolve(themeID, dark: false, generation: KeyboardProfile.standInGeneration).name)
       }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
@@ -149,11 +152,20 @@ struct SettingsView: View {
         Text("1 hour").tag(60)
         Text("Until I stop it").tag(0)
       }
-      .onChange(of: windowMinutes) { _, value in SharedStore.windowMinutes = value }
+      .onChange(of: windowMinutes) { _, value in
+        SharedStore.windowMinutes = value
+        // The window that is open takes the new length, not only the next one.
+        coordinator.windowMinutesChanged()
+      }
+      Toggle("Use AirPods mic", isOn: $airPodsMic)
+        .onChange(of: airPodsMic) { _, value in SharedStore.airPodsMic = value }
     } header: {
       Eyebrow("Listening")
     } footer: {
-      Text("How long the mic stays open with nobody dictating, so the keyboard can start without opening Blurt.")
+      Text(
+        "How long a session stays on with nobody dictating, counted from the last word, so the keyboard can start "
+          + "without opening Blurt. With AirPods, the phone's own mic is used and music stays stereo; "
+          + "Use AirPods mic takes theirs instead, from the next session.")
     }
   }
 

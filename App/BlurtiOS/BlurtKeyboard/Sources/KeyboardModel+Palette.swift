@@ -1,8 +1,11 @@
 import BlurtiOSCore
 
 extension KeyboardModel {
-  /// The palette for the face the model draws (`KeyboardModel.face`).
-  var palette: KeyboardPalette { .resolve(face.themeID, dark: face.dark) }
+  /// The palette for the face the model draws (`KeyboardModel.face`) on a
+  /// profile's generation: the system theme exists on classic alone.
+  func palette(for profile: KeyboardProfile) -> KeyboardPalette {
+    .resolve(face.themeID, dark: face.dark, generation: profile.generation)
+  }
 }
 
 extension ThemeFace {
