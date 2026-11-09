@@ -257,13 +257,21 @@ targets:
     platform: iOS
     sources:
       - path: BlurtiOSTests
+      # The engine tests' hand-stepped clock, compiled in rather than copied:
+      # the window's heartbeat and the hop's return cap sleep on it here.
+      - path: ../../Tests/BlurtEngineTests/Stubs/TestClock.swift
       # The design's one source, bundled so DesignTokensTests can pin the
       # compiled DesignTokens.swift to the file it was generated from.
       - path: Design/tokens.json
         buildPhase: resources
-      # The iPhone keyboard's measured geometry, so AppleGeometryTests can pin
-      # the key/* tokens to what scripts/apple-geometry.sh read off the phone.
-      - path: Design/apple-geometry.json
+      # The iPhone keyboard's measured geometry, one file per profile, so
+      # AppleGeometryTests and KeyboardProfileTests can pin the glass/* and
+      # classic/* tokens to what scripts/apple-geometry.sh read off the phone.
+      - path: Design/apple-geometry-glass-402.json
+        buildPhase: resources
+      - path: Design/apple-geometry-classic-390.json
+        buildPhase: resources
+      - path: Design/apple-geometry-classic-375.json
         buildPhase: resources
     dependencies:
       - target: BlurtiOS

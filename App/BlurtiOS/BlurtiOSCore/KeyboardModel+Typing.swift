@@ -123,29 +123,17 @@ extension KeyboardModel {
   /// had selected a word — the one Blurt got wrong — it is the starting
   /// point, and saving also replaces it in the text with what they typed.
   /// The field takes the mic key's row, so a dictation in flight is closed
-  /// first — nothing runs on with no key to stop it. From the plain + a
-  /// recording is released and the words still land; from a highlighted
-  /// word it is cancelled: the words would land *over* the word being fixed
-  /// (a result replaces the selection), and the user's intent is the word.
-  /// Words already being transcribed follow the same rule: from the plain +
-  /// they still land (the mic is off; there is nothing to stop), from a
-  /// highlighted word they are cancelled.
+  /// first — nothing runs on with no key to stop it (`endDictation`). From
+  /// the plain + a recording is released and the words still land; from a
+  /// highlighted word it is cancelled: the words would land *over* the word
+  /// being fixed (a result replaces the selection), and the user's intent is
+  /// the word. Words already being transcribed follow the same rule: from
+  /// the plain + they still land (the mic is off; there is nothing to stop),
+  /// from a highlighted word they are cancelled. The gate stays the
+  /// handshake's: it comes up when the stop is answered, not here.
   package func beginAddingTerm() {
     let seed = Self.termCandidate(from: proxy?.selectedText) ?? ""
-    switch snapshot.state {
-    case .recording: perform(seed.isEmpty ? .stop : .cancel)
-    case .connecting: perform(.cancel)
-    case .processing:
-      // The gate may still be latched from the tap that started it (an
-      // auto-release has no finger event to close it): that is no reason to
-      // cancel.
-      if !seed.isEmpty { perform(.cancel) }
-    case .idle, .pasted, .copied, .error:
-      // A press the app hasn't answered yet would start a dictation under
-      // the field: it is taken back.
-      if unansweredPress != nil || !gate.isIdle { perform(.cancel) }
-    }
-    gate.reset()
+    endDictation(keepWords: seed.isEmpty)
     termDraftFromSelection = seed.isEmpty ? nil : seed
     termHostBaseline = proxy?.documentContextBeforeInput ?? ""
     termHostBaselineAfter = proxy?.documentContextAfterInput ?? ""
@@ -271,24 +259,31 @@ extension KeyboardModel {
 
   package func globe() { controller?.advanceToNextInputMode() }
 
-  /// Brings the app forward to open the microphone — the one thing a keyboard
-  /// cannot do for itself. iOS gives extensions no `UIApplication.shared`, so
-  /// this walks the responder chain to the application object and asks it, the
-  /// way every keyboard that opens its app does. With `open(_:options:)`: since
-  /// iOS 18 the old `openURL:` only logs "BUG IN CLIENT OF UIKIT" and opens
-  /// nothing.
-  package func openApp() {
-    guard let controller,
-      let url = URL(string: "\(BlurtShared.urlScheme)://\(BlurtShared.startHost)")
-    else { return }
+  /// Brings the app forward — to open the microphone, the one thing a
+  /// keyboard cannot do for itself, or to finish its setup — at the URL the
+  /// handshake chose (`BlurtShared.startURL`, `setupURL`). iOS gives
+  /// extensions no `UIApplication.shared`, so this walks the responder chain
+  /// to the application object and asks it, the way every keyboard that
+  /// opens its app does. With `open(_:options:)`: since iOS 18 the old
+  /// `openURL:` only logs "BUG IN CLIENT OF UIKIT" and opens nothing. The
+  /// log says whether an application was there to ask: nothing here can
+  /// tell whether it then opened (a later iOS may refuse an extension
+  /// without Full Access), so the setup line stays up until the app answers.
+  package func openApp(url: URL) {
+    guard let controller else {
+      KeyboardLog.hop(url, asked: false)
+      return
+    }
     var responder: UIResponder? = controller
     while let current = responder {
       if let application = current as? UIApplication {
+        KeyboardLog.hop(url, asked: true)
         urlOpener(application, url)
         return
       }
       responder = current.next
     }
+    KeyboardLog.hop(url, asked: false)
   }
 }
 
@@ -309,10 +304,12 @@ package struct Insertion: Equatable {
   }
 }
 
-/// The three letter rows, by the language the user types in most.
+/// The three letter rows, by the language the user types in most. AZERTY's
+/// third row carries the apostrophe, as the iPhone's French keyboard does,
+/// so every layout's third row has seven keys between shift and delete.
 package nonisolated enum LetterLayout {
   package static let qwerty = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-  package static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn"]
+  package static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn'"]
   package static let qwertz = ["qwertzuiop", "asdfghjkl", "yxcvbnm"]
 
   /// From the phone's own language order — no setting to make.

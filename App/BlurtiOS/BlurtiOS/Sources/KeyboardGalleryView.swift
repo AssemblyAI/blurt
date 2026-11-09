@@ -1,3 +1,4 @@
+import BlurtDesign
 import BlurtiOSCore
 
 #if DEBUG
@@ -96,14 +97,25 @@ import BlurtiOSCore
       }
     }
 
+    /// The keyboard at this phone's width on this OS's generation — the
+    /// profile the real keyboard would get, the host's container taken as
+    /// present where the OS has one (`KeyboardProfile.standIn`). The height
+    /// is the generation's, whatever the width.
     private func keyboard(_ row: Row) -> some View {
-      KeyboardRootView(model: row.model)
-        .frame(height: row.model.effectiveLayout.height)
-        // The host's material, under a clear surface, as the app stands in for it.
-        .background(row.model.palette.standIn)
-        .clipped()
-        .environment(\.keyboardMotionHeld, options.still)
+      GeometryReader { geo in
+        let profile = KeyboardProfile.standIn(width: geo.size.width)
+        KeyboardRootView(model: row.model, profile: profile)
+          // The host's material, under a clear surface, as the app stands in for it.
+          .background(row.model.palette(for: profile).standIn(painted: profile.paintsSurface))
+      }
+      .frame(height: row.model.effectiveLayout.height(profile: Self.heightProfile))
+      .clipped()
+      .environment(\.keyboardMotionHeld, options.still)
     }
+
+    /// A profile for the heights alone, which depend on the generation and
+    /// not the width.
+    private static let heightProfile = KeyboardProfile.standIn(width: DesignTokens.Metrics.pickerPreviewWidth)
 
     /// The rows named by the launch arguments; empty when they don't ask for
     /// the gallery at all.
@@ -225,7 +237,7 @@ import BlurtiOSCore
           Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.standIn)
+        .background(palette.standIn(painted: KeyboardGalleryView.heightProfile.paintsSurface))
         .ignoresSafeArea()
       }
 

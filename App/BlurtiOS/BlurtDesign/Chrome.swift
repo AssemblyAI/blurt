@@ -127,14 +127,25 @@ extension View {
   }
 }
 
-/// The lowercase wordmark from the Mac's ready screen, tinted with the accent.
-/// The image (`blurt-ready-logo.png`, shared from `Design/brand`) is the host
-/// bundle's resource, not the library's; without it the word is set in the
-/// heading face instead.
+/// The lowercase wordmark from the Mac's ready screen, tinted with the accent
+/// unless told otherwise. The image (`blurt-ready-logo.png`, shared from
+/// `Design/brand`) is the host bundle's resource, not the library's; without
+/// it the word is set in the heading face instead.
 package struct Wordmark: View {
-  private static let height = DesignTokens.Metrics.wordmarkHeight
+  /// The image's width over its height, for a caller that has to know the
+  /// wordmark's size before it is drawn (the Blurt-is-on card's bounce).
+  package static var aspectRatio: CGFloat {
+    guard let size = UIImage(named: "blurt-ready-logo")?.size, size.height > 0 else { return 1 }
+    return size.width / size.height
+  }
 
-  package init() {}
+  private let height: CGFloat
+  private let tint: Color
+
+  package init(height: CGFloat = DesignTokens.Metrics.wordmarkHeight, tint: Color = BlurtBrand.accent) {
+    self.height = height
+    self.tint = tint
+  }
 
   package var body: some View {
     if let image = UIImage(named: "blurt-ready-logo") {
@@ -142,13 +153,13 @@ package struct Wordmark: View {
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
-        .frame(height: Self.height)
-        .foregroundStyle(BlurtBrand.accent)
+        .frame(height: height)
+        .foregroundStyle(tint)
         .accessibilityLabel("Blurt")
     } else {
       Text("blurt")
         .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
-        .foregroundStyle(BlurtBrand.accent)
+        .foregroundStyle(tint)
     }
   }
 }

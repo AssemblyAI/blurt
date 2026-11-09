@@ -29,6 +29,11 @@ final class BlurtKeyboardFlows: XCTestCase {
     // The app listens from launch, so the keyboard's mic key is live.
     app.launchArguments =
       ["-BlurtProbeField"] + arguments + ["-BlurtStartListening", "-BlurtProbeResetTerms", "-BlurtProbeText", "Rizz"]
+    // A simulator with no key in its Keychain can't open the window: the key
+    // the script was given (TEST_RUNNER_BLURT_DEBUG_API_KEY) goes to the app.
+    if let key = ProcessInfo.processInfo.environment["BLURT_DEBUG_API_KEY"], !key.isEmpty {
+      app.launchEnvironment["BLURT_DEBUG_API_KEY"] = key
+    }
     app.launch()
     try bringUpBlurt()
     shot("up")
@@ -53,7 +58,9 @@ final class BlurtKeyboardFlows: XCTestCase {
 
   // MARK: Helpers
 
-  /// Where the mic and the + sit, for this run's layout and side.
+  /// Where the mic and the + sit, for this run's layout and side: in the
+  /// keyboard's own coordinates, whatever the layout — the keyboard spans
+  /// the window, so its width is the window's.
   private func checkPlacement(layout: String, mic: XCUIElement, plus: XCUIElement) {
     let width = app.windows.firstMatch.frame.width
     let centre = mic.frame.midX
@@ -62,31 +69,17 @@ final class BlurtKeyboardFlows: XCTestCase {
       abs(plus.frame.midY - mic.frame.midY) < 4,
       "the + at the mic's centre line (\(plus.frame.midY) vs \(mic.frame.midY))")
     if let side {
-      // One hand: the mic at the chosen edge, the + on its inner side. The
-      // slim bar's row is bounded by the globe (when Blurt draws one; on a
-      // Face ID phone the system puts it under the keyboard) and delete
-      // keys, so there the mic is next to that key rather than the edge.
+      // One hand: the mic at the chosen edge of the keyboard, the + on its
+      // inner side — in every layout, the slim bar's keys sitting inboard.
       let left = side == "left"
-      let globe = app.buttons["globe"].firstMatch
-      let bound =
-        layout == "slimBar"
-        ? (left ? (globe.exists ? globe.frame.maxX : 0) : app.buttons["delete.left"].firstMatch.frame.minX)
-        : (left ? 0 : width)
-      let edge = left ? mic.frame.minX - bound : bound - mic.frame.maxX
+      let edge = left ? mic.frame.minX : width - mic.frame.maxX
       let inner = left ? plus.frame.minX > mic.frame.maxX : plus.frame.maxX < mic.frame.minX
-      check(edge < 12, "mic at the \(side) edge (\(edge) pt in)")
+      check(edge < 12, "mic at the \(side) edge of the keyboard (\(edge) pt in, \(layout))")
       check(inner, "the + on the mic's inner side")
-    } else if layout == "panel" {
-      check(abs(centre - width / 2) < 4, "mic centred in the panel (\(centre) of \(width))")
-      check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
     } else {
-      // The element itself is centred in the voice bar's own width — the
-      // whole row in the full keyboard, the room between the globe (if any)
-      // and delete in the slim bar — with the + hanging beside it.
-      let globe = app.buttons["globe"].firstMatch
-      let from = layout == "slimBar" && globe.exists ? globe.frame.maxX : 0
-      let to = layout == "slimBar" ? app.buttons["delete.left"].firstMatch.frame.minX : width
-      check(abs(centre - (from + to) / 2) < 8, "mic centred in its row (\(centre) in \(from)…\(to))")
+      // The mic's centre is the keyboard's (W/2) in every layout; the +
+      // hangs beside it.
+      check(abs(centre - width / 2) < 4, "mic centred in the keyboard (\(centre) of \(width), \(layout))")
       check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
     }
   }

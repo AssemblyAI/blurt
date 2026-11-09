@@ -11,10 +11,11 @@ import SwiftUI
 /// highlighted word — hangs off the mic a clearance away, at the mic's own
 /// vertical centre: on its trailing side in the middle, on its inner side at
 /// an edge, so the mic is always the thing at the edge. A chip grows away
-/// from the mic as far as the row allows. When a chip has less than its
-/// minimum beside a centred mic (the slim bar), the mic and the chip centre
-/// as a pair instead: the mic moves over rather than the chip collapsing
-/// onto it. In the panel the cancel × mirrors the add key on the mic's other
+/// from the mic as far as the row allows, or as far as `addCap` allows where
+/// keys share the row (the slim bar). When a chip has less than its minimum
+/// beside a centred mic and nothing caps it, the mic and the chip centre as
+/// a pair instead: the mic moves over rather than the chip collapsing onto
+/// it. In the panel the cancel × mirrors the add key on the mic's other
 /// side, so the row reads × · mic · + while something is in flight.
 nonisolated struct VoiceRowLayout: Equatable {
   enum Side: Equatable {
@@ -65,28 +66,31 @@ nonisolated struct VoiceRowLayout: Equatable {
 
   /// Places a mic key that shows `shown` wide — never narrower than
   /// `minMicWidth` (a key), never wider than the row — with the + beside it,
-  /// or a chip when `chip`.
-  func place(micWidth shown: CGFloat, minMicWidth: CGFloat, chip: Bool) -> Placement {
+  /// or a chip when `chip`. With an `addCap` the add box never grows past
+  /// it, and the mic stays where it is: the row has keys to keep their room
+  /// (the slim bar), so the pair never centres.
+  func place(micWidth shown: CGFloat, minMicWidth: CGFloat, chip: Bool, addCap: CGFloat? = nil) -> Placement {
     let mic = min(rowWidth, max(minMicWidth, shown))
+    let cap = addCap ?? .infinity
     switch side {
     case .leading:
       let addX = mic + clearance
-      let room = max(0, rowWidth - addX)
+      let room = min(cap, max(0, rowWidth - addX))
       return Placement(
         micX: 0, micWidth: mic, addX: addX, addWidth: chip ? room : min(glyphHit, room), addGrowsTrailing: true,
         cancelX: nil, paired: false)
     case .trailing:
       let micX = rowWidth - mic
       let room = max(0, micX - clearance)
-      let width = chip ? room : min(glyphHit, room)
+      let width = min(cap, chip ? room : min(glyphHit, room))
       return Placement(
         micX: micX, micWidth: mic, addX: room - width, addWidth: width, addGrowsTrailing: false, cancelX: nil,
         paired: false)
     case .center:
       let micX = (rowWidth - mic) / 2  // literal-ok: centred
       let addX = micX + mic + clearance
-      let room = max(0, rowWidth - addX)
-      if chip, room < chipMinWidth {
+      let room = min(cap, max(0, rowWidth - addX))
+      if chip, addCap == nil, room < chipMinWidth {
         // Not enough beside a centred mic: the pair centres, the chip taking
         // what the mic leaves.
         return Placement(
@@ -107,12 +111,16 @@ nonisolated struct VoiceRowLayout: Equatable {
 /// The row itself: the mic key where `VoiceRowLayout` puts it, the add key
 /// hanging off it and — where `cancels` — the cancel × mirroring the add key
 /// while a dictation is in flight. Fills the width it is given; `height` is
-/// the row's, and the mic key's touch target is that tall.
+/// the row's, and the mic key's touch target is that tall. `micCap` is the
+/// most the mic key shows (the panel's box on a narrow phone); `addCap` the
+/// most the add key takes (the slim bar, whose keys share the row).
 struct VoiceRow: View {
   var model: KeyboardModel
   let slot: VoiceSlot
   let height: CGFloat
   var cancels = false
+  var micCap: CGFloat?
+  var addCap: CGFloat?
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.voiceElementKind) private var kind
   @Environment(\.layoutDirection) private var direction
@@ -123,8 +131,8 @@ struct VoiceRow: View {
       let chip = model.selectedTerm != nil
       let layout = VoiceRowLayout(rowWidth: geo.size.width, side: Self.side(model.micAlignment, in: direction))
       let placed = layout.place(
-        micWidth: kind.visibleWidth(slot: slot, recording: recording), minMicWidth: DesignTokens.Metrics.keyMinWidth,
-        chip: chip)
+        micWidth: min(kind.visibleWidth(slot: slot, recording: recording), micCap ?? .infinity),
+        minMicWidth: DesignTokens.Metrics.keyMinWidth, chip: chip, addCap: addCap)
       let cancel = cancels && model.voiceState.canCancel
       ZStack(alignment: .leading) {
         if placed.paired {
