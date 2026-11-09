@@ -44,7 +44,7 @@ struct KeyboardLifecycleTests {
     #expect(SharedStore.keyboardSeenAt == nil)
   }
 
-  @Test("leaving never clears another process's record, nor another controller's in this one, nor the older key beside them")
+  @Test("leaving never clears another process's record, nor another controller's in this one, nor the older key")
   func presenceCompareAndWrite() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
