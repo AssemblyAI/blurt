@@ -19,12 +19,20 @@ import Foundation
 /// owner here.) A dictation with no owner on record — a press that carried
 /// no process id — has nobody to wait for, so whoever is on screen stands
 /// in, and it is released once no keyboard is.
+///
+/// Another keyboard's record *off* screen is read with the same patience as
+/// the owner's own beat: the record is one slot, read and then written
+/// (`SharedStore.writeKeyboardPresence`), so a keyboard leaving as the owner
+/// comes up can write last, and the owner's next beat puts it right. Only
+/// once that record is older than the watchdog is the owner gone.
 package nonisolated enum OwnerWatchdog {
   /// Whether the dictation in flight has lost its keyboard.
   package static func shouldRelease(inFlight: DictationRef?, presence: KeyboardPresenceRecord?, now: Date) -> Bool {
     guard let inFlight else { return false }
-    guard let presence, presence.onScreen, stands(presence, for: inFlight) else { return true }
-    return now.timeIntervalSince(presence.seenAt) > BlurtShared.ownerWatchdog
+    guard let presence else { return true }
+    let old = now.timeIntervalSince(presence.seenAt) > BlurtShared.ownerWatchdog
+    guard stands(presence, for: inFlight) else { return presence.onScreen || old }
+    return !presence.onScreen || old
   }
 
   /// The record is the owner's, or the dictation has no owner to be stricter about.

@@ -177,13 +177,21 @@ nonisolated extension ListeningWindowMachine {
 
   /// Settings' change, applied live: an open window's end moves to the new
   /// length from now (a dictation's floor still holds), and until-stopped
-  /// takes the running timer away. Any other state only keeps the number for
-  /// its next expiry.
+  /// takes the running timer away — an interrupted window's too, which runs
+  /// on through the pause and would end it, or end it the moment it resumed.
+  /// Any other state only keeps the number for its next expiry.
   private mutating func windowMinutesChanged(to minutes: Int, now: Date) -> [Effect] {
     windowMinutes = minutes
-    guard case .open(_, _, let utterance) = state else { return [] }
-    let rescheduled = expiry(from: now, floor: utterance ? maxAudioSeconds : 0)
-    return (rescheduled.isEmpty ? [.cancelExpiry] : rescheduled) + [publish(now: now)]
+    switch state {
+    case .open(_, _, let utterance):
+      let rescheduled = expiry(from: now, floor: utterance ? maxAudioSeconds : 0)
+      return (rescheduled.isEmpty ? [.cancelExpiry] : rescheduled) + [publish(now: now)]
+    case .interrupted where minutes <= Self.untilStopped && windowUntil != nil:
+      windowUntil = nil
+      return [.cancelExpiry, publish(now: now)]
+    case .closed, .opening, .closing, .interrupted:
+      return []
+    }
   }
 
   private mutating func idleChanged(to idle: ListeningState.Idle, now: Date) -> [Effect] {

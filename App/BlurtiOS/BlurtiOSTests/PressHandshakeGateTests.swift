@@ -188,6 +188,8 @@ struct PressHandshakeGateTests {
     let closed = handshake.handle(.stateChanged(Fixture.record(.opening, micLive: false)), now: epoch)
     #expect(closed == [.show(.opening)])
     #expect(handshake.state == .unready(.opening))
+    let again = handshake.handle(.stateChanged(Fixture.record(.opening, micLive: false)), now: epoch)
+    #expect(again == [.none], "the heartbeat's repeat of the record is not another refusal")
     let gone = handshake.handle(.stateChanged(nil), now: epoch)
     #expect(gone == [.show(.sessionOff)])
     let open = handshake.handle(.stateChanged(Fixture.record(.open)), now: epoch)

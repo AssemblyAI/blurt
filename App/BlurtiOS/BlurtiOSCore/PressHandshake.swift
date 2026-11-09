@@ -377,8 +377,10 @@ nonisolated extension PressHandshake {
     case .pressing, .foreign:
       return refuse(lapsed ? .suspended : reason)
     case .idle, .unready:
+      // Said once per reason: the heartbeat feeds the record in every beat.
+      let repeated = state == .unready(reason)
       state = .unready(reason)
-      return [.show(reason)]
+      return repeated ? [.none] : [.show(reason)]
     }
   }
 

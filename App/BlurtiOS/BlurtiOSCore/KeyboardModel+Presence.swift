@@ -146,18 +146,19 @@ extension KeyboardModel {
     }
   }
 
-  /// Presence ends: the record off screen, the `keyboard` signal, the older
-  /// key cleared. Only over this controller's own record: a keyboard leaving
-  /// in one host must not erase the one that just appeared in another — nor,
-  /// within one process, the controller that came up as this one went down.
+  /// Presence ends: the record off screen, the older key cleared, the
+  /// `keyboard` signal. Only over this controller's own record: a keyboard
+  /// leaving in one host must not erase the one that just appeared in
+  /// another — nor, within one process, the controller that came up as this
+  /// one went down — and the older key is that record's, so it stays with it.
   package func leave() {
     leaving?.cancel()
     leaving = nil
-    if SharedStore.keyboardPresence?.controllerID == controllerID {
+    guard SharedStore.keyboardPresence?.controllerID == controllerID,
       SharedStore.writeKeyboardPresence(presence(onScreen: false), ifOwnedBy: KeyboardProcess.id)
-    }
-    SharedStore.post(BlurtShared.Signal.keyboard)
+    else { return }
     SharedStore.keyboardSeenAt = nil
+    SharedStore.post(BlurtShared.Signal.keyboard)
   }
 
   /// The host app is resigning or going to the background: the field is

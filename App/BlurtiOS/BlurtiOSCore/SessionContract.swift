@@ -344,8 +344,10 @@ nonisolated extension SharedStore {
   }
 
   /// Writes the presence record. A keyboard leaving writes `onScreen: false`
-  /// only over its own record (`ifOwnedBy`), never over another process's.
-  /// Returns whether it was written.
+  /// only over its own record (`ifOwnedBy`), never over another process's —
+  /// as read the moment before: UserDefaults has no compare-and-write, so a
+  /// record landing in between is written over, and `OwnerWatchdog` gives its
+  /// keyboard the beats to put it back. Returns whether it was written.
   @discardableResult
   package static func writeKeyboardPresence(_ record: KeyboardPresenceRecord, ifOwnedBy owner: String? = nil) -> Bool {
     if let owner, let current = keyboardPresence, current.processID != owner { return false }

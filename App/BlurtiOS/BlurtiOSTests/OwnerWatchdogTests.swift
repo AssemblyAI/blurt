@@ -54,7 +54,14 @@ struct OwnerWatchdogTests {
   @Test("another keyboard on screen does not keep the owner's dictation alive: the rule is owner-based")
   func otherKeyboardOnScreen() {
     #expect(release(owned, presence("keyboard-other")))
-    #expect(release(owned, presence("keyboard-other", onScreen: false)))
+    #expect(release(owned, presence("keyboard-other", age: BlurtShared.ownerWatchdog * 2)))
+  }
+
+  @Test("another keyboard's record off screen may have landed over the owner's beat: gone only once it is old")
+  func otherKeyboardLeft() {
+    #expect(!release(owned, presence("keyboard-other", onScreen: false)))
+    #expect(!release(owned, presence("keyboard-other", onScreen: false, age: BlurtShared.ownerWatchdog)))
+    #expect(release(owned, presence("keyboard-other", onScreen: false, age: BlurtShared.ownerWatchdog + 0.001)))
   }
 
   @Test("a dictation nobody owns is kept alive by whoever is on screen, and released once nobody is")

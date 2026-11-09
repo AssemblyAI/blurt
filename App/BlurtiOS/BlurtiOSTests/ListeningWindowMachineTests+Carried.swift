@@ -122,6 +122,17 @@ extension ListeningWindowMachineTests {
     #expect(again.windowUntil == t0 + 30 + window)
   }
 
+  @Test("windowMinutesChanged to until-stopped while interrupted takes the paused window's timer away")
+  func windowMinutesChangedToUntilStoppedWhileInterrupted() throws {
+    var m = interruptedWindow()
+    let untilStopped = Machine.Event.windowMinutesChanged(Machine.untilStopped)
+    let paused = Machine.State.interrupted(1, reason: .interrupted, resumable: true)
+    let record = try row(&m, untilStopped, at: t0 + 3, lands: paused, asks: [.cancelExpiry])
+    #expect(record.windowUntil == nil && record.window == .interrupted && m.windowUntil == nil)
+    #expect(m.handle(untilStopped, now: t0 + 4).isEmpty, "nothing left to take away")
+    #expect(actions(m.handle(.resumed(1), now: t0 + 5)) == [.endBackgroundTask], "and nothing to schedule")
+  }
+
   @Test("windowMinutesChanged in any other state is only stored, for the next expiry")
   func windowMinutesChangedStored() {
     var closed = fresh()

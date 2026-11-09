@@ -44,7 +44,7 @@ struct KeyboardLifecycleTests {
     #expect(SharedStore.keyboardSeenAt == nil)
   }
 
-  @Test("leaving never clears another process's record, nor another controller's in this one")
+  @Test("leaving never clears another process's record, nor another controller's in this one, nor the older key beside them")
   func presenceCompareAndWrite() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
@@ -56,12 +56,14 @@ struct KeyboardLifecycleTests {
     model.disappeared()
     #expect(SharedStore.keyboardPresence?.processID == "other-process")
     #expect(SharedStore.keyboardPresence?.onScreen == true)
+    #expect(SharedStore.keyboardSeenAt != nil, "the older key is the record's, and the record is theirs")
     let sibling = KeyboardPresenceRecord(
       processID: KeyboardProcess.id, controllerID: "the-next-field", pid: KeyboardModel.pid, onScreen: true)
     SharedStore.writeKeyboardPresence(sibling)
     model.disappeared()
     #expect(SharedStore.keyboardPresence?.controllerID == "the-next-field")
     #expect(SharedStore.keyboardPresence?.onScreen == true)
+    #expect(SharedStore.keyboardSeenAt != nil)
     // The store's own rule: a write over another process's record, owned, is refused.
     #expect(!SharedStore.writeKeyboardPresence(model.presence(onScreen: false), ifOwnedBy: "someone-else"))
     #expect(SharedStore.keyboardPresence?.onScreen == true)
