@@ -240,14 +240,14 @@ final class SettingsUITests: BlurtUITestCase {
   // MARK: - Keys
 
   /// The Keys tab has a key pop-up per action, and one activation pop-up. On
-  /// a reset launch right ⌘ dictates and, as the only dictating key, can't be
-  /// cleared; left ⌥ reads aloud; nothing asks.
+  /// a reset launch right ⌘ dictates, and its pop-up offers None like every
+  /// other row; left ⌥ reads aloud; nothing asks.
   func testKeysTabListsEveryAction() {
     let keys = openKeys()
 
     let actions = [
       "Dictate", "Dictate: No custom style", KeyActionName.readAloud, KeyActionName.ask,
-      KeyActionName.rewrite, KeyActionName.command,
+      KeyActionName.rewrite, KeyActionName.compose, KeyActionName.command,
     ]
     for action in actions {
       XCTAssertTrue(
@@ -263,7 +263,7 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(dictate.value as? String, "Right Command")
     dictate.click()
     XCTAssertTrue(dictate.menuItems["Right Command"].waitForExistence(timeout: 5))
-    XCTAssertFalse(dictate.menuItems["None"].exists, "The only dictating key can't be cleared")
+    XCTAssertTrue(dictate.menuItems["None"].exists, "Dictate can be set to None, like any action")
     // Close the menu by re-choosing the current item, leaving the setting as it was.
     dictate.menuItems["Right Command"].click()
   }

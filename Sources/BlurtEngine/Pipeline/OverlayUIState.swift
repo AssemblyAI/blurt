@@ -37,6 +37,10 @@ public enum OverlayUIState: Equatable, Sendable {
   /// phase either: the app shows it from the spoken instruction's hand-back
   /// until the rewrite pastes, then the notice a dictation ends with.
   case rewriting
+  /// Writing what spoken instructions describe (the Compose From Instructions
+  /// key). Not a pipeline phase: the app shows it from the instructions'
+  /// hand-back until the writing pastes, then the notice a dictation ends with.
+  case composing
   /// Carrying out a spoken command (the Control Your Mac key): planning it,
   /// then its steps. Not a pipeline phase: the app shows it from the
   /// command's hand-back until the last step is done, then `.done` or the error.
@@ -80,6 +84,7 @@ public enum OverlayUIState: Equatable, Sendable {
     case .recording: "Recording."
     case .speaking: "Reading aloud."
     case .rewriting: "Rewriting the selection."
+    case .composing: "Writing your message."
     case .commanding: "Carrying out your command."
     case .processing: "Processing."
     case .error(let message, _): message
@@ -103,7 +108,7 @@ public enum OverlayUIState: Equatable, Sendable {
     // A sentence, not a word: long enough to read the device name.
     case .error(_, _?): 3.0
     case .error, .noTarget: 1.6
-    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .commanding: nil
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding: nil
     }
   }
 
@@ -166,7 +171,8 @@ extension PipelinePhase {
   ///
   /// `processingAs`: what this phase's transcription shows as when it's a
   /// job's spoken words rather than a dictation — `.rewriting` for a Rewrite
-  /// Selection press's instruction, `.commanding` for a command — so the pill
+  /// Selection press's instruction, `.composing` for a compose press's,
+  /// `.commanding` for a command — so the pill
   /// reads as one step from release to the job's end.
   public func overlayState(whileSpeaking speaking: Bool, processingAs: OverlayUIState? = nil) -> OverlayUIState? {
     if speaking && !isCapturing { return nil }

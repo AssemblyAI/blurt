@@ -3,7 +3,9 @@
 /// dictation session; a read-aloud key reads the selection aloud; an ask key
 /// records a spoken request about the selection and reads the answer; a rewrite
 /// key records a spoken instruction and pastes the selection, rewritten, over
-/// it; a command key records a spoken command and carries it out. It is a
+/// it; a compose key records spoken instructions and pastes what they
+/// describe at the cursor; a command key records a spoken command and
+/// carries it out. It is a
 /// pure state machine. The app's `SelectionSpeechRouter` carries out the
 /// actions it returns (the AX read, the hold timer, the speech task, the gate
 /// resets), the same split as `DictationKeyRouter` under `DictationKeyTap`.
@@ -26,7 +28,9 @@
 ///   transcript is the instruction the selection is rewritten by.
 /// - A command records the same way, and its transcript is carried out. It
 ///   needs no selection, so it skips the read: the press is `.selected` from
-///   the key-down, and still waits to prove itself before the mic opens.
+///   the key-down, and still waits to prove itself before the mic opens. A
+///   compose press does the same, and its transcript is the instructions for
+///   what to write.
 ///
 /// The Accessibility read is in flight while those signals land, so a press
 /// first waits in `.deciding`, noting them, and acts once the read returns.
@@ -57,12 +61,14 @@ struct SelectionSpeechRouting: Sendable {
 
   /// What the pill shows while the session records or transcribes a job's
   /// spoken words, in place of "Transcribing": "Rewriting" for a rewrite's
-  /// instruction, "Working" for a command. Nil for anything else.
+  /// instruction, "Writing" for a composition's, "Working" for a command.
+  /// Nil for anything else.
   var processingState: OverlayUIState? {
     switch mode {
     case .asking(let intent, _, _, _), .transcribing(let intent, _, _):
       switch intent {
       case .rewrite: .rewriting
+      case .compose: .composing
       case .command: .commanding
       case .read, .ask: nil
       }
@@ -81,9 +87,9 @@ struct SelectionSpeechRouting: Sendable {
       // Off only reaches here when Settings turned the key off mid-press:
       // dictate, as it was bound to.
       case .dictate, .off: return [.forward(.press(key: key))]
-      case .command:
+      case .command, .compose:
         // Nothing to read: the press only has to prove itself.
-        mode = .selected(.command, "")
+        mode = .selected(Self.intent(action), "")
         return holds ? [.startHoldTimer] : []
       case .readAloud, .ask, .rewrite:
         mode = .deciding(Self.intent(action), trigger: nil, ended: false)
@@ -94,8 +100,8 @@ struct SelectionSpeechRouting: Sendable {
       // answer, or a tapped read, which frees the gate as it starts.
       return interrupt(with: .stopSpeech, key: key, action: action)
     case .working:
-      // Any press abandons a rewrite before it pastes, or a command before
-      // its next step, as it stops a read:
+      // Any press abandons a rewrite or a composition before it pastes, or a
+      // command before its next step, as it stops a read:
       // a paste landing in the middle of whatever the press starts would be
       // the worse surprise. The gate is free here too.
       return interrupt(with: .stopJob, key: key, action: action)
@@ -126,7 +132,7 @@ struct SelectionSpeechRouting: Sendable {
     mode = .passthrough
     switch action {
     case .dictate, .off: return [stop, .forward(.press(key: key))]
-    case .readAloud, .ask, .rewrite, .command: return [stop, .resetGate]
+    case .readAloud, .ask, .rewrite, .compose, .command: return [stop, .resetGate]
     }
   }
 
@@ -276,7 +282,7 @@ struct SelectionSpeechRouting: Sendable {
       // every other key — dictation's among them — dead until it ended. A
       // held read keeps it, so letting go stops the read.
       return trigger == .tap ? [.speak(selection), .resetGate] : [.speak(selection)]
-    case .ask, .rewrite, .command:
+    case .ask, .rewrite, .compose, .command:
       mode = .asking(intent, selection, started: !sessionBusy, byHold: trigger == .hold)
       // A command's screen is prepared now (`.prepareCommand`), while it's
       // spoken — and before the session is free to record it, if it isn't yet.
@@ -289,6 +295,7 @@ struct SelectionSpeechRouting: Sendable {
     switch action {
     case .ask: .ask
     case .rewrite: .rewrite
+    case .compose: .compose
     case .command: .command
     case .readAloud, .dictate, .off: .read
     }
@@ -304,7 +311,7 @@ struct SelectionSpeechRouting: Sendable {
     return [.resetGate]
   }
 
-  /// The job — a rewrite or a command — finished or failed. As with
+  /// The job — a rewrite, a composition or a command — finished or failed. As with
   /// `speechFinished`, the caller must not report a job it stopped itself.
   mutating func jobFinished() -> [Action] {
     guard mode == .working else { return [] }
@@ -353,6 +360,9 @@ struct SelectionSpeechRouting: Sendable {
       case .rewrite:
         mode = .working
         return [.rewrite(request: request, selection: selection)] + reset
+      case .compose:
+        mode = .working
+        return [.compose(request: request)] + reset
       case .command:
         mode = .working
         // Handed back by the recording cap, the key still down, it skipped

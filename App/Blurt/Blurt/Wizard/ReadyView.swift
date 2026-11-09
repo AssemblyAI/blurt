@@ -20,7 +20,8 @@ struct ReadyView: View {
   // the dictation key, any key's action or mode — re-renders this window's
   // rows live (`ObservedKeyBindings`).
   @ObservedKeyBindings private var bindings
-  private var triggerKey: TriggerKey { bindings.bound }
+  /// The key that dictates, or nil when the Keys tab set every one to None.
+  private var triggerKey: TriggerKey? { bindings.dictationKey }
   /// The dictation key's tap/hold mode, which the rows' tooltips and the
   /// Library's first-run prompt follow.
   private var activation: TriggerActivation { bindings.activation }
@@ -186,13 +187,29 @@ struct ReadyView: View {
   /// The dictation shortcut as a form row: "Dictate" leading, the bound key
   /// trailing, and how its gesture works in the tooltip. Still while a key is
   /// down: how a dictation is going is the pill's to say, not the window's.
-  private var shortcutRow: some View {
-    SettingRow(title: "Dictate", systemImage: TriggerKeyAction.dictate.systemImage) {
-      KeyCap(label: triggerKey.spokenName)
+  /// With no key dictating it stays, with a button to Settings in place of
+  /// the keycap, so the panel says dictation is off and how to turn it back
+  /// on rather than quietly losing a row.
+  @ViewBuilder private var shortcutRow: some View {
+    if let triggerKey {
+      SettingRow(title: "Dictate", systemImage: TriggerKeyAction.dictate.systemImage) {
+        KeyCap(label: triggerKey.spokenName)
+      }
+      .help(activation.hint(for: .dictate))
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(activation.hint(for: .dictate))")
+    } else {
+      SettingRow(title: "Dictate", systemImage: TriggerKeyAction.dictate.systemImage) {
+        Button("Choose Key…") { openSettings() }
+          .buttonStyle(.link)
+          .help("Choose a key in Settings › Keys.")
+          .accessibilityLabel("Choose a dictation key")
+          .accessibilityHint("Opens Settings. Choose a key for Dictate in the Keys tab.")
+      }
+      // Contained, not ignored: the button has to stay reachable.
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Dictate: None")
     }
-    .help(activation.hint(for: .dictate))
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(activation.hint(for: .dictate))")
   }
 
   /// One extra key's row: what it does — with the style a dictating key uses
@@ -205,6 +222,7 @@ struct ReadyView: View {
       case .readAloud: LibraryKind.readAloud.name
       case .ask: LibraryKind.ask.name
       case .rewrite: KeyActionName.rewrite
+      case .compose: KeyActionName.compose
       case .command: KeyActionName.command
       case .dictate(TriggerKeyChoice.mainWindowStyle), .off: "Dictate"
       case .dictate(let style):

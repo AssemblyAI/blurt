@@ -48,6 +48,7 @@ struct SoundsSettingsTab: View {
     case .readAloud: KeyActionName.readAloud
     case .ask: KeyActionName.ask
     case .rewrite: KeyActionName.rewrite
+    case .compose: KeyActionName.compose
     case .command: KeyActionName.command
     }
   }

@@ -11,7 +11,8 @@ import SwiftUI
 /// contextual menu hold the rest, and ⌘F searches.
 struct LibrarySection<Header: View>: View {
   var coordinator: AppCoordinator
-  let triggerKey: TriggerKey
+  /// The key that dictates, or nil when none does.
+  let triggerKey: TriggerKey?
   let activation: TriggerActivation
 
   /// The toolbar's search (`ReadyView`).
@@ -212,6 +213,13 @@ struct LibrarySection<Header: View>: View {
     }
   }
 
+  /// The prompt's dictation sentence, for VoiceOver.
+  private var dictateLine: String {
+    // Spelled out: VoiceOver may skip or read out "›" by punctuation setting.
+    guard let triggerKey else { return "To dictate, choose a key in the Keys tab of Settings." }
+    return "Click a text field, then \(activation.startVerb) \(triggerKey.spokenName) to dictate."
+  }
+
   /// The first-run prompt, naming both things this list will hold: a
   /// dictation (click a field, press the key) and a transcript (Record, or
   /// drop a file).
@@ -220,10 +228,14 @@ struct LibrarySection<Header: View>: View {
       Text("Ready when you are")
         .font(.headline)
         .foregroundStyle(.primary)
-      HStack(spacing: 4) {
-        Text("Click a text field, then \(activation.startVerb)")
-        KeyCap(label: triggerKey.spokenName)
-        Text("to dictate")
+      if let triggerKey {
+        HStack(spacing: 4) {
+          Text("Click a text field, then \(activation.startVerb)")
+          KeyCap(label: triggerKey.spokenName)
+          Text("to dictate")
+        }
+      } else {
+        Text("To dictate, choose a key in Settings › Keys")
       }
       Text("Press Record, or drop an audio file, to transcribe")
     }
@@ -232,8 +244,7 @@ struct LibrarySection<Header: View>: View {
     .fixedSize()
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
-      "Ready when you are. Click a text field, then \(activation.startVerb) \(triggerKey.spokenName) to dictate. "
-        + "Press Record, or drop an audio file, to transcribe."
+      "Ready when you are. \(dictateLine) Press Record, or drop an audio file, to transcribe."
     )
     .accessibilityAddTraits(.isStaticText)
     .accessibilityIdentifier(UITestIdentifiers.recentEmptyPrompt)

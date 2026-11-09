@@ -14,7 +14,7 @@ struct PermissionsStepView: View {
   /// the old key after a rebind until something else re-rendered the view. Same
   /// `ObservedKeyBindings` as `ReadyView` / `MenuBarScene`.
   @ObservedKeyBindings private var bindings
-  private var triggerKey: TriggerKey { bindings.bound }
+  private var triggerKey: TriggerKey? { bindings.dictationKey }
 
   /// Set when the user taps a settings button so the section can show a
   /// "waiting for you to come back" cue until the poll sees the grant.
@@ -45,7 +45,7 @@ struct PermissionsStepView: View {
       permissionRow(
         PermissionInfo(
           label: "Microphone", symbol: "mic.fill", buttonLabel: "Allow Access",
-          detail: "Records when you use \(triggerKey.spokenName)."),
+          detail: triggerKey.map { "Records when you use \($0.spokenName)." } ?? "Records when you dictate."),
         granted: controller.permissions.microphone,
         action: {
           Task {
