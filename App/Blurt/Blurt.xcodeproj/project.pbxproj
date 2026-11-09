@@ -547,7 +547,6 @@
 		1E6C29571118FA5B039C4FC1 /* rom1a-31-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-31-stop.m4a"; sourceTree = "<group>"; };
 		1EA259C10192DFF7D7431FD4 /* juno-95-start.m4a */ = {isa = PBXFileReference; path = "juno-95-start.m4a"; sourceTree = "<group>"; };
 		1EA8B0FCDE5A026C5E8B5EFA /* juno-37-start.m4a */ = {isa = PBXFileReference; path = "juno-37-start.m4a"; sourceTree = "<group>"; };
-		1EF0215FDA3E6D553706F234 /* held-session */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "held-session"; path = ../..; sourceTree = SOURCE_ROOT; };
 		1F71C1C8D870D024746CED69 /* rom1a-15-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-15-stop.m4a"; sourceTree = "<group>"; };
 		207F58335FAAD1E0D1311D10 /* juno-105-stop.m4a */ = {isa = PBXFileReference; path = "juno-105-stop.m4a"; sourceTree = "<group>"; };
 		20C7896DEBBFFBBD8AA6337B /* juno-11-start.m4a */ = {isa = PBXFileReference; path = "juno-11-start.m4a"; sourceTree = "<group>"; };
@@ -606,6 +605,7 @@
 		37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowRoot.swift; sourceTree = "<group>"; };
 		383E03AB60BA21AAD92655D5 /* ReadyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyView.swift; sourceTree = "<group>"; };
 		3879273E32399C14F3533899 /* KeyActionName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyActionName.swift; sourceTree = "<group>"; };
+		38CAFC7A39E679F1CA3A9692 /* blurt */ = {isa = PBXFileReference; lastKnownFileType = folder; name = blurt; path = ../..; sourceTree = SOURCE_ROOT; };
 		3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */ = {isa = PBXFileReference; path = "rom1b-6-start.m4a"; sourceTree = "<group>"; };
 		3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtUITestSupport.swift; sourceTree = "<group>"; };
 		3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextShortcutsSection.swift; sourceTree = "<group>"; };
@@ -1039,7 +1039,7 @@
 		4B1375E36CD42DBEFF08BC7E /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				1EF0215FDA3E6D553706F234 /* held-session */,
+				38CAFC7A39E679F1CA3A9692 /* blurt */,
 			);
 			name = Packages;
 			sourceTree = "<group>";

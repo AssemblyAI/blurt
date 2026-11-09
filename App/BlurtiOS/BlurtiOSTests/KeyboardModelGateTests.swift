@@ -34,10 +34,9 @@ struct KeyboardModelGateTests {
     let dictation = UUID()
     rig.answer(.started(dictation))
     #expect(model.handshake.isOwned)
-    model.apply(snapshot(.recording, dictation: dictation))
-    model.tapMic()
+    let release = rig.tapToStop(dictation)
     #expect(commands.sent.map(\.kind) == [.press, .release])
-    #expect(commands.sent.last?.dictationID == dictation)
+    #expect(release?.dictationID == dictation)
     rig.answer(.stopped(dictation))
     #expect(model.gate.isIdle && model.handshake.isIdle)
     // The words land and the picture settles.

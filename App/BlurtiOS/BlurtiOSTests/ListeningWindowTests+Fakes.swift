@@ -190,69 +190,6 @@ final class AppStateBox {
   var state = UIApplication.State.active
 }
 
-/// A clock the test advances by hand: a sleep ends when `advance(by:)` passes
-/// its deadline, never on its own, so a heartbeat or an expiry fires when the
-/// test says and not a second before.
-nonisolated final class ManualClock: Clock, @unchecked Sendable {
-  struct Instant: InstantProtocol {
-    var offset: Duration
-
-    func advanced(by duration: Duration) -> Instant { Instant(offset: offset + duration) }
-
-    func duration(to other: Instant) -> Duration { other.offset - offset }
-
-    static func < (lhs: Instant, rhs: Instant) -> Bool { lhs.offset < rhs.offset }
-  }
-
-  private struct Sleeper {
-    let id: UUID
-    let deadline: Instant
-    let continuation: CheckedContinuation<Void, any Error>
-  }
-
-  private struct State {
-    var now = Instant(offset: .zero)
-    var sleepers: [Sleeper] = []
-  }
-
-  private let state = Mutex(State())
-
-  var now: Instant { state.withLock { $0.now } }
-  var minimumResolution: Duration { .zero }
-
-  func sleep(until deadline: Instant, tolerance: Duration?) async throws {
-    let id = UUID()
-    try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-        let due = state.withLock { state -> Bool in
-          if deadline <= state.now { return true }
-          if Task.isCancelled { return true }
-          state.sleepers.append(Sleeper(id: id, deadline: deadline, continuation: continuation))
-          return false
-        }
-        if due { continuation.resume() }
-      }
-    } onCancel: {
-      let cancelled = state.withLock { state -> Sleeper? in
-        guard let index = state.sleepers.firstIndex(where: { $0.id == id }) else { return nil }
-        return state.sleepers.remove(at: index)
-      }
-      cancelled?.continuation.resume(throwing: CancellationError())
-    }
-  }
-
-  /// Moves the clock on and wakes every sleep whose deadline has passed.
-  func advance(by duration: Duration) {
-    let woken = state.withLock { state -> [Sleeper] in
-      state.now = state.now.advanced(by: duration)
-      let due = state.sleepers.filter { $0.deadline <= state.now }
-      state.sleepers.removeAll { $0.deadline <= state.now }
-      return due
-    }
-    for sleeper in woken { sleeper.continuation.resume() }
-  }
-}
-
 /// One window over the fakes, with what it asked the coordinator to do
 /// (`endings`: the `keepWords` of every `onEndingUtterance`) kept. The window
 /// is built, not started: a test that needs the heartbeat calls
@@ -264,7 +201,7 @@ final class WindowRig {
   let audio = FakeAudioSession()
   let tasks = FakeBackgroundTasks()
   let idle: FakeIdle
-  let clock = ManualClock()
+  let clock = TestClock()
   let app = AppStateBox()
   let window: ListeningWindow
   private(set) var endings: [Bool] = []

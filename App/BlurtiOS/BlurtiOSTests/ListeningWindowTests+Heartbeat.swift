@@ -26,7 +26,7 @@ extension ListeningWindowTests {
     #expect(launched.launchID == rig.window.launchID)
     #expect(SharedStore.listeningState == launched)
     // The heartbeat takes its first turn before the clock moves.
-    try? await Task.sleep(for: .milliseconds(20))
+    await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
     rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
     #expect(await until { rig.state?.sequence == 1 })
     guard let beat = rig.state else { return }
@@ -74,10 +74,12 @@ extension ListeningWindowTests {
     rig.window.start()
     rig.window.start()
     #expect(rig.state?.sequence == 0)
-    try? await Task.sleep(for: .milliseconds(20))
+    await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
     rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
     #expect(await until { rig.state?.sequence == 1 })
-    try? await Task.sleep(for: .milliseconds(100))
+    // The one heartbeat parks again; a second would have beaten too.
+    await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
     #expect(rig.state?.sequence == 1, "one heartbeat, one beat")
+    #expect(rig.clock.sleepingFor == [.seconds(SharedStore.appHeartbeatInterval)], "one sleeper")
   }
 }

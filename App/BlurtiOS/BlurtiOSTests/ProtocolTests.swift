@@ -154,10 +154,9 @@ struct KeyboardModelProtocolTests {
     #expect(!model.gate.isIdle)
     let dictation = UUID()
     rig.answer(.started(dictation))
-    model.apply(snapshot(.recording, dictation: dictation))
-    model.tapMic()
+    let release = rig.tapToStop(dictation)
     #expect(commands.sent.map(\.kind) == [.press, .release])
-    #expect(commands.sent.last?.dictationID == dictation)
+    #expect(release?.dictationID == dictation)
   }
 
   @Test("a dictation started elsewhere, named by the app, latches on the finger so one tap stops it")

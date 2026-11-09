@@ -77,6 +77,14 @@ struct KeyboardRig {
     return dictation
   }
 
+  /// The recording phase published for `dictation`, then the tap that stops
+  /// it: the release this keyboard sent, which names the dictation.
+  func tapToStop(_ dictation: UUID) -> KeyboardCommand? {
+    model.apply(snapshot(.recording, dictation: dictation))
+    model.tapMic()
+    return commands.sent.last
+  }
+
   /// A controller in a window, so the model's hop can walk the responder
   /// chain to the application; what it asked to open is captured here.
   final class Hops {

@@ -39,23 +39,33 @@ struct DictationCoordinatorReturnTests {
     return Bench(coordinator: coordinator, rig: rig, returns: returns)
   }
 
+  /// A hop from Messages, handled with `expectsKeeper` set, and the window
+  /// then open: the point at which the return is decided.
+  func hopped(expectsKeeper: Bool) async -> Bench {
+    let bench = make()
+    bench.coordinator.expectsKeeper = expectsKeeper
+    bench.coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
+    await bench.rig.opened()
+    return bench
+  }
+
   @Test("a hop from another app goes back to it as soon as the window is open under a held mic")
   func returnsWhenOpen() async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let bench = make()
-    let (coordinator, rig, returns) = (bench.coordinator, bench.rig, bench.returns)
+    let coordinator = bench.coordinator
     coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
     #expect(coordinator.returnHost == Self.messages)
     #expect(coordinator.startedFromKeyboard)
-    #expect(returns.hosts.isEmpty, "not before the window is open")
-    await rig.opened()
-    #expect(returns.hosts == [Self.messages])
+    #expect(bench.returns.hosts.isEmpty, "not before the window is open")
+    await bench.rig.opened()
+    #expect(bench.returns.hosts == [Self.messages])
     #expect(coordinator.returnHost == nil && coordinator.returnCap == nil)
     #expect(!coordinator.startedFromKeyboard, "the hint is moot once the app has gone back")
     // The window's later records ask nothing more.
-    await rig.dictating()
-    #expect(returns.hosts == [Self.messages])
+    await bench.rig.dictating()
+    #expect(bench.returns.hosts == [Self.messages])
   }
 
   @Test("no return when the hop came with no host, from Blurt's own box, or with the app already in front")
@@ -63,13 +73,13 @@ struct DictationCoordinatorReturnTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let bench = make()
-    let (coordinator, rig, returns) = (bench.coordinator, bench.rig, bench.returns)
-    coordinator.handle(BlurtShared.startURL(reason: .sessionOff))
-    #expect(coordinator.returnHost == nil)
-    coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Bundle.main.bundleIdentifier ?? "blurt"))
-    #expect(coordinator.returnHost == nil)
-    await rig.opened()
-    #expect(returns.hosts.isEmpty)
+    bench.coordinator.handle(BlurtShared.startURL(reason: .sessionOff))
+    #expect(bench.coordinator.returnHost == nil)
+    bench.coordinator.handle(
+      BlurtShared.startURL(reason: .sessionOff, host: Bundle.main.bundleIdentifier ?? "blurt"))
+    #expect(bench.coordinator.returnHost == nil)
+    await bench.rig.opened()
+    #expect(bench.returns.hosts.isEmpty)
 
     let second = make(state: .active)
     let (active, activeRig, activeReturns) = (second.coordinator, second.rig, second.returns)
@@ -83,58 +93,43 @@ struct DictationCoordinatorReturnTests {
   func waitsForKeeper() async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let bench = make()
-    let (coordinator, rig, returns) = (bench.coordinator, bench.rig, bench.returns)
-    coordinator.expectsKeeper = true
-    coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
-    await rig.opened()
-    #expect(returns.hosts.isEmpty, "open, but the keeper is not up")
-    #expect(coordinator.returnCap != nil, "the cap is armed")
-    rig.idle.report?(.idleChanged(.pip), rig.idle.generation)
-    #expect(await until { returns.hosts == [Self.messages] })
-    #expect(coordinator.returnCap == nil, "the cap stands down")
+    let bench = await hopped(expectsKeeper: true)
+    #expect(bench.returns.hosts.isEmpty, "open, but the keeper is not up")
+    #expect(bench.coordinator.returnCap != nil, "the cap is armed")
+    bench.rig.idle.report?(.idleChanged(.pip), bench.rig.idle.generation)
+    #expect(await until { bench.returns.hosts == [Self.messages] })
+    #expect(bench.coordinator.returnCap == nil, "the cap stands down")
   }
 
   @Test("with a keeper expected but silent, the return comes at the cap")
   func returnsAtCap() async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let bench = make()
-    let (coordinator, rig, returns) = (bench.coordinator, bench.rig, bench.returns)
-    coordinator.expectsKeeper = true
-    coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
-    await rig.opened()
-    #expect(returns.hosts.isEmpty)
-    rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
-    #expect(await until { returns.hosts == [Self.messages] })
-    #expect(coordinator.returnHost == nil)
+    let bench = await hopped(expectsKeeper: true)
+    #expect(bench.returns.hosts.isEmpty)
+    bench.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
+    #expect(await until { bench.returns.hosts == [Self.messages] })
+    #expect(bench.coordinator.returnHost == nil)
   }
 
   @Test("the user leaving first, or the window closing before it opened, cancels the return")
   func cancelled() async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let bench = make()
-    let (coordinator, rig, returns) = (bench.coordinator, bench.rig, bench.returns)
-    coordinator.expectsKeeper = true
-    coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
-    await rig.opened()
+    let bench = await hopped(expectsKeeper: true)
+    let coordinator = bench.coordinator
     coordinator.sceneLeft()
     #expect(coordinator.returnHost == nil && coordinator.returnCap == nil && !coordinator.startedFromKeyboard)
-    rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
+    bench.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
     try? await Task.sleep(for: .milliseconds(50))
-    #expect(returns.hosts.isEmpty)
+    #expect(bench.returns.hosts.isEmpty)
 
     // A window seen and then closed: the open did not hold.
-    let later = make()
-    let (second, secondRig, secondReturns) = (later.coordinator, later.rig, later.returns)
-    second.expectsKeeper = true
-    second.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
-    await secondRig.opened()
-    await secondRig.closed()
-    #expect(second.returnHost == nil)
-    secondRig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
+    let later = await hopped(expectsKeeper: true)
+    await later.rig.closed()
+    #expect(later.coordinator.returnHost == nil)
+    later.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
     try? await Task.sleep(for: .milliseconds(50))
-    #expect(secondReturns.hosts.isEmpty)
+    #expect(later.returns.hosts.isEmpty)
   }
 }

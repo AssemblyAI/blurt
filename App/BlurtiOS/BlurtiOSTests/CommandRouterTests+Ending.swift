@@ -46,12 +46,14 @@ extension CommandRouterTests {
     #expect(decision.recipient == owner)
   }
 
-  @Test("the owner's cancel cancels it, addressed to the owner")
+  @Test("the owner's cancel cancels it, addressed to the owner, whether or not it names the dictation")
   func ownerCancel() {
-    let decision = route(command(.cancel, dictationID: current.id), phase: .recording, inFlight: current)
-    #expect(decision.ack.outcome == .cancelled(current.id))
-    #expect(decision.submit == .cancel)
-    #expect(decision.recipient == owner)
+    for dictationID in [current.id, nil] {
+      let decision = route(command(.cancel, dictationID: dictationID), phase: .recording, inFlight: current)
+      #expect(decision.ack.outcome == .cancelled(current.id), "\(String(describing: dictationID))")
+      #expect(decision.submit == .cancel)
+      #expect(decision.recipient == owner)
+    }
   }
 
   @Test("an accepted ending is stopped or cancelled in every in-flight phase")
@@ -69,14 +71,6 @@ extension CommandRouterTests {
     let decision = route(command(.release), phase: .connecting, inFlight: current)
     #expect(decision.ack.outcome == .stopped(current.id))
     #expect(decision.submit == .release)
-  }
-
-  @Test("a cancel that names no dictation cancels the one in flight")
-  func cancelWithoutDictationID() {
-    let decision = route(command(.cancel, dictationID: nil), phase: .recording, inFlight: current)
-    #expect(decision.ack.outcome == .cancelled(current.id))
-    #expect(decision.submit == .cancel)
-    #expect(decision.recipient == owner)
   }
 
   @Test("a release for an older dictation is not the owner's to make")

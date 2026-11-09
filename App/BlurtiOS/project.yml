@@ -257,6 +257,9 @@ targets:
     platform: iOS
     sources:
       - path: BlurtiOSTests
+      # The engine tests' hand-stepped clock, compiled in rather than copied:
+      # the window's heartbeat and the hop's return cap sleep on it here.
+      - path: ../../Tests/BlurtEngineTests/Stubs/TestClock.swift
       # The design's one source, bundled so DesignTokensTests can pin the
       # compiled DesignTokens.swift to the file it was generated from.
       - path: Design/tokens.json

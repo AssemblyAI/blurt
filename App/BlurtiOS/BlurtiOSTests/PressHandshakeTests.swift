@@ -61,6 +61,16 @@ enum HandshakeFixture {
     return dictation
   }
 
+  /// A dictation the keyboard owns and has lifted over, its stop out at 5 s:
+  /// the handshake is stopping, awaiting the stop's answer.
+  static func stopping(_ handshake: inout PressHandshake) -> (dictation: UUID, stop: UUID) {
+    let dictation = owned(&handshake, phase: .recording)
+    _ = handshake.handle(liftOverLatch, now: at(5))
+    let stop = UUID()
+    _ = handshake.handle(.stopSent(id: stop, at: at(5)), now: at(5))
+    return (dictation, stop)
+  }
+
   /// A press from rest the app answered with busy, the finger still down:
   /// latched onto their dictation.
   static func foreignViaBusy(_ handshake: inout PressHandshake) -> UUID {
