@@ -364,6 +364,8 @@ package enum DesignTokens {
     package nonisolated static let keepOpenFlare: Double = 0.9
     /// A key lighting.
     package nonisolated static let keyPress: Double = 0.08
+    /// The space bar's hold before it moves the cursor: KeyboardKit's half second made it wait.
+    package nonisolated static let spaceHold: Double = 0.25
     /// Every change on the mic key and the +: a glyph, the tint, the dimming.
     package nonisolated static let stateFade: Double = 0.5
     /// The bar becoming the key-term field.
@@ -552,6 +554,7 @@ package enum DesignTokens {
     "motion.keep-open-first-corner": "9",
     "motion.keep-open-flare": "0.9",
     "motion.key-press": "0.08",
+    "motion.space-hold": "0.25",
     "motion.state-fade": "0.5",
     "motion.term-swap": "0.4",
     "motion.typing-flash": "0.15",

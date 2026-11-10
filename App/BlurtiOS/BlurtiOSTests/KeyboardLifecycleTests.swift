@@ -172,8 +172,9 @@ struct KeyboardLifecycleTests {
     connecting.model.hostLeaving()
     #expect(connecting.commands.sent.map(\.kind) == [.press, .cancel])
     #expect(connecting.commands.sent.last?.dictationID == coming)
-    // Words being made, another keyboard's dictation, and a press unanswered
-    // are left to the app and its watchdog.
+    // Words being made, another keyboard's dictation (the finger down over it
+    // already released it), and a press unanswered are left to the app and
+    // its watchdog.
     let processing = KeyboardRig()
     let made = processing.latchRecording()
     processing.model.apply(snapshot(.processing, dictation: made))
@@ -183,7 +184,7 @@ struct KeyboardLifecycleTests {
     foreign.model.apply(snapshot(.recording, dictation: UUID()))
     foreign.model.micDown()
     foreign.model.hostLeaving()
-    #expect(foreign.commands.sent.isEmpty)
+    #expect(foreign.commands.sent.map(\.kind) == [.release])
     let pressing = KeyboardRig()
     pressing.model.tapMic()
     pressing.model.hostLeaving()

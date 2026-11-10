@@ -38,7 +38,7 @@ struct KeyboardModelLatchTests {
     #expect(rig.model.gate.isIdle && rig.model.handshake.isIdle)
   }
 
-  @Test("ack busy: the tap latches onto the dictation; its own lift leaves it running, the next tap stops it")
+  @Test("ack busy: the press latches onto the dictation; its lift leaves it running, the next tap stops it")
   func busy() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
@@ -48,7 +48,7 @@ struct KeyboardModelLatchTests {
     let theirs = UUID()
     rig.answer(.busy(theirs))
     #expect(!model.gate.isIdle)
-    #expect(model.handshake.state == .foreign(dictation: theirs, liftStops: false))
+    #expect(model.handshake.state == .foreign(dictation: theirs))
     model.micUp()
     #expect(rig.commands.sent.map(\.kind) == [.press])
     #expect(!model.gate.isIdle)
@@ -77,7 +77,7 @@ struct KeyboardModelLatchTests {
     #expect(rig.commands.sent.map(\.kind) == [.press])
   }
 
-  @Test("a stop during connecting is a release at once: a hold let go before the mic is up")
+  @Test("a stop during connecting is a release at once: a second tap before the mic is up")
   func releaseWhileConnecting() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
@@ -91,13 +91,14 @@ struct KeyboardModelLatchTests {
     model.apply(snapshot(.connecting, dictation: dictation))
     model.now = { start.addingTimeInterval(1.2) }
     model.micUp()
+    model.tapMic()
     #expect(rig.commands.sent.map(\.kind) == [.press, .release])
     #expect(rig.commands.sent.last?.dictationID == dictation)
     #expect(model.handshake.stopID != nil)
   }
 
-  @Test("a hold let go before the answer releases the moment the answer names the dictation")
-  func holdBeforeAnswer() {
+  @Test("a second tap before the answer releases the moment the answer names the dictation")
+  func secondTapBeforeAnswer() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()
@@ -107,6 +108,7 @@ struct KeyboardModelLatchTests {
     model.micDown()
     model.now = { start.addingTimeInterval(1.1) }
     model.micUp()
+    model.micDown()
     #expect(rig.commands.sent.map(\.kind) == [.press])
     let dictation = UUID()
     rig.answer(.started(dictation))

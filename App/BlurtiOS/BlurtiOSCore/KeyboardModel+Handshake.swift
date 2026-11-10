@@ -30,11 +30,10 @@ extension KeyboardModel {
   /// The gate is the handshake's to touch, and only through these three: a
   /// press from rest or a finger down over a latch arms it with the touch's
   /// own stamp; nothing to hold resets it; a dictation this keyboard didn't
-  /// start is latched over with a synthetic tap, so the lift stops it.
+  /// start is latched over with a synthetic tap, so the gate holds it.
   private func touchGate(_ action: PressHandshake.Action) {
     switch action {
     case .armGate:
-      armedFromIdle = gate.isIdle
       _ = gate.modifierDown(at: touchDown ?? elapsed)
     case .resetGate:
       gate.reset()

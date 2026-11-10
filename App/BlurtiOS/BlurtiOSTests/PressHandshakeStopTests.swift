@@ -3,49 +3,49 @@ import Testing
 
 @testable import BlurtiOSCore
 
-/// The lift half of the table: what a lift, a × and a flip send once a press
-/// is out, and how the stop is answered. The fixture is `PressHandshakeTests`'.
+/// The stop half of the table: what a second finger down, a lift, a × and a
+/// flip send once a press is out, and how the stop is answered. The fixture is `PressHandshakeTests`'.
 @Suite("Press handshake: lifts, stops and the ×")
 struct PressHandshakeStopTests {
   typealias Fixture = HandshakeFixture
   let epoch = Fixture.epoch
 
-  @Test("a tap over our press waits for the answer; the next tap is the gate's, and its lift releases")
+  @Test("a tap over our press waits for the answer; the next finger down releases at once, its lift nothing")
   func tapThenTap() {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
-    let lift = handshake.handle(Fixture.tap, now: Fixture.at(0.2))
+    let lift = handshake.handle(Fixture.lift, now: Fixture.at(0.2))
     #expect(lift == [.none])
     #expect(handshake.state == .pressing(id: id, sentAt: epoch, resent: false, stopWanted: false))
     let dictation = UUID()
     _ = handshake.handle(Fixture.ack(.started(dictation), for: id), now: Fixture.at(0.3))
     let down = handshake.handle(Fixture.micDown(phase: .recording, inFlight: dictation), now: Fixture.at(2))
-    #expect(down == [.armGate])
+    #expect(down == [.armGate, .sendRelease(dictation: dictation)])
     #expect(handshake.isOwned)
-    let stop = handshake.handle(Fixture.liftOverLatch, now: Fixture.at(2.1))
-    #expect(stop == [.sendRelease(dictation: dictation)])
+    let up = handshake.handle(Fixture.lift, now: Fixture.at(2.1))
+    #expect(up == [.none])
   }
 
-  @Test("stop during connecting sends release immediately")
+  @Test("a finger down during connecting sends the release immediately")
   func stopWhileConnecting() {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
     let dictation = UUID()
     _ = handshake.handle(Fixture.ack(.started(dictation), for: id), now: Fixture.at(0.2))
     #expect(handshake.state == .owned(dictation: dictation, phase: .connecting))
-    let lift = handshake.handle(Fixture.hold, now: Fixture.at(1.2))
-    #expect(lift == [.sendRelease(dictation: dictation)])
+    let down = handshake.handle(Fixture.micDown(phase: .connecting, inFlight: dictation), now: Fixture.at(1.2))
+    #expect(down == [.armGate, .sendRelease(dictation: dictation)])
     let stop = UUID()
     _ = handshake.handle(.stopSent(id: stop, at: Fixture.at(1.2)), now: Fixture.at(1.2))
     #expect(handshake.state == .stopping(id: stop, dictation: dictation, sentAt: Fixture.at(1.2), resent: false))
   }
 
-  @Test("a hold lifted at 1.1 s before the answer: started at 1.15 s, the release goes out at once")
-  func holdLiftedWhilePressing() {
+  @Test("a second finger down at 1.1 s before the answer: started at 1.15 s, the release goes out at once")
+  func secondPressWhilePressing() {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
-    let lift = handshake.handle(Fixture.hold, now: Fixture.at(1.1))
-    #expect(lift == [.none])
+    let again = handshake.handle(Fixture.micDown(), now: Fixture.at(1.1))
+    #expect(again == [.none])
     #expect(handshake.state == .pressing(id: id, sentAt: epoch, resent: false, stopWanted: true))
     let dictation = UUID()
     let answer = handshake.handle(Fixture.ack(.started(dictation), for: id), now: Fixture.at(1.15))
@@ -53,61 +53,59 @@ struct PressHandshakeStopTests {
     #expect(handshake.isOwned)
   }
 
-  @Test("a hold lifted before the answer, answered by a phase or by busy, also releases at once")
-  func holdLiftedThenPhase() {
+  @Test("a second finger down before the answer, answered by a phase or by busy, also releases at once")
+  func secondPressThenPhase() {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
-    _ = handshake.handle(Fixture.hold, now: Fixture.at(1.1))
+    _ = handshake.handle(Fixture.micDown(), now: Fixture.at(1.1))
     let dictation = UUID()
     let answer = handshake.handle(
       Fixture.published(.recording, answers: id, dictation: dictation), now: Fixture.at(1.15))
     #expect(answer == [.sendRelease(dictation: dictation)])
     var other = PressHandshake()
     let press = Fixture.pressed(&other)
-    _ = other.handle(Fixture.hold, now: Fixture.at(1.1))
+    _ = other.handle(Fixture.micDown(), now: Fixture.at(1.1))
     let theirs = UUID()
     let busy = other.handle(Fixture.ack(.busy(theirs), for: press), now: Fixture.at(1.15))
     #expect(busy == [.sendRelease(dictation: theirs)])
-    #expect(other.state == .foreign(dictation: theirs, liftStops: false))
+    #expect(other.state == .foreign(dictation: theirs))
   }
 
-  @Test("foreign via busy: a tap's lift sends nothing, a hold's releases; latched over a running one, any lift does")
-  func foreignTapVsHold() {
+  @Test("foreign via busy: the lift sends nothing, the next press releases; over a running one the press releases")
+  func foreignPresses() {
     var tapped = PressHandshake()
     let theirs = Fixture.foreignViaBusy(&tapped)
-    let tap = tapped.handle(Fixture.tap, now: Fixture.at(0.2))
-    #expect(tap == [.none])
-    #expect(tapped.state == .foreign(dictation: theirs, liftStops: true))
-    var held = PressHandshake()
-    let other = Fixture.foreignViaBusy(&held)
-    let hold = held.handle(Fixture.hold, now: Fixture.at(1.2))
-    #expect(hold == [.sendRelease(dictation: other)])
+    let lift = tapped.handle(Fixture.lift, now: Fixture.at(0.2))
+    #expect(lift == [.none])
+    #expect(tapped.state == .foreign(dictation: theirs))
+    let down = tapped.handle(Fixture.micDown(phase: .recording, inFlight: theirs), now: Fixture.at(1))
+    #expect(down == [.armGate, .sendRelease(dictation: theirs)])
     var running = PressHandshake()
-    let dictation = Fixture.foreignViaLatch(&running)
-    #expect(running.state == .foreign(dictation: dictation, liftStops: true))
-    let lift = running.handle(Fixture.tap, now: Fixture.at(0.2))
-    #expect(lift == [.sendRelease(dictation: dictation)])
+    let dictation = UUID()
+    let pressed = running.handle(Fixture.micDown(phase: .recording, inFlight: dictation), now: epoch)
+    #expect(pressed == [.latch, .sendRelease(dictation: dictation)])
+    #expect(running.state == .foreign(dictation: dictation))
+    let up = running.handle(Fixture.lift, now: Fixture.at(0.2))
+    #expect(up == [.none])
   }
 
-  @Test("over the words being made nothing is sent: a finger down or up over owned(processing) buzzes")
+  @Test("over the words being made nothing is sent: a finger down over owned(processing) buzzes, the lift nothing")
   func processingBuzzes() {
     var handshake = PressHandshake()
     let dictation = Fixture.owned(&handshake, phase: .processing)
     let down = handshake.handle(Fixture.micDown(phase: .processing, inFlight: dictation), now: Fixture.at(3))
     #expect(down == [.buzz])
     #expect(handshake.state == .owned(dictation: dictation, phase: .processing))
-    let lift = handshake.handle(Fixture.liftOverLatch, now: Fixture.at(3.1))
-    #expect(lift == [.buzz])
-    let hold = handshake.handle(Fixture.hold, now: Fixture.at(4.2))
-    #expect(hold == [.buzz])
+    let lift = handshake.handle(Fixture.lift, now: Fixture.at(3.1))
+    #expect(lift == [.none])
     #expect(handshake.isOwned)
     var latched = PressHandshake()
     let theirs = Fixture.foreignViaLatch(&latched)
     _ = latched.handle(Fixture.published(.processing, dictation: theirs), now: Fixture.at(2))
     let made = latched.handle(Fixture.micDown(phase: .processing, inFlight: theirs), now: Fixture.at(3))
     #expect(made == [.buzz])
-    #expect(latched.state == .foreign(dictation: theirs, liftStops: false))
-    let nothing = latched.handle(Fixture.liftOverLatch, now: Fixture.at(3.1))
+    #expect(latched.state == .foreign(dictation: theirs))
+    let nothing = latched.handle(Fixture.lift, now: Fixture.at(3.1))
     #expect(nothing == [.none])
   }
 
@@ -199,7 +197,7 @@ struct PressHandshakeStopTests {
     let cancel = UUID()
     _ = handshake.handle(.cancelSent(id: cancel, at: Fixture.at(5.1)), now: Fixture.at(5.1))
     #expect(handshake.state == .stopping(id: cancel, dictation: dictation, sentAt: Fixture.at(5.1), resent: false))
-    let lift = handshake.handle(Fixture.tap, now: Fixture.at(5.2))
+    let lift = handshake.handle(Fixture.lift, now: Fixture.at(5.2))
     #expect(lift == [.none])
   }
 
@@ -239,7 +237,7 @@ struct PressHandshakeStopTests {
     #expect(!latched.canUndoBeforeRecording)
     let theirs = latched.undoBeforeRecording(now: Fixture.at(1))
     #expect(theirs == [.none])
-    _ = latched.handle(Fixture.liftOverLatch, now: Fixture.at(1))
+    _ = latched.handle(Fixture.lift, now: Fixture.at(1))
     _ = latched.handle(.stopSent(id: UUID(), at: Fixture.at(1)), now: Fixture.at(1))
     #expect(!latched.canUndoBeforeRecording)
   }

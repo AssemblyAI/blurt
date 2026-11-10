@@ -7,14 +7,16 @@ import Foundation
 /// names the press — before `pressDeadline`, or the keyboard lets it go and
 /// the next tap opens the app instead. The answer says whether this keyboard
 /// owns a dictation, latched onto one it didn't start, or can't record right
-/// now and why. From then on a lift is a stop, sent at once with the
-/// dictation's id, and the stop has a deadline of its own.
+/// now and why. From then on the next finger down is a stop, sent at once
+/// with the dictation's id, and the stop has a deadline of its own. The lift
+/// does nothing but hop when the press was refused: the mic key is a signal
+/// to start and a signal to end, never a hold.
 ///
 /// `KeyboardModel` drives it: every finger event, signal and clock tick comes
 /// in as an `Event`, every side effect goes out as an `Action` the model
 /// performs. Nothing here reads the store, the clock or the gate, so every row
-/// is a unit test. `DictationKeyGate` keeps deciding tap against hold; the
-/// handshake agrees with it by being fed the same `holdThreshold` and stamps.
+/// is a unit test. `DictationKeyGate` keeps the touches' stamps; nothing here
+/// reads a hold.
 ///
 /// The gate is the model's, and the handshake says when a touch is the gate's:
 /// `KeyboardModel` calls `gate.modifierDown` only on `armGate`, resets it on
@@ -25,8 +27,8 @@ import Foundation
 package nonisolated struct PressHandshake: Sendable, Equatable {
   package nonisolated enum State: Sendable, Equatable {
     case idle
-    /// Our press is out and unanswered. `stopWanted`: the finger lifted after
-    /// a hold before the answer came. The one command slot holds our press
+    /// Our press is out and unanswered. `stopWanted`: the finger came down
+    /// again before the answer came. The one command slot holds our press
     /// until the app reads it, so the release waits for the dictation's id
     /// rather than overwriting the press.
     case pressing(id: UUID, sentAt: Date, resent: Bool, stopWanted: Bool)
@@ -37,12 +39,10 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// before the press was answered.
     case stopping(id: UUID, dictation: UUID?, sentAt: Date, resent: Bool)
     /// A dictation another keyboard, or hands-free, started: the gate is
-    /// latched over it. `liftStops`: whether the next lift releases it —
-    /// false when the app answered our press with `busy` (the tap latched
-    /// onto it; its own lift leaves it running, the next tap stops it), true
-    /// from a finger down over a dictation visibly running. A hold's lift
-    /// releases it either way.
-    case foreign(dictation: UUID, liftStops: Bool)
+    /// latched over it, and the next finger down releases it. From `busy`
+    /// the press latched onto it without a stop: the press didn't knowingly
+    /// land on a running dictation.
+    case foreign(dictation: UUID)
     /// A press would not record; the next lift hops with the reason.
     case unready(FailureReason)
   }
@@ -51,9 +51,8 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// Finger down: whether the record says a press records now (and why
     /// not), the phase on screen and the dictation it names.
     case micDown(ready: Bool, reason: FailureReason?, phase: PhaseSnapshot.State, inFlight: DictationRef?)
-    /// Finger up: whether the press began from an idle gate, and how long it
-    /// was held — the same stamps the gate got.
-    case micUp(armedFromIdle: Bool, heldFor: TimeInterval)
+    /// Finger up: hops when the press was refused; otherwise nothing.
+    case micUp
     /// The × key, and only that: a flip over the orb is `undoBeforeRecording`.
     case cancelTapped
     /// The model wrote the press; the id and stamp start its deadline.
@@ -87,8 +86,8 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// A release; nil when the dictation has no name yet.
     case sendRelease(dictation: UUID?)
     case sendCancel(dictation: UUID?)
-    /// Latch the gate over a dictation this keyboard didn't start, so the lift
-    /// stops it: the synthetic `modifierDown` + `modifierUp`, only if
+    /// Latch the gate over a dictation this keyboard didn't start, so the gate
+    /// holds it until it ends: the synthetic `modifierDown` + `modifierUp`, only if
     /// `gate.isIdle` — the finger may be down, or a tap may have latched it.
     case latch
     case showConnecting
@@ -102,26 +101,20 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   /// `KeyboardModel.commandRetryDelay`, as seconds: one resend of an
   /// unanswered command, well inside the deadline.
   package static let defaultRetryDelay: TimeInterval = 0.6
-  /// `DictationKeyGate`'s default: a lift at or past this is a hold.
-  package static let defaultHoldThreshold: TimeInterval = 1
-
   package let retryDelay: TimeInterval
   package let pressDeadline: TimeInterval
   package let stopDeadline: TimeInterval
-  package let holdThreshold: TimeInterval
   // Set from the rows alone, which `PressHandshake+Stop.swift` also holds.
   package internal(set) var state: State = .idle
 
   package init(
     retryDelay: TimeInterval = PressHandshake.defaultRetryDelay,
     pressDeadline: TimeInterval = BlurtShared.pressDeadline,
-    stopDeadline: TimeInterval = BlurtShared.stopDeadline,
-    holdThreshold: TimeInterval = PressHandshake.defaultHoldThreshold
+    stopDeadline: TimeInterval = BlurtShared.stopDeadline
   ) {
     self.retryDelay = retryDelay
     self.pressDeadline = pressDeadline
     self.stopDeadline = stopDeadline
-    self.holdThreshold = holdThreshold
   }
 
   /// The press awaiting an answer.
@@ -137,7 +130,7 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   /// The dictation a lift or a × would end.
   package var dictationID: UUID? {
     switch state {
-    case .owned(let dictation, _), .foreign(let dictation, _): dictation
+    case .owned(let dictation, _), .foreign(let dictation): dictation
     case .stopping(_, let dictation, _, _): dictation
     case .idle, .pressing, .unready: nil
     }
@@ -176,8 +169,8 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     switch event {
     case .micDown(let ready, let reason, let phase, let inFlight):
       return micDown(ready: ready, reason: reason, phase: phase, inFlight: inFlight)
-    case .micUp(let armedFromIdle, let heldFor):
-      return micUp(armedFromIdle: armedFromIdle, heldFor: heldFor)
+    case .micUp:
+      return micUp()
     case .cancelTapped:
       return cancelTapped()
     case .pressSent(let id, let at):
@@ -209,9 +202,14 @@ nonisolated extension PressHandshake {
         return [.none]
       }
       return pressFromRest(phase: phase, inFlight: inFlight)
-    case .owned(let dictation, _), .foreign(let dictation, _):
+    case .owned(let dictation, _), .foreign(let dictation):
       return micDownOverLatch(dictation: dictation, ready: ready, reason: reason, phase: phase, inFlight: inFlight)
-    case .pressing, .stopping:
+    case .pressing(let id, let sentAt, let resent, _):
+      // A second finger down before the answer: the stop goes out the moment
+      // the dictation has an id.
+      state = .pressing(id: id, sentAt: sentAt, resent: resent, stopWanted: true)
+      return [.none]
+    case .stopping:
       return [.none]
     }
   }
@@ -227,16 +225,17 @@ nonisolated extension PressHandshake {
     case .connecting, .recording:
       // A running dictation the app has not named can't be stopped by id.
       guard let inFlight else { return [.buzz] }
-      state = .foreign(dictation: inFlight.id, liftStops: true)
-      return [.latch]
+      // A finger down over a dictation visibly running stops it at once.
+      state = .foreign(dictation: inFlight.id)
+      return [.latch, .sendRelease(dictation: inFlight.id)]
     case .idle, .pasted, .copied, .error:
       return [.armGate, .sendPress, .showConnecting]
     }
   }
 
   /// A finger down over a latched gate. A dictation still running — ours, or
-  /// the one that took its place — is the gate's to stop on the lift, unless
-  /// its words are being made. A settled phase means it ended unseen: a fresh
+  /// the one that took its place — is stopped now, unless its words are being
+  /// made. A settled phase means it ended unseen: a fresh
   /// press over a cleared gate, if the record still says a press records; a
   /// closed or lapsed window takes none, and the lift hops.
   private mutating func micDownOverLatch(
@@ -244,13 +243,9 @@ nonisolated extension PressHandshake {
   ) -> [Action] {
     let named = inFlight?.id
     guard phase.isSettled else {
-      let stoppable = phase != .processing
-      if let named, named != dictation {
-        state = .foreign(dictation: named, liftStops: stoppable)
-      } else if case .foreign(let latched, _) = state {
-        state = .foreign(dictation: latched, liftStops: stoppable)
-      }
-      return stoppable ? [.armGate] : [.buzz]
+      guard phase != .processing else { return [.buzz] }
+      if let named, named != dictation { state = .foreign(dictation: named) }
+      return [.armGate, .sendRelease(dictation: named ?? dictation)]
     }
     // A notice naming another dictation is the previous one's, still up.
     if let named, named != dictation { return [.none] }
@@ -287,8 +282,8 @@ nonisolated extension PressHandshake {
       state = .owned(dictation: dictation, phase: .connecting)
       return stopWanted ? [.sendRelease(dictation: dictation)] : [.none]
     case .busy(let dictation):
-      // The tap latched onto it; a hold's lift already asked for the stop.
-      state = .foreign(dictation: dictation, liftStops: false)
+      // The press latched onto it; a second finger down already asked for the stop.
+      state = .foreign(dictation: dictation)
       return stopWanted ? [.sendRelease(dictation: dictation)] : [.latch]
     case .notListening(let reason):
       return refuse(reason)
@@ -307,7 +302,7 @@ nonisolated extension PressHandshake {
       guard snapshot.answers == id else { return [.none] }
       guard isInTime(sentAt: sentAt, now: now) else { return refuse(.unanswered) }
       return pressAnswered(by: snapshot, stopWanted: stopWanted)
-    case .owned(let dictation, _), .foreign(let dictation, _):
+    case .owned(let dictation, _), .foreign(let dictation):
       return follow(snapshot, dictation: dictation)
     case .stopping:
       return stopPhased(snapshot)
@@ -335,7 +330,7 @@ nonisolated extension PressHandshake {
   /// dictation already running in ours' place, now under the latch.
   private mutating func follow(_ snapshot: PhaseSnapshot, dictation: UUID) -> [Action] {
     if let named = snapshot.dictation?.id, named != dictation {
-      if !snapshot.state.isSettled { state = .foreign(dictation: named, liftStops: true) }
+      if !snapshot.state.isSettled { state = .foreign(dictation: named) }
       return [.none]
     }
     guard !snapshot.state.isSettled else { return settle() }

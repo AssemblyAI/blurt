@@ -35,6 +35,11 @@ struct BlurtKeyboardView: View {
             .accessibilityLabel(model.voiceState.accessibilityLabel)
             .accessibilityValue(model.voiceState.accessibilityValue)
             .accessibilityIdentifier("blurt-mic")
+        } else if params.item.action == .space {
+          // The hold that moves the cursor comes sooner than KeyboardKit's
+          // half second (`motion/space-hold`).
+          params.view.keyboardGestureConfiguration(
+            GestureButtonConfiguration(longPressDelay: DesignTokens.Motion.spaceHold))
         } else {
           params.view
         }

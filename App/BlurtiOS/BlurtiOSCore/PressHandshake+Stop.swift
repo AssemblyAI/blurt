@@ -6,36 +6,19 @@ import Foundation
 /// is answered, resent and given up. The press half, and the type, are in
 /// `PressHandshake.swift`.
 nonisolated extension PressHandshake {
-  mutating func micUp(armedFromIdle: Bool, heldFor: TimeInterval) -> [Action] {
-    let isHold = heldFor >= holdThreshold
-    let isTap = armedFromIdle && !isHold
-    switch state {
-    case .unready(let reason):
-      return [.hop(reason)]
-    case .idle, .stopping:
-      return [.none]
-    case .pressing(let id, let sentAt, let resent, _):
-      // A tap latched the gate and the answer decides what it holds. A hold's
-      // lift is a stop, sent the moment the dictation has an id.
-      if !isTap { state = .pressing(id: id, sentAt: sentAt, resent: resent, stopWanted: true) }
-      return [.none]
-    case .owned(let dictation, let phase):
-      // Over the words being made there is nothing to stop.
-      if phase == .processing { return [.buzz] }
-      return isTap ? [.none] : [.sendRelease(dictation: dictation)]
-    case .foreign(let dictation, let liftStops):
-      if isHold || liftStops { return [.sendRelease(dictation: dictation)] }
-      // The tap that latched onto it leaves it running; the next one stops it.
-      state = .foreign(dictation: dictation, liftStops: true)
-      return [.none]
-    }
+  /// The lift sends nothing: every stop went out on a finger down. A press
+  /// that was refused hops on its lift, so the app opens once the finger is
+  /// off the key.
+  func micUp() -> [Action] {
+    if case .unready(let reason) = state { return [.hop(reason)] }
+    return [.none]
   }
 
   func cancelTapped() -> [Action] {
     switch state {
     case .idle, .unready: [.none]
     case .pressing: [.sendCancel(dictation: nil)]
-    case .owned(let dictation, _), .foreign(let dictation, _): [.sendCancel(dictation: dictation)]
+    case .owned(let dictation, _), .foreign(let dictation): [.sendCancel(dictation: dictation)]
     // Over a release already out: the user wants the words gone, and a
     // cancel landing on either side of the release ends it that way.
     case .stopping(_, let dictation, _, _): [.sendCancel(dictation: dictation)]
@@ -44,7 +27,7 @@ nonisolated extension PressHandshake {
 
   mutating func stopSent(id: UUID, at: Date) -> [Action] {
     switch state {
-    case .owned(let dictation, _), .foreign(let dictation, _):
+    case .owned(let dictation, _), .foreign(let dictation):
       state = .stopping(id: id, dictation: dictation, sentAt: at, resent: false)
     case .pressing:
       state = .stopping(id: id, dictation: nil, sentAt: at, resent: false)

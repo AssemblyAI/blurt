@@ -191,7 +191,8 @@ nothing else.
 KeyboardKit's, as Apple draws them: the caps, their colour and corner, the
 press, the callouts, shift and caps lock, delete and its repeat, 123 / #+= /
 ABC turning the pages, the space bar's hold moving the cursor
-(`spacebarLongPressBehavior` = `.moveInputCursor`) and the input clicks.
+(`spacebarLongPressBehavior` = `.moveInputCursor`, after `motion/space-hold`
+0.25 s rather than KeyboardKit's half second) and the input clicks.
 The case is KeyboardKit's rule too — uppercase at a sentence's start in a
 field that capitalizes sentences, lowercase after the first letter, shift
 for one letter — and the layout follows it: `BlurtKeyboardView` observes
@@ -291,12 +292,15 @@ value and never a branch in the view (`VoiceStateTests`).
 
 The press is KeyboardKit's gesture on the key, routed by `BlurtActionHandler`
 (a `StandardKeyboardActionHandler`): finger down is `KeyboardModel.micDown`
-and finger up — on the key or off it — `micUp`, and tap against hold is the
-handshake's to decide from the stamps (`PressHandshake`): a tap latches and
-a hold is push-to-talk, exactly as on the Mac. The key clicks on the press
-as every key does; the dictation's own haptics are in the table. A release
-made while the mic is still coming up (the engine drops one before it
-records) is held and sent on the first recording phase, so a short hold
+and finger up — on the key or off it — `micUp`. The key is a signal, never a
+hold (`PressHandshake`): the first finger down sends the press and the
+dictation starts; the next finger down sends the stop, the moment it lands,
+and the words are on their way; the lift sends nothing, except the hop that
+opens Blurt after a refused press. There is no push-to-talk on the phone and
+no waiting for the finger to come up. The key clicks on the press as every
+key does; the dictation's own haptics are in the table. A second press made
+while the first is still unanswered (the engine drops one before it records)
+is held and sent the moment the dictation has its id, so a quick double tap
 over a slow mic still stops. Every phase the app publishes carries the id of
 the keyboard command it last took (`PhaseSnapshot.command`), and the
 keyboard settles its gate only for a phase that answers the press it is
@@ -633,6 +637,7 @@ over the brand's transition; everything else moves on the house curve
 | `keep-open-first-corner` | `9`             | `Motion.keepOpenFirstCorner` | the first exact corner, this long after the card appears; the rest come as the screen allows     |
 | `keep-open-flare`        | `0.9`           | `Motion.keepOpenFlare`       | the cross flare when the wordmark lands in a corner                                              |
 | `key-press`              | `0.08`          | `Motion.keyPress`            | a key lighting                                                                                   |
+| `space-hold`             | `0.25`          | `Motion.spaceHold`           | the space bar's hold before it moves the cursor: KeyboardKit's half second made it wait          |
 | `state-fade`             | `0.5`           | `Motion.stateFade`           | every change on the mic key and the +: a glyph, the tint, the dimming                            |
 | `term-swap`              | `0.4`           | `Motion.termSwap`            | the bar becoming the key-term field                                                              |
 | `typing-flash`           | `0.15`          | `Motion.typingFlash`         | the typing field's border turning, and the countdown's thump                                     |

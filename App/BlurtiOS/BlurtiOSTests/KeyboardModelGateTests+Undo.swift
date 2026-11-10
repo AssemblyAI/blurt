@@ -29,17 +29,16 @@ extension KeyboardModelGateTests {
     #expect(commands.sent.map(\.kind) == [.press, .cancel, .press, .cancel])
     #expect(commands.sent.last?.dictationID == coming)
     rig.answer(.cancelled(coming))
-    // A tap latches a recording; a swipe across the orb leaves it running
-    // (the swipe's end is the undo, never a lift), and the next tap is
-    // still the stop.
+    // A finger down over a recording is its stop, sent at once; a swipe
+    // after it undoes nothing (the words are kept).
     model.apply(snapshot(.idle))
     let dictation = rig.latchRecording()
     model.micDown()
-    model.undoPress()
-    #expect(commands.sent.count == 5)
-    #expect(!model.gate.isIdle)
-    model.tapMic()
+    #expect(commands.sent.count == 6)
     #expect(commands.sent.last?.kind == .release && commands.sent.last?.dictationID == dictation)
+    model.undoPress()
+    #expect(commands.sent.count == 6)
+    #expect(!model.gate.isIdle)
   }
 
   @Test("a swipe over a recording this keyboard just released cancels nothing: those words are being transcribed")

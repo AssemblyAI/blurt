@@ -1,4 +1,3 @@
-import BlurtEngine
 import Foundation
 import Testing
 
@@ -11,9 +10,7 @@ enum HandshakeFixture {
   static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
   static let app = UUID()
 
-  static let tap = PressHandshake.Event.micUp(armedFromIdle: true, heldFor: 0.2)
-  static let hold = PressHandshake.Event.micUp(armedFromIdle: true, heldFor: 1.2)
-  static let liftOverLatch = PressHandshake.Event.micUp(armedFromIdle: false, heldFor: 0.1)
+  static let lift = PressHandshake.Event.micUp
 
   static func at(_ seconds: TimeInterval) -> Date { epoch.addingTimeInterval(seconds) }
 
@@ -54,18 +51,18 @@ enum HandshakeFixture {
   /// A tap from rest the app answered: the keyboard owns the dictation, at `phase`.
   static func owned(_ handshake: inout PressHandshake, phase: PhaseSnapshot.State = .connecting) -> UUID {
     let id = pressed(&handshake)
-    _ = handshake.handle(tap, now: epoch)
+    _ = handshake.handle(lift, now: epoch)
     let dictation = UUID()
     _ = handshake.handle(ack(.started(dictation), for: id), now: epoch)
     if phase != .connecting { _ = handshake.handle(published(phase, dictation: dictation), now: epoch) }
     return dictation
   }
 
-  /// A dictation the keyboard owns and has lifted over, its stop out at 5 s:
-  /// the handshake is stopping, awaiting the stop's answer.
+  /// A dictation the keyboard owns and has pressed again at 5 s, its stop
+  /// out: the handshake is stopping, awaiting the stop's answer.
   static func stopping(_ handshake: inout PressHandshake) -> (dictation: UUID, stop: UUID) {
     let dictation = owned(&handshake, phase: .recording)
-    _ = handshake.handle(liftOverLatch, now: at(5))
+    _ = handshake.handle(micDown(phase: .recording, inFlight: dictation), now: at(5))
     let stop = UUID()
     _ = handshake.handle(.stopSent(id: stop, at: at(5)), now: at(5))
     return (dictation, stop)
@@ -95,14 +92,13 @@ struct PressHandshakeTests {
   typealias Fixture = HandshakeFixture
   let epoch = Fixture.epoch
 
-  @Test("the numbers are the contract's: the deadlines, the gate's hold, the model's retry")
+  @Test("the numbers are the contract's: the deadlines, the model's retry")
   @MainActor
   func numbers() {
     let handshake = PressHandshake()
     #expect(handshake.pressDeadline == BlurtShared.pressDeadline)
     #expect(handshake.stopDeadline == BlurtShared.stopDeadline)
     #expect(Duration.seconds(handshake.retryDelay) == KeyboardModel.commandRetryDelay)
-    #expect(Duration.seconds(handshake.holdThreshold) == DictationKeyGate().holdThreshold)
     #expect(handshake.retryDelay < handshake.pressDeadline)
   }
 
@@ -144,7 +140,7 @@ struct PressHandshakeTests {
     #expect(handshake.state == .unready(.unanswered))
     #expect(handshake.unreadyReason == .unanswered)
     #expect(handshake.pressID == nil)
-    let lift = handshake.handle(Fixture.hold, now: Fixture.at(1.3))
+    let lift = handshake.handle(Fixture.lift, now: Fixture.at(1.3))
     #expect(lift == [.hop(.unanswered)])
     let ticks = handshake.handle(.tick(now: Fixture.at(5)), now: Fixture.at(5))
     #expect(ticks == [.none])
@@ -207,22 +203,21 @@ struct PressHandshakeTests {
     #expect(handshake.isIdle)
   }
 
-  @Test("ack busy → foreign and a latch; the tap's own lift leaves it running, the next tap's lift stops it")
+  @Test("ack busy → foreign and a latch; the lift leaves it running, the next finger down stops it")
   func busy() {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
     let dictation = UUID()
     let answer = handshake.handle(Fixture.ack(.busy(dictation), for: id), now: epoch)
     #expect(answer == [.latch])
-    #expect(handshake.state == .foreign(dictation: dictation, liftStops: false))
+    #expect(handshake.state == .foreign(dictation: dictation))
     #expect(handshake.dictationID == dictation && !handshake.isOwned)
-    let lift = handshake.handle(Fixture.tap, now: Fixture.at(0.2))
+    let lift = handshake.handle(Fixture.lift, now: Fixture.at(0.2))
     #expect(lift == [.none])
-    #expect(handshake.state == .foreign(dictation: dictation, liftStops: true))
+    #expect(handshake.state == .foreign(dictation: dictation))
     let down = handshake.handle(Fixture.micDown(phase: .recording, inFlight: dictation), now: Fixture.at(2))
-    #expect(down == [.armGate])
-    let stop = handshake.handle(Fixture.liftOverLatch, now: Fixture.at(2.1))
-    #expect(stop == [.sendRelease(dictation: dictation)])
+    #expect(down == [.armGate, .sendRelease(dictation: dictation)])
+    #expect(handshake.state == .foreign(dictation: dictation))
   }
 
   @Test("ack notListening → unready with its reason, gate reset, a line and no buzz")
@@ -232,7 +227,7 @@ struct PressHandshakeTests {
     let refused = handshake.handle(Fixture.ack(.notListening(.interrupted), for: id), now: epoch)
     #expect(refused == [.resetGate, .show(.interrupted)])
     #expect(handshake.state == .unready(.interrupted))
-    let lift = handshake.handle(Fixture.tap, now: epoch)
+    let lift = handshake.handle(Fixture.lift, now: epoch)
     #expect(lift == [.hop(.interrupted)])
   }
 
@@ -254,13 +249,13 @@ struct PressHandshakeTests {
   func lateAnswer() {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
-    _ = handshake.handle(Fixture.hold, now: Fixture.at(1.1))
+    _ = handshake.handle(Fixture.lift, now: Fixture.at(1.1))
     let late = handshake.handle(Fixture.ack(.started(UUID()), for: id), now: Fixture.at(1.3))
     #expect(late == [.resetGate, .show(.unanswered)])
     #expect(handshake.state == .unready(.unanswered))
     var ticked = PressHandshake()
     let press = Fixture.pressed(&ticked)
-    _ = ticked.handle(Fixture.hold, now: Fixture.at(1.1))
+    _ = ticked.handle(Fixture.lift, now: Fixture.at(1.1))
     _ = ticked.handle(.tick(now: Fixture.at(1.2)), now: Fixture.at(1.2))
     let ignored = ticked.handle(Fixture.ack(.started(UUID()), for: press), now: Fixture.at(1.3))
     #expect(ignored == [.none])
@@ -278,7 +273,7 @@ struct PressHandshakeTests {
     let down = handshake.handle(Fixture.micDown(ready: false, reason: .needsForeground), now: epoch)
     #expect(down == [.none])
     #expect(handshake.state == .unready(.needsForeground))
-    let lift = handshake.handle(Fixture.tap, now: epoch)
+    let lift = handshake.handle(Fixture.lift, now: epoch)
     #expect(lift == [.hop(.needsForeground)])
     let unsaid = handshake.handle(Fixture.micDown(ready: false), now: epoch)
     #expect(unsaid == [.none])
@@ -305,8 +300,6 @@ struct PressHandshakeTests {
     #expect(phaseAtRest == [.none])
     #expect(handshake.isIdle)
     let id = Fixture.pressed(&handshake)
-    let downAgain = handshake.handle(Fixture.micDown(), now: epoch)
-    #expect(downAgain == [.none])
     let sentAgain = handshake.handle(.pressSent(id: UUID(), at: epoch), now: epoch)
     #expect(sentAgain == [.none])
     #expect(handshake.pressID == id)

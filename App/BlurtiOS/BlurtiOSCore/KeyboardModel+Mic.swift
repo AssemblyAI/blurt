@@ -21,17 +21,16 @@ extension KeyboardModel {
     return VoiceState(snapshot: snapshot, isReady: isReady)
   }
 
-  /// Finger down on the orb. The readiness record is read now — not a beat
-  /// ago — and the status line's own routing comes first: a line that says
-  /// the tap opens Blurt makes it so, whatever the record says, so the words
-  /// and the tap can never disagree. Then the handshake decides: a press, a
-  /// latch over a dictation already running, a buzz over words being made.
+  /// Finger down on the mic key: the signal. The readiness record is read now
+  /// — not a beat ago — and the status line's own routing comes first: a line
+  /// that says the tap opens Blurt makes it so, whatever the record says, so
+  /// the words and the tap can never disagree. Then the handshake decides: a
+  /// press, a stop of the dictation running, a buzz over words being made.
   package func micDown() {
     readListeningState()
     let line = statusLine
     heldError = nil
     touchDown = elapsed
-    armedFromIdle = false
     let ready: Bool
     let reason: FailureReason?
     switch line?.tapOpens {
@@ -51,17 +50,13 @@ extension KeyboardModel {
     perform(handshake.handle(event, now: now()))
   }
 
-  /// Finger up. The gate is told too, so it stays in step, but the decision
-  /// — a tap that latched, a hold that stops, a lift that opens the app —
-  /// is the handshake's, from the stamps the gate got.
+  /// Finger up. The gate is told, so it stays in step; the lift itself sends
+  /// nothing — every start and stop went out on the finger down — except the
+  /// hop that opens the app after a refused press.
   package func micUp() {
-    let lift = elapsed
-    let held = touchDown.map { lift - $0 } ?? .zero
-    _ = gate.modifierUp(at: lift)
-    let fromIdle = armedFromIdle
-    armedFromIdle = false
+    _ = gate.modifierUp(at: elapsed)
     touchDown = nil
-    perform(handshake.handle(.micUp(armedFromIdle: fromIdle, heldFor: held / .seconds(1)), now: now()))
+    perform(handshake.handle(.micUp, now: now()))
   }
 
   /// The × key: the dictation ends and its words are thrown away.

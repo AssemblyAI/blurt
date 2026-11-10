@@ -106,10 +106,8 @@ package final class KeyboardModel {
   /// The last command written, kept whole for the handshake's resend: the
   /// same id and stamp again, so an app that did read it ignores the copy.
   @ObservationIgnored package var lastCommand: KeyboardCommand?
-  /// When the finger touched the mic, on the clock the gate is fed, and
-  /// whether that touch armed the gate from rest: what the lift is judged by.
+  /// When the finger touched the mic, on the clock the gate is fed.
   @ObservationIgnored package var touchDown: Duration?
-  @ObservationIgnored package var armedFromIdle = false
   /// The clock, injected so a test can move it: the handshake's stamps and
   /// deadlines, the gate's stamps and every freshness check read it.
   @ObservationIgnored package var now: () -> Date = { Date() }
