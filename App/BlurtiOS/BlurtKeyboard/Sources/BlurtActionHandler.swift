@@ -52,7 +52,9 @@ final class BlurtActionHandler: StandardKeyboardActionHandler {
   /// characters, space and return on the release KeyboardKit acts on, delete
   /// on its press and its repeat. Shift and the page keys fall through, so
   /// the pages still turn; the case follows the term's own rule.
-  private func routeToTerm(_ gesture: Keyboard.Gesture, on action: KeyboardAction, model: BlurtiOSCore.KeyboardModel) -> Bool {
+  private func routeToTerm(
+    _ gesture: Keyboard.Gesture, on action: KeyboardAction, model: BlurtiOSCore.KeyboardModel
+  ) -> Bool {
     switch (gesture, action) {
     case (.release, .character(let character)): model.termType(character)
     case (.release, .space): model.termSpace()

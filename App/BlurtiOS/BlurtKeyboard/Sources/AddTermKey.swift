@@ -93,7 +93,7 @@ struct AddTermKey: View {
         .updating($pressed) { _, state, _ in state = true }
         .onEnded { value in
           defer { held = false }
-          guard !held, KeyboardInteraction.isTap(value.translation) else { return }
+          guard !held, KeyboardInteraction.isTap(width: value.translation.width, height: value.translation.height) else { return }
           model.addSelectedTerm()
         }
     )

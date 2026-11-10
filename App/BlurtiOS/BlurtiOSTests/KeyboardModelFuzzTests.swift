@@ -90,13 +90,13 @@ struct KeyboardModelFuzzTests {
           #expect(asked, "words dropped: cancel in \(stateBefore) by \(event) — \(context)")
         }
       }
-      check(model, proxy, commands, after: event, context)
+      check(model, proxy, commands, context)
     }
   }
 
   /// What must be true after every event, whatever came before.
   private func check(
-    _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: KeyboardRig.Commands, after event: Event, _ context: String
+    _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: KeyboardRig.Commands, _ context: String
   ) {
     // The term field's bookkeeping lives and dies with the field.
     let fieldOpen = model.termDraft != nil

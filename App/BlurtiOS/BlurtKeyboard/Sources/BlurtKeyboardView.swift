@@ -24,7 +24,18 @@ struct BlurtKeyboardView: View {
           params.view
         }
       },
-      buttonView: { $0.view },
+      // The mic's name and state for VoiceOver and the probe, on the key
+      // itself: KeyboardKit names a custom action's key after the action.
+      buttonView: { params in
+        if params.item.action == .blurtMic {
+          params.view
+            .accessibilityLabel(model.voiceState.accessibilityLabel)
+            .accessibilityValue(model.voiceState.accessibilityValue)
+            .accessibilityIdentifier("blurt-mic")
+        } else {
+          params.view
+        }
+      },
       collapsedView: { $0.view },
       emojiKeyboard: { $0.view },
       toolbar: { _ in BlurtToolbar(model: model) }

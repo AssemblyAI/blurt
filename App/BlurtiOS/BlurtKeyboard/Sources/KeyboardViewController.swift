@@ -1,6 +1,5 @@
 import BlurtiOSCore
 import KeyboardKit
-import SwiftUI
 import UIKit
 
 /// The keyboard's entry point — what iOS instantiates when the user picks Blurt

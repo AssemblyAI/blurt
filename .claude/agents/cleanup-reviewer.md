@@ -73,15 +73,15 @@ effort on what periphery cannot see.
 
 On the iPhone (`App/BlurtiOS/`), equally deliberate:
 
-- **The two losing mic concepts are on purpose.** `VoiceRibs`, `VoiceStreak`,
-  `VoiceElementKind`'s `.ribs`/`.streak`, `SharedStore.voiceElementKind` and the
-  `-BlurtGalleryVoice` switch are marked TEMPORARY: three concepts are built side
-  by side until one is picked (`DESIGN.md` › The voice element), then the losers go
-  together. Don't propose deleting one piecemeal.
-- **The gallery and the probe screens are entry points**, reached by launch
-  arguments (`-BlurtGallery…`, `-BlurtProbeField`) from `scripts/design-capture.sh`,
-  `ios-keyboard-shot.sh`, `ios-keyboard-flows.sh` and `apple-geometry.sh` — not
-  from any view. Likewise the `BlurtiOSProbe` XCUITest helpers.
+- **The keyboard is KeyboardKit's; Blurt's seams in it are few and deliberate.**
+  `KeyboardLayout.blurt` (the mic in the row), `MicKey`, `BlurtToolbar`,
+  `BlurtActionHandler` and `BlurtTint` are the whole of Blurt's keyboard
+  (`DESIGN.md`); a `KeyboardApp.blurt` with no licence key and one locale is the
+  free-core rule, not an omission.
+- **The probe screen is an entry point**, reached by a launch argument
+  (`-BlurtProbeField`) from `scripts/keyboard-parity.sh`, `ios-keyboard-shot.sh`,
+  `ios-keyboard-flows.sh` and `apple-geometry.sh` — not from any view. Likewise
+  the `BlurtiOSProbe` XCUITest helpers.
 - **`BlurtiOSCore` uses `package` access, not `public`,** and its explicit
   `package init`s exist because a memberwise initializer is only ever internal.
   Seams with one production use (`KeyboardModel.transport`, `.urlOpener`,

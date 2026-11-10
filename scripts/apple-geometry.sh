@@ -3,9 +3,10 @@
 # the BlurtiOSProbe UI test launches the app on `-BlurtProbeField`, reads every
 # key's frame off the system keyboard (both faces), and this turns the
 # attachment into App/BlurtiOS/Design/apple-geometry-<profile>.json — the
-# table the keyboard's profile tokens (`glass/*`, `classic/*`) are pinned to
-# (AppleGeometryTests, KeyboardProfileTests) and the crop
-# scripts/design-diff.swift measures the corner radius from. One file per
+# oracle scripts/keyboard-parity.sh reads Blurt's keyboard (KeyboardKit's,
+# with the mic in the row) against, which AppleGeometryTests checks parses
+# with every number read here, and the crop scripts/design-diff.swift
+# measures the corner radius from. One file per
 # profile: `glass-402` (the iPhone 18 Pro on iOS 26+, the default),
 # `classic-390` (the iPhone 16e on iOS 18.6: a Face ID phone) and
 # `classic-375` (the iPhone SE on iOS 18.6: a globe in the keyboard). The

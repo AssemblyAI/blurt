@@ -49,7 +49,7 @@ struct AppleGeometryTests {
   ]
 
   @Test("each file parses at the width its name says, with every number the probe reads", arguments: files)
-  func parses(file: String, measured: Bool) throws {
+  func parses(file: String, measured _: Bool) throws {
     let geometry = try AppleGeometry.load(file)
     let width = try #require(file.split(separator: "-").last.flatMap { Int($0) })
     #expect(geometry.width == CGFloat(width))

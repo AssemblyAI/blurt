@@ -18,9 +18,10 @@ The iPhone app and the keyboard it ships. Same engine as the Mac app
   shared defaults, Darwin notifications to wake each other. Full Access is what
   lets the keyboard reach the group — without it the keyboard still types, and says
   what it needs.
-- **Three layouts, the user's choice**: a slim mic bar, a mic panel (the Wispr /
-  Aqua shape), or a full keyboard with the mic as the main key. One keyboard
-  target, one setting, one set of plumbing.
+- **The keyboard is Apple's**, on KeyboardKit's free core: KeyboardKit draws the
+  iPhone's own keyboard and owns the typing; Blurt adds the mic key in the bottom
+  row and the key-term bar above the keys, and nothing else (`DESIGN.md`). One
+  keyboard target, one set of plumbing.
 
 ## Build
 
@@ -57,9 +58,10 @@ scripts retry it (`ios_resolve_packages` in `scripts/ios-lib.sh`) and print the 
 
 ## Design
 
-`DESIGN.md` — the tokens, the orb, the meter, the three layouts, the
-app's screens, all traced to the Mac app's sources, plus the gallery that renders every layout
-and state for a screenshot and the launch flags that reach every app state.
+`DESIGN.md` — the app's screens and their tokens, traced to the brand system and the Mac
+app's sources; the keyboard as KeyboardKit draws it, the mic key and the bar; Apple's geometry
+as the probe measured it and the parity run that checks the keyboard against it; and the
+launch flags that reach the app's screens for a screenshot.
 
 ## Getting Xcode
 
@@ -86,17 +88,18 @@ and the pieces every screen is built from (card, page, form, eyebrow, button, wo
 
 It is a static framework, so the app and the keyboard each link their own copy beside the
 engine's, and its API is `package` (one `SWIFT_PACKAGE_NAME` across the project), not `public`:
-nothing outside this project can see it, and periphery still reports what nothing uses. A
-preview hands the model a `ThemeFace`, not a palette — the colours are the UI's
-(`KeyboardModel+Palette.swift`).
+nothing outside this project can see it, and periphery still reports what nothing uses. The
+keyboard's keys and bar take KeyboardKit's own colours; the two brand tints it keeps are
+`BlurtTint`'s (`BlurtKeyboard/Sources`).
 
 ## Unit tests
 
 `scripts/ios-test.sh` runs `BlurtiOSTests` on a simulator (CI's `ios-build` job runs it after
-the build): the core's logic — the App Group contract (key terms, stale snapshots, layouts),
-the keyboard's rules (sentence start, the double space, the term field, return labels, letter
-rows) against a fake text field, the gate against the app's phases, the Darwin signals, term
-packs — and what the UI builds on it (palettes, the voice element, the gallery). The engine's
+the build): the core's logic — the App Group contract (key terms, stale snapshots), the
+keyboard's own rules (the term field's keys and case, the chip, the one-tap undo) against a
+fake text field, the gate against the app's phases, the Darwin signals, term packs — and what
+the UI builds on it (the voice state, the layout with the mic against KeyboardKit's own, the
+tokens). The engine's
 own tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here; every
 number in `DESIGN.md` › The two processes has one in `SessionContractNumbersTests`, which reads
 it off its named constant and greps the table for the constant's name beside the value the code
@@ -109,7 +112,9 @@ job runs it again under ThreadSanitizer and AddressSanitizer (`BLURT_IOS_SANITIZ
 `address` locally). `scripts/ios-check.sh` runs the whole iPhone bar in one go — the tests and
 the coverage gate, then `swiftlint analyze` and periphery over this project — and is what CI's
 `ios-build` job and a local `scripts/check.sh` run. The views are not in that figure, as the Mac shell's aren't in the engine's:
-they are checked on sight, through the gallery and the probe's screenshot flows.
+the keyboard is measured against Apple's by the parity probe (`scripts/keyboard-parity.sh`) and
+checked on sight through the probe's screenshots and flows (`scripts/ios-keyboard-shot.sh`,
+`scripts/ios-keyboard-flows.sh`).
 
 ## Testing in the simulator
 
@@ -210,8 +215,8 @@ iPhone 13.
    session off, the tap opens Blurt instead, which turns the session on and brings Messages back by
    itself (`HostReturn`; the trace's `hop` line carries the host and its `return` line says whether
    iOS agreed — refused, Blurt stays in front with its "◀" hint). Repeat at
-   the waits the flow asks for, and try the other two layouts from the app's Keyboard picker (the
-   keyboard reads the choice the next time it comes up). `scripts/ios-device.sh kill blurt` or
+   the waits the flow asks for, and try Hands-free from Settings → Keyboard (the keyboard reads
+   the change the next time it comes up). `scripts/ios-device.sh kill blurt` or
    `kill keyboard` ends either process mid-dictation (the relaunch and dead-keyboard flows).
 5. `scripts/ios-device.sh pull <dir> --syslog` — Blurt's own logs under `<dir>/Logs` (none on the
    phone yet is not a failure; `trace.jsonl` is among them once the app has been launched with
@@ -229,18 +234,18 @@ iPhone 13.
 
 ## What is still a stub
 
-- **Autocorrect and the suggestion bar** on the full keyboard.
-
+- **Autocorrect and the emoji keyboard** are KeyboardKit Pro and not wired: the keyboard
+  runs the free core only, so autocorrect is off and the emoji switcher is hidden.
 - **Sign in with AssemblyAI.** The shipping app will sign the user in and get a key
   behind the scenes; that service does not exist yet. Until it does, every build
   (TestFlight included) takes a pasted API key (`KeyEntryView`), as the Mac app does.
 - **Returning to the host app.** After "Start Blurt" the user swipes back; iOS 26.4
   ended automatic switch-back for everyone.
-- **The full keyboard** has no autocorrect or suggestions yet.
 
 ## What to verify on a phone first
 
 The listening window's life in the background (capture keeps flowing after the
 swipe back; battery over an hour); keyboard → app → back on iOS 26 and 27; the
-keyboard's memory with the orb growing into the wave; how long the lexicon takes on a phone
-with thousands of contacts; and, once the service exists, sign-in end to end.
+keyboard's memory with KeyboardKit's views up and the waveform following the level; how long
+the lexicon takes on a phone with thousands of contacts; and, once the service exists, sign-in
+end to end.

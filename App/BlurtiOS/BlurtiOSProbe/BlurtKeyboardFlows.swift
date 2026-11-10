@@ -51,8 +51,8 @@ final class BlurtKeyboardFlows: XCTestCase {
   /// their centre line (DESIGN.md › The mic's place); the + in the bar above
   /// the keys, at the trailing end.
   private func checkPlacement(mic: XCUIElement, plus: XCUIElement) {
-    let space = app.buttons["space"].firstMatch
-    let returnKey = app.buttons.matching(
+    let space = app.keys["space"].firstMatch
+    let returnKey = app.keys.matching(
       NSPredicate(format: "label ==[c] %@ OR label ==[c] %@", "return", "Return")
     ).firstMatch
     check(space.exists && returnKey.exists, "space and return present")
@@ -61,26 +61,25 @@ final class BlurtKeyboardFlows: XCTestCase {
     check(
       mic.frame.minX >= space.frame.maxX - 1 && mic.frame.maxX <= returnKey.frame.minX + 1,
       "the mic between space and return (\(mic.frame) vs \(space.frame), \(returnKey.frame))")
-    let top =
-      app.buttons.allElementsBoundByIndex.filter { $0.frame.minY > app.windows.firstMatch.frame.midY }
-      .map(\.frame.minY).min() ?? 0
-    check(plus.exists && plus.frame.minY <= top + 1, "the + in the bar above the keys")
+    let keysTop = letterKey("q").frame.minY
+    check(plus.exists && plus.frame.maxY <= keysTop + 1, "the + in the bar above the keys")
     check(plus.exists && plus.frame.maxX > mic.frame.midX, "the + at the bar's trailing end")
   }
 
-  /// Blurt's mic key, by its identifier: the system's own bottom bar has a
+  /// Blurt's mic key, by its identifier: a key, as every KeyboardKit key is
+  /// to XCUITest (the keyboard-key trait); the system's own bottom bar has a
   /// "Dictate" button too, and a label query lands on it.
   func micKey() -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "identifier == %@", "blurt-mic")).firstMatch
+    app.keys.matching(NSPredicate(format: "identifier == %@", "blurt-mic")).firstMatch
   }
 
   func micKey(labelled label: String) -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "blurt-mic", label)).firstMatch
+    app.keys.matching(NSPredicate(format: "identifier == %@ AND label == %@", "blurt-mic", label)).firstMatch
   }
 
   /// A letter key, in either case.
   func letterKey(_ letter: String) -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "label ==[c] %@", letter)).firstMatch
+    app.keys.matching(NSPredicate(format: "label ==[c] %@", letter)).firstMatch
   }
 
   func check(_ condition: Bool, _ what: String) {
@@ -116,7 +115,7 @@ extension BlurtKeyboardFlows {
     check(
       (field.value as? String)?.lowercased().contains("qq") == true,
       "letters type into the field (\(field.value ?? "-"))")
-    check(app.buttons["space"].exists, "space present")
+    check(app.keys["space"].exists, "space present")
     shot("typed")
   }
 
@@ -183,14 +182,15 @@ extension BlurtKeyboardFlows {
     let cancel = app.buttons["Cancel"]
     check(cancel.waitForExistence(timeout: 3), "the + opens the key-term field")
     check(letterKey("q").exists, "the keys stay up for the term")
+    let field = app.textFields.firstMatch
+    let hostBefore = field.value as? String
     letterKey("r").tap()
     letterKey("i").tap()
     shot("term")
     let save = app.buttons["Save the key term"]
     check(save.exists && save.isEnabled, "save enabled after typing")
-    let field = app.textFields.firstMatch
     check(
-      (field.value as? String)?.lowercased().contains("ri") != true,
+      (field.value as? String) == hostBefore,
       "the term's letters went to the field in the bar, not the host (\(field.value ?? "-"))")
     cancel.tap()
     check(micKey().waitForExistence(timeout: 3), "cancel returns to the bar")

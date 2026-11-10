@@ -298,9 +298,11 @@ targets:
       # compiled DesignTokens.swift to the file it was generated from.
       - path: Design/tokens.json
         buildPhase: resources
-      # The iPhone keyboard's measured geometry, one file per profile, so
-      # AppleGeometryTests and KeyboardProfileTests can pin the glass/* and
-      # classic/* tokens to what scripts/apple-geometry.sh read off the phone.
+      # The iPhone keyboard's measured geometry, one file per profile — the
+      # oracle scripts/keyboard-parity.sh reads Blurt's keyboard against — so
+      # AppleGeometryTests can check each file parses with every number
+      # scripts/apple-geometry.sh reads off the phone, and says whether a
+      # phone measured it.
       - path: Design/apple-geometry-glass-402.json
         buildPhase: resources
       - path: Design/apple-geometry-classic-390.json
