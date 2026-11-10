@@ -23,10 +23,8 @@ struct BlurtToolbar: View {
     ZStack {
       if model.termDraft != nil {
         TermField(model: model)
-          .transition(.opacity)
       } else if !model.hasFullAccess {
         note(scheme)
-          .transition(.opacity)
       } else {
         HStack(spacing: 0) {
           line(scheme)
@@ -34,13 +32,10 @@ struct BlurtToolbar: View {
           AddTermKey(model: model)
         }
         .padding(.horizontal, DesignTokens.Metrics.addtermInset)
-        .transition(.opacity)
       }
     }
     .frame(maxWidth: .infinity)
     .frame(height: DesignTokens.Metrics.voicebarHeight)
-    .animation(.easeInOut(duration: DesignTokens.Motion.termSwap), value: model.termDraft == nil)
-    .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: model.statusLine)
   }
 
   /// The note is the key: it fills the bar, and a tap opens the app's setup.
@@ -75,7 +70,6 @@ struct BlurtToolbar: View {
       }
       .buttonStyle(KeyPressStyle())
       .accessibilityIdentifier("blurt-line")
-      .transition(.opacity)
     }
   }
 }

@@ -284,8 +284,8 @@ is the state's:
 | copied                  | `doc.on.clipboard` for 2 s                                                                                                          | signal green            | success                      |
 | error                   | `exclamationmark` for 2 s, whether or not Blurt is ready (a failure is often why it isn't); the reason in the line and on VoiceOver | notice orange           | error                        |
 
-Every change fades over `state-fade` (the glyph through
-`contentTransition(.symbolEffect(.replace))`); nothing snaps. `VoiceState`
+Every change is instant: no fade, no symbol transition, no press animation
+— the key answers the finger and the phase the moment they change. `VoiceState`
 (`BlurtiOSCore`) decides all of it — ready, recording, the tone, the glyph,
 the dimming — from the phase the app published, so each decision is a tested
 value and never a branch in the view (`VoiceStateTests`).
@@ -326,8 +326,7 @@ than on the host's next notification.
 
 Where Apple's keyboard shows its predictions — empty on KeyboardKit's free
 core — Blurt puts its own (`BlurtToolbar`, in KeyboardKit's `toolbar`
-slot): one of three things, each fading into the next over `term-swap` or
-`state-fade`.
+slot): one of three things, each replacing the last at once.
 
 - **The status line and the +.** The line at the leading end, the + at the
   trailing end (`AddTermKey`; the chip for a highlighted word takes its
@@ -638,10 +637,7 @@ over the brand's transition; everything else moves on the house curve
 | `keep-open-fade`         | `0.6`           | `Motion.keepOpenFade`        | the Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns |
 | `keep-open-first-corner` | `9`             | `Motion.keepOpenFirstCorner` | the first exact corner, this long after the card appears; the rest come as the screen allows     |
 | `keep-open-flare`        | `0.9`           | `Motion.keepOpenFlare`       | the cross flare when the wordmark lands in a corner                                              |
-| `key-press`              | `0.08`          | `Motion.keyPress`            | a key lighting                                                                                   |
 | `space-hold`             | `0.25`          | `Motion.spaceHold`           | the space bar's hold before it moves the cursor: KeyboardKit's half second made it wait          |
-| `state-fade`             | `0.5`           | `Motion.stateFade`           | every change on the mic key and the +: a glyph, the tint, the dimming                            |
-| `term-swap`              | `0.4`           | `Motion.termSwap`            | the bar becoming the key-term field                                                              |
 | `typing-flash`           | `0.15`          | `Motion.typingFlash`         | the typing field's border turning, and the countdown's thump                                     |
 | `typing-tick`            | `0.1`           | `Motion.typingTick`          | how often the typing test's clock and live speed redraw                                          |
 

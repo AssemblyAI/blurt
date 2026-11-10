@@ -14,7 +14,6 @@ struct GlyphKey: View {
       Image(systemName: symbol)
         .font(.system(size: DesignTokens.Typography.sizeGlyph, weight: DesignTokens.Typography.weightGlyph))
         .foregroundStyle(tint)
-        .contentTransition(.symbolEffect(.replace))
         .frame(width: DesignTokens.Metrics.glyphHit, height: DesignTokens.Metrics.glyphHit)
         .contentShape(Rectangle())
     }
@@ -29,6 +28,5 @@ struct KeyPressStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .brightness(configuration.isPressed ? DesignTokens.Metrics.opacityPressBrighten : 0)
-      .animation(.easeOut(duration: DesignTokens.Motion.keyPress), value: configuration.isPressed)
   }
 }

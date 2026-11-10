@@ -25,12 +25,11 @@ struct AddTermKey: View {
     let scheme = keyboardContext.colorScheme
     ZStack {
       if let term = model.selectedTerm {
-        chip(term, scheme: scheme).transition(.opacity)
+        chip(term, scheme: scheme)
       } else {
-        plain(scheme).transition(.opacity)
+        plain(scheme)
       }
     }
-    .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: model.selectedTerm == nil)
     .disabled(!model.hasFullAccess)
     .opacity(model.hasFullAccess ? 1 : DesignTokens.Metrics.opacityDisabled)
   }
@@ -69,7 +68,6 @@ struct AddTermKey: View {
         .strokeBorder(BlurtTint.edge(scheme), lineWidth: DesignTokens.Metrics.termBorder)
     )
     .brightness(pressed ? DesignTokens.Metrics.opacityPressBrighten : 0)
-    .animation(.easeOut(duration: DesignTokens.Motion.keyPress), value: pressed)
     .contentShape(Rectangle())
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(known ? "“\(term)” is a key term" : "Add “\(term)” as a key term")
@@ -109,6 +107,5 @@ struct AddTermKey: View {
     Image(systemName: symbol)
       .font(.system(size: DesignTokens.Typography.sizeGlyph, weight: DesignTokens.Typography.weightGlyph))
       .foregroundStyle(tint)
-      .contentTransition(.symbolEffect(.replace))
   }
 }
