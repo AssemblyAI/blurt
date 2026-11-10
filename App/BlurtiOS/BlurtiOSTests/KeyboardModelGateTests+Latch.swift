@@ -84,11 +84,7 @@ struct KeyboardModelLatchTests {
     let rig = KeyboardRig()
     let model = rig.model
     let start = Date()
-    model.now = { start }
-    model.micDown()
-    let dictation = UUID()
-    rig.answer(.started(dictation))
-    model.apply(snapshot(.connecting, dictation: dictation))
+    let dictation = Self.pressedAndStarted(rig, at: start, phase: .connecting)
     model.now = { start.addingTimeInterval(1.2) }
     model.micUp()
     model.tapMic()
@@ -114,6 +110,30 @@ struct KeyboardModelLatchTests {
     rig.answer(.started(dictation))
     #expect(rig.commands.sent.map(\.kind) == [.press, .release])
     #expect(rig.commands.sent.last?.dictationID == dictation)
+  }
+
+  @Test("a hold: the press on the finger down, the release the instant it lifts")
+  func holdToTalk() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let rig = KeyboardRig()
+    let start = Date()
+    let dictation = Self.pressedAndStarted(rig, at: start, phase: .recording)
+    rig.model.now = { start.addingTimeInterval(0.5) }
+    rig.model.micUp()
+    #expect(rig.commands.sent.map(\.kind) == [.press, .release])
+    #expect(rig.commands.sent.last?.dictationID == dictation)
+  }
+
+  /// A finger down at `start`, answered with a started dictation that the
+  /// app then publishes at `phase`; the finger is still down.
+  private static func pressedAndStarted(_ rig: KeyboardRig, at start: Date, phase: PhaseSnapshot.State) -> UUID {
+    rig.model.now = { start }
+    rig.model.micDown()
+    let dictation = UUID()
+    rig.answer(.started(dictation))
+    rig.model.apply(snapshot(phase, dictation: dictation))
+    return dictation
   }
 
   @Test("the × cancels with the dictation's id, and the gate comes up on the app's answer")

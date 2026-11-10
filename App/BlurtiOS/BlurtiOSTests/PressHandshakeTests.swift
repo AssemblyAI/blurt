@@ -10,7 +10,8 @@ enum HandshakeFixture {
   static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
   static let app = UUID()
 
-  static let lift = PressHandshake.Event.micUp
+  static let lift = PressHandshake.Event.micUp(heldFor: 0.1)
+  static let holdLift = PressHandshake.Event.micUp(heldFor: 0.5)
 
   static func at(_ seconds: TimeInterval) -> Date { epoch.addingTimeInterval(seconds) }
 
@@ -92,10 +93,11 @@ struct PressHandshakeTests {
   typealias Fixture = HandshakeFixture
   let epoch = Fixture.epoch
 
-  @Test("the numbers are the contract's: the deadlines, the model's retry")
+  @Test("the numbers are the contract's: the deadlines, the hold, the model's retry")
   @MainActor
   func numbers() {
     let handshake = PressHandshake()
+    #expect(handshake.holdThreshold == 0.35)
     #expect(handshake.pressDeadline == BlurtShared.pressDeadline)
     #expect(handshake.stopDeadline == BlurtShared.stopDeadline)
     #expect(Duration.seconds(handshake.retryDelay) == KeyboardModel.commandRetryDelay)

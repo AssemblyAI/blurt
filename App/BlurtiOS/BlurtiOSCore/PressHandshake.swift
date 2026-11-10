@@ -8,15 +8,14 @@ import Foundation
 /// the next tap opens the app instead. The answer says whether this keyboard
 /// owns a dictation, latched onto one it didn't start, or can't record right
 /// now and why. From then on the next finger down is a stop, sent at once
-/// with the dictation's id, and the stop has a deadline of its own. The lift
-/// does nothing but hop when the press was refused: the mic key is a signal
-/// to start and a signal to end, never a hold.
+/// with the dictation's id, and so is a hold's lift (`holdThreshold`): tap to
+/// start and tap to end, or hold to talk. The stop has a deadline of its own.
 ///
 /// `KeyboardModel` drives it: every finger event, signal and clock tick comes
 /// in as an `Event`, every side effect goes out as an `Action` the model
 /// performs. Nothing here reads the store, the clock or the gate, so every row
-/// is a unit test. `DictationKeyGate` keeps the touches' stamps; nothing here
-/// reads a hold.
+/// is a unit test. `DictationKeyGate` keeps the touches' stamps; the lift
+/// brings its own held time.
 ///
 /// The gate is the model's, and the handshake says when a touch is the gate's:
 /// `KeyboardModel` calls `gate.modifierDown` only on `armGate`, resets it on
@@ -28,7 +27,7 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   package nonisolated enum State: Sendable, Equatable {
     case idle
     /// Our press is out and unanswered. `stopWanted`: the finger came down
-    /// again before the answer came. The one command slot holds our press
+    /// again, or a hold lifted, before the answer came. The one command slot holds our press
     /// until the app reads it, so the release waits for the dictation's id
     /// rather than overwriting the press.
     case pressing(id: UUID, sentAt: Date, resent: Bool, stopWanted: Bool)
@@ -39,9 +38,9 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// before the press was answered.
     case stopping(id: UUID, dictation: UUID?, sentAt: Date, resent: Bool)
     /// A dictation another keyboard, or hands-free, started: the gate is
-    /// latched over it, and the next finger down releases it. From `busy`
-    /// the press latched onto it without a stop: the press didn't knowingly
-    /// land on a running dictation.
+    /// latched over it, and the next finger down, or a hold's lift, releases
+    /// it. From `busy` the press latched onto it without a stop: the press
+    /// didn't knowingly land on a running dictation.
     case foreign(dictation: UUID)
     /// A press would not record; the next lift hops with the reason.
     case unready(FailureReason)
@@ -51,8 +50,9 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     /// Finger down: whether the record says a press records now (and why
     /// not), the phase on screen and the dictation it names.
     case micDown(ready: Bool, reason: FailureReason?, phase: PhaseSnapshot.State, inFlight: DictationRef?)
-    /// Finger up: hops when the press was refused; otherwise nothing.
-    case micUp
+    /// Finger up, with how long it was down: a hold's lift stops, a tap's
+    /// sends nothing, and a refused press hops.
+    case micUp(heldFor: TimeInterval)
     /// The × key, and only that: a flip over the orb is `undoBeforeRecording`.
     case cancelTapped
     /// The model wrote the press; the id and stamp start its deadline.
@@ -101,20 +101,25 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
   /// `KeyboardModel.commandRetryDelay`, as seconds: one resend of an
   /// unanswered command, well inside the deadline.
   package static let defaultRetryDelay: TimeInterval = 0.6
+  /// A finger down this long is a hold, and its lift the stop; shorter is a tap.
+  package static let defaultHoldThreshold: TimeInterval = 0.35
   package let retryDelay: TimeInterval
   package let pressDeadline: TimeInterval
   package let stopDeadline: TimeInterval
+  package let holdThreshold: TimeInterval
   // Set from the rows alone, which `PressHandshake+Stop.swift` also holds.
   package internal(set) var state: State = .idle
 
   package init(
     retryDelay: TimeInterval = PressHandshake.defaultRetryDelay,
     pressDeadline: TimeInterval = BlurtShared.pressDeadline,
-    stopDeadline: TimeInterval = BlurtShared.stopDeadline
+    stopDeadline: TimeInterval = BlurtShared.stopDeadline,
+    holdThreshold: TimeInterval = PressHandshake.defaultHoldThreshold
   ) {
     self.retryDelay = retryDelay
     self.pressDeadline = pressDeadline
     self.stopDeadline = stopDeadline
+    self.holdThreshold = holdThreshold
   }
 
   /// The press awaiting an answer.
@@ -169,8 +174,8 @@ package nonisolated struct PressHandshake: Sendable, Equatable {
     switch event {
     case .micDown(let ready, let reason, let phase, let inFlight):
       return micDown(ready: ready, reason: reason, phase: phase, inFlight: inFlight)
-    case .micUp:
-      return micUp()
+    case .micUp(let heldFor):
+      return micUp(heldFor: heldFor)
     case .cancelTapped:
       return cancelTapped()
     case .pressSent(let id, let at):

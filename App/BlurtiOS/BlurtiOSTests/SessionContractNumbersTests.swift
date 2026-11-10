@@ -53,6 +53,9 @@ struct SessionContractNumbersTests {
       row("owner watchdog", "`SyncSTTLimits.autoReleaseSeconds` \(seconds(SyncSTTLimits.autoReleaseSeconds))"),
       row("press ack", "`BlurtShared.pressDeadline` \(seconds(BlurtShared.pressDeadline))"),
       row("stop ack", "`BlurtShared.stopDeadline` \(seconds(BlurtShared.stopDeadline))"),
+      row(
+        "mic hold",
+        "`PressHandshake.defaultHoldThreshold` \(milliseconds(.seconds(PressHandshake.defaultHoldThreshold)))"),
       row("command retry", "`KeyboardModel.commandRetryDelay` \(milliseconds(KeyboardModel.commandRetryDelay))"),
       row("hop URLs", "`BlurtShared.fullAccessNeed`"),
       row("hop return", "`BlurtShared.hopReturnCap` \(seconds(BlurtShared.hopReturnCap))"),

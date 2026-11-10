@@ -6,12 +6,29 @@ import Foundation
 /// is answered, resent and given up. The press half, and the type, are in
 /// `PressHandshake.swift`.
 nonisolated extension PressHandshake {
-  /// The lift sends nothing: every stop went out on a finger down. A press
-  /// that was refused hops on its lift, so the app opens once the finger is
-  /// off the key.
-  func micUp() -> [Action] {
-    if case .unready(let reason) = state { return [.hop(reason)] }
-    return [.none]
+  /// A hold's lift is the stop, sent the instant the finger is off the key;
+  /// a tap's lift sends nothing (the tap started, the next tap stops). A
+  /// press that was refused hops on its lift, so the app opens once the
+  /// finger is off the key.
+  mutating func micUp(heldFor: TimeInterval) -> [Action] {
+    let isHold = heldFor >= holdThreshold
+    switch state {
+    case .unready(let reason):
+      return [.hop(reason)]
+    case .idle, .stopping:
+      return [.none]
+    case .pressing(let id, let sentAt, let resent, _):
+      // A hold lifted before the answer: the stop goes out the moment the
+      // dictation has an id.
+      if isHold { state = .pressing(id: id, sentAt: sentAt, resent: resent, stopWanted: true) }
+      return [.none]
+    case .owned(let dictation, let phase):
+      // Over the words being made there is nothing to stop.
+      if phase == .processing || !isHold { return [.none] }
+      return [.sendRelease(dictation: dictation)]
+    case .foreign(let dictation):
+      return isHold ? [.sendRelease(dictation: dictation)] : [.none]
+    }
   }
 
   func cancelTapped() -> [Action] {

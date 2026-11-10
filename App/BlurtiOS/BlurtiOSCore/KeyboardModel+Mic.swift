@@ -50,13 +50,15 @@ extension KeyboardModel {
     perform(handshake.handle(event, now: now()))
   }
 
-  /// Finger up. The gate is told, so it stays in step; the lift itself sends
-  /// nothing — every start and stop went out on the finger down — except the
-  /// hop that opens the app after a refused press.
+  /// Finger up. The gate is told, so it stays in step; the handshake gets
+  /// how long the finger was down: a hold's lift is the stop, sent at once;
+  /// a tap's lift sends nothing; a refused press hops.
   package func micUp() {
-    _ = gate.modifierUp(at: elapsed)
+    let lift = elapsed
+    let held = touchDown.map { lift - $0 } ?? .zero
+    _ = gate.modifierUp(at: lift)
     touchDown = nil
-    perform(handshake.handle(.micUp, now: now()))
+    perform(handshake.handle(.micUp(heldFor: held / .seconds(1)), now: now()))
   }
 
   /// The × key: the dictation ends and its words are thrown away.

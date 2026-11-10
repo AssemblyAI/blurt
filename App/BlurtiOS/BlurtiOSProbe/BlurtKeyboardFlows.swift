@@ -212,5 +212,9 @@ extension BlurtKeyboardFlows {
     let back = micKey(labelled: "Dictate")
     check(back.waitForExistence(timeout: 12), "a second tap stops it and the key settles")
     shot("settled")
+    // Hold to talk: the press starts, the lift stops.
+    micKey().press(forDuration: 1.5)
+    check(micKey(labelled: "Dictate").waitForExistence(timeout: 12), "a hold's lift stops it (\(micKey().label))")
+    shot("held")
   }
 }
