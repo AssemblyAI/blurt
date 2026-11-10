@@ -928,14 +928,13 @@ three of them pure engine logic:
   among the losses and the gate is reset. The host passes the raw `CGEventSource.flagsState` read
   in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
-  shell `if`. While developer mode is on — read at each Escape through the router's
-  `escapeCancels` provider (default `DeveloperModeStore().isEnabled`), so the switch applies without a
-  relaunch, and off it Escape is an ordinary key exactly as before — it also routes `escapeKeyCode`
-  (53) to the gate's cancel rather than the combo path,
-  and carries **`dictationIsActive`** — set by the host from `!PipelinePhase.isTerminal` — so Escape
-  keeps cancelling across the post-recording transcribe/inject window, which the gate reads as idle.
-  Escape stays inert when nothing is in flight: the tap is listen-only and sees every Escape pressed
-  anywhere on the system, so an idle pipeline must not turn each one into a cancel command.
+  shell `if`. It also routes a **bare Escape** — `Event.isBareEscape`: keycode 53, no ⌘⌥⌃⇧, not a
+  key-repeat — arriving as `.escapeDown(inFlight:)`, where the host's `inFlight` covers what the gate
+  can't see (a dictation past its recording, a request, a job, a read). Nothing live and nothing in
+  flight, it takes the ordinary-key path without reading the switch: the tap is listen-only and sees
+  every Escape on the system. Otherwise the `escapeCancels` provider decides — `{ false }` unless the
+  host passes one; the app passes developer mode, read at the keystroke — and on, the gate is cleared
+  and `.cancel` returned; off, Escape is an ordinary key exactly as before.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
 `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
@@ -943,10 +942,15 @@ key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator
 `syncAfterTerminalPhase()` on every terminal phase: a dictation can end with no key event to close
 the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
 and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
-`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. It also pushes
-`dictationIsActive` (`!phase.isTerminal`) down to the tap on every phase, which is what lets Escape
-cancel a dictation that has stopped recording but is still transcribing or pasting; the cancel goes
-through `SelectionSpeechRouter` like a combo's, so it reaches whatever the pressing key started. The
+`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. An Escape's
+`inFlight` is asked of the coordinator at the keystroke (`isBusy`: the read-aloud router busy, or the
+last phase not terminal), and its cancel goes to `SelectionSpeechRouter.escape()` rather than a
+combo's `submit(.cancel)`: from every routing mode it stops the router's own work — a job before it
+pastes, a read or answer, a request — and cancels a busy session, which a combo would leave running
+under a press still deciding. With nothing of the router's under way the cancel goes to the session
+unconditionally, and `DictationSession.cancel()` decides by its own phase (a no-op at rest), so a
+stale "in flight" can't strand a dictation. The ready screen's own Esc button stands down while the
+tap's Escape is on, so one Escape is one cancel. The
 tap **swallows nothing**: a lone modifier types nothing, combos pass through so normal shortcuts keep
 working, and the Escape cancel does **not** consume the keystroke — Escape still reaches the focused
 app. Making it exclusive would require an active (`.defaultTap`) tap, which is ruled out because

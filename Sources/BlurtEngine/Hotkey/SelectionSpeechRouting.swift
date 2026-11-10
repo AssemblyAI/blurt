@@ -49,13 +49,14 @@ struct SelectionSpeechRouting: Sendable {
   /// speaking; a deliberate tap is over long before it.
   static let holdDelay = Duration.milliseconds(350)
 
-  private var mode = Mode.passthrough
+  // The state is internal, not private, for Escape's extension (`+Escape`).
+  var mode = Mode.passthrough
   /// Whether the session's last phase was in flight. A terminal phase is then
   /// that dictation's end, never a hand-back press that hasn't started.
-  private var sessionBusy = false
+  var sessionBusy = false
   /// Reads still in flight for presses a newer press already replaced. Their
   /// results are dropped as they land, before any newer read's.
-  private var staleReads = 0
+  var staleReads = 0
 
   init() {}
 
@@ -383,7 +384,7 @@ struct SelectionSpeechRouting: Sendable {
   /// it transcribed — still has its screen read under way and, in a Chromium
   /// browser, its page tree switched on: `.stopJob` stops one and undoes the
   /// other. Nothing for any other request.
-  private func abandon(_ intent: Intent) -> [Action] {
+  func abandon(_ intent: Intent) -> [Action] {
     intent == .command ? [.stopJob] : []
   }
 }

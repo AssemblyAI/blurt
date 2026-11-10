@@ -187,7 +187,9 @@ final class AppCoordinator {
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
-      onRecordingDiscarded: { router.submit(.cancelRecording) }
+      onRecordingDiscarded: { router.submit(.cancelRecording) },
+      onEscape: { router.escape() },
+      isBusy: { [weak self] in router.isBusy || !(self?.lastPhase.isTerminal ?? true) }
     )
     router.syncGateAfterSession = { [weak self] in self?.keyTap?.syncAfterTerminalPhase() }
     router.resetGate = { [weak self] in self?.keyTap?.resetGate() }
@@ -377,9 +379,6 @@ final class AppCoordinator {
     isCapturing = phase.isCapturing
 
     cues.transition(for: phase)
-    // Escape keeps cancelling through the transcribe/inject window, which the
-    // trigger's gate reads as idle (`DictationKeyRouter.dictationIsActive`).
-    keyTap?.dictationIsActive = !phase.isTerminal
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the

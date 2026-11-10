@@ -40,6 +40,9 @@ struct ReadyView: View {
   /// The toolbar's Browse open panel.
   @State private var isImporting = false
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
+  /// Whether the key tap's Escape cancels (`DictationKeyTap`), which sees this
+  /// window's Escape too: the button below then stands down, so one Escape is one cancel.
+  @AppStorage(DeveloperModeStore.defaultsKey) private var escapeCancelsEverywhere = false
 
   /// The one page the window pushes: whatever the model has open.
   private enum Route: Hashable { case openItem }
@@ -106,7 +109,7 @@ struct ReadyView: View {
     // Present through all of capture (not just `.recording`), so Esc during
     // the mic bring-up also cancels rather than beeping.
     .background {
-      if coordinator.isCapturing {
+      if coordinator.isCapturing, !escapeCancelsEverywhere {
         Button("Cancel Dictation") { coordinator.session.submit(.cancel) }
           .keyboardShortcut(.cancelAction)
           .hidden()

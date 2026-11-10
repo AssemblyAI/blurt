@@ -108,7 +108,7 @@ public struct DictationKeyGate: Sendable {
   /// state: a held push-to-talk, a latched toggle recording, and a re-press over
   /// a latch. Returns `.none` from `.idle` so the key stays inert when the gate
   /// holds nothing; the *pipeline*'s post-recording window is the router's call,
-  /// not the gate's (see `DictationKeyRouter.dictationIsActive`).
+  /// not the gate's (see `DictationKeyRouter.Event.escapeDown`).
   ///
   /// Clears state either way, so a still-held trigger's eventual key-up routes to
   /// `.none` rather than emitting a `.stop` for the dictation just cancelled.

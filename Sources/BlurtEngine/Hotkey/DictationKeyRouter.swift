@@ -11,10 +11,12 @@
 ///   than one trigger bound, the one whose press left the gate idle owns it
 ///   (`activeKeyCode`) until the gate is idle and that key is up again; the
 ///   others are ignored meanwhile, so two triggers never interleave.
-/// - **Cancel.** With developer mode on, Escape is not a combo but a discard: it
-///   cancels a dictation anywhere in flight, including the transcribe/inject
-///   window the gate has already forgotten about (see `dictationIsActive`). With
-///   it off, Escape is an ordinary key, as every other `keyDown` is.
+/// - **Cancel.** With the switch on (`escapeCancels`), a bare Escape is not a
+///   combo but a discard: it clears the gate and reports `.cancel` whenever
+///   anything is in flight, including the transcribe/inject window and a job or
+///   spoken answer the gate has already forgotten about (`Event.escapeDown`).
+///   The host decides what that cancel stops. Otherwise Escape is an ordinary
+///   key, as every other `keyDown` is.
 /// - **Dropped-event recovery.** After the host's tap is disabled and re-enabled,
 ///   whether the gate's state survives depends on the trigger still being held —
 ///   see `recoverFromDroppedEvents(heldFlags:)`.
@@ -36,6 +38,10 @@ public struct DictationKeyRouter: Sendable {
     /// modifier-click (⌘-click a link, ⌥-click in Finder), not a lone press, so
     /// it cancels the press exactly as another key would.
     case pointerDown
+    /// A bare, non-repeating Escape (`isBareEscape`). `inFlight`: whether the
+    /// host has anything under way the gate can't see — a dictation past its
+    /// recording, a request, a job, a read — read at the keystroke.
+    case escapeDown(inFlight: Bool)
 
     /// A `flagsChanged` delivery from its keycode and the event's raw
     /// `CGEventFlags`: down when the flags hold *that* key's device bit — so
@@ -43,6 +49,18 @@ public struct DictationKeyRouter: Sendable {
     public static func fromFlags(keyCode: Int, rawFlags: UInt64) -> Event {
       let isOn = TriggerKey(rawValue: keyCode).map { rawFlags & $0.deviceModifierMask != 0 } ?? false
       return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: isOn)
+    }
+
+    /// ⌘, ⌥, ⌃ and ⇧ in `CGEventFlags`' raw value — `maskCommand`,
+    /// `maskAlternate`, `maskControl`, `maskShift` — spelled out so the router
+    /// stays free of CoreGraphics.
+    static let modifierMask: UInt64 = 0x10_0000 | 0x8_0000 | 0x4_0000 | 0x2_0000
+
+    /// Whether a `keyDown` is the cancel gesture: Escape with no ⌘, ⌥, ⌃ or ⇧
+    /// held, and not a key-repeat. ⌥⌘Esc (Force Quit) and a held Escape's
+    /// repeats are someone else's, and stay ordinary keys.
+    public static func isBareEscape(keyCode: Int, rawFlags: UInt64, isAutorepeat: Bool) -> Bool {
+      keyCode == DictationKeyRouter.escapeKeyCode && rawFlags & modifierMask == 0 && !isAutorepeat
     }
   }
 
@@ -59,22 +77,12 @@ public struct DictationKeyRouter: Sendable {
   /// it's a router constant rather than a `TriggerKey` case.
   public static let escapeKeyCode = 53
 
-  /// Whether the session still has a dictation in flight — recording, or past
-  /// the recording and mid transcribe/inject. Fed by the host from the phase it
-  /// already observes (`!PipelinePhase.isTerminal`), because Escape has to keep
-  /// cancelling through a window the gate cannot see: a tap-to-stop leaves the
-  /// gate `.idle` while the transcript is still being fetched and pasted, and
-  /// "Escape kills it" must hold for that stretch too — it's the one the user
-  /// is actually staring at the "Transcribing…" pill during.
-  ///
-  /// Defaults to false, so a host that never sets it gets Escape-cancels-
-  /// recording and nothing more — never a cancel fired at an idle session.
-  public var dictationIsActive = false
-
-  /// Whether Escape is the cancel key, read at each Escape so the Settings switch
-  /// applies without a relaunch. Developer mode for now (`DeveloperModeStore`), so
-  /// the gesture can be trialled before it is everyone's; off, Escape takes the
-  /// ordinary-key path exactly as it did before the gesture existed.
+  /// Whether Escape is the cancel key, read at an Escape only once something is
+  /// in flight, so the Settings switch applies without a relaunch. The app
+  /// passes developer mode (`DeveloperModeStore`) for now, so the gesture can be
+  /// trialled before it is everyone's; off, Escape takes the ordinary-key path
+  /// exactly as it did before the gesture existed. Defaults to off, so nothing
+  /// built without the host's say reads the real defaults.
   private let escapeCancels: @Sendable () -> Bool
 
   private var gate: DictationKeyGate
@@ -85,10 +93,10 @@ public struct DictationKeyRouter: Sendable {
   /// Each key with its own mode (keycode → activation).
   public init(
     activations: [Int: TriggerActivation], holdThreshold: Duration = .seconds(1),
-    escapeCancels: (@Sendable () -> Bool)? = nil
+    escapeCancels: @escaping @Sendable () -> Bool = { false }
   ) {
     self.activations = activations
-    self.escapeCancels = escapeCancels ?? { DeveloperModeStore().isEnabled }
+    self.escapeCancels = escapeCancels
     self.gate = DictationKeyGate(holdThreshold: holdThreshold, activation: activations.values.first ?? .tapOrHold)
   }
 
@@ -117,22 +125,17 @@ public struct DictationKeyRouter: Sendable {
       }
       return .none
     case .keyDown(let keyCode):
-      if keyCode == Self.escapeKeyCode, escapeCancels() { return escapeKeyDown() }
       return activations[keyCode] != nil ? .none : gate.otherKeyDown()
     case .pointerDown:
       return gate.otherKeyDown()
+    case .escapeDown(let inFlight):
+      // Cheapest first: with nothing in flight this is any Escape typed anywhere
+      // on the system (the tap is listen-only), so it neither reads the switch
+      // nor cancels — it takes the ordinary-key path, a no-op on an idle gate.
+      guard !gate.isIdle || inFlight, escapeCancels() else { return gate.otherKeyDown() }
+      _ = gate.escapeKeyDown()
+      return .cancel
     }
-  }
-
-  /// Escape: the gate cancels whatever live state it holds, and a gate that holds
-  /// nothing still cancels while the host reports a dictation in flight (the
-  /// post-recording transcribe/inject window — see `dictationIsActive`). Only a
-  /// genuinely idle pipeline leaves Escape inert, which matters because the tap
-  /// is listen-only and sees every Escape pressed anywhere on the system.
-  private mutating func escapeKeyDown() -> DictationKeyGate.Action {
-    let action = gate.escapeKeyDown()
-    if action != .none { return action }
-    return dictationIsActive ? .cancel : .none
   }
 
   /// Rebinds the triggers — which keys, and each one's mode, the two halves of

@@ -12,7 +12,7 @@ public struct DeveloperModeStore {
   public static var defaultsKey: String { DefaultsKey.developerMode.key }
   private let defaults: UserDefaults
 
-  init(defaults: UserDefaults = .standard) {
+  public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }
 
@@ -23,7 +23,7 @@ public struct DeveloperModeStore {
   /// caller — only tests, which is the hazard `KeysSettingsTab` documents in the
   /// other direction. Rather than leave a write path nothing exercised, there is
   /// none; seed the slot to change the switch.
-  var isEnabled: Bool {
+  public var isEnabled: Bool {
     defaults.bool(forKey: Self.defaultsKey)
   }
 }

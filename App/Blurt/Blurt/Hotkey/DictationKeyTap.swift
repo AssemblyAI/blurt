@@ -53,14 +53,12 @@ final class DictationKeyTap {
   /// Seeded from the persisted binding in `init` — see the note there.
   private var router: DictationKeyRouter
 
-  /// Whether a dictation is in flight, so Escape can cancel one that has already
-  /// stopped recording and is mid transcribe/inject — a window the gate reads as
-  /// idle. Set by `AppCoordinator.render(_:)` from the phase stream; the router's
-  /// property owns the semantics.
-  var dictationIsActive: Bool {
-    get { router.dictationIsActive }
-    set { router.dictationIsActive = newValue }
-  }
+  /// A bare Escape cancelled: stop whatever is in flight (the read-aloud
+  /// router's `escape()`), which a combo's `onCancel` would not all reach.
+  private let onEscape: @MainActor () -> Void
+  /// Whether anything is in flight that the gate can't see — a dictation past
+  /// its recording, a request, a job, a read — asked at each bare Escape.
+  private let isBusy: @MainActor () -> Bool
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
@@ -82,20 +80,27 @@ final class DictationKeyTap {
     onStop: @escaping @MainActor () -> Void,
     onCancel: @escaping @MainActor () -> Void,
     onLatch: @escaping @MainActor () -> Void,
-    onRecordingDiscarded: @escaping @MainActor () -> Void
+    onRecordingDiscarded: @escaping @MainActor () -> Void,
+    onEscape: @escaping @MainActor () -> Void,
+    isBusy: @escaping @MainActor () -> Bool
   ) {
     self.onStart = onStart
     self.onStop = onStop
     self.onCancel = onCancel
     self.onLatch = onLatch
     self.onRecordingDiscarded = onRecordingDiscarded
+    self.onEscape = onEscape
+    self.isBusy = isBusy
     // Every half of the binding comes from its store, not a hard-coded
     // `.rightCommand` / `.tapOrHold`: `fromPersisted` owns the unset default, and
     // restating it here is the same mistake `ObservedKeyBindings` and `KeysSettingsTab`
     // were each corrected away from — the tap would name the old key while the
     // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
     // re-reads this, but nothing enforces that it runs before the first event.
-    self.router = DictationKeyRouter(activations: Self.boundActivations())
+    // Escape cancels in developer mode only, for now; the router reads the
+    // switch at the keystroke.
+    self.router = DictationKeyRouter(
+      activations: Self.boundActivations(), escapeCancels: { DeveloperModeStore().isEnabled })
   }
 
   deinit {
@@ -233,7 +238,9 @@ final class DictationKeyTap {
 
     guard let routed = routerEvent(type: type, event: event) else { return }
     let now = reference.duration(to: ContinuousClock.now)
-    dispatch(router.handle(routed, at: now))
+    let action = router.handle(routed, at: now)
+    if case .escapeDown = routed, action == .cancel { return onEscape() }
+    dispatch(action)
   }
 
   /// Reduces a `CGEvent` to the router's CoreGraphics-free event shape, or nil
@@ -244,7 +251,10 @@ final class DictationKeyTap {
     case .flagsChanged:
       return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
-      return .keyDown(keyCode: keyCode)
+      let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+      guard DictationKeyRouter.Event.isBareEscape(keyCode: keyCode, rawFlags: event.flags.rawValue, isAutorepeat: isRepeat)
+      else { return .keyDown(keyCode: keyCode) }
+      return .escapeDown(inFlight: isBusy())
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       #if UITEST_HOOKS
         // A simulated press is "held" while the test clicks the harness's
