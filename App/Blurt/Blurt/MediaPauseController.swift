@@ -1,3 +1,4 @@
+import AppKit
 import BlurtEngine
 import Foundation
 import os
@@ -15,10 +16,10 @@ import os
 ///
 /// Only the scriptable players (`MediaPlayerApp`: Spotify, Apple Music) are touched,
 /// and only *precisely*: each exposes `player state`, so we pause one that is
-/// already playing and resume only what we actually paused. `if application … is
-/// running` is the scripting idiom that reads the running state *without* launching
-/// the app, which matters — a dictation must never boot a music player. Because it
-/// cannot start anything unbidden, the switch defaults on.
+/// already playing and resume only what we paused, and only while it is still
+/// paused. Only a player that is running is scripted, one script per player — see
+/// `MediaPlayerApp` for why one script for both broke on a Mac without Spotify.
+/// Because it cannot start anything unbidden, the switch defaults on.
 ///
 /// Browsers are deliberately out of scope; `MediaPlayerApp` documents the detection
 /// routes that were measured and rejected, and the blind media-key fallback that was
@@ -40,12 +41,13 @@ import os
 /// `tccutil` the same way. TCC still attributes the Apple Event to Blurt as the
 /// *responsible* process, so the consent prompt names Blurt and reads Blurt's
 /// `NSAppleEventsUsageDescription` — don't remove that key.
-///
-/// One `osascript` per edge, not one per player: AppleScript can't take
-/// app-specific terminology like `player state` through a variable application
-/// reference, so both players are unrolled into a single generated script.
 final class MediaPauseController {
   private nonisolated static let logger = HostIdentity.current.logger("MediaPauseController")
+
+  /// How long one `osascript` may run before it is killed. A player that answers
+  /// takes milliseconds; one that is wedged must not hold the queue — and with it
+  /// every later pause and resume — for as long as it stays wedged.
+  private nonisolated static let timeout = DispatchTimeInterval.seconds(5)
 
   /// Off-pool home for the `osascript` invocations. A Dispatch queue rather than
   /// `Task.detached`, for the same reason `DictationSession` uses one for the AX
@@ -69,11 +71,23 @@ final class MediaPauseController {
   /// Exactly the players *we* paused, so the restore puts back only what we took
   /// away and never starts something the user had stopped themselves.
   ///
-  /// `nonisolated(unsafe)` because it is read and written only inside
-  /// `Self.queue.async` blocks, and that queue is serial — so the accesses are
-  /// mutually exclusive and ordered without a lock. Do not touch it from the main
-  /// actor; the ordering guarantee is the whole reason it lives here.
+  /// `nonisolated(unsafe)` because it is read and written only on `Self.queue`,
+  /// and that queue is serial — so the accesses are mutually exclusive and ordered
+  /// without a lock. Do not touch it from the main actor; the ordering guarantee is
+  /// the whole reason it lives here.
   nonisolated(unsafe) private var pausedPlayers: [MediaPlayerApp] = []
+
+  /// Quitting mid-dictation — a Sparkle relaunch included — must not leave the
+  /// music paused, and no `.ended` edge will come.
+  private var terminationObserver: NSObjectProtocol?
+
+  init() {
+    terminationObserver = NotificationCenter.default.addObserver(
+      forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.restoreBeforeExit() }
+    }
+  }
 
   /// Acts on the recording edge. Call once per rendered phase.
   func transition(for phase: PipelinePhase) {
@@ -91,106 +105,104 @@ final class MediaPauseController {
     }
   }
 
-  /// Enqueues the pause. Fire-and-forget: recording has already started and must
-  /// never wait on another app's responsiveness, so a slow or wedged player costs
-  /// at most some music bleeding into the first moments of the take.
+  /// Enqueues the pause of every running player. Fire-and-forget: recording has
+  /// already started and must never wait on another app's responsiveness, so a slow
+  /// or wedged player costs at most some music bleeding into the first moments of
+  /// the take. The running check is `NSWorkspace`'s, on the main actor, so nothing
+  /// is spawned when no player is open.
   private func pause() {
+    let running = MediaPlayerApp.running(among: NSWorkspace.shared.runningApplications.map(\.bundleIdentifier))
     Self.queue.async { [self] in
       // Assigned, not appended: a stale entry from an earlier dictation whose
       // restore was skipped must not resurrect playback the user has since stopped.
-      pausedPlayers = Self.pausePlayingPlayers()
+      pausedPlayers = running.filter { Self.runOSA($0.pauseScript) == "paused" }
     }
   }
 
   private func restore() {
-    Self.queue.async { [self] in
-      guard !pausedPlayers.isEmpty else { return }
-      Self.resume(pausedPlayers)
-      pausedPlayers = []
-    }
+    Self.queue.async { [self] in resumePaused() }
   }
 
-  /// Pauses every scriptable player that is running *and* currently playing,
-  /// returning those it paused. Must be called on `queue`.
-  ///
-  /// Each player's block is wrapped in `try` so one uninstalled or unresponsive app
-  /// can't abort the others: on a machine without Spotify, `application "Spotify"`
-  /// raises rather than answering false, which would otherwise skip Apple Music too
-  /// — exactly the CI configuration.
-  private nonisolated static func pausePlayingPlayers() -> [MediaPlayerApp] {
-    let blocks = MediaPlayerApp.allCases.map { player in
-      """
-      try
-        if application "\(player.applicationName)" is running then
-          tell application "\(player.applicationName)"
-            if player state is playing then
-              pause
-              set out to out & "\(player.rawValue)" & linefeed
-            end if
-          end tell
-        end if
-      end try
-      """
-    }
-    let script = "set out to \"\"\n" + blocks.joined(separator: "\n") + "\nreturn out"
-    guard let output = runOSA(script) else { return [] }
-    // Match back through the raw values rather than trusting order or count, so a
-    // partial failure yields exactly what actually paused.
-    let names = Set(output.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) })
-    return MediaPlayerApp.allCases.filter { names.contains($0.rawValue) }
+  /// The termination path: synchronous, so the resume lands before the process
+  /// goes. Waits behind a pause still in flight, at most `timeout` per script.
+  private func restoreBeforeExit() {
+    Self.queue.sync { [self] in resumePaused() }
   }
 
-  /// Resumes the given players, each guarded by the same non-launching running
-  /// check — one may have quit during the dictation, and reviving it would be
-  /// absurd. Must be called on `queue`.
-  private nonisolated static func resume(_ players: [MediaPlayerApp]) {
-    let blocks = players.map { player in
-      """
-      try
-        if application "\(player.applicationName)" is running then
-          tell application "\(player.applicationName)" to play
-        end if
-      end try
-      """
-    }
-    _ = runOSA(blocks.joined(separator: "\n"))
+  /// Resumes what the last pause took, each player in its own script so one
+  /// failure can't keep the other paused. Must be called on `queue`.
+  private nonisolated func resumePaused() {
+    let players = pausedPlayers
+    pausedPlayers = []
+    for player in players { _ = Self.runOSA(player.resumeScript) }
   }
 
   /// Runs `source` through `/usr/bin/osascript`, returning trimmed stdout (nil when
-  /// the process couldn't launch or exited non-zero). Must be called on `queue` —
-  /// see `pausedPlayers` — since it blocks until the child exits.
+  /// the process couldn't launch, exited non-zero, or ran past `timeout` and was
+  /// killed). Must be called on `queue` — see `pausedPlayers` — since it blocks
+  /// until the child exits.
   ///
-  /// stderr goes to a pipe rather than being inherited, so a script error (a
-  /// declined automation prompt reports `-1743` here) can't spray the app's own
-  /// output; and both pipes are drained *before* `waitUntilExit` so a chatty script
-  /// can't deadlock against a full pipe buffer.
+  /// Both pipes are drained on their own threads while the child runs, so a chatty
+  /// script can't deadlock against a full pipe buffer, and stderr goes to a pipe
+  /// rather than being inherited so a script error is logged, not sprayed.
   private nonisolated static func runOSA(_ source: String) -> String? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
     process.arguments = ["-e", source]
-    let stdout = Pipe()
-    let stderr = Pipe()
-    process.standardOutput = stdout
-    process.standardError = stderr
+    let stdout = PipeDrain()
+    let stderr = PipeDrain()
+    process.standardOutput = stdout.pipe
+    process.standardError = stderr.pipe
+    let exited = DispatchSemaphore(value: 0)
+    process.terminationHandler = { _ in exited.signal() }
     do {
       try process.run()
     } catch {
       logger.error("osascript failed to launch: \(error.localizedDescription, privacy: .public)")
       return nil
     }
-    let data = stdout.fileHandleForReading.readDataToEndOfFile()
-    let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
+    stdout.start()
+    stderr.start()
+    if exited.wait(timeout: .now() + timeout) == .timedOut {
+      process.terminate()
+      exited.wait()
+      logger.error("osascript timed out and was killed")
+      return nil
+    }
+    let output = stdout.finish()
+    let errors = stderr.finish()
     guard process.terminationStatus == 0 else {
       // Logged, not surfaced: the dictation itself worked, and a modal about the
       // user's music player would be worse than silent. `-1743` here means the user
       // declined the automation prompt.
-      let message =
-        String(bytes: errorData, encoding: .utf8)?
-        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      logger.error("osascript exited \(process.terminationStatus): \(message, privacy: .public)")
+      logger.error("osascript exited \(process.terminationStatus): \(errors, privacy: .public)")
       return nil
     }
-    return String(bytes: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return output
+  }
+}
+
+/// One child pipe, read to EOF on a background thread so the child never blocks
+/// on a full buffer while the caller waits for it to exit.
+///
+/// `@unchecked Sendable`: `text` is written once on the reading thread and read
+/// only after `finish()`'s wait on `done`, which orders the two.
+private nonisolated final class PipeDrain: @unchecked Sendable {
+  let pipe = Pipe()
+  private let done = DispatchSemaphore(value: 0)
+  private var text = ""
+
+  func start() {
+    DispatchQueue.global(qos: .userInitiated).async { [self] in
+      let data = pipe.fileHandleForReading.readDataToEndOfFile()
+      text = String(bytes: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      done.signal()
+    }
+  }
+
+  /// Everything the child wrote, trimmed. Returns once the pipe hit EOF.
+  func finish() -> String {
+    done.wait()
+    return text
   }
 }

@@ -17,17 +17,18 @@
       // Input Monitoring's internal name — what `tccutil` takes, and not what
       // System Settings calls the row.
       #expect(PermissionsReset.Service.inputMonitoring.rawValue == "ListenEvent")
+      #expect(PermissionsReset.Service.appleEvents.rawValue == "AppleEvents")
     }
 
     /// `resetAll` walks the hand-written `sweep` (Periphery can't follow a case
     /// reached only through `allCases`), so this is what keeps that list honest: a
     /// service added to the enum and forgotten there would otherwise survive every
-    /// "full" reset in silence. The three are also the ones
-    /// `scripts/reset-lib.sh` lists — a fourth belongs in both places.
+    /// "full" reset in silence. The four are also the ones
+    /// `scripts/reset-lib.sh` lists — a fifth belongs in both places.
     @Test("the sweep covers every service the enum names")
     func sweepCoversEveryService() {
       #expect(Set(PermissionsReset.sweep) == Set(PermissionsReset.Service.allCases))
-      #expect(Set(PermissionsReset.sweep) == [.accessibility, .microphone, .inputMonitoring])
+      #expect(Set(PermissionsReset.sweep) == [.accessibility, .microphone, .inputMonitoring, .appleEvents])
     }
   }
 #endif

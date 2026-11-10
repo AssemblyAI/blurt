@@ -1401,11 +1401,16 @@ invocation (`scripts/leaks.sh` failed twice on backtraces through `executeAndRet
 `autoreleasepool` did **not** help), and the leak only reproduced on CI. In a child the OSA
 allocations die with `osascript`, so no Blurt frame can appear in a leak backtrace. TCC still
 attributes the event to Blurt as the **responsible process**, so the prompt names Blurt and reads its
-`NSAppleEventsUsageDescription`. One `osascript` per recording edge, both players unrolled into one
-generated script (AppleScript can't take app terminology like `player state` through a variable
-application reference), each block wrapped in `try` so an uninstalled app can't abort the others.
-The invocations sit on a **serial `DispatchQueue`** so the restore always observes what the pause
-did, and the whole thing is fire-and-forget, so a wedged player can never delay a recording. Sending
+`NSAppleEventsUsageDescription`. Only a player `NSWorkspace` reports running is scripted, and each
+gets **its own script** (`MediaPlayerApp.pauseScript` / `resumeScript`): AppleScript resolves an
+app's terminology at compile time, so one script naming both failed whole (-2741) on a Mac without
+Spotify and Music never paused. The resume plays a player only if it is still paused, so playback
+the user changed meanwhile is left alone. Each `osascript` is killed after 5 s, with both pipes
+drained concurrently. The invocations sit on a **serial `DispatchQueue`** so the restore always
+observes what the pause did, and the whole thing is fire-and-forget, so a wedged player can never
+delay a recording; quitting mid-dictation (a Sparkle relaunch included) resumes synchronously on
+`willTerminateNotification`. Reset clears the Automation grant with the others
+(`PermissionsReset.Service.appleEvents`, `scripts/reset-lib.sh`). Sending
 Apple Events needs **two** build-side pieces, both in `project.yml`: `NSAppleEventsUsageDescription`
 (without it macOS _terminates_ the process on the first send instead of prompting) and the
 `com.apple.security.automation.apple-events` entitlement (the hardened runtime otherwise blocks
