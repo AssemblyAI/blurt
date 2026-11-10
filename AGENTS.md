@@ -912,10 +912,7 @@ three of them pure engine logic:
   (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops);
   tap-only latches on every release, hold-only stops on every release. A combo
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
-  passes through as a normal shortcut. **Escape** (`escapeKeyDown()`) is the unambiguous discard, so
-  unlike a combo it cancels from _every_ live state — held push-to-talk, latched toggle recording, or
-  a re-press over a latch — and always clears state, so a still-held trigger's key-up can't re-`stop`
-  the dictation it just threw away. Callers pass monotonic timestamps, so every decision is
+  passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.
 - **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycodes' flag
   changes drive the modifier (the first to go down owns the gate, `activeKeyCode`, until it is idle), and only genuine down/up **edges** reach the gate (`flagsChanged`
@@ -929,13 +926,15 @@ three of them pure engine logic:
   in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
   shell `if`. It also routes a **bare Escape** — `Event.isBareEscape`: keycode 53, no ⌘⌥⌃⇧, not a
-  key-repeat — arriving as `.escapeDown(inFlight:)`, where the host's `inFlight` covers what the gate
-  can't see (a dictation past its recording, a request, a job, a read). Nothing live and nothing in
-  flight, it takes the ordinary-key path without reading the switch: the tap is listen-only and sees
-  every Escape on the system. Otherwise the `escapeCancels` provider decides — `{ false }` unless the
-  host passes one; the app passes `EscapeCancelStore` (`BlurtEscapeCancelsDictation`, off by default, the
-  Advanced pane's Experimental section), read at the keystroke — and on, the gate is cleared
-  and `.cancel` returned; off, Escape is an ordinary key exactly as before.
+  key-repeat — arriving as `.escapeDown`. The `escapeCancels` provider is asked first — `{ false }`
+  unless the host passes one; the app passes `EscapeCancelStore` (`BlurtEscapeCancelsDictation`, off
+  by default, the Advanced pane's Experimental section), read at the keystroke. Off, Escape takes the
+  ordinary-key path exactly as on main, and nothing else is asked. On, it is a discard only with the
+  gate live or the host's `inFlight` (`handle(_:at:inFlight:)`, what the gate can't see: a dictation
+  past its recording, a request, a job, a read) true, since the tap is listen-only and sees every
+  Escape on the system: the router `reset()`s — gate, `modifierIsDown` and `activeKeyCode` — so a
+  still-held trigger's key-up is inert and another key works at once, and returns `.discard`, the
+  one action that means it. Otherwise the ordinary-key path again.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
 `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
@@ -944,14 +943,15 @@ key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator
 the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
 and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
 `modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. An Escape's
-`inFlight` is asked of the coordinator at the keystroke (`isBusy`: the read-aloud router busy, or the
-last phase not terminal), and its cancel goes to `SelectionSpeechRouter.escape()` rather than a
-combo's `submit(.cancel)`: from every routing mode it stops the router's own work — a job before it
+`inFlight` is the read-aloud router's `isBusy` (its own mode, or the session busy), and the tap maps
+`.discard` to `SelectionSpeechRouter.escape()` and `.cancel` to a combo's `submit(.cancel)`, deriving
+nothing from the event itself. `escape()` stops, from every routing mode, the router's own work — a job before it
 pastes, a read or answer, a request — and cancels a busy session, which a combo would leave running
 under a press still deciding. With nothing of the router's under way the cancel goes to the session
 unconditionally, and `DictationSession.cancel()` decides by its own phase (a no-op at rest), so a
-stale "in flight" can't strand a dictation. The ready screen's own Esc button stands down while the
-tap's Escape is on, so one Escape is one cancel. The
+stale "in flight" can't strand a dictation. The ready screen's own hidden Esc button is a silent
+no-op while the tap's Escape is on and the tap installed, so one Escape is one cancel and there is no
+beep; otherwise it cancels as on main. The
 tap **swallows nothing**: a lone modifier types nothing, combos pass through so normal shortcuts keep
 working, and the Escape cancel does **not** consume the keystroke — Escape still reaches the focused
 app. Making it exclusive would require an active (`.defaultTap`) tap, which is ruled out because

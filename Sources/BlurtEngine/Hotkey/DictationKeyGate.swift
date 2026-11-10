@@ -8,7 +8,6 @@
 /// shorter release is a tap (latch recording on; the next tap stops it). Tap-only
 /// latches on every release; hold-only stops on every release. A press combined
 /// with any other key is a normal modifier shortcut (e.g. ⌘C), not dictation.
-/// Escape discards a dictation in flight.
 ///
 /// The gate reads no clock — callers pass monotonic timestamps as a `Duration`
 /// from a fixed reference, so every decision is deterministic and unit-testable.
@@ -17,7 +16,10 @@ public struct DictationKeyGate: Sendable {
   /// nothing to do on it, since the recording just keeps going, but it is the
   /// only moment a tap is distinguishable from a hold, and read-aloud's router
   /// needs exactly that (a tap over a selection reads it; a hold asks about it).
-  public enum Action: Sendable, Equatable { case none, start, stop, cancel, latch }
+  /// `discard` is the router's alone: a bare Escape with its switch on, which
+  /// throws away everything in flight (`DictationKeyRouter.Event.escapeDown`),
+  /// where `cancel` is a combo's.
+  public enum Action: Sendable, Equatable { case none, start, stop, cancel, latch, discard }
 
   /// A release held at least this long counts as a hold (push-to-talk stop);
   /// shorter is a tap. 1 s is a good default when one key does both jobs.
@@ -97,25 +99,6 @@ public struct DictationKeyGate: Sendable {
     case .idle, .latched:
       return .none
     }
-  }
-
-  /// Escape pressed: throw away whatever dictation this gate is tracking.
-  ///
-  /// Distinct from `otherKeyDown()`, which reads a second key as a *modifier
-  /// combo* and so deliberately passes through over a latched recording (⌘C
-  /// while toggle-dictating is a copy, not a cancel). Escape carries no such
-  /// ambiguity — it is only ever "discard this" — so it cancels from every live
-  /// state: a held push-to-talk, a latched toggle recording, and a re-press over
-  /// a latch. Returns `.none` from `.idle` so the key stays inert when the gate
-  /// holds nothing; the *pipeline*'s post-recording window is the router's call,
-  /// not the gate's (see `DictationKeyRouter.Event.escapeDown`).
-  ///
-  /// Clears state either way, so a still-held trigger's eventual key-up routes to
-  /// `.none` rather than emitting a `.stop` for the dictation just cancelled.
-  public mutating func escapeKeyDown() -> Action {
-    let hadLiveDictation = !isIdle
-    state = .idle
-    return hadLiveDictation ? .cancel : .none
   }
 
   /// Clears state to idle without emitting — used when the event tap is disabled

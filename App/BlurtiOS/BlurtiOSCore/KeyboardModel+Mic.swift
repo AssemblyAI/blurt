@@ -58,8 +58,9 @@ extension KeyboardModel {
     case .cancel:
       releasePending = false
       send(.cancel)
-    // A latch keeps the recording going; only the Mac's read-aloud router acts on it.
-    case .none, .latch: break
+    // A latch keeps the recording going; only the Mac's read-aloud router acts on
+    // it. A discard is the Mac's Escape, which never reaches the keyboard's gate.
+    case .none, .latch, .discard: break
     }
   }
 

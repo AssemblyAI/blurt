@@ -43,20 +43,13 @@
 /// for a dictation, while `.resetGate` just clears it, because no recording is
 /// involved.
 struct SelectionSpeechRouting: Sendable {
-  /// How long a read or ask key must stay down, in a mode that holds, before
-  /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
-  /// asker waits this long (plus the mic bring-up) for the start chime before
-  /// speaking; a deliberate tap is over long before it.
-  static let holdDelay = Duration.milliseconds(350)
-
-  // The state is internal, not private, for Escape's extension (`+Escape`).
-  var mode = Mode.passthrough
+  private var mode = Mode.passthrough
   /// Whether the session's last phase was in flight. A terminal phase is then
   /// that dictation's end, never a hand-back press that hasn't started.
-  var sessionBusy = false
+  private var sessionBusy = false
   /// Reads still in flight for presses a newer press already replaced. Their
   /// results are dropped as they land, before any newer read's.
-  var staleReads = 0
+  private var staleReads = 0
 
   init() {}
 
@@ -292,16 +285,6 @@ struct SelectionSpeechRouting: Sendable {
     }
   }
 
-  private static func intent(_ action: TriggerKeyAction) -> Intent {
-    switch action {
-    case .ask: .ask
-    case .rewrite: .rewrite
-    case .compose: .compose
-    case .command: .command
-    case .readAloud, .dictate, .off: .read
-    }
-  }
-
   /// The read ended on its own, or failed. The caller must not report a read it
   /// stopped itself: a key stop has already moved on, and a newer read may be
   /// playing. The read's key may still hold the gate (latched by a tap), so
@@ -380,11 +363,31 @@ struct SelectionSpeechRouting: Sendable {
     return [.syncGateAfterSession] + abandon(intent)
   }
 
-  /// A command dropped before it ran — nothing said, a combo, a press while
-  /// it transcribed — still has its screen read under way and, in a Chromium
-  /// browser, its page tree switched on: `.stopJob` stops one and undoes the
-  /// other. Nothing for any other request.
-  func abandon(_ intent: Intent) -> [Action] {
-    intent == .command ? [.stopJob] : []
+  /// Whether anything is under way: a dictation the session is busy with, or a
+  /// press, request, read, answer or job of this router's. What makes an Escape
+  /// worth acting on (`DictationKeyRouter`'s `inFlight`).
+  var isBusy: Bool { mode != .passthrough || sessionBusy }
+
+  /// Escape: throw away everything in flight, and paste nothing. Unlike a combo
+  /// (`submit(.cancel)`), which a press still deciding absorbs and an earlier
+  /// dictation outlives, this stops the router's own work *and* cancels a busy
+  /// session. In passthrough the cancel goes to the session unconditionally: it
+  /// decides by its own phase (`cancel()` is a no-op at rest), so a moment-stale
+  /// "busy" can't strand a dictation. The key router has already cleared the gate.
+  mutating func escape() -> [Action] {
+    let busy: [Action] = sessionBusy ? [.forward(.cancel)] : []
+    defer { mode = .passthrough }
+    switch mode {
+    case .passthrough: return [.forward(.cancel)]
+    case .deciding(let intent, _, _):
+      staleReads += 1  // its selection read is still out
+      return busy + abandon(intent)
+    case .selected(let intent, _): return busy + abandon(intent)
+    case .asking(let intent, _, let started, _), .transcribing(let intent, _, let started):
+      // Unstarted, the session is busy with an earlier dictation: discard it too.
+      return (started || sessionBusy ? [.forward(.cancel)] : []) + abandon(intent)
+    case .speaking: return [.stopSpeech] + busy
+    case .working: return [.stopJob] + busy
+    }
   }
 }

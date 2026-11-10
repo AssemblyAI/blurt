@@ -189,7 +189,7 @@ final class AppCoordinator {
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
       onRecordingDiscarded: { router.submit(.cancelRecording) },
       onEscape: { router.escape() },
-      isBusy: { [weak self] in router.isBusy || !(self?.lastPhase.isTerminal ?? true) }
+      isBusy: { router.isBusy }
     )
     router.syncGateAfterSession = { [weak self] in self?.keyTap?.syncAfterTerminalPhase() }
     router.resetGate = { [weak self] in self?.keyTap?.resetGate() }

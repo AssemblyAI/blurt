@@ -147,7 +147,7 @@ import Foundation
       perform(routing.escape())
     }
 
-    /// Whether a press, request, read, answer or job is under way.
+    /// Whether a dictation, press, request, read, answer or job is under way.
     public var isBusy: Bool { routing.isBusy }
 
     /// `DictationKeyTap`'s latch: the press was a tap.

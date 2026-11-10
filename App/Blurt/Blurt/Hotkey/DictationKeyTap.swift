@@ -53,8 +53,9 @@ final class DictationKeyTap {
   /// Seeded from the persisted binding in `init` — see the note there.
   private var router: DictationKeyRouter
 
-  /// A bare Escape cancelled: stop whatever is in flight (the read-aloud
-  /// router's `escape()`), which a combo's `onCancel` would not all reach.
+  /// The router's `.discard` — a bare Escape with its switch on: stop whatever
+  /// is in flight (the read-aloud router's `escape()`), which a combo's
+  /// `onCancel` would not all reach.
   private let onEscape: @MainActor () -> Void
   /// Whether anything is in flight that the gate can't see — a dictation past
   /// its recording, a request, a job, a read — asked at each bare Escape.
@@ -238,9 +239,7 @@ final class DictationKeyTap {
 
     guard let routed = routerEvent(type: type, event: event) else { return }
     let now = reference.duration(to: ContinuousClock.now)
-    let action = router.handle(routed, at: now)
-    if case .escapeDown = routed, action == .cancel { return onEscape() }
-    dispatch(action)
+    dispatch(router.handle(routed, at: now) { isBusy() })
   }
 
   /// Reduces a `CGEvent` to the router's CoreGraphics-free event shape, or nil
@@ -252,9 +251,9 @@ final class DictationKeyTap {
       return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
       let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-      guard DictationKeyRouter.Event.isBareEscape(keyCode: keyCode, rawFlags: event.flags.rawValue, isAutorepeat: isRepeat)
-      else { return .keyDown(keyCode: keyCode) }
-      return .escapeDown(inFlight: isBusy())
+      let flags = event.flags.rawValue
+      let isBare = DictationKeyRouter.Event.isBareEscape(keyCode: keyCode, rawFlags: flags, isAutorepeat: isRepeat)
+      return isBare ? .escapeDown : .keyDown(keyCode: keyCode)
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       #if UITEST_HOOKS
         // A simulated press is "held" while the test clicks the harness's
@@ -275,6 +274,7 @@ final class DictationKeyTap {
       onStart(activeKey)
     case .stop: onStop()
     case .cancel: onCancel()
+    case .discard: onEscape()
     case .latch: onLatch()
     case .none: break
     }

@@ -12,7 +12,7 @@
 ///   (`activeKeyCode`) until the gate is idle and that key is up again; the
 ///   others are ignored meanwhile, so two triggers never interleave.
 /// - **Cancel.** With the switch on (`escapeCancels`), a bare Escape is not a
-///   combo but a discard: it clears the gate and reports `.cancel` whenever
+///   combo but a discard: it resets the router and reports `.discard` whenever
 ///   anything is in flight, including the transcribe/inject window and a job or
 ///   spoken answer the gate has already forgotten about (`Event.escapeDown`).
 ///   The host decides what that cancel stops. Otherwise Escape is an ordinary
@@ -38,10 +38,10 @@ public struct DictationKeyRouter: Sendable {
     /// modifier-click (⌘-click a link, ⌥-click in Finder), not a lone press, so
     /// it cancels the press exactly as another key would.
     case pointerDown
-    /// A bare, non-repeating Escape (`isBareEscape`). `inFlight`: whether the
-    /// host has anything under way the gate can't see — a dictation past its
-    /// recording, a request, a job, a read — read at the keystroke.
-    case escapeDown(inFlight: Bool)
+    /// A bare, non-repeating Escape (`isBareEscape`). What the host has in
+    /// flight beyond the gate is asked only once the switch is on
+    /// (`handle(_:at:inFlight:)`).
+    case escapeDown
 
     /// A `flagsChanged` delivery from its keycode and the event's raw
     /// `CGEventFlags`: down when the flags hold *that* key's device bit — so
@@ -102,7 +102,13 @@ public struct DictationKeyRouter: Sendable {
 
   /// Feeds one event through the relevance/edge filters into the gate and
   /// returns its decision.
-  public mutating func handle(_ event: Event, at now: Duration) -> DictationKeyGate.Action {
+  ///
+  /// `inFlight` is asked only of an `.escapeDown` with the switch on: whether the
+  /// host has anything under way the gate can't see — a dictation past its
+  /// recording, a request, a job, a read.
+  public mutating func handle(
+    _ event: Event, at now: Duration, inFlight: () -> Bool = { false }
+  ) -> DictationKeyGate.Action {
     switch event {
     case .flagsChanged(let keyCode, let triggerFlagIsOn):
       guard activations[keyCode] != nil, (activeKeyCode ?? keyCode) == keyCode else { return .none }
@@ -128,13 +134,15 @@ public struct DictationKeyRouter: Sendable {
       return activations[keyCode] != nil ? .none : gate.otherKeyDown()
     case .pointerDown:
       return gate.otherKeyDown()
-    case .escapeDown(let inFlight):
-      // Cheapest first: with nothing in flight this is any Escape typed anywhere
-      // on the system (the tap is listen-only), so it neither reads the switch
-      // nor cancels — it takes the ordinary-key path, a no-op on an idle gate.
-      guard !gate.isIdle || inFlight, escapeCancels() else { return gate.otherKeyDown() }
-      _ = gate.escapeKeyDown()
-      return .cancel
+    case .escapeDown:
+      // Switch off, Escape is the ordinary key it is on main, and nothing else
+      // is asked. On, it is a discard only with something live or in flight:
+      // the tap is listen-only and sees every Escape typed anywhere. A discard
+      // resets the whole router, so the trigger that pressed lets go of it and
+      // another key works at once.
+      guard escapeCancels(), !gate.isIdle || inFlight() else { return gate.otherKeyDown() }
+      reset()
+      return .discard
     }
   }
 

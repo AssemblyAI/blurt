@@ -41,7 +41,7 @@ struct ReadyView: View {
   @State private var isImporting = false
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
   /// Whether the key tap's Escape cancels (`DictationKeyTap`), which sees this
-  /// window's Escape too: the button below then stands down, so one Escape is one cancel.
+  /// window's Escape too: the button below then does nothing, so one Escape is one cancel.
   @AppStorage(EscapeCancelStore.defaultsKey) private var escapeCancelsEverywhere = false
 
   /// The one page the window pushes: whatever the model has open.
@@ -109,10 +109,15 @@ struct ReadyView: View {
     // Present through all of capture (not just `.recording`), so Esc during
     // the mic bring-up also cancels rather than beeping.
     .background {
-      if coordinator.isCapturing, !escapeCancelsEverywhere {
-        Button("Cancel Dictation") { coordinator.session.submit(.cancel) }
-          .keyboardShortcut(.cancelAction)
-          .hidden()
+      if coordinator.isCapturing {
+        // With the tap's Escape on and the tap running, the tap has cancelled
+        // already; the button stays, as a no-op, so the key doesn't beep.
+        Button("Cancel Dictation") {
+          guard !escapeCancelsEverywhere || coordinator.keyTap?.isInstalled != true else { return }
+          coordinator.session.submit(.cancel)
+        }
+        .keyboardShortcut(.cancelAction)
+        .hidden()
       }
     }
     .onReceive(

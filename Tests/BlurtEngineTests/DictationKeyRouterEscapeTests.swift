@@ -3,16 +3,14 @@ import Testing
 
 @testable import BlurtEngine
 
-/// Escape routing on top of `DictationKeyGate.escapeKeyDown()` (whose per-state
-/// semantics have their own scenarios): a bare escape routes to a cancel rather
-/// than a combo, keeps cancelling while the host reports something in flight the
-/// gate can't see, and stays inert with nothing in flight — all of it only while
-/// the switch is on. Off, Escape is an ordinary key.
+/// Escape routing: with its switch on, a bare escape is a `.discard` that resets
+/// the router whenever something is live or in flight, and inert otherwise; with
+/// it off, escape is the ordinary key it is on main, and nothing else is asked.
 @Suite("DictationKeyRouter escape")
 struct DictationKeyRouterEscapeTests {
   private let trigger = TriggerKey.rightCommand.keyCode
-  private let escape = DictationKeyRouter.Event.escapeDown(inFlight: false)
-  private let escapeInFlight = DictationKeyRouter.Event.escapeDown(inFlight: true)
+  private let otherTrigger = TriggerKey.rightOption.keyCode
+  private let escape = DictationKeyRouter.Event.escapeDown
 
   private func downEvent(_ keyCode: Int) -> DictationKeyRouter.Event {
     .flagsChanged(keyCode: keyCode, triggerFlagIsOn: true)
@@ -22,88 +20,104 @@ struct DictationKeyRouterEscapeTests {
     .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false)
   }
 
-  @Test("escape cancels a live recording the gate is tracking")
-  func escapeCancelsRecording() {
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { true })
+  private func router(on: Bool) -> DictationKeyRouter {
+    DictationKeyRouter(triggerKeyCodes: [trigger, otherTrigger], escapeCancels: { on })
+  }
+
+  @Test("escape discards a live recording, and the trigger's own release is inert")
+  func escapeDiscardsRecording() {
+    var router = router(on: true)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(escape, at: .milliseconds(100)) == .cancel)
-    // The trigger's own release, still to come, must not re-stop it.
+    #expect(router.handle(escape, at: .milliseconds(100)) == .discard)
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .none)
     #expect(router.handle(downEvent(trigger), at: .seconds(3)) == .start)
   }
 
-  @Test("escape cancels a latched toggle recording")
-  func escapeCancelsLatchedRecording() {
+  @Test("escape discards a latched toggle recording")
+  func escapeDiscardsLatchedRecording() {
     // The gap the feature exists to close: a tap-to-toggle recording is held by
     // the gate with no key down, and `otherKeyDown` passes through there by
     // design, so before escape routing nothing short of a second tap ended it.
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { true })
+    var router = router(on: true)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
-    #expect(router.handle(escape, at: .seconds(3)) == .cancel)
-    // Cancelling cleared the latch, so the next tap starts a fresh dictation
-    // rather than being swallowed as a stop.
+    #expect(router.handle(escape, at: .seconds(3)) == .discard)
     #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .start)
   }
 
-  @Test("escape cancels whatever the host reports in flight, with the gate idle")
-  func escapeCancelsInFlightWork() {
-    // A hold that has already stopped leaves the gate idle while the transcript
-    // is fetched and pasted; a job or a spoken answer after a hand-back does too.
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { true })
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
-    #expect(router.handle(escapeInFlight, at: .seconds(2) + .milliseconds(300)) == .cancel)
+  @Test("a discard frees the router: another trigger works at once")
+  func discardClearsTheActiveKey() {
+    // A read or rewrite press deciding or selected holds the gate armed under its
+    // key; a discard that cleared only the gate left that key owning the router,
+    // so every other trigger was ignored until it was let go.
+    var router = router(on: true)
+    #expect(router.handle(downEvent(otherTrigger), at: .zero) == .start)
+    #expect(router.handle(escape, at: .milliseconds(100)) == .discard)
+    #expect(router.activeKeyCode == nil)
+    #expect(router.handle(downEvent(trigger), at: .milliseconds(200)) == .start)
   }
 
-  @Test("escape is inert with nothing in flight, and doesn't read the switch")
+  @Test("escape discards whatever the host reports in flight, with the gate idle")
+  func escapeDiscardsInFlightWork() {
+    // A hold that has already stopped leaves the gate idle while the transcript
+    // is fetched and pasted; a job or a spoken answer after a hand-back does too.
+    var router = router(on: true)
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
+    #expect(router.handle(escape, at: .seconds(2) + .milliseconds(300)) { true } == .discard)
+  }
+
+  @Test("escape is inert with nothing live or in flight")
   func escapeIsInertWhenIdle() {
     // The tap is listen-only and sees every escape pressed anywhere on the
-    // system, so an idle host must not turn each one into a cancel, nor pay for
-    // a defaults read on each.
-    let reads = SwitchReads()
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { reads.bump() })
-    #expect(router.handle(escape, at: .zero) == .none)
-    #expect(router.handle(escape, at: .seconds(1)) == .none)
-    #expect(reads.total == 0)
-    // And escape left nothing broken behind — the next press dictates normally.
-    #expect(router.handle(downEvent(trigger), at: .seconds(3)) == .start)
-    #expect(router.handle(escape, at: .seconds(4)) == .cancel)
-    #expect(reads.total == 1)
+    // system, so an idle host must not turn each one into a discard.
+    var router = router(on: true)
+    #expect(router.handle(escape, at: .zero) { false } == .none)
+    #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .start)
   }
 
   @Test("escape is not treated as a combo over a latched recording")
   func escapeIsNotACombo() {
-    // `keyDown` for an ordinary key over a latch is a pass-through shortcut; the
-    // two routes must not be confused, or ⌘C would cancel (or escape wouldn't).
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { true })
+    var router = router(on: true)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
     #expect(router.handle(.keyDown(keyCode: 8), at: .seconds(1)) == .none)  // ⌘C passes through
-    #expect(router.handle(escape, at: .seconds(2)) == .cancel)
+    #expect(router.handle(escape, at: .seconds(2)) == .discard)
   }
 
-  @Test("with the switch off, escape is an ordinary key: it passes over a latch")
-  func escapeOffPassesThroughLatch() {
-    // Exactly the pre-gesture behaviour: over a latched recording any other key,
-    // escape included, is a shortcut that leaves the recording running.
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { false })
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
-    #expect(router.handle(escape, at: .seconds(1)) == .none)
-    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .none)
-    #expect(router.handle(upEvent(trigger), at: .seconds(2) + .milliseconds(100)) == .stop)
+  /// Switch off must be exactly main, where escape reached the router as an
+  /// ordinary `keyDown(53)`. Each scenario runs both ways and must agree.
+  @Test(
+    "with the switch off, escape gives exactly main's action",
+    arguments: [
+      [DictationKeyRouter.Event](),  // idle
+      [.flagsChanged(keyCode: 54, triggerFlagIsOn: true)],  // armed from idle
+      // latched
+      [.flagsChanged(keyCode: 54, triggerFlagIsOn: true), .flagsChanged(keyCode: 54, triggerFlagIsOn: false)],
+    ])
+  func escapeOffMatchesMain(_ setup: [DictationKeyRouter.Event]) {
+    var off = router(on: false)
+    var main = router(on: false)
+    for (i, event) in setup.enumerated() {
+      _ = off.handle(event, at: .milliseconds(100 * i))
+      _ = main.handle(event, at: .milliseconds(100 * i))
+    }
+    let asked = Flag()
+    let action = off.handle(escape, at: .seconds(1)) {
+      asked.value = true
+      return true
+    }
+    #expect(action == main.handle(.keyDown(keyCode: DictationKeyRouter.escapeKeyCode), at: .seconds(1)))
+    #expect(action != .discard)
+    // Nothing is asked of the host with the switch off.
+    #expect(!asked.value)
   }
 
-  @Test("with the switch off, escape over a fresh press is a combo, and nothing after")
-  func escapeOffIsAComboAndInertOtherwise() {
-    var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { false })
-    // Any key over a press from idle cancels it — that was always so.
+  @Test("over a press from idle, a switched-off escape is main's combo cancel")
+  func escapeOffOverArmedIsCancel() {
+    var router = router(on: false)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(escape, at: .milliseconds(100)) == .cancel)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .none)
-    // But what's in flight past the gate is not escape's to cancel.
-    #expect(router.handle(escapeInFlight, at: .seconds(1)) == .none)
   }
 
   @Test("the switch is read at each escape, not at construction")
@@ -114,7 +128,7 @@ struct DictationKeyRouterEscapeTests {
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
     #expect(router.handle(escape, at: .seconds(1)) == .none)
     enabled.value = true
-    #expect(router.handle(escape, at: .seconds(2)) == .cancel)
+    #expect(router.handle(escape, at: .seconds(2)) == .discard)
   }
 
   @Test("only a bare, non-repeating Escape is the gesture")
@@ -137,15 +151,5 @@ private final class Flag: Sendable {
   var value: Bool {
     get { state.withLock { $0 } }
     set { state.withLock { $0 = newValue } }
-  }
-}
-
-/// Counts reads of the switch; always reads on.
-private final class SwitchReads: Sendable {
-  private let state = Mutex(0)
-  var total: Int { state.withLock { $0 } }
-  func bump() -> Bool {
-    state.withLock { $0 += 1 }
-    return true
   }
 }

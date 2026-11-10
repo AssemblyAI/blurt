@@ -1,9 +1,33 @@
 // `SelectionSpeechRouting`'s vocabulary: the actions it returns, and the
-// state it keeps between them. Apart from the decisions themselves
+// state it keeps between them, and the pure helpers over them. Apart from the decisions themselves
 // (`SelectionSpeechRouting.swift`) only to keep that file readable; nothing
 // outside the routing uses the state types.
 
 extension SelectionSpeechRouting {
+  /// How long a read or ask key must stay down, in a mode that holds, before
+  /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
+  /// asker waits this long (plus the mic bring-up) for the start chime before
+  /// speaking; a deliberate tap is over long before it.
+  static let holdDelay = Duration.milliseconds(350)
+
+  static func intent(_ action: TriggerKeyAction) -> Intent {
+    switch action {
+    case .ask: .ask
+    case .rewrite: .rewrite
+    case .compose: .compose
+    case .command: .command
+    case .readAloud, .dictate, .off: .read
+    }
+  }
+
+  /// A command dropped before it ran — nothing said, a combo, a press while
+  /// it transcribed, an Escape — still has its screen read under way and, in a
+  /// Chromium browser, its page tree switched on: `.stopJob` stops one and undoes
+  /// the other. Nothing for any other request.
+  func abandon(_ intent: Intent) -> [Action] {
+    intent == .command ? [.stopJob] : []
+  }
+
   enum Action: Sendable, Equatable {
     case forward(DictationSession.Command)
     /// Start the Accessibility read. Its result comes back through `selectionResolved`.
