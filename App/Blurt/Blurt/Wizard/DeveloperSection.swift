@@ -131,7 +131,8 @@ struct ExperimentalSection: View {
     } header: {
       Text("Experimental")
     } footer: {
-      Text("Features still being tried out. Each is off until you turn it on.")
+      // Only the consent note: the panes don't scroll, and each row's subtitle
+      // says what it does.
       if !refusedPlayers.isEmpty {
         Text(
           "Blurt can't control \(refusedPlayers.map(\.rawValue).joined(separator: " or ")). "
