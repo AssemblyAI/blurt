@@ -192,6 +192,13 @@ KeyboardKit's, as Apple draws them: the caps, their colour and corner, the
 press, the callouts, shift and caps lock, delete and its repeat, 123 / #+= /
 ABC turning the pages, the space bar's hold moving the cursor
 (`spacebarLongPressBehavior` = `.moveInputCursor`) and the input clicks.
+The case is KeyboardKit's rule too — uppercase at a sentence's start in a
+field that capitalizes sentences, lowercase after the first letter, shift
+for one letter — and the layout follows it: `BlurtKeyboardView` observes
+the context and rebuilds `KeyboardLayout.blurt` on every change, because
+a layout handed over once kept the uppercase letters the keyboard came up
+with and typed them (the flows' case check, on a field launched with
+`-BlurtProbeSentences`).
 Blurt styles one key: the mic's cap wears the 123 key's style
 (`keyboardButtonStyle` in `BlurtKeyboardView` answers `.blurtMic` with the
 standard style for `.keyboardType(.numeric)`), the system key Apple's own

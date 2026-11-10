@@ -65,7 +65,7 @@ final class KeyboardViewController: KeyboardInputViewController {
   override func viewWillSetupKeyboardView() {
     let model = self.model
     setupKeyboardView { controller in
-      BlurtKeyboardView(services: controller.services, state: controller.state, model: model)
+      BlurtKeyboardView(services: controller.services, context: controller.state.keyboardContext, model: model)
     }
   }
 

@@ -16,6 +16,10 @@ import BlurtiOSCore
     /// `-BlurtProbeText <word>`: the field starts with this in it, so a flow
     /// can highlight a word in any layout, letter keys or not.
     var text = ""
+    /// `-BlurtProbeSentences`: the field capitalizes sentences, as Messages
+    /// does, so a flow can watch the keys' case; the geometry probes keep the
+    /// field's default of none, so Apple's keys are read at rest.
+    var sentences = false
 
     /// `-BlurtProbeField light|dark`: the face the field asks for, so the Blurt
     /// keyboard comes up that way for a capture of the real extension
@@ -31,12 +35,13 @@ import BlurtiOSCore
       if let flag = arguments.firstIndex(of: "-BlurtProbeText"), arguments.count > flag + 1 {
         text = arguments[flag + 1]
       }
-      return KeyboardProbeView(dark: face == "dark", text: text)
+      return KeyboardProbeView(
+        dark: face == "dark", text: text, sentences: arguments.contains("-BlurtProbeSentences"))
     }
 
     var body: some View {
       VStack {
-        ProbeField(dark: dark, text: text)
+        ProbeField(dark: dark, text: text, sentences: sentences)
           .frame(height: DesignTokens.Metrics.keyMinWidth)
           .padding()
         // Puts the keyboard away without leaving the field, so a flow can
@@ -61,6 +66,7 @@ import BlurtiOSCore
   private struct ProbeField: UIViewRepresentable {
     let dark: Bool
     let text: String
+    let sentences: Bool
 
     func makeUIView(context: Context) -> UITextField {
       let field = UITextField()
@@ -68,7 +74,7 @@ import BlurtiOSCore
       field.text = text
       field.keyboardAppearance = dark ? .dark : .light
       field.autocorrectionType = .yes
-      field.autocapitalizationType = .none
+      field.autocapitalizationType = sentences ? .sentences : .none
       field.borderStyle = .roundedRect
       field.placeholder = "probe"
       DispatchQueue.main.async { field.becomeFirstResponder() }

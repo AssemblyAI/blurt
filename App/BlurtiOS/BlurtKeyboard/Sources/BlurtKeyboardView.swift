@@ -10,12 +10,15 @@ import SwiftUI
 /// own in-row mic sits on, so it reads as one of the row.
 struct BlurtKeyboardView: View {
   var services: KeyboardServices
-  var state: KeyboardState
+  /// Observed, so the layout is rebuilt as KeyboardKit changes the case,
+  /// the page or the locale: a layout handed over once kept the uppercase
+  /// letters the keyboard came up with, and typed them.
+  @ObservedObject var context: KeyboardContext
   var model: BlurtiOSCore.KeyboardModel
 
   var body: some View {
     KeyboardView(
-      layout: .blurt(for: state.keyboardContext),
+      layout: .blurt(for: context),
       services: services,
       buttonContent: { params in
         if params.item.action == .blurtMic {
