@@ -31,12 +31,29 @@ open BlurtiOS.xcodeproj                  # scheme BlurtiOS builds and embeds the
 
 CI builds it for the simulator on every PR (`check.yml`'s `ios-build` job). On a
 Mac with only the Command Line Tools — no iOS SDK — `scripts/ios-typecheck.sh`
-typechecks both targets against the Mac Catalyst frameworks with the same
-flags, which catches the Swift 6 isolation errors before CI does. Running
+typechecks `BlurtiOSCore` and `BlurtDesign`, and either UI module that does not
+import KeyboardKit, against the Mac Catalyst frameworks with the same flags,
+which catches the Swift 6 isolation errors before CI does. Running
 on a phone needs Xcode with a team that can provision the App Group. The ids in
 `project.yml` (`com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard`,
 `group.com.assemblyai.blurt.iphone`) are AssemblyAI's, so they register under the AssemblyAI team;
 anyone building under another team changes them locally (see Testing on a phone).
+
+## Dependencies
+
+Two packages, both in `project.yml`: the local `BlurtEngine` (the pipeline the Mac app runs) and
+[KeyboardKit](https://github.com/KeyboardKit/KeyboardKit) 11 — the free core only (no licence key,
+no Pro feature, none of its plugin products), pinned with `exactVersion`, the one remote package
+this app carries. It is a closed-source binary under its own licence: nothing of it is checked in;
+SPM downloads `KeyboardKit.zip` and its dependency LicenseKit's from GitHub releases at build time,
+verified against the checksums their manifests pin, which with the exact pin fixes the resolution
+without a `Package.resolved` (the generated project, where Xcode would write one, is not committed).
+The app target links and embeds it; the keyboard imports it without linking (`link: false`) and
+loads the app's copy through `@executable_path/../../Frameworks` — a second copy in the .appex is
+what KeyboardKit warns crashes at runtime and what App Store validation rejects (ITMS-90206).
+`check.sh`'s dependency guard allows exactly this URL in this file; a bump is a reviewed diff to
+`project.yml`. The first resolve clones KeyboardKit's full history (about three minutes); the
+scripts retry it (`ios_resolve_packages` in `scripts/ios-lib.sh`) and print the pins they resolved.
 
 ## Design
 

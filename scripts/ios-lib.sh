@@ -14,6 +14,32 @@ IOS_SIM_SIGNING=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIR
 # shellcheck disable=SC2034 # used by the scripts that source this file
 IOS_DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
 
+# ios_resolve_packages DERIVED → resolves the iPhone project's packages into
+# DERIVED/SourcePackages before the build, retrying. KeyboardKit and LicenseKit
+# arrive as two git clones and two zips from GitHub releases; a transient fetch
+# failure would otherwise read as a red build with no test run behind it. The
+# pins are printed so a moved tag shows in the log (project.yml names
+# KeyboardKit's version; its manifest names LicenseKit's and both checksums).
+ios_resolve_packages() {
+  local derived="$1" attempt resolved
+  resolved="$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  for attempt in 1 2 3; do
+    if xcodebuild -resolvePackageDependencies -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" \
+      -scheme BlurtiOS -derivedDataPath "$derived" -quiet; then
+      python3 -c '
+import json, sys
+for pin in json.load(open(sys.argv[1]))["pins"]:
+    state = pin["state"]
+    print("resolved:", pin["identity"], state.get("version", "?"), state.get("revision", "?")[:12])
+' "$resolved"
+      return 0
+    fi
+    echo "ios: package resolution failed (attempt $attempt of 3)" >&2
+    [ "$attempt" -lt 3 ] && sleep 20
+  done
+  return 1
+}
+
 # ios_pick_device NAME → prints "udid<TAB>name" for the available simulator
 # called NAME on the newest iOS runtime, else for whichever iPhone this Mac
 # (or CI runner) has; prints nothing if there is none. BLURT_SIM_RUNTIME

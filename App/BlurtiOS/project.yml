@@ -49,10 +49,23 @@ settings:
     # nothing outside them) without becoming `public` API.
     SWIFT_PACKAGE_NAME: BlurtiOS
 packages:
-  # The same local package the Mac app carries, reached from App/BlurtiOS. No
-  # remote packages: check.sh's dependency guard reads every App/*/project.yml.
+  # The same local package the Mac app carries, reached from App/BlurtiOS.
   BlurtEngine:
     path: ../..
+  # The keyboard's engine: KeyboardKit's free core — the input controller, the
+  # layout, the key views, the callouts — as a binary XCFramework. Closed source
+  # under its own licence (AGENTS.md → Settled decisions): nothing of it is
+  # checked in; SPM downloads the zip at build time and verifies the checksum
+  # its Package.swift pins, as it does LicenseKit 2.4.1, the one package it
+  # pulls in. With the exact pin here the resolution is fully determined without
+  # a Package.resolved (the generated project, where Xcode would write one, is
+  # not committed). check.sh's dependency guard allows this URL in this file
+  # only, spelled exactly like this, with `exactVersion:` on the next line; a
+  # bump is a reviewed diff here, never a float. No licence key, no Pro feature,
+  # none of the plugin products — the free core and nothing else.
+  KeyboardKit:
+    url: https://github.com/KeyboardKit/KeyboardKit.git
+    exactVersion: 11.1.6
 targets:
   # The iPhone code's logic, apart from its UI, the way BlurtEngine sits apart
   # from the Mac shell: the App Group contract, the keyboard's model and rules,
@@ -198,6 +211,13 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+      # Linked and embedded here, and only here (KeyboardKit: "must ONLY be
+      # added to the app target"): its two frameworks (KeyboardKit, LicenseKit)
+      # land in BlurtiOS.app/Frameworks, and the keyboard loads that copy
+      # through its runpath. A copy inside the .appex is the crash KeyboardKit
+      # warns about and an ITMS-90206 rejection (no Frameworks/ in an extension).
+      - package: KeyboardKit
+        product: KeyboardKit
       - target: BlurtiOSCore
         embed: false
       - target: BlurtDesign
@@ -220,6 +240,15 @@ targets:
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         APPLICATION_EXTENSION_API_ONLY: YES
+        # Where the keyboard finds KeyboardKit and LicenseKit at launch: the
+        # app's Frameworks/, two levels up from PlugIns/BlurtKeyboard.appex.
+        # XcodeGen's app-extension preset sets these same three paths; restated
+        # so a preset change cannot drop the one KeyboardKit needs (missing, the
+        # keyboard dies on load with "Library not loaded: @rpath/KeyboardKit").
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
     info:
       path: BlurtKeyboard/Info.plist
       properties:
@@ -242,6 +271,14 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+      # Imported, never linked or embedded here. `link: false` makes the
+      # product a target dependency (XcodeGen), so Xcode unpacks the binary
+      # before this target compiles and `import KeyboardKit` resolves, while
+      # the Frameworks phase stays without it; the runpath above finds the
+      # app's copy at launch.
+      - package: KeyboardKit
+        product: KeyboardKit
+        link: false
       - target: BlurtiOSCore
         embed: false
       - target: BlurtDesign

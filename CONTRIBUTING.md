@@ -148,7 +148,8 @@ open the PR and let CI on `macos-26` answer that.
 - Make sure `scripts/check.sh` passes (or, if you're on Linux, say so in the PR
   and let CI verify).
 - Match the surrounding code: 2-space indent, Swift Testing for tests, no new
-  external dependencies in the engine.
+  external dependencies in the engine (the apps' remote packages — Sparkle,
+  KeyboardKit — are allowlisted and exactly pinned in `check.sh`).
 - Write a clear description of what changed and why.
 
 Every PR that touches code gets an **installable dev build**: CI builds

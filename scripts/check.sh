@@ -219,14 +219,23 @@ run_check() {
   return 0
 }
 
-# External-dependencies guard. The engine is dependency-free by rule, and the
-# app carries the local BlurtEngine package plus exactly one remote package:
-# Sparkle, the updater (see AGENTS.md → Updates). A third-party dependency is the
-# single biggest supply-chain risk, so fail the moment any *other* one is
-# declared — in the engine's Package.swift or the app's project.yml. Extend
-# BlurtEngine rather than adding a package. Pure text parsing, so it runs in
-# both full and --portable modes and fails fast before the expensive steps.
-ALLOWED_APP_PACKAGE_URL="https://github.com/sparkle-project/Sparkle"
+# External-dependencies guard. The engine is dependency-free by rule. Each app
+# carries the local BlurtEngine package plus the remote packages allowlisted for
+# *that* spec below — Sparkle, the Mac app's updater (AGENTS.md → Updates);
+# KeyboardKit, the iPhone keyboard's engine (App/BlurtiOS/README.md →
+# Dependencies) — each pinned with `exactVersion:` on the line after its url.
+# A third-party dependency is the single biggest supply-chain risk, so fail the
+# moment any other one is declared, in any other spec, under a `github:`
+# shorthand, or with any version key that can float. Extend BlurtEngine rather
+# than adding a package. Pure text parsing, so it runs in both full and
+# --portable modes and fails fast before the expensive steps.
+#
+# One `spec|url` per entry: the Mac app must not grow KeyboardKit and the iPhone
+# app must not grow Sparkle without a reviewed edit to this list.
+ALLOWED_APP_PACKAGES=(
+  "App/Blurt/project.yml|https://github.com/sparkle-project/Sparkle"
+  "App/BlurtiOS/project.yml|https://github.com/KeyboardKit/KeyboardKit.git"
+)
 check_no_external_deps() {
   cd "$REPO_ROOT" || return 1
   local violation=0
@@ -238,32 +247,61 @@ check_no_external_deps() {
     violation=1
   fi
 
-  # Apps: the local BlurtEngine (path:) package plus the one allowlisted remote
-  # (Sparkle, the Mac app's updater). A remote package is declared with a
-  # url:/github: key inside project.yml's `packages:` block, so extract that
-  # block and reject any such key that isn't exactly the allowlisted URL. A
-  # github: shorthand is rejected outright, so the allowlist has one spelling to
-  # match.
+  # Apps: the local BlurtEngine (path:) package plus the remote packages
+  # allowlisted for the spec. A remote package is declared with a url:/github:
+  # key inside project.yml's `packages:` block, so extract that block and reject
+  # any such key that isn't exactly an allowlisted URL for this spec. A github:
+  # shorthand is rejected outright, so the allowlist has one spelling to match.
   #
   # Every App/*/project.yml, not just the mac app's: the iOS app carries its own
   # spec with its own `packages:` block, and a guard that names one file is a
   # guard the next app walks around without anyone noticing.
-  local spec spec_path app_packages remote allowed_re
-  allowed_re="${ALLOWED_APP_PACKAGE_URL//./\\.}"
+  local spec spec_path app_packages remote allowed_re entry floating unpinned
   for spec in "$REPO_ROOT"/App/*/project.yml; do
     spec_path="${spec#"$REPO_ROOT"/}"
     app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$spec")"
+
+    # The url: lines this spec may carry, as one alternation; `^$` seeds it and
+    # can never match a `grep -n` line, so a spec with no entry allows nothing.
+    allowed_re='^$'
+    for entry in "${ALLOWED_APP_PACKAGES[@]}"; do
+      [ "${entry%%|*}" = "$spec_path" ] || continue
+      allowed_re="$allowed_re|^[0-9]+:[[:space:]]*url:[[:space:]]*${entry#*|}[[:space:]]*\$"
+    done
+    allowed_re="${allowed_re//./\\.}"
     remote="$(printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' \
-      | grep -vE "^[0-9]+:[[:space:]]*url:[[:space:]]*${allowed_re}[[:space:]]*$" || true)"
+      | grep -vE "$allowed_re" || true)"
     if [ -n "$remote" ]; then
-      echo "error: $spec_path declares a remote SPM package other than Sparkle:" >&2
+      echo "error: $spec_path declares a remote SPM package not on its allowlist (check.sh ALLOWED_APP_PACKAGES):" >&2
       printf '%s\n' "$remote" >&2
+      violation=1
+    fi
+
+    # A float: every version key but exactVersion (XcodeGen's `version:` alias
+    # included, so the pin has one spelling).
+    floating="$(printf '%s\n' "$app_packages" \
+      | grep -nE '^[[:space:]]+(version|majorVersion|minorVersion|minVersion|maxVersion|from|branch|revision):' || true)"
+    if [ -n "$floating" ]; then
+      echo "error: $spec_path pins a remote package with something other than exactVersion:" >&2
+      printf '%s\n' "$floating" >&2
+      violation=1
+    fi
+
+    # Every url: is followed, on the very next line, by exactVersion: x.y.z.
+    unpinned="$(printf '%s\n' "$app_packages" | awk '
+      /^[[:space:]]+url:/ {
+        u = $0
+        if ((getline nxt) <= 0 || nxt !~ /^[[:space:]]+exactVersion:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*$/) print u
+      }')"
+    if [ -n "$unpinned" ]; then
+      echo "error: $spec_path has a remote package without 'exactVersion: x.y.z' on the line after its url:" >&2
+      printf '%s\n' "$unpinned" >&2
       violation=1
     fi
   done
 
   [ "$violation" -eq 0 ] || return 1
-  echo "no unexpected dependencies (engine dependency-free; app carries BlurtEngine + Sparkle only)"
+  echo "no unexpected dependencies (engine dependency-free; each app carries BlurtEngine plus its allowlisted, exactly pinned remote packages: Sparkle on the Mac, KeyboardKit on the iPhone)"
 }
 run_check "no-external-dependencies guard" check_no_external_deps
 
