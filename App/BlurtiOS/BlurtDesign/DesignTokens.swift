@@ -8,7 +8,7 @@ import SwiftUI
 /// The design's colours and numbers, from their one source
 /// (`Design/tokens.json`): what the views draw with, what DESIGN.md's tables
 /// say, and what the asset catalog holds, all from the same file. Swift names
-/// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`).
+/// follow the token names by one rule (`app/cta-text-light` → `appCtaTextLight`).
 /// `package`: BlurtDesign's, read by the app, the keyboard and the tests.
 package enum DesignTokens {
   package enum Brand {
