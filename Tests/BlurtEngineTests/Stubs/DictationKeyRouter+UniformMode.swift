@@ -5,11 +5,12 @@
 /// binds per key (`DictationKeyRouter.init(activations:)`).
 extension DictationKeyRouter {
   init(
-    triggerKeyCodes: Set<Int>, holdThreshold: Duration = .seconds(1), activation: TriggerActivation = .tapOrHold
+    triggerKeyCodes: Set<Int>, holdThreshold: Duration = .seconds(1), activation: TriggerActivation = .tapOrHold,
+    escapeCancels: @escaping @Sendable () -> Bool = { false }
   ) {
     self.init(
       activations: Dictionary(uniqueKeysWithValues: triggerKeyCodes.map { ($0, activation) }),
-      holdThreshold: holdThreshold)
+      holdThreshold: holdThreshold, escapeCancels: escapeCancels)
   }
 
   @discardableResult

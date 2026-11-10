@@ -112,6 +112,11 @@ utterance.
   on AssemblyAI's published benchmarks.
 - **Multilingual** — works in 18 languages, detected automatically, and you
   can code-switch mid-sentence.
+- **Escape to throw it away** (developer option) — with Developer mode on
+  (Settings › Advanced), press <kbd>esc</kbd> and the dictation is cancelled:
+  while you're still speaking, or after, right up until the text lands. Nothing
+  is transcribed and nothing is pasted. Escape isn't swallowed, so it still
+  reaches whatever app you're in.
 - **Live feedback** — a floating overlay pill shows a real-time mic level
   meter and the pipeline phase; a menu bar indicator mirrors it from anywhere.
 - **Actual synth cues** — start and stop can be cued by real Yamaha DX7 or

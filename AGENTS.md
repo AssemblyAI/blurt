@@ -912,7 +912,10 @@ three of them pure engine logic:
   (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops);
   tap-only latches on every release, hold-only stops on every release. A combo
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
-  passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
+  passes through as a normal shortcut. **Escape** (`escapeKeyDown()`) is the unambiguous discard, so
+  unlike a combo it cancels from _every_ live state — held push-to-talk, latched toggle recording, or
+  a re-press over a latch — and always clears state, so a still-held trigger's key-up can't re-`stop`
+  the dictation it just threw away. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.
 - **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycodes' flag
   changes drive the modifier (the first to go down owns the gate, `activeKeyCode`, until it is idle), and only genuine down/up **edges** reach the gate (`flagsChanged`
@@ -925,7 +928,14 @@ three of them pure engine logic:
   among the losses and the gate is reset. The host passes the raw `CGEventSource.flagsState` read
   in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
-  shell `if`.
+  shell `if`. While developer mode is on — read at each Escape through the router's
+  `escapeCancels` provider (default `DeveloperModeStore().isEnabled`), so the switch applies without a
+  relaunch, and off it Escape is an ordinary key exactly as before — it also routes `escapeKeyCode`
+  (53) to the gate's cancel rather than the combo path,
+  and carries **`dictationIsActive`** — set by the host from `!PipelinePhase.isTerminal` — so Escape
+  keeps cancelling across the post-recording transcribe/inject window, which the gate reads as idle.
+  Escape stays inert when nothing is in flight: the tap is listen-only and sees every Escape pressed
+  anywhere on the system, so an idle pipeline must not turn each one into a cancel command.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
 `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
@@ -933,9 +943,14 @@ key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator
 `syncAfterTerminalPhase()` on every terminal phase: a dictation can end with no key event to close
 the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
 and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
-`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. The tap
-**swallows nothing**: a lone modifier types nothing, and combos pass through so normal shortcuts keep
-working.
+`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. It also pushes
+`dictationIsActive` (`!phase.isTerminal`) down to the tap on every phase, which is what lets Escape
+cancel a dictation that has stopped recording but is still transcribing or pasting; the cancel goes
+through `SelectionSpeechRouter` like a combo's, so it reaches whatever the pressing key started. The
+tap **swallows nothing**: a lone modifier types nothing, combos pass through so normal shortcuts keep
+working, and the Escape cancel does **not** consume the keystroke — Escape still reaches the focused
+app. Making it exclusive would require an active (`.defaultTap`) tap, which is ruled out because
+macOS would then block on this process for every system-wide keystroke.
 
 Because the tap can't swallow `fn`, macOS's own 🌐 action ("Press 🌐 key to": emoji, input source,
 or Apple Dictation — each with its own sound or popup) would fire on every `fn` dictation. The

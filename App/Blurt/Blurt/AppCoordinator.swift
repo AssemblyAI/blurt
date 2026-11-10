@@ -377,6 +377,9 @@ final class AppCoordinator {
     isCapturing = phase.isCapturing
 
     cues.transition(for: phase)
+    // Escape keeps cancelling through the transcribe/inject window, which the
+    // trigger's gate reads as idle (`DictationKeyRouter.dictationIsActive`).
+    keyTap?.dictationIsActive = !phase.isTerminal
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the

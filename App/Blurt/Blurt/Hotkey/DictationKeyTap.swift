@@ -8,14 +8,17 @@ import os
 /// keycode 54, dictating and left ⌥ reading aloud), each under its own
 /// tap/hold mode — `TriggerKeyBindings`, to detect down/up, and
 /// `keyDown` for any *other* key, or a mouse-button down, to spot a modifier
-/// combo (⌘C, ⌘V, ⌘-click…). The per-event decision lives in the engine — `DictationKeyRouter`
-/// (keycode relevance + down/up edge dedup) over `DictationKeyGate` (tap/hold
-/// semantics) — so this type only reduces each `CGEvent` to a router event and
-/// owns the tap lifecycle.
+/// combo (⌘C, ⌘V, ⌘-click…) or, in developer mode, an Escape cancel. The per-event decision lives in the
+/// engine — `DictationKeyRouter` (keycode relevance, down/up edge dedup, Escape
+/// routing) over `DictationKeyGate` (tap/hold semantics) — so this type only
+/// reduces each `CGEvent` to a router event and owns the tap lifecycle.
 ///
 /// Unlike the old chord trigger, this **swallows nothing**: a lone modifier
 /// types nothing into the focused app, and combos must pass through so normal
-/// shortcuts keep working. The tap is therefore created `.listenOnly` — an
+/// shortcuts keep working. That includes the Escape cancel — cancelling a
+/// dictation does *not* consume the keystroke, so Escape still reaches whatever
+/// is focused. Making it exclusive would mean an active tap, which the paragraph
+/// below rules out. The tap is therefore created `.listenOnly` — an
 /// active (`.defaultTap`) tap would make macOS synchronously wait on this
 /// process before delivering every keystroke system-wide, so any main-thread
 /// stall in Blurt would add typing latency in *other* apps.
@@ -49,6 +52,15 @@ final class DictationKeyTap {
   /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
   /// Seeded from the persisted binding in `init` — see the note there.
   private var router: DictationKeyRouter
+
+  /// Whether a dictation is in flight, so Escape can cancel one that has already
+  /// stopped recording and is mid transcribe/inject — a window the gate reads as
+  /// idle. Set by `AppCoordinator.render(_:)` from the phase stream; the router's
+  /// property owns the semantics.
+  var dictationIsActive: Bool {
+    get { router.dictationIsActive }
+    set { router.dictationIsActive = newValue }
+  }
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
