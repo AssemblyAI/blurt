@@ -3,8 +3,8 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's three sections: updates (version, check, Sparkle's two
-// preferences), developer mode, and the start-over button. All are
+// The Advanced pane's four sections: updates (version, check, Sparkle's two
+// preferences), developer mode, the experimental switches, and the start-over button. All are
 // Settings-only (none gates setup, so none is a wizard step), and they live here
 // rather than in `SettingsWindowRoot` because that file is at the repo's
 // file-length limit.
@@ -103,6 +103,28 @@ struct MaintenanceSection: View {
     let directory = DictationLog.defaultURL.deletingLastPathComponent()
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     NSWorkspace.shared.open(directory)
+  }
+}
+
+/// Features on trial, each behind its own switch, off by default. Always shown,
+/// and independent of developer mode: trying one shouldn't mean logging every
+/// dictation to disk.
+struct ExperimentalSection: View {
+  @AppStorage(EscapeCancelStore.defaultsKey) private var escapeCancels = false
+
+  var body: some View {
+    Section {
+      Toggle(isOn: $escapeCancels) {
+        SettingLabel(
+          title: "Cancel with Escape", systemImage: "escape",
+          subtitle: "Esc discards a dictation, request or answer in progress, from any app.")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.escapeCancelToggle)
+    } header: {
+      Text("Experimental")
+    } footer: {
+      Text("Features still being tried out. Each is off until you turn it on.")
+    }
   }
 }
 

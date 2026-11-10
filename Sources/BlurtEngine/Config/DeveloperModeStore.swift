@@ -2,9 +2,8 @@ import Foundation
 
 /// Persists the developer-mode switch in `UserDefaults`. Off by default; the
 /// Settings window's Advanced pane flips it. While on, each completed
-/// dictation is appended to `DictationLog` — so a user who never opts in has no
-/// dictation text on disk — and features still on trial are turned on: Escape
-/// cancelling a dictation (`DictationKeyRouter`).
+/// dictation is appended to `DictationLog` — that gate is the switch's only
+/// effect, so a user who never opts in has no dictation text on disk.
 /// Same shape as `TriggerKeyStore` / `SoundPackStore`.
 public struct DeveloperModeStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
@@ -12,7 +11,7 @@ public struct DeveloperModeStore {
   public static var defaultsKey: String { DefaultsKey.developerMode.key }
   private let defaults: UserDefaults
 
-  public init(defaults: UserDefaults = .standard) {
+  init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }
 
@@ -23,7 +22,7 @@ public struct DeveloperModeStore {
   /// caller — only tests, which is the hazard `KeysSettingsTab` documents in the
   /// other direction. Rather than leave a write path nothing exercised, there is
   /// none; seed the slot to change the switch.
-  public var isEnabled: Bool {
+  var isEnabled: Bool {
     defaults.bool(forKey: Self.defaultsKey)
   }
 }

@@ -112,9 +112,9 @@ utterance.
   on AssemblyAI's published benchmarks.
 - **Multilingual** — works in 18 languages, detected automatically, and you
   can code-switch mid-sentence.
-- **Escape to throw it away** (developer option) — with Developer mode on
-  (Settings › Advanced), press <kbd>esc</kbd> to throw a dictation away: while
-  you're still speaking, or after, until the text lands. A rewrite, a
+- **Escape to throw it away** (Experimental, off by default: Settings ›
+  Advanced) — press <kbd>esc</kbd> to throw a dictation away: while you're
+  still speaking, or after, until the text lands. A rewrite, a
   composition, a command or a spoken answer stops too. Nothing is pasted, though
   audio already sent has been transcribed, and an Escape after the paste can't
   undo it. Escape isn't swallowed, so it still reaches whatever app you're in.

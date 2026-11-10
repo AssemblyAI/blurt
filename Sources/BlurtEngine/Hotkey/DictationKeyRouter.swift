@@ -79,7 +79,7 @@ public struct DictationKeyRouter: Sendable {
 
   /// Whether Escape is the cancel key, read at an Escape only once something is
   /// in flight, so the Settings switch applies without a relaunch. The app
-  /// passes developer mode (`DeveloperModeStore`) for now, so the gesture can be
+  /// passes its experimental switch (`EscapeCancelStore`), so the gesture can be
   /// trialled before it is everyone's; off, Escape takes the ordinary-key path
   /// exactly as it did before the gesture existed. Defaults to off, so nothing
   /// built without the host's say reads the real defaults.

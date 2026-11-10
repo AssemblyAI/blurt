@@ -66,6 +66,8 @@ enum DefaultsKey: String, CaseIterable {
   /// Whether a recording starts and stops on its own with meetings
   /// (`MeetingAutoRecordStore`).
   case autoRecordMeetings = "AutoRecordMeetings"
+  /// Whether a bare Escape cancels what is in flight (`EscapeCancelStore`).
+  case escapeCancelsDictation = "EscapeCancelsDictation"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

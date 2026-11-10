@@ -933,7 +933,8 @@ three of them pure engine logic:
   can't see (a dictation past its recording, a request, a job, a read). Nothing live and nothing in
   flight, it takes the ordinary-key path without reading the switch: the tap is listen-only and sees
   every Escape on the system. Otherwise the `escapeCancels` provider decides — `{ false }` unless the
-  host passes one; the app passes developer mode, read at the keystroke — and on, the gate is cleared
+  host passes one; the app passes `EscapeCancelStore` (`BlurtEscapeCancelsDictation`, off by default, the
+  Advanced pane's Experimental section), read at the keystroke — and on, the gate is cleared
   and `.cancel` returned; off, Escape is an ordinary key exactly as before.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each

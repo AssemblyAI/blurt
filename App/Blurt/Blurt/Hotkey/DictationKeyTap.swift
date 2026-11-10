@@ -8,7 +8,7 @@ import os
 /// keycode 54, dictating and left ⌥ reading aloud), each under its own
 /// tap/hold mode — `TriggerKeyBindings`, to detect down/up, and
 /// `keyDown` for any *other* key, or a mouse-button down, to spot a modifier
-/// combo (⌘C, ⌘V, ⌘-click…) or, in developer mode, an Escape cancel. The per-event decision lives in the
+/// combo (⌘C, ⌘V, ⌘-click…) or, when its switch is on, an Escape cancel. The per-event decision lives in the
 /// engine — `DictationKeyRouter` (keycode relevance, down/up edge dedup, Escape
 /// routing) over `DictationKeyGate` (tap/hold semantics) — so this type only
 /// reduces each `CGEvent` to a router event and owns the tap lifecycle.
@@ -97,10 +97,10 @@ final class DictationKeyTap {
     // were each corrected away from — the tap would name the old key while the
     // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
     // re-reads this, but nothing enforces that it runs before the first event.
-    // Escape cancels in developer mode only, for now; the router reads the
-    // switch at the keystroke.
+    // Escape cancels only with its experimental switch on; the router reads it
+    // at the keystroke.
     self.router = DictationKeyRouter(
-      activations: Self.boundActivations(), escapeCancels: { DeveloperModeStore().isEnabled })
+      activations: Self.boundActivations(), escapeCancels: { EscapeCancelStore().isEnabled })
   }
 
   deinit {

@@ -42,7 +42,7 @@ struct ReadyView: View {
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
   /// Whether the key tap's Escape cancels (`DictationKeyTap`), which sees this
   /// window's Escape too: the button below then stands down, so one Escape is one cancel.
-  @AppStorage(DeveloperModeStore.defaultsKey) private var escapeCancelsEverywhere = false
+  @AppStorage(EscapeCancelStore.defaultsKey) private var escapeCancelsEverywhere = false
 
   /// The one page the window pushes: whatever the model has open.
   private enum Route: Hashable { case openItem }
