@@ -40,9 +40,6 @@ struct PersistedSettingsTests {
     // The text shortcuts: left out, a reset would keep expanding the user's
     // phrases into their old snippets.
     #expect(PersistedSettings.allDefaultsKeys.contains(TextShortcutStore.defaultsKey))
-    // The media-pause switch also defaults to ON, so the enhanced-transcripts
-    // argument applies: a stray `false` surviving a reset would silently stop
-    // pausing the music.
     #expect(PersistedSettings.allDefaultsKeys.contains(MediaPauseStore.defaultsKey))
   }
 

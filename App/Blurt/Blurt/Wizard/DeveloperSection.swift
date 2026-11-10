@@ -3,8 +3,8 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's three sections: updates (version, check, Sparkle's two
-// preferences), developer mode, and the start-over button. All are
+// The Advanced pane's four sections: updates (version, check, Sparkle's two
+// preferences), developer mode, the experimental switches, and the start-over button. All are
 // Settings-only (none gates setup, so none is a wizard step), and they live here
 // rather than in `SettingsWindowRoot` because that file is at the repo's
 // file-length limit.
@@ -59,13 +59,10 @@ struct UpdatesSection: View {
 /// Developer mode is an opt-in: while on, every completed dictation is appended
 /// to the local JSONL log and every failed one to a sibling error log (see
 /// `DictationLog` — both gates read the same default this toggle writes), and
-/// the section grows a "Show Logs in Finder" row, the switches for the features
-/// still on trial, and a footer naming where the logs live.
+/// the section grows a "Show Logs in Finder" row and a footer naming where the
+/// logs live.
 struct MaintenanceSection: View {
   @AppStorage(DeveloperModeStore.defaultsKey) private var developerMode = false
-  // The unset default comes from the store, which `MediaPauseController` reads
-  // too (behind developer mode), so the toggle and the pause can't disagree.
-  @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = MediaPauseStore.defaultValue
 
   var body: some View {
     Section {
@@ -80,12 +77,6 @@ struct MaintenanceSection: View {
           Button("Show in Finder", action: showLogs)
             .accessibilityIdentifier(UITestIdentifiers.developerShowLogs)
         }
-        Toggle(isOn: $pauseMedia) {
-          SettingLabel(
-            title: "Pause music while dictating", systemImage: "pause.circle",
-            subtitle: "Pause Spotify or Music if playing, and resume when you stop.")
-        }
-        .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
       }
     } footer: {
       if developerMode {
@@ -112,6 +103,28 @@ struct MaintenanceSection: View {
     let directory = DictationLog.defaultURL.deletingLastPathComponent()
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     NSWorkspace.shared.open(directory)
+  }
+}
+
+/// Features on trial, each behind its own switch, off by default. Always shown,
+/// and independent of developer mode: trying one shouldn't mean logging every
+/// dictation to disk.
+struct ExperimentalSection: View {
+  @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = false
+
+  var body: some View {
+    Section {
+      Toggle(isOn: $pauseMedia) {
+        SettingLabel(
+          title: "Pause music while dictating", systemImage: "pause.circle",
+          subtitle: "Pauses Spotify or Music while you speak, and resumes it when you stop.")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
+    } header: {
+      Text("Experimental")
+    } footer: {
+      Text("Features still being tried out. Each is off until you turn it on.")
+    }
   }
 }
 

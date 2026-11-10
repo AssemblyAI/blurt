@@ -19,7 +19,8 @@ import os
 /// already playing and resume only what we paused, and only while it is still
 /// paused. Only a player that is running is scripted, one script per player — see
 /// `MediaPlayerApp` for why one script for both broke on a Mac without Spotify.
-/// Because it cannot start anything unbidden, the switch defaults on.
+/// It never starts anything unbidden. Off unless its experimental switch is on
+/// (`MediaPauseStore`).
 ///
 /// Browsers are deliberately out of scope; `MediaPlayerApp` documents the detection
 /// routes that were measured and rejected, and the blind media-key fallback that was

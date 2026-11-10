@@ -1,16 +1,14 @@
 import Foundation
 
-/// Persists the "pause music while dictating" switch in `UserDefaults`. A
-/// developer option for now, so it can be trialled before it is everyone's: it
-/// only takes effect while developer mode is on (`DeveloperModeStore`), where it
-/// defaults on, and its switch sits beside developer mode's in the Advanced pane.
-/// Music bleeding into the microphone is the transcript's problem, not just the
-/// listener's.
+/// Persists the experimental "pause music while dictating" switch in
+/// `UserDefaults`. Off by default; the Settings window's Advanced pane flips it
+/// (its Experimental section), so the pause can be trialled before it is
+/// everyone's. Developer mode has no say in it. Music bleeding into the
+/// microphone is the transcript's problem, not just the listener's.
 ///
 /// Scoped to the players that can be paused *precisely*: `MediaPlayerApp` entries
 /// expose `player state`, so a dictation acts only on one that is already playing
-/// and resumes only what it paused. Nothing can start unbidden, which is what makes
-/// it safe to default on.
+/// and resumes only what it paused. Nothing can start unbidden.
 ///
 /// **Browsers are deliberately not covered** — see `MediaPlayerApp` for the three
 /// detection routes that were measured and rejected, and for the blind media-key
@@ -24,30 +22,19 @@ public struct MediaPauseStore {
   /// directly (e.g. `@AppStorage`) and re-render on change.
   public static var defaultsKey: String { DefaultsKey.pauseMedia.key }
 
-  /// The value an unset key reads as. Public so the Settings toggle's `@AppStorage`
-  /// default comes from here rather than restating `true` — the view and the pause
-  /// controller have to agree about the empty slot.
-  public static let defaultValue = true
-
   private let defaults: UserDefaults
 
   public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }
 
-  /// Whether a recording pauses the music: developer mode on **and** the switch
-  /// on. The switch's unset value is **on** — pausing the music you're talking
-  /// over is the useful default, so only an explicit opt-out disables it. That
-  /// inverts the usual `bool(forKey:)` shape (which reads a missing key as false),
-  /// hence the presence check. Both are read from the same `defaults` at each
-  /// call, so either switch applies to the very next dictation.
+  /// `bool(forKey:)` returns false for a missing key, so unset means off.
   ///
-  /// Read-only, like `EnhancedTranscriptsStore.isEnabled`: the Settings toggles
-  /// write their slots through `@AppStorage`, so a setter here would have no
-  /// production caller.
+  /// Read-only, like `DeveloperModeStore.isEnabled`: the Settings toggle writes
+  /// the slot through `@AppStorage`, so a setter here would have no production
+  /// caller.
   public var isEnabled: Bool {
-    guard DeveloperModeStore(defaults: defaults).isEnabled else { return false }
-    return defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue
+    defaults.bool(forKey: Self.defaultsKey)
   }
 }
 

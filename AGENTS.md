@@ -1318,9 +1318,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   CoreAudio UID — empty/unset follows the system default; re-read at every press, and a pinned
   device that isn't connected falls back to the system default without unpinning),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y),
-  **`MediaPauseStore`** (`BlurtPauseMediaWhileDictating`, a developer option: `isEnabled` is false
-  unless developer mode is on, and within it the switch is **on** by default — unset reads as
-  enabled; gates pausing Spotify/Apple Music while recording, re-read on every recording edge),
+  **`MediaPauseStore`** (`BlurtPauseMediaWhileDictating`, experimental and off by default, the
+  Advanced pane's Experimental section, independent of developer mode; gates pausing Spotify/Apple
+  Music while recording, re-read on every recording edge),
   **`TextShortcutStore`** (`BlurtTextShortcuts`, the JSON list of spoken phrase → saved text
   pairs; re-read per transcript via the session's `textShortcutsProvider` and applied locally by
   `TextShortcutExpander` between the response and the paste — never on the wire. Like
@@ -1372,15 +1372,15 @@ stops, not a second later when the paste lands.
 
 Music: **`MediaPauseController`** (`App/Blurt/Blurt/`) pauses the user's music while the mic is open
 and restores it on `.ended`, so what they're listening to stays out of the transcript. Driven from
-`AppCoordinator.render(_:)` exactly like the chimes. A developer option for now, so it can be
-trialled before it is the default: it acts only while developer mode is on, and its switch sits in
-the Advanced pane's developer section, shown only then. Scoped to **scriptable players** —
-`MediaPlayerApp` (Spotify, Apple Music), on by default within developer mode. Both expose
+`AppCoordinator.render(_:)` exactly like the chimes. Experimental for now, so it can be trialled
+before it is the default: off unless its own switch in the Advanced pane's Experimental section is on,
+whatever developer mode says (trying it shouldn't mean logging every dictation to disk). Scoped to
+**scriptable players** — `MediaPlayerApp` (Spotify, Apple Music). Both expose
 `player state` through one shared script shape, so a dictation pauses only a player that is _already
 playing_ and resumes only what it paused (tracked on the controller's serial queue, not against the
 setting, so flipping the toggle off mid-dictation can't strand the music paused). `if application …
 is running` is the idiom that reads the running state _without_ launching the app — a dictation must
-never boot a music player. Because it cannot start anything unbidden, it's safe on by default. It
+never boot a music player. It cannot start anything unbidden. It
 pauses rather than ducks the volume (an earlier ducking attempt, #171, was closed unmerged).
 
 **Browsers are deliberately not covered — don't "fix" this.** Pausing safely needs to know something

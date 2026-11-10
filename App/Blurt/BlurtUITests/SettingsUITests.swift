@@ -108,26 +108,19 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(picker.value as? String, "None", "Choosing None should stick as the selection")
   }
 
-  /// The media-pause switch is a developer option: absent until developer mode is
-  /// on, and then **on** by default — which is only safe because the scripted path
-  /// can't start playback that wasn't already running, so the default and that
-  /// property travel together. Pinning it here means flipping it, or widening the
-  /// feature to something that *can* start playback while leaving the default on,
-  /// fails a test rather than shipping. Matched by identifier, like the developer
-  /// toggle below.
-  func testMediaPauseIsADeveloperOptionThatDefaultsOn() {
+  /// The media pause is an experimental switch: shown in the Advanced pane with
+  /// developer mode off, off by default, and on with a click.
+  func testMediaPauseIsAnExperimentalSwitchThatDefaultsOff() {
     let advanced = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
     let developer = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
     XCTAssertTrue(developer.waitForExistence(timeout: 10), "Developer mode toggle not found")
+    XCTAssertEqual("\(developer.value ?? "")", "0", "Developer mode should start switched off")
+
     let toggle = advanced.anyDescendant(identified: UITestIdentifiers.pauseMediaToggle)
-    XCTAssertFalse(toggle.exists, "Pause-music should be hidden while developer mode is off")
-
-    developer.click()
-
-    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Pause-music toggle not found in developer mode")
-    XCTAssertEqual("\(toggle.value ?? "")", "1", "Pausing music should default ON")
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Pause-music toggle not found")
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Pausing music should default OFF")
     toggle.click()
-    XCTAssertEqual("\(toggle.value ?? "")", "0", "Clicking should opt out of pausing music")
+    XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should turn pausing music on")
   }
 
   /// Developer mode starts off (the UI-test launch resets persisted settings)
