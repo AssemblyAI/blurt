@@ -1,30 +1,22 @@
 import XCTest
 
 /// The real keyboard, used: the extension in its own process over a field in
-/// the app, driven through every layout's flows — the mic key present and
-/// centred, the + beside it, the panel's carousel swiping to the keys and
-/// back, the key-term field opening and closing, letters typing into the
-/// field, the mic starting and stopping a dictation while the app listens.
-/// One run per face × mic concept × layout (`TEST_RUNNER_BLURT_PROBE_ARGS`);
-/// every step prints a FLOW line and attaches a screenshot, and
-/// `scripts/ios-keyboard-flows.sh` runs the matrix and collects them.
+/// the app, driven through its flows — the mic key in the bottom row between
+/// space and return, the + in the bar, letters typing into the field, the
+/// key-term field opening and closing, the mic starting and stopping a
+/// dictation while the app listens, and the ways a keyboard comes back. One
+/// run per face (`TEST_RUNNER_BLURT_PROBE_ARGS`); every step prints a FLOW
+/// line and attaches a screenshot, and `scripts/ios-keyboard-flows.sh` runs
+/// both faces and collects them.
 @MainActor
 final class BlurtKeyboardFlows: XCTestCase {
   var app = XCUIApplication()
   var shots = 0
-  /// `left` or `right` when the run puts the mic at an edge (Settings ›
-  /// alignment); nil for the middle.
-  var side: String?
-  /// The layout this run is of: `slimBar`, `panel` or `full`.
-  var layoutName = "panel"
 
   func testFlows() throws {
     continueAfterFailure = true
     let arguments =
       ProcessInfo.processInfo.environment["BLURT_PROBE_ARGS"]?.split(separator: " ").map(String.init) ?? ["light"]
-    let layout = arguments.first { ["slimBar", "panel", "full"].contains($0) } ?? "panel"
-    layoutName = layout
-    side = arguments.first { ["left", "right"].contains($0) }
     app = XCUIApplication()
     // The app listens from launch, so the keyboard's mic key is live.
     app.launchArguments =
@@ -35,7 +27,8 @@ final class BlurtKeyboardFlows: XCTestCase {
       app.launchEnvironment["BLURT_DEBUG_API_KEY"] = key
     }
     app.launch()
-    try bringUpBlurt()
+    KeyboardMeasure.bringUpBlurt(app)
+    Thread.sleep(forTimeInterval: 1.5)
     shot("up")
     let mic = micKey()
     check(mic.exists, "mic key present (\(mic.label))")
@@ -44,12 +37,8 @@ final class BlurtKeyboardFlows: XCTestCase {
     let plus = app.buttons["Add a key term"]
     check(plus.exists, "the + present")
     checkDrawn(mic, "on appearance")
-    if mic.exists, plus.exists { checkPlacement(layout: layout, mic: mic, plus: plus) }
-    switch layout {
-    case "panel": try panelFlows()
-    case "full": try fullFlows()
-    default: try slimFlows()
-    }
+    if mic.exists { checkPlacement(mic: mic, plus: plus) }
+    try typingFlow()
     try selectionFlow(app.textFields.firstMatch)
     try termFlow()
     try dictationFlow()
@@ -58,46 +47,25 @@ final class BlurtKeyboardFlows: XCTestCase {
 
   // MARK: Helpers
 
-  /// Where the mic and the + sit, for this run's layout and side: in the
-  /// keyboard's own coordinates, whatever the layout — the keyboard spans
-  /// the window, so its width is the window's.
-  private func checkPlacement(layout: String, mic: XCUIElement, plus: XCUIElement) {
-    let width = app.windows.firstMatch.frame.width
-    let centre = mic.frame.midX
-    // Wherever the mic is, the + sits on its centre line.
+  /// Where the mic sits: in the bottom row between space and return, on
+  /// their centre line (DESIGN.md › The mic's place); the + in the bar above
+  /// the keys, at the trailing end.
+  private func checkPlacement(mic: XCUIElement, plus: XCUIElement) {
+    let space = app.buttons["space"].firstMatch
+    let returnKey = app.buttons.matching(
+      NSPredicate(format: "label ==[c] %@ OR label ==[c] %@", "return", "Return")
+    ).firstMatch
+    check(space.exists && returnKey.exists, "space and return present")
+    guard space.exists, returnKey.exists else { return }
+    check(abs(mic.frame.midY - space.frame.midY) < 2, "the mic on the bottom row's centre line")
     check(
-      abs(plus.frame.midY - mic.frame.midY) < 4,
-      "the + at the mic's centre line (\(plus.frame.midY) vs \(mic.frame.midY))")
-    if let side {
-      // One hand: the mic at the chosen edge of the keyboard, the + on its
-      // inner side — in every layout, the slim bar's keys sitting inboard.
-      let left = side == "left"
-      let edge = left ? mic.frame.minX : width - mic.frame.maxX
-      let inner = left ? plus.frame.minX > mic.frame.maxX : plus.frame.maxX < mic.frame.minX
-      check(edge < 12, "mic at the \(side) edge of the keyboard (\(edge) pt in, \(layout))")
-      check(inner, "the + on the mic's inner side")
-    } else {
-      // The mic's centre is the keyboard's (W/2) in every layout; the +
-      // hangs beside it.
-      check(abs(centre - width / 2) < 4, "mic centred in the keyboard (\(centre) of \(width), \(layout))")
-      check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
-    }
-  }
-
-  private func bringUpBlurt() throws {
-    let blurt = app.buttons["Add a key term"]
-    let system = app.keyboards.firstMatch
-    let deadline = Date().addingTimeInterval(15)
-    while !blurt.exists, !system.exists, Date() < deadline { Thread.sleep(forTimeInterval: 0.5) }
-    var hops = 0
-    while !blurt.waitForExistence(timeout: 2), hops < 4 {
-      let globe = app.buttons["Next keyboard"]
-      XCTAssertTrue(globe.waitForExistence(timeout: 5), "no globe key")
-      globe.tap()
-      hops += 1
-    }
-    XCTAssertTrue(blurt.exists, "Blurt never came up")
-    Thread.sleep(forTimeInterval: 1.5)
+      mic.frame.minX >= space.frame.maxX - 1 && mic.frame.maxX <= returnKey.frame.minX + 1,
+      "the mic between space and return (\(mic.frame) vs \(space.frame), \(returnKey.frame))")
+    let top =
+      app.buttons.allElementsBoundByIndex.filter { $0.frame.minY > app.windows.firstMatch.frame.midY }
+      .map(\.frame.minY).min() ?? 0
+    check(plus.exists && plus.frame.minY <= top + 1, "the + in the bar above the keys")
+    check(plus.exists && plus.frame.maxX > mic.frame.midX, "the + at the bar's trailing end")
   }
 
   /// Blurt's mic key, by its identifier: the system's own bottom bar has a
@@ -110,8 +78,9 @@ final class BlurtKeyboardFlows: XCTestCase {
     app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "blurt-mic", label)).firstMatch
   }
 
+  /// A letter key, in either case.
   func letterKey(_ letter: String) -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "label == %@", letter)).firstMatch
+    app.buttons.matching(NSPredicate(format: "label ==[c] %@", letter)).firstMatch
   }
 
   func check(_ condition: Bool, _ what: String) {
@@ -119,8 +88,8 @@ final class BlurtKeyboardFlows: XCTestCase {
     XCTAssertTrue(condition, what)
   }
 
-  /// The mic element's pixels are there — a key with nothing drawn in it is
-  /// the failure the frame checks cannot see.
+  /// The mic key's pixels are there — a key with nothing drawn in it is the
+  /// failure the frame checks cannot see.
   func checkDrawn(_ mic: XCUIElement, _ when: String) {
     let ink = MicPixels.ink(app, mic: mic) ?? 0
     check(ink > MicPixels.drawnThreshold, "the mic is drawn \(when) (ink \(ink))")
@@ -138,89 +107,8 @@ final class BlurtKeyboardFlows: XCTestCase {
 // MARK: - Flows
 
 extension BlurtKeyboardFlows {
-  // MARK: Flows
-
-  private func panelFlows() throws {
-    // Where a finger swipes on the panel: the empty space under the element,
-    // the element itself, the space key. Each attempt says where it started
-    // and whether the carousel flipped; the page is put back between them.
-    let mic = { self.micKey().coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)) }
-    let gap = { self.micKey().coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.15)) }
-    let space = { self.app.buttons["space"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)) }
-    let attempts = [
-      Swipe(origin: "the gap under the mic, left", start: gap, dx: -160),
-      Swipe(origin: "the mic itself, left", start: mic, dx: -160),
-      Swipe(origin: "the space key, left", start: space, dx: -160),
-      Swipe(origin: "the gap under the mic, right", start: gap, dx: 160),
-      Swipe(origin: "the space key, right", start: space, dx: 160),
-    ]
-    for (index, swipe) in attempts.enumerated() {
-      let (origin, dx) = (swipe.origin, swipe.dx)
-      let from = swipe.start()
-      from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: dx, dy: 0)))
-      Thread.sleep(forTimeInterval: 1.2)
-      let flipped = keysUp
-      check(flipped, "swipe from \(origin) flips the panel to the keys")
-      if index == 0 { shot("panel-keys") }
-      if flipped {
-        // Back to the panel from the letters, the swipe that is known to work.
-        let g = letterKey("g").exists ? letterKey("g") : letterKey("G")
-        let on = g.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        on.press(forDuration: 0.05, thenDragTo: on.withOffset(CGVector(dx: dx > 0 ? -160 : 160, dy: 0)))
-        Thread.sleep(forTimeInterval: 1.2)
-        check(!keysUp, "swipe from the letters (\(dx > 0 ? "left" : "right")) flips back to the panel")
-        if index == 0 { shot("panel-back") }
-      }
-    }
-    check(!keysUp && panelMicUp, "the panel is showing again, its mic full size")
-    checkDrawn(micKey(), "after the swipes back")
-    // Pairs from one fixed screen point (an element mid-slide is no anchor):
-    // a flip and a flip back, and two the same way — with no wait between,
-    // so the second lands mid-slide, and again after the slide has settled.
-    // Each pair lands on the panel, the cards never having crossed.
-    let anchor = gap().screenPoint
-    let fixed = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: anchor.x, dy: anchor.y))
-    let pairs = [
-      Pair(name: "left then right, mid-slide", first: -160, second: 160, pause: 0),
-      Pair(name: "left twice, mid-slide", first: -160, second: -160, pause: 0),
-      Pair(name: "left then right, settled", first: -160, second: 160, pause: 0.5),
-      Pair(name: "left twice, settled", first: -160, second: -160, pause: 0.5),
-    ]
-    for pair in pairs {
-      fixed.press(forDuration: 0.05, thenDragTo: fixed.withOffset(CGVector(dx: pair.first, dy: 0)))
-      if pair.pause > 0 { Thread.sleep(forTimeInterval: pair.pause) }
-      fixed.press(forDuration: 0.05, thenDragTo: fixed.withOffset(CGVector(dx: pair.second, dy: 0)))
-      Thread.sleep(forTimeInterval: 1.5)
-      check(!keysUp && panelMicUp, "two quick swipes, \(pair.name), land back on the panel")
-      shot("panel-pair-\(pair.name.replacingOccurrences(of: ", ", with: "-").replacingOccurrences(of: " ", with: "-"))")
-    }
-  }
-
-  /// Two swipes from one point: how far each goes, and the wait between.
-  private struct Pair {
-    let name: String
-    let first: CGFloat
-    let second: CGFloat
-    let pause: TimeInterval
-  }
-
-  /// Where a swipe starts and how far it goes.
-  private struct Swipe {
-    let origin: String
-    let start: () -> XCUICoordinate
-    let dx: CGFloat
-  }
-
-  /// Whether the letter keys are on screen (either shift state).
-  var keysUp: Bool { letterKey("Q").exists || letterKey("q").exists }
-
-  /// Whether the mic key on screen is the panel's: as tall as the panel's
-  /// element box (88), where the bar's is the row (44). The width says
-  /// nothing — the key is as wide as the element shows, whichever concept.
-  var panelMicUp: Bool { micKey().exists && micKey().frame.height > 60 }
-
-  private func fullFlows() throws {
-    let q = letterKey("Q")
+  private func typingFlow() throws {
+    let q = letterKey("q")
     check(q.exists, "letter keys present")
     q.tap()
     letterKey("q").tap()
@@ -228,10 +116,8 @@ extension BlurtKeyboardFlows {
     check(
       (field.value as? String)?.lowercased().contains("qq") == true,
       "letters type into the field (\(field.value ?? "-"))")
-    check(
-      app.buttons["return"].exists || app.buttons["RETURN"].exists || app.buttons["Return"].exists,
-      "return key labelled")
-    shot("full-typed")
+    check(app.buttons["space"].exists, "space present")
+    shot("typed")
   }
 
   /// Highlight the word in the field: the + becomes a chip holding it, one
@@ -245,22 +131,16 @@ extension BlurtKeyboardFlows {
     let chip = app.buttons.matching(
       NSPredicate(format: "label BEGINSWITH %@ OR label ENDSWITH %@", "Add “", "” is a key term")
     ).firstMatch
-    let mic = micKey()
     for attempt in 1...2 where !chip.exists {
       field.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).doubleTap()
       if chip.waitForExistence(timeout: 3) { break }
-      shot("\(layoutName)-select-miss-\(attempt)")
+      shot("select-miss-\(attempt)")
     }
     let label = chip.exists ? chip.label : "-"
     check(chip.exists, "highlighting a word shows the chip (\(label))")
-    if chip.exists, mic.exists {
-      check(abs(chip.frame.midY - mic.frame.midY) < 4, "the chip at the mic's centre line")
-      check(
-        chip.frame.minX >= mic.frame.maxX - 1 || chip.frame.maxX <= mic.frame.minX + 1,
-        "the chip clear of the mic (\(chip.frame) vs \(mic.frame))")
-    }
-    shot("\(layoutName)-selected")
+    shot("selected")
     let plus = app.buttons["Add a key term"]
+    let mic = micKey()
     if label.hasPrefix("Add “") {
       let word = label.dropFirst("Add “".count).prefix { $0 != "”" }
       chip.tap()
@@ -269,19 +149,19 @@ extension BlurtKeyboardFlows {
       // The check shows for 1.2 s; XCUITest's snapshot of another process
       // can miss it, so the proof of the add is below: the word re-selected
       // is a word Blurt knows.
-      if known.waitForExistence(timeout: 2) { shot("\(layoutName)-added") }
+      if known.waitForExistence(timeout: 2) { shot("added") }
       // The highlight still stands in the field; the chip gives way to the +
-      // on its own after the check, so the row is never stuck on the word.
+      // on its own after the check, so the bar is never stuck on the word.
       check(plus.waitForExistence(timeout: 4), "after the check the + is back while the word stays highlighted")
       check(mic.exists && mic.label != "Start Blurt", "the mic is still the mic after adding (\(mic.label))")
-      shot("\(layoutName)-after-add")
+      shot("after-add")
       // Cleared and highlighted again: Blurt knows the word now, and a tap on
       // that chip puts the + back at once.
       field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
       Thread.sleep(forTimeInterval: 0.5)
       field.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).doubleTap()
       check(known.waitForExistence(timeout: 4), "one tap added “\(word)”: highlighted again, the chip knows it")
-      shot("\(layoutName)-known")
+      shot("known")
       if known.exists {
         known.tap()
         check(plus.waitForExistence(timeout: 3), "a tap on the known chip puts the + back")
@@ -296,25 +176,24 @@ extension BlurtKeyboardFlows {
     Thread.sleep(forTimeInterval: 0.5)
   }
 
-  private func slimFlows() throws {
-    check(app.buttons["delete.left"].exists, "delete present on the slim bar")
-    shot("slim")
-  }
-
   private func termFlow() throws {
     let plus = app.buttons["Add a key term"]
     guard plus.exists else { return }
     plus.tap()
     let cancel = app.buttons["Cancel"]
     check(cancel.waitForExistence(timeout: 3), "the + opens the key-term field")
-    check(letterKey("Q").exists, "the keys come up for the term")
-    letterKey("R").tap()
+    check(letterKey("q").exists, "the keys stay up for the term")
+    letterKey("r").tap()
     letterKey("i").tap()
     shot("term")
     let save = app.buttons["Save the key term"]
     check(save.exists && save.isEnabled, "save enabled after typing")
+    let field = app.textFields.firstMatch
+    check(
+      (field.value as? String)?.lowercased().contains("ri") != true,
+      "the term's letters went to the field in the bar, not the host (\(field.value ?? "-"))")
     cancel.tap()
-    check(micKey().waitForExistence(timeout: 3), "cancel returns to the mic")
+    check(micKey().waitForExistence(timeout: 3), "cancel returns to the bar")
   }
 
   private func dictationFlow() throws {

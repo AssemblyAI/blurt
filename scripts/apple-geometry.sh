@@ -67,6 +67,7 @@ echo "==> measuring the system keyboard on $NAME (iOS $OS, ${SCALE}x) for the $P
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
 RESULTS="$WORK/probe.xcresult"
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSProbe \
+  -only-testing:BlurtiOSProbe/AppleKeyboardProbe \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet
 xcrun xcresulttool export attachments --path "$RESULTS" --output-path "$WORK/attachments" >/dev/null
