@@ -98,14 +98,22 @@ final class MediaPauseController {
   nonisolated(unsafe) private var pausedPlayers: [MediaPlayerApp] = []
 
   /// Quitting mid-dictation — a Sparkle relaunch included — must not leave the
-  /// music paused, and no `.ended` edge will come.
-  private var terminationObserver: NSObjectProtocol?
+  /// music paused, and no `.ended` edge will come. Kept so `deinit` can deregister
+  /// it; `nonisolated(unsafe)` because the nonisolated deinit reads it, as in
+  /// `OverlayWindowController` (written once in init, read once in deinit).
+  private nonisolated(unsafe) var terminationObserver: (any NSObjectProtocol)?
 
   init() {
     terminationObserver = NotificationCenter.default.addObserver(
       forName: NSApplication.willTerminateNotification, object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated { self?.restoreBeforeExit() }
+    }
+  }
+
+  deinit {
+    if let terminationObserver {
+      NotificationCenter.default.removeObserver(terminationObserver)
     }
   }
 
