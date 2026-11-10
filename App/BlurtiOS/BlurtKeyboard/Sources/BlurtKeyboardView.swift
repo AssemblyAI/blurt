@@ -1,3 +1,4 @@
+import BlurtDesign
 import BlurtiOSCore
 import KeyboardKit
 import SwiftUI
@@ -28,11 +29,22 @@ struct BlurtKeyboardView: View {
       emojiKeyboard: { $0.view },
       toolbar: { _ in BlurtToolbar(model: model) }
     )
+    // The bar above the keys at Apple's suggestion bar's height, and the
+    // keyboard's edges as the layout measured them (`KeyboardLayoutConfiguration.blurt`).
+    .keyboardToolbarStyle(Keyboard.ToolbarStyle(height: DesignTokens.Metrics.voicebarHeight))
+    .keyboardViewStyle(KeyboardViewStyle(edgeInsets: KeyboardLayoutConfiguration.blurt.edgeInsets))
+    // Every cap at Apple's corner (the probe's fitted radius, `key/radius`);
+    // the mic in the 123 key's style, the system key Apple's own in-row mic
+    // sits on.
     .keyboardButtonStyle { params in
-      guard params.action == .blurtMic else { return params.standardStyle() }
-      return Keyboard.ButtonStyleBuilderParams(
-        action: .keyboardType(.numeric), context: params.context, isPressed: params.isPressed
-      ).standardStyle()
+      var style =
+        params.action == .blurtMic
+        ? Keyboard.ButtonStyleBuilderParams(
+          action: .keyboardType(.numeric), context: params.context, isPressed: params.isPressed
+        ).standardStyle()
+        : params.standardStyle()
+      style.cornerRadius = DesignTokens.Metrics.keyRadius
+      return style
     }
   }
 }

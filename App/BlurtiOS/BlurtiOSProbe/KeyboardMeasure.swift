@@ -66,9 +66,12 @@ enum KeyboardMeasure {
   /// own frame (`keyboard`, or the union of the keys for a custom keyboard,
   /// which XCUITest shows only through its controls) and the other elements
   /// in it. `keys` are the elements that are keys; `others` whatever else
-  /// the caller hands in.
+  /// the caller hands in, and `buttons` the keyboard's buttons, named with a
+  /// `button:` prefix (Apple's shift, return and emoji keys are buttons to
+  /// XCUITest, and apple-geometry.sh reads them under that name).
   static func record(
-    face: String, app: XCUIApplication, keyboard: CGRect, keys: [XCUIElement], others: [XCUIElement]
+    face: String, app: XCUIApplication, keyboard: CGRect, keys: [XCUIElement], others: [XCUIElement],
+    buttons: [XCUIElement] = []
   ) -> [String: Any] {
     var named: [String: Any] = [:]
     for key in keys {
@@ -80,6 +83,11 @@ enum KeyboardMeasure {
     for element in others {
       let name = element.identifier.isEmpty ? element.label : element.identifier
       guard !name.isEmpty, rest[name] == nil else { continue }
+      rest[name] = rect(element.frame)
+    }
+    for element in buttons {
+      let name = "button:" + (element.identifier.isEmpty ? element.label : element.identifier)
+      guard rest[name] == nil else { continue }
       rest[name] = rect(element.frame)
     }
     return [

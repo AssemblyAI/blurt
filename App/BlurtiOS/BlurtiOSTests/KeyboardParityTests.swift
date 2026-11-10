@@ -1,3 +1,4 @@
+import BlurtDesign
 import Foundation
 import KeyboardKit
 import Testing
@@ -101,27 +102,39 @@ struct BlurtLayoutTests {
     #expect(Array(actions.dropLast()) == [page] + (globe ? [.nextKeyboard] : []) + [.space, .blurtMic], "\(actions)")
     #expect(Self.isReturn(actions.last), "\(actions)")
     // Apple's row with the mic after space and nothing else moved; every
-    // other row is KeyboardKit's own.
+    // other row is KeyboardKit's own, key for key.
     var apple = try #require(standard.itemRows.last).map(\.action)
     apple.insert(.blurtMic, at: try #require(apple.firstIndex(of: .space)) + 1)
     #expect(bottom.map(\.action) == apple)
-    #expect(layout.itemRows.dropLast() == standard.itemRows.dropLast())
-    // At the small key's size, so every cap keeps Apple's width.
+    #expect(
+      layout.itemRows.dropLast().map { $0.map(\.action) } == standard.itemRows.dropLast().map { $0.map(\.action) })
+    // Every cell at Apple's measured geometry (`KeyboardLayoutConfiguration.blurt`).
+    let configuration = KeyboardLayoutConfiguration.blurt
+    #expect(layout.configuration == configuration)
+    for item in layout.itemRows.joined() {
+      #expect(item.size.height == configuration.rowHeight)
+      #expect(item.edgeInsets == configuration.buttonInsets)
+    }
+    // The mic at the 123 key's size, and both at Apple's measured width (the
+    // cap and the gap), so every cap keeps Apple's width.
     let mic = try #require(bottom.first { $0.action == .blurtMic })
     #expect(mic.size == bottom.first?.size)
+    #expect(mic.size.width == .points(DesignTokens.Metrics.keyAbcWidth402 + DesignTokens.Metrics.keyGap))
   }
 
   // KeyboardKit draws the number pad as its own view (`Keyboard.NumberPad`),
-  // not from the layout: for that type its layout service hands back the
-  // letters with ABC leading the bottom row, space bar and all, so the mic
-  // rides that row as it does on the symbol pages. The guard in
-  // `KeyboardLayout.blurt` against a row with no space bar never fires here.
+  // not from the layout: for that type its layout service still hands back
+  // the letters' rows, space bar and all, so `KeyboardLayout.blurt` keeps the
+  // mic out of them by the type, not the row.
   @Test("the number pad gets no mic: KeyboardKit draws it from no rows, and Apple's has none")
   func numberPad() {
     let context = Self.context(.numberPad, globe: true)
     let layout = KeyboardLayout.blurt(for: context)
     #expect(!layout.itemRows.joined().contains { $0.action == .blurtMic })
-    #expect(layout.itemRows == KeyboardLayout.standard(for: context).itemRows)
+    #expect(
+      layout.itemRows.map { $0.map(\.action) }
+        == KeyboardLayout.standard(for: context).itemRows.map { $0.map(\.action) })
+    #expect(layout.configuration == .blurt)
   }
 
   @Test("the mic goes in once: a second pass over the same context adds no second")

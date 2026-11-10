@@ -38,7 +38,7 @@ struct BlurtToolbar: View {
       }
     }
     .frame(maxWidth: .infinity)
-    .frame(height: Keyboard.ToolbarStyle.standardHeight)
+    .frame(height: DesignTokens.Metrics.voicebarHeight)
     .animation(.easeInOut(duration: DesignTokens.Motion.termSwap), value: model.termDraft == nil)
     .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: model.statusLine)
   }
