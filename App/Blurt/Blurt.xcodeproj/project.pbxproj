@@ -28,6 +28,7 @@
 		0A37755226EF8ABE02BA42AC /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 30117E33FF99C309A29FB903 /* AppIcon.icon */; };
 		0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 371215E93A9C2CE60C6347BB /* BlurtEngine */; };
 		0BAB613C778CDF7691FAE6E6 /* rom1b-11-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4052A873788D31A33BE80FCB /* rom1b-11-stop.m4a */; };
+		0C4B8246B96187D7C237C8A1 /* MediaPauseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7871E362C7B85812F03A49 /* MediaPauseController.swift */; };
 		0CB2E6C02E57374806139E68 /* juno-60-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 24B8138546D9CD21F6D55F54 /* juno-60-start.m4a */; };
 		0D4AE0F936EAA5E3F0CE96AD /* rom1b-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F2B1262C9AB83ED251421D03 /* rom1b-5-start.m4a */; };
 		0DB94677FDF38489C7CE3E25 /* blurt-ready-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 49B8C7CF9FC84D9E3B96796B /* blurt-ready-logo.png */; };
@@ -609,6 +610,7 @@
 		3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */ = {isa = PBXFileReference; path = "rom1b-6-start.m4a"; sourceTree = "<group>"; };
 		3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtUITestSupport.swift; sourceTree = "<group>"; };
 		3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextShortcutsSection.swift; sourceTree = "<group>"; };
+		3A7871E362C7B85812F03A49 /* MediaPauseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPauseController.swift; sourceTree = "<group>"; };
 		3A96FC2E4AD7DB1BA0F6B178 /* rom1a-29-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-29-stop.m4a"; sourceTree = "<group>"; };
 		3B0E95E0D720A1D8EC05EA6F /* juno-39-start.m4a */ = {isa = PBXFileReference; path = "juno-39-start.m4a"; sourceTree = "<group>"; };
 		3BA1B8BBEEC6B5A2960688C3 /* rom1a-15-start.m4a */ = {isa = PBXFileReference; path = "rom1a-15-start.m4a"; sourceTree = "<group>"; };
@@ -1005,6 +1007,7 @@
 				7D222ED050CC93DEB330E773 /* CueSoundPlayer.swift */,
 				08A7417835D8538AC4A7E2FB /* DictationComposition.swift */,
 				0566F4FC45C72A6DA586126E /* Info.plist */,
+				3A7871E362C7B85812F03A49 /* MediaPauseController.swift */,
 				78C5D6E7BD14D68FEB9BA215 /* SoundPackCatalog.swift */,
 				A5A03BCF719B616FFF41455C /* SoundPackCatalog+ReadAloud.swift */,
 				40B53F2C705B17845D45FC1A /* TriggerKeySeams.swift */,
@@ -2177,6 +2180,7 @@
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				223C5150193302A11CE7074B /* LiveRecordingView.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,
+				0C4B8246B96187D7C237C8A1 /* MediaPauseController.swift in Sources */,
 				FFCEED254CC097D05D0E48EC /* MeetingAutoRecordSection.swift in Sources */,
 				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,
 				EC0B15FB6EAAF91396A8BF50 /* MicrophoneStepView.swift in Sources */,

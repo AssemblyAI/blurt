@@ -108,6 +108,28 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(picker.value as? String, "None", "Choosing None should stick as the selection")
   }
 
+  /// The media-pause switch is a developer option: absent until developer mode is
+  /// on, and then **on** by default — which is only safe because the scripted path
+  /// can't start playback that wasn't already running, so the default and that
+  /// property travel together. Pinning it here means flipping it, or widening the
+  /// feature to something that *can* start playback while leaving the default on,
+  /// fails a test rather than shipping. Matched by identifier, like the developer
+  /// toggle below.
+  func testMediaPauseIsADeveloperOptionThatDefaultsOn() {
+    let advanced = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
+    let developer = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
+    XCTAssertTrue(developer.waitForExistence(timeout: 10), "Developer mode toggle not found")
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.pauseMediaToggle)
+    XCTAssertFalse(toggle.exists, "Pause-music should be hidden while developer mode is off")
+
+    developer.click()
+
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Pause-music toggle not found in developer mode")
+    XCTAssertEqual("\(toggle.value ?? "")", "1", "Pausing music should default ON")
+    toggle.click()
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Clicking should opt out of pausing music")
+  }
+
   /// Developer mode starts off (the UI-test launch resets persisted settings)
   /// and a click switches it on. Matched by identifier rather than element type
   /// so the test doesn't care whether AppKit exposes the SwiftUI switch as a

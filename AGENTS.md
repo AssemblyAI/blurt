@@ -1318,6 +1318,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   CoreAudio UID — empty/unset follows the system default; re-read at every press, and a pinned
   device that isn't connected falls back to the system default without unpinning),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y),
+  **`MediaPauseStore`** (`BlurtPauseMediaWhileDictating`, a developer option: `isEnabled` is false
+  unless developer mode is on, and within it the switch is **on** by default — unset reads as
+  enabled; gates pausing Spotify/Apple Music while recording, re-read on every recording edge),
   **`TextShortcutStore`** (`BlurtTextShortcuts`, the JSON list of spoken phrase → saved text
   pairs; re-read per transcript via the session's `textShortcutsProvider` and applied locally by
   `TextShortcutExpander` between the response and the paste — never on the wire. Like
@@ -1355,10 +1358,59 @@ target (`App/Blurt/Blurt/SoundPackCatalog.swift`) by `scripts/generate-sounds.sw
 `.m4a` files they name, because a voice list whose cues live in someone else's bundle is a picker in
 which every choice plays silence. Regenerate both halves together — `check.sh`'s sound-catalog guard
 exists because a drift plays silence with no error — and note that adding or removing a voice changes
-the app target's file list, so `xcodegen generate` and a committed `.pbxproj` are part of that edit. **`RecordingCueGate`** is the
-pure edge detector deciding when the chimes fire — on the `.recording` edge, i.e. once audio is
-actually flowing, never at the press (see the latency notes above for why that ordering is
-load-bearing); the AppKit `CueSoundPlayer` just plays what it resolves.
+the app target's file list, so `xcodegen generate` and a committed `.pbxproj` are part of that edit. **`RecordingCueGate`** decides
+which chime fires on each recording edge — on the `.recording` edge, i.e. once audio is actually
+flowing, never at the press (see the latency notes above for why that ordering is load-bearing); the
+AppKit `CueSoundPlayer` just plays what it resolves.
+
+**`RecordingEdgeDetector`** is the shared primitive underneath: a pure detector reporting `.began` on
+the not-recording→recording transition and `.ended` on the reverse, silent everywhere else (the host
+feeds it _every_ phase). `RecordingCueGate` is a thin mapping over it, and so is the media pause —
+they want identical edges, so the edge logic exists once. Note `.ended` fires when the **mic closes**,
+not at a terminal phase: anything suppressed for the microphone's benefit is restored as recording
+stops, not a second later when the paste lands.
+
+Music: **`MediaPauseController`** (`App/Blurt/Blurt/`) pauses the user's music while the mic is open
+and restores it on `.ended`, so what they're listening to stays out of the transcript. Driven from
+`AppCoordinator.render(_:)` exactly like the chimes. A developer option for now, so it can be
+trialled before it is the default: it acts only while developer mode is on, and its switch sits in
+the Advanced pane's developer section, shown only then. Scoped to **scriptable players** —
+`MediaPlayerApp` (Spotify, Apple Music), on by default within developer mode. Both expose
+`player state` through one shared script shape, so a dictation pauses only a player that is _already
+playing_ and resumes only what it paused (tracked on the controller's serial queue, not against the
+setting, so flipping the toggle off mid-dictation can't strand the music paused). `if application …
+is running` is the idiom that reads the running state _without_ launching the app — a dictation must
+never boot a music player. Because it cannot start anything unbidden, it's safe on by default. It
+pauses rather than ducks the volume (an earlier ducking attempt, #171, was closed unmerged).
+
+**Browsers are deliberately not covered — don't "fix" this.** Pausing safely needs to know something
+is playing, and no public API answers that for a browser. All three routes were measured on macOS 26
+and rejected: CoreAudio's device-level `kAudioDevicePropertyDeviceIsRunningSomewhere` reads busy with
+the app quit and total silence; per-process `kAudioProcessPropertyIsRunningOutput` (public since
+14.4) reports nothing for other processes without system-audio-recording consent, a far heavier
+permission than the feature is worth; and MediaRemote (`MRMediaRemoteGetNowPlayingApplicationIsPlaying`)
+is gated for unentitled apps, returning `false` while Spotify was demonstrably playing. A blind
+system play/pause media key — the only thing that _reaches_ a browser — was built as an opt-in
+fallback, tried in real use, and **removed**: with no state to read it toggles rather than pauses, so
+it started playback that wasn't running. `MediaPlayerApp`'s doc carries the same warning next to the
+code.
+
+The scripts run in a short-lived **`/usr/bin/osascript` child process**, not in-process
+`NSAppleScript` — a correctness requirement, not a style choice. In-process OSA leaked internally per
+invocation (`scripts/leaks.sh` failed twice on backtraces through `executeAndReturnError`, and an
+`autoreleasepool` did **not** help), and the leak only reproduced on CI. In a child the OSA
+allocations die with `osascript`, so no Blurt frame can appear in a leak backtrace. TCC still
+attributes the event to Blurt as the **responsible process**, so the prompt names Blurt and reads its
+`NSAppleEventsUsageDescription`. One `osascript` per recording edge, both players unrolled into one
+generated script (AppleScript can't take app terminology like `player state` through a variable
+application reference), each block wrapped in `try` so an uninstalled app can't abort the others.
+The invocations sit on a **serial `DispatchQueue`** so the restore always observes what the pause
+did, and the whole thing is fire-and-forget, so a wedged player can never delay a recording. Sending
+Apple Events needs **two** build-side pieces, both in `project.yml`: `NSAppleEventsUsageDescription`
+(without it macOS _terminates_ the process on the first send instead of prompting) and the
+`com.apple.security.automation.apple-events` entitlement (the hardened runtime otherwise blocks
+outgoing events). A user who declines the consent prompt just gets a logged `-1743` and an inert
+feature.
 
 `CueSoundPlayer` decodes and pre-rolls the players once so the first chime never stalls the pill, and
 that pre-roll is bound to the output route it was made against. Blurt's own capture invalidates it:

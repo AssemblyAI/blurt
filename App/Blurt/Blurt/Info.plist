@@ -49,6 +49,8 @@
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Blurt pauses your music while you dictate so it doesn't end up in your transcript.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Blurt records your Mac's audio alongside your microphone so it can transcribe meetings and calls with AssemblyAI.</string>
 	<key>NSMicrophoneUsageDescription</key>
