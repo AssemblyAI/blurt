@@ -111,6 +111,8 @@ struct MaintenanceSection: View {
 /// dictation to disk.
 struct ExperimentalSection: View {
   @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = false
+  /// Which players refused the consent asked as the music switch turned on.
+  @State private var refusedPlayers: [MediaPlayerApp] = []
 
   var body: some View {
     Section {
@@ -120,10 +122,21 @@ struct ExperimentalSection: View {
           subtitle: "Pauses Spotify or Music while you speak, and resumes it when you stop.")
       }
       .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
+      // Ask for Automation consent now, not mid-dictation.
+      .onChange(of: pauseMedia) { _, isOn in
+        refusedPlayers = []
+        guard isOn else { return }
+        MediaPauseController.requestConsent { refusedPlayers = $0 }
+      }
     } header: {
       Text("Experimental")
     } footer: {
       Text("Features still being tried out. Each is off until you turn it on.")
+      if !refusedPlayers.isEmpty {
+        Text(
+          "Blurt can't control \(refusedPlayers.map(\.rawValue).joined(separator: " or ")). "
+            + "Allow it in System Settings › Privacy & Security › Automation.")
+      }
     }
   }
 }

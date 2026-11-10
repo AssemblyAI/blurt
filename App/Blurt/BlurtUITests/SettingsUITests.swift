@@ -112,15 +112,12 @@ final class SettingsUITests: BlurtUITestCase {
   /// developer mode off, off by default, and on with a click.
   func testMediaPauseIsAnExperimentalSwitchThatDefaultsOff() {
     let advanced = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
-    let developer = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
-    XCTAssertTrue(developer.waitForExistence(timeout: 10), "Developer mode toggle not found")
-    XCTAssertEqual("\(developer.value ?? "")", "0", "Developer mode should start switched off")
-
     let toggle = advanced.anyDescendant(identified: UITestIdentifiers.pauseMediaToggle)
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Pause-music toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Pausing music should default OFF")
     toggle.click()
-    XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should turn pausing music on")
+    let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 1"), object: toggle)
+    XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 10), .completed, "Clicking should turn pausing music on")
   }
 
   /// Developer mode starts off (the UI-test launch resets persisted settings)

@@ -71,4 +71,21 @@ struct MediaPauseStoreTests {
     #expect(MediaPlayerApp.spotify.pauseScript.contains("if player state is playing then"))
     #expect(MediaPlayerApp.spotify.resumeScript.contains("if player state is paused then play"))
   }
+
+  @Test("the consent request only asks a running player its state")
+  func consentScriptIsHarmless() {
+    let script = MediaPlayerApp.appleMusic.consentScript
+    #expect(script.contains("application \"Music\" is running"))
+    #expect(script.contains("get player state"))
+    #expect(!script.contains("pause") && !script.contains("play\n"))
+  }
+
+  @Test("the AppleScript error number is read from osascript's stderr")
+  func errorNumberParsing() {
+    let declined = "execution error: Not authorized to send Apple events to Music. (-1743)"
+    #expect(MediaPlayerApp.errorNumber(in: declined) == MediaPlayerApp.consentDeclined)
+    #expect(MediaPlayerApp.errorNumber(in: "0:42: syntax error (Expected end of line) (-2741)") == -2741)
+    #expect(MediaPlayerApp.errorNumber(in: "something went wrong") == nil)
+    #expect(MediaPlayerApp.errorNumber(in: "") == nil)
+  }
 }

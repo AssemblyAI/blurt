@@ -1405,17 +1405,26 @@ attributes the event to Blurt as the **responsible process**, so the prompt name
 gets **its own script** (`MediaPlayerApp.pauseScript` / `resumeScript`): AppleScript resolves an
 app's terminology at compile time, so one script naming both failed whole (-2741) on a Mac without
 Spotify and Music never paused. The resume plays a player only if it is still paused, so playback
-the user changed meanwhile is left alone. Each `osascript` is killed after 5 s, with both pipes
-drained concurrently. The invocations sit on a **serial `DispatchQueue`** so the restore always
-observes what the pause did, and the whole thing is fire-and-forget, so a wedged player can never
-delay a recording; quitting mid-dictation (a Sparkle relaunch included) resumes synchronously on
-`willTerminateNotification`. Reset clears the Automation grant with the others
-(`PermissionsReset.Service.appleEvents`, `scripts/reset-lib.sh`). Sending
+the user changed meanwhile is left alone — though a pause the user made themselves mid-dictation is
+indistinguishable from Blurt's, so it is resumed too (a known limitation). Each `osascript` is
+killed after 5 s, with both pipes drained concurrently; a pause that timed out counts as possibly
+paused, which the still-paused check makes safe. The invocations sit on a **serial `DispatchQueue`**
+so the restore always observes what the pause did, and the whole thing is fire-and-forget, so a
+wedged player can never delay a recording; a dictation that queued no pause (no player running)
+queues no restore. Quitting mid-dictation (a Sparkle relaunch included) resumes on
+`willTerminateNotification`, waiting at most 2 s in all (1 s a script), and not at all when nothing
+was paused. **Consent is asked as the switch turns on**, not mid-dictation: `requestConsent` sends
+each running player `consentScript` (`get player state`), and the Experimental section names any
+that refused under the toggle. A `-1743` refusal is remembered per player (`declined`), so it isn't
+re-asked and re-logged on every dictation, until the switch is turned on again or the app restarts.
+Reset clears the Automation grant with the others (`PermissionsReset.Service.appleEvents`,
+`scripts/reset-lib.sh`). `MediaPlayerApp` (the roster, its scripts, and `errorNumber(in:)` over
+`osascript`'s stderr) is its own file beside `MediaPauseStore`. Sending
 Apple Events needs **two** build-side pieces, both in `project.yml`: `NSAppleEventsUsageDescription`
 (without it macOS _terminates_ the process on the first send instead of prompting) and the
 `com.apple.security.automation.apple-events` entitlement (the hardened runtime otherwise blocks
-outgoing events). A user who declines the consent prompt just gets a logged `-1743` and an inert
-feature.
+outgoing events). A user who declines the consent prompt gets the note, one logged `-1743`, and an
+inert feature for that player.
 
 `CueSoundPlayer` decodes and pre-rolls the players once so the first chime never stalls the pill, and
 that pre-roll is bound to the output route it was made against. Blurt's own capture invalidates it:
