@@ -7,15 +7,14 @@ import Testing
 /// of them.
 @Suite("SelectionSpeechRouting · Escape")
 struct SelectionSpeechRoutingEscapeTests {
-  /// A held rewrite over a selection, its instruction spoken and handed back:
-  /// the job is under way.
+  /// A held composition, its instructions spoken and handed back: the job is
+  /// under way.
   private func working() -> SelectionSpeechRouting {
     var routing = SelectionSpeechRouting()
-    _ = routing.press(key: .rightOption, action: .rewrite, holds: true)
-    _ = routing.selectionResolved("hey all")
+    _ = routing.press(key: .rightOption, action: .compose, holds: true)
     _ = routing.holdElapsed()
     _ = routing.submit(.release)
-    _ = routing.sessionPhaseChanged(.handedBack("Shorter."))
+    _ = routing.sessionPhaseChanged(.handedBack("Say hi to Sam."))
     return routing
   }
 

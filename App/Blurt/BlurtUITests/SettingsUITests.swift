@@ -161,9 +161,11 @@ final class SettingsUITests: BlurtUITestCase {
   /// The Advanced pane's reset button asks first, and dismissing the
   /// confirmation leaves the install exactly as it was.
   ///
-  /// Everything happens on the Advanced pane, against the developer-mode switch
+  /// Everything happens on the Advanced pane, against an Experimental switch
   /// — one of the settings `PersistedSettings.resetAll` clears — so "nothing was
   /// reset" is observable without switching tabs or opening the API-key sheet.
+  /// Not developer mode, whose rows and footer grow the pane: the panes don't
+  /// scroll, so a taller one pushed the reset button off a small CI screen.
   /// That isn't tidiness: the sheet leaves its own "Cancel" in the accessibility
   /// tree, which made an app-level query for the alert's Cancel ambiguous, and
   /// dismissing with Escape instead closed the settings window along with the
@@ -181,10 +183,11 @@ final class SettingsUITests: BlurtUITestCase {
     // Switch on a setting the sweep would clear, so a reset that ran anyway is
     // visible in the same pane. (The UI-test launch resets persisted settings,
     // so this starts off.)
-    let developerMode = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
-    XCTAssertTrue(developerMode.waitForExistence(timeout: 10), "Developer mode toggle not found")
-    developerMode.click()
-    XCTAssertEqual("\(developerMode.value ?? "")", "1", "Clicking should switch developer mode on")
+    let setting = advanced.anyDescendant(identified: UITestIdentifiers.escapeCancelToggle)
+    XCTAssertTrue(setting.waitForExistence(timeout: 10), "Cancel with Escape toggle not found")
+    setting.click()
+    let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 1"), object: setting)
+    XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 10), .completed, "Clicking should switch Cancel with Escape on")
 
     let reset = advanced.anyDescendant(identified: UITestIdentifiers.installReset)
     XCTAssertTrue(reset.waitForExistence(timeout: 10), "Reset button not found")
@@ -220,7 +223,7 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
     XCTAssertEqual(
-      "\(developerMode.value ?? "")", "1",
+      "\(setting.value ?? "")", "1",
       "Cancelling the confirmation should leave the settings alone")
   }
 

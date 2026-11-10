@@ -12,14 +12,6 @@ struct DictationKeyRouterEscapeTests {
   private let otherTrigger = TriggerKey.rightOption.keyCode
   private let escape = DictationKeyRouter.Event.escapeDown
 
-  private func downEvent(_ keyCode: Int) -> DictationKeyRouter.Event {
-    .flagsChanged(keyCode: keyCode, triggerFlagIsOn: true)
-  }
-
-  private func upEvent(_ keyCode: Int) -> DictationKeyRouter.Event {
-    .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false)
-  }
-
   private func router(on: Bool) -> DictationKeyRouter {
     DictationKeyRouter(triggerKeyCodes: [trigger, otherTrigger], escapeCancels: { on })
   }
@@ -27,10 +19,10 @@ struct DictationKeyRouterEscapeTests {
   @Test("escape discards a live recording, and the trigger's own release is inert")
   func escapeDiscardsRecording() {
     var router = router(on: true)
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(.down(trigger), at: .zero) == .start)
     #expect(router.handle(escape, at: .milliseconds(100)) == .discard)
-    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .none)
-    #expect(router.handle(downEvent(trigger), at: .seconds(3)) == .start)
+    #expect(router.handle(.up(trigger), at: .seconds(2)) == .none)
+    #expect(router.handle(.down(trigger), at: .seconds(3)) == .start)
   }
 
   @Test("escape discards a latched toggle recording")
@@ -39,10 +31,10 @@ struct DictationKeyRouterEscapeTests {
     // the gate with no key down, and `otherKeyDown` passes through there by
     // design, so before escape routing nothing short of a second tap ended it.
     var router = router(on: true)
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
+    #expect(router.handle(.down(trigger), at: .zero) == .start)
+    #expect(router.handle(.up(trigger), at: .milliseconds(200)) == .latch)
     #expect(router.handle(escape, at: .seconds(3)) == .discard)
-    #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .start)
+    #expect(router.handle(.down(trigger), at: .seconds(5)) == .start)
   }
 
   @Test("a discard frees the router: another trigger works at once")
@@ -51,10 +43,10 @@ struct DictationKeyRouterEscapeTests {
     // key; a discard that cleared only the gate left that key owning the router,
     // so every other trigger was ignored until it was let go.
     var router = router(on: true)
-    #expect(router.handle(downEvent(otherTrigger), at: .zero) == .start)
+    #expect(router.handle(.down(otherTrigger), at: .zero) == .start)
     #expect(router.handle(escape, at: .milliseconds(100)) == .discard)
     #expect(router.activeKeyCode == nil)
-    #expect(router.handle(downEvent(trigger), at: .milliseconds(200)) == .start)
+    #expect(router.handle(.down(trigger), at: .milliseconds(200)) == .start)
   }
 
   @Test("escape discards whatever the host reports in flight, with the gate idle")
@@ -62,8 +54,8 @@ struct DictationKeyRouterEscapeTests {
     // A hold that has already stopped leaves the gate idle while the transcript
     // is fetched and pasted; a job or a spoken answer after a hand-back does too.
     var router = router(on: true)
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
+    #expect(router.handle(.down(trigger), at: .zero) == .start)
+    #expect(router.handle(.up(trigger), at: .seconds(2)) == .stop)
     #expect(router.handle(escape, at: .seconds(2) + .milliseconds(300)) { true } == .discard)
   }
 
@@ -73,14 +65,14 @@ struct DictationKeyRouterEscapeTests {
     // system, so an idle host must not turn each one into a discard.
     var router = router(on: true)
     #expect(router.handle(escape, at: .zero) { false } == .none)
-    #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .start)
+    #expect(router.handle(.down(trigger), at: .seconds(1)) == .start)
   }
 
   @Test("escape is not treated as a combo over a latched recording")
   func escapeIsNotACombo() {
     var router = router(on: true)
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
+    #expect(router.handle(.down(trigger), at: .zero) == .start)
+    #expect(router.handle(.up(trigger), at: .milliseconds(200)) == .latch)
     #expect(router.handle(.keyDown(keyCode: 8), at: .seconds(1)) == .none)  // ⌘C passes through
     #expect(router.handle(escape, at: .seconds(2)) == .discard)
   }
@@ -116,7 +108,7 @@ struct DictationKeyRouterEscapeTests {
   @Test("over a press from idle, a switched-off escape is main's combo cancel")
   func escapeOffOverArmedIsCancel() {
     var router = router(on: false)
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(.down(trigger), at: .zero) == .start)
     #expect(router.handle(escape, at: .milliseconds(100)) == .cancel)
   }
 
@@ -124,8 +116,8 @@ struct DictationKeyRouterEscapeTests {
   func escapeReadsTheSwitchAtKeyTime() {
     let enabled = Flag()
     var router = DictationKeyRouter(triggerKeyCodes: [trigger], escapeCancels: { enabled.value })
-    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
+    #expect(router.handle(.down(trigger), at: .zero) == .start)
+    #expect(router.handle(.up(trigger), at: .milliseconds(200)) == .latch)
     #expect(router.handle(escape, at: .seconds(1)) == .none)
     enabled.value = true
     #expect(router.handle(escape, at: .seconds(2)) == .discard)

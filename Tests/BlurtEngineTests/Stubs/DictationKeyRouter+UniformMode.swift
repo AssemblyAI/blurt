@@ -21,3 +21,9 @@ extension DictationKeyRouter {
   /// The keycodes the router watches.
   var triggerKeyCodes: Set<Int> { Set(activations.keys) }
 }
+
+extension DictationKeyRouter.Event {
+  /// `keyCode`'s modifier going down, or coming up.
+  static func down(_ keyCode: Int) -> Self { .flagsChanged(keyCode: keyCode, triggerFlagIsOn: true) }
+  static func up(_ keyCode: Int) -> Self { .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false) }
+}

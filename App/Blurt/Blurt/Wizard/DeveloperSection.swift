@@ -121,9 +121,8 @@ struct ExperimentalSection: View {
       }
       .accessibilityIdentifier(UITestIdentifiers.escapeCancelToggle)
     } header: {
+      // No footer: the panes don't scroll, and each row's subtitle says what it does.
       Text("Experimental")
-    } footer: {
-      Text("Features still being tried out. Each is off until you turn it on.")
     }
   }
 }
