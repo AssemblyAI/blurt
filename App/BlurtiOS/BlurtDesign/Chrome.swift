@@ -3,8 +3,8 @@ import UIKit
 
 /// The app's chrome, on the brand: the card, the page, the form, the eyebrow,
 /// the button, the wordmark. Screens are built from these rather than stock
-/// `Form`/`List` styling or default buttons. The keyboard draws its own faces
-/// (`KeyboardPalette`) and uses only the grain from here.
+/// `Form`/`List` styling or default buttons. The keyboard is KeyboardKit's and
+/// takes nothing from here.
 extension View {
   /// The brand's card: the warm fill, 12 pt corners, a 1 pt hairline, no shadow.
   package func card(radius: CGFloat = DesignTokens.Metrics.cardRadius) -> some View {

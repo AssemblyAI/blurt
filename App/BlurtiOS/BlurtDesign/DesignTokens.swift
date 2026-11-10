@@ -12,16 +12,6 @@ import SwiftUI
 /// `package`: BlurtDesign's, read by the app, the keyboard and the tests.
 package enum DesignTokens {
   package enum Brand {
-    /// The iPhone keyboard's dark key.
-    package nonisolated static let appleDarkKey: Color = Color(hex: 0x6B6B6B)
-    /// The iPhone keyboard's dark modifier key.
-    package nonisolated static let appleDarkModifier: Color = Color(hex: 0x464646)
-    /// The iPhone keyboard's dark surface.
-    package nonisolated static let appleDarkSurface: Color = Color(hex: 0x2B2B2B)
-    /// The iPhone keyboard's light modifier key.
-    package nonisolated static let appleLightModifier: Color = Color(hex: 0xADB3BC)
-    /// The iPhone keyboard's light surface.
-    package nonisolated static let appleLightSurface: Color = Color(hex: 0xD1D5DB)
     package nonisolated static let black: Color = Color(hex: 0x000000)
     /// The warm card fill; the paper theme's surface.
     package nonisolated static let card: Color = Color(hex: 0xEBE8E8)
@@ -47,14 +37,6 @@ package enum DesignTokens {
     package nonisolated static let ink700: Color = Color(hex: 0x33302A)
     /// A modifier key on ink; the Mac's dark card fill.
     package nonisolated static let ink800: Color = Color(hex: 0x26231E)
-    /// A key on the system's dark keyboard material (measured, iOS 27): the container case.
-    package nonisolated static let materialDarkKey: Color = Color(hex: 0x575757)
-    /// A modifier key on the system's dark material.
-    package nonisolated static let materialDarkModifier: Color = Color(hex: 0x474747)
-    /// The system's dark keyboard material (measured, iOS 27).
-    package nonisolated static let materialDarkSurface: Color = Color(hex: 0x373737)
-    /// The system's light keyboard material (measured, iOS 27): what the gallery stands under a clear surface.
-    package nonisolated static let materialLightSurface: Color = Color(hex: 0xE2E3E8)
     /// Black-100: the lightest warm grey.
     package nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
     /// Black-200: mono labels on the dark face.
@@ -87,110 +69,14 @@ package enum DesignTokens {
   }
 
   package enum Themes {
-    /// `brand.material/dark-key`.
-    package nonisolated static let darkContainerKey: Color = Brand.materialDarkKey
-    /// `brand.material/dark-modifier`.
-    package nonisolated static let darkContainerKeyModifier: Color = Brand.materialDarkModifier
-    /// `brand.ink/700`.
-    package nonisolated static let darkField: Color = Brand.ink700
-    /// `brand.ink/600`.
-    package nonisolated static let darkFieldBorder: Color = Brand.ink600
-    /// `brand.ink/700`.
-    package nonisolated static let darkKey: Color = Brand.ink700
-    /// `brand.ink/800`.
-    package nonisolated static let darkKeyModifier: Color = Brand.ink800
-    /// `brand.paper/tint`.
-    package nonisolated static let darkLegend: Color = Brand.paperTint
-    /// `brand.neutral/500`.
-    package nonisolated static let darkLegendSecondary: Color = Brand.neutral500
-    /// `brand.material/dark-surface`.
-    package nonisolated static let darkMaterial: Color = Brand.materialDarkSurface
     /// `brand.orange`.
     package nonisolated static let darkNotice: Color = Brand.orange
-    /// `brand.ink/700`.
-    package nonisolated static let darkPopup: Color = Brand.ink700
     /// `brand.green/400`.
     package nonisolated static let darkSignal: Color = Brand.green400
-    /// `brand.ink`.
-    package nonisolated static let darkSurface: Color = Brand.ink
-    /// `brand.white`.
-    package nonisolated static let lightContainerKey: Color = Brand.white
-    /// `brand.paper/300`.
-    package nonisolated static let lightContainerKeyModifier: Color = Brand.paper300
-    /// `brand.white`.
-    package nonisolated static let lightField: Color = Brand.white
-    /// `brand.paper/400`.
-    package nonisolated static let lightFieldBorder: Color = Brand.paper400
-    /// `brand.white`.
-    package nonisolated static let lightKey: Color = Brand.white
-    /// `brand.paper/300`.
-    package nonisolated static let lightKeyModifier: Color = Brand.paper300
-    /// `brand.ink`.
-    package nonisolated static let lightLegend: Color = Brand.ink
-    /// `brand.neutral/700`.
-    package nonisolated static let lightLegendSecondary: Color = Brand.neutral700
-    /// `brand.material/light-surface`.
-    package nonisolated static let lightMaterial: Color = Brand.materialLightSurface
     /// `brand.orange`.
     package nonisolated static let lightNotice: Color = Brand.orange
-    /// `brand.white`.
-    package nonisolated static let lightPopup: Color = Brand.white
     /// `brand.green/700`.
     package nonisolated static let lightSignal: Color = Brand.green700
-    /// `brand.paper/200`.
-    package nonisolated static let lightSurface: Color = Brand.paper200
-    /// `brand.apple/dark-key`.
-    package nonisolated static let systemDarkContainerKey: Color = Brand.appleDarkKey
-    /// `brand.apple/dark-modifier`.
-    package nonisolated static let systemDarkContainerKeyModifier: Color = Brand.appleDarkModifier
-    /// `brand.apple/dark-key`.
-    package nonisolated static let systemDarkField: Color = Brand.appleDarkKey
-    /// `brand.apple/dark-modifier`.
-    package nonisolated static let systemDarkFieldBorder: Color = Brand.appleDarkModifier
-    /// `brand.apple/dark-key`.
-    package nonisolated static let systemDarkKey: Color = Brand.appleDarkKey
-    /// `brand.apple/dark-modifier`.
-    package nonisolated static let systemDarkKeyModifier: Color = Brand.appleDarkModifier
-    /// `brand.white`.
-    package nonisolated static let systemDarkLegend: Color = Brand.white
-    /// `brand.white`.
-    package nonisolated static let systemDarkLegendSecondary: Color = Brand.white
-    /// `brand.apple/dark-surface`.
-    package nonisolated static let systemDarkMaterial: Color = Brand.appleDarkSurface
-    /// `brand.orange`.
-    package nonisolated static let systemDarkNotice: Color = Brand.orange
-    /// `brand.apple/dark-key`.
-    package nonisolated static let systemDarkPopup: Color = Brand.appleDarkKey
-    /// `brand.green/400`.
-    package nonisolated static let systemDarkSignal: Color = Brand.green400
-    /// `brand.apple/dark-surface`.
-    package nonisolated static let systemDarkSurface: Color = Brand.appleDarkSurface
-    /// `brand.white`.
-    package nonisolated static let systemLightContainerKey: Color = Brand.white
-    /// `brand.apple/light-modifier`.
-    package nonisolated static let systemLightContainerKeyModifier: Color = Brand.appleLightModifier
-    /// `brand.white`.
-    package nonisolated static let systemLightField: Color = Brand.white
-    /// `brand.apple/light-modifier`.
-    package nonisolated static let systemLightFieldBorder: Color = Brand.appleLightModifier
-    /// `brand.white`.
-    package nonisolated static let systemLightKey: Color = Brand.white
-    /// `brand.apple/light-modifier`.
-    package nonisolated static let systemLightKeyModifier: Color = Brand.appleLightModifier
-    /// `brand.black`.
-    package nonisolated static let systemLightLegend: Color = Brand.black
-    /// `brand.black`.
-    package nonisolated static let systemLightLegendSecondary: Color = Brand.black
-    /// `brand.apple/light-surface`.
-    package nonisolated static let systemLightMaterial: Color = Brand.appleLightSurface
-    /// `brand.orange`.
-    package nonisolated static let systemLightNotice: Color = Brand.orange
-    /// `brand.white`.
-    package nonisolated static let systemLightPopup: Color = Brand.white
-    /// `brand.green/700`.
-    package nonisolated static let systemLightSignal: Color = Brand.green700
-    /// `brand.apple/light-surface`.
-    package nonisolated static let systemLightSurface: Color = Brand.appleLightSurface
   }
 
   package enum Keyboard {
@@ -242,30 +128,6 @@ package enum DesignTokens {
     package nonisolated static let appTextDark: Color = Brand.paperTint
     /// The catalog's Text in light.
     package nonisolated static let appTextLight: Color = Brand.ink
-    /// The panel's cancel ×.
-    package nonisolated static let kbCancel: Color = Brand.orange
-    /// The key-term field.
-    package nonisolated static let kbField: Color = Themes.darkField
-    /// The field's hairline.
-    package nonisolated static let kbFieldBorder: Color = Themes.darkFieldBorder
-    /// The one line of words the keyboard ever shows.
-    package nonisolated static let kbFullAccessNote: Color = Brand.orange
-    /// An ordinary key.
-    package nonisolated static let kbKey: Color = Themes.darkKey
-    /// Shift, delete, globe, return, 123, cancel.
-    package nonisolated static let kbKeyModifier: Color = Themes.darkKeyModifier
-    /// Key legends and bare glyphs.
-    package nonisolated static let kbLegend: Color = Themes.darkLegend
-    /// The mono word labels (123, ABC, return, space) and the + at rest.
-    package nonisolated static let kbLegendSecondary: Color = Themes.darkLegendSecondary
-    /// The solid ring and glyph for an error.
-    package nonisolated static let kbNoticeError: Color = Brand.orange
-    /// The letter pop-up.
-    package nonisolated static let kbPopup: Color = Themes.darkPopup
-    /// The wave, the caret, the saved check.
-    package nonisolated static let kbSignal: Color = Themes.darkSignal
-    /// The design face's surface (Swift reads the palette).
-    package nonisolated static let kbSurface: Color = Themes.darkSurface
   }
 
   package enum Metrics {
@@ -273,11 +135,9 @@ package enum DesignTokens {
     package nonisolated static let addtermChipGap: CGFloat = 6
     /// The widest the chip grows in the bar, so the status line keeps its room; a longer word truncates.
     package nonisolated static let addtermChipMaxWidth: CGFloat = 200
-    /// The least room a chip needs beside a centred mic; with less, the mic and the chip centre as a pair.
-    package nonisolated static let addtermChipMinWidth: CGFloat = 96
     /// The selected-word chip's side padding.
     package nonisolated static let addtermChipPad: CGFloat = 10
-    /// The cancel × from the panel's far corner when the mic is at an edge.
+    /// The bar's side padding: the status line from the leading edge, the + from the trailing one.
     package nonisolated static let addtermInset: CGFloat = 6
     /// The brand's button.
     package nonisolated static let appButtonHeight: CGFloat = 40
@@ -295,8 +155,6 @@ package enum DesignTokens {
     package nonisolated static let appHeaderHeight: CGFloat = 44
     /// Between the hero's pieces.
     package nonisolated static let appHeroGap: CGFloat = 14
-    /// Inside the hero card.
-    package nonisolated static let appHeroPad: CGFloat = 20
     /// The header's gear, the copy glyph.
     package nonisolated static let appIcon: CGFloat = 20
     /// An app input's top and bottom (its sides are app/chip-pad-x).
@@ -309,8 +167,6 @@ package enum DesignTokens {
     package nonisolated static let appPillPadY: CGFloat = 4
     /// The × on a key-term pill: its tap square.
     package nonisolated static let appPillRemove: CGFloat = 24
-    /// Between the theme card's two faces.
-    package nonisolated static let appPreviewGap: CGFloat = 8
     /// A list row's top and bottom inside a card.
     package nonisolated static let appRowPadY: CGFloat = 8
     /// The × on a text-shortcut row: its tap square.
@@ -338,67 +194,8 @@ package enum DesignTokens {
     package nonisolated static let caretLead: CGFloat = 1
     package nonisolated static let caretRadius: CGFloat = 1
     package nonisolated static let caretWidth: CGFloat = 2
-    /// Classic: 123 and the globe span this many W/10 cells (return two of those, space the rest), the cap two insets narrower — unmeasured: iOS 18's bottom row at 375 pt.
-    package nonisolated static let classicAbcCells: CGFloat = 1.25
-    /// Classic: under the bottom row of keys — unmeasured (the plan's number).
-    package nonisolated static let classicBottomInset: CGFloat = 6
-    /// Classic: between caps, two insets — unmeasured (the plan's rule).
-    package nonisolated static let classicKeyGap: CGFloat = 6
-    /// Classic: every cap — unmeasured (the plan's number).
-    package nonisolated static let classicKeyHeight: CGFloat = 42
-    /// Classic: the caps' corner — unmeasured (the plan's number).
-    package nonisolated static let classicKeyRadius: CGFloat = 5
-    /// The classic profile (iOS 18–25, or an iOS 26 host with no container): the caps are inset this far inside W/10 cells, so the row's margin is one inset — unmeasured: the plan's rule (cell = W/10, cap = cell − 2 × 3), pending scripts/apple-geometry.sh --profile classic-390 on an iOS 18.6 simulator.
-    package nonisolated static let classicMarginSide: CGFloat = 3
-    /// Classic: the keyboard's top above the voice row, and the slim bar's bottom — half a row gap, as the first cell's inset — unmeasured.
-    package nonisolated static let classicMarginTop: CGFloat = 6
-    /// Classic: between rows, a 54 pt pitch less the cap — unmeasured (the plan's number).
-    package nonisolated static let classicRowGap: CGFloat = 12
-    /// Classic: shift and delete to the letters — unmeasured: what puts iOS 18's 42 pt shift cap at 375 pt inside its 1.5 cells (56.25 − 42).
-    package nonisolated static let classicSideGap: CGFloat = 14.25
-    /// The least the host's material must inset the keyboard above or below (read at viewIsAppearing from the input view's superview) for a container to be detected; iOS 26's is about 16.
-    package nonisolated static let containerInsetMin: CGFloat = 8
-    /// Glass: 123 and the globe at the reference width; they scale with the keyboard.
-    package nonisolated static let glassAbcWidth402: CGFloat = Metrics.keyAbcWidth402
-    /// Glass: under the bottom row of keys.
-    package nonisolated static let glassBottomInset: CGFloat = Metrics.marginBottomKeys
-    /// Glass: between keys.
-    package nonisolated static let glassKeyGap: CGFloat = Metrics.keyGap
-    /// Glass: every cap.
-    package nonisolated static let glassKeyHeight: CGFloat = Metrics.keyHeight
-    /// Glass: the caps' corner.
-    package nonisolated static let glassKeyRadius: CGFloat = Metrics.keyRadius
-    /// The glass profile (iOS 26+ in the host's container): the key, row and margin tokens measured at 402 pt, under the profile's names.
-    package nonisolated static let glassMarginSide: CGFloat = Metrics.marginSide
-    /// Glass: the keyboard's top, above the voice row, and the slim bar's bottom.
-    package nonisolated static let glassMarginTop: CGFloat = Metrics.marginVertical
-    /// Glass: the width the @402 tokens were measured at.
-    package nonisolated static let glassReferenceWidth: CGFloat = Metrics.keyReferenceWidth
-    /// Glass: between rows.
-    package nonisolated static let glassRowGap: CGFloat = Metrics.rowGap
-    /// Glass: shift and delete to the letters.
-    package nonisolated static let glassSideGap: CGFloat = Metrics.keySideGap
     /// The +, × and ✓ touch targets: the HIG's 44 pt square around a size/glyph symbol.
     package nonisolated static let glyphHit: CGFloat = 44
-    package nonisolated static let grilleBarHeight: CGFloat = 28
-    /// The grille in the voice bar.
-    package nonisolated static let grilleBarWidth: CGFloat = 64
-    /// A dot's diameter.
-    package nonisolated static let grilleDot: CGFloat = 2
-    /// The cross glint's vertical arm, as a fraction of the grille's height.
-    package nonisolated static let grilleGlintArm: CGFloat = 1.6
-    /// The glint's arms.
-    package nonisolated static let grilleGlintWidth: CGFloat = 1
-    package nonisolated static let grilleHomeHeight: CGFloat = 108
-    /// The grille on the home screen.
-    package nonisolated static let grilleHomeWidth: CGFloat = 240
-    package nonisolated static let grillePanelHeight: CGFloat = 72
-    /// The grille in the panel.
-    package nonisolated static let grillePanelWidth: CGFloat = 160
-    /// The dot lattice: one dot every.
-    package nonisolated static let grillePitch: CGFloat = 4
-    /// The sheen's band, as a fraction of the width.
-    package nonisolated static let grilleSheenWidth: CGFloat = 0.35
     /// Touching one edge this close to the other counts as an exact corner.
     package nonisolated static let keepOpenCornerTolerance: CGFloat = 4
     /// The corner flare's vertical arm, as a fraction of the wordmark's height.
@@ -413,108 +210,50 @@ package enum DesignTokens {
     package nonisolated static let keepOpenSpeed: CGFloat = 64
     /// The wordmark drifting on the Blurt-is-on card: twice the header's.
     package nonisolated static let keepOpenWordmarkHeight: CGFloat = 44
-    /// 123 and the globe at 402 pt: the iPhone's.
+    /// 123, the globe and the mic at 402 pt: the iPhone's small bottom-row key, pinned so every other cap keeps Apple's width.
     package nonisolated static let keyAbcWidth402: CGFloat = 43.333
-    /// Between keys, the iPhone's.
+    /// Between caps, the iPhone's: half each side is KeyboardKit's cell inset.
     package nonisolated static let keyGap: CGFloat = 6
-    /// Every key: the iPhone's cap height (apple-geometry.json).
+    /// Every cap: the iPhone's, measured (apple-geometry-glass-402.json); with row/gap it is KeyboardKit's row height.
     package nonisolated static let keyHeight: CGFloat = 43
-    /// A letter key at 402 pt: (width − 2 × margin/side − 9 × key/gap) / 10.
-    package nonisolated static let keyLetterWidth402: CGFloat = 33.5
-    /// A key that isn't given a width: the iPhone's 123 key at 402 pt.
+    /// The probe field's height in the app: the iPhone's 123 key at 402 pt.
     package nonisolated static let keyMinWidth: CGFloat = 43.333
-    /// A legend's side padding on a min-width key.
-    package nonisolated static let keyPad: CGFloat = 4
-    /// Flat keys, one colour at this corner: the iPhone's (fitted 8.17).
+    /// Every cap's corner: the iPhone's (fitted 8.17), set on KeyboardKit's button style.
     package nonisolated static let keyRadius: CGFloat = 8
     /// The width the @402 tokens were measured at (iPhone 18 Pro); widths scale from it.
     package nonisolated static let keyReferenceWidth: CGFloat = 402
-    /// Return at 402 pt: two 123 keys and a gap.
-    package nonisolated static let keyReturnWidth402: CGFloat = 92.667
-    /// Shift and delete stand this far from the letters: the iPhone's.
-    package nonisolated static let keySideGap: CGFloat = 13.667
-    /// Shift and delete at 402 pt: what seven letters and the side gaps leave, halved (measured 45.5).
-    package nonisolated static let keySideWidth402: CGFloat = 45.583
-    /// Space at 402 pt beside 123, the globe and return: what is left (measured 191.333).
-    package nonisolated static let keySpaceWidth402: CGFloat = 191.667
-    /// Margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys.
-    package nonisolated static let layoutFull: CGFloat = 270
-    /// Classic/margin-top + voicebar/height + 4 × classic/key-height + 3 × classic/row-gap + classic/bottom-inset: iOS 18's 216 pt keyboard under its 44 pt bar.
-    package nonisolated static let layoutFullClassic: CGFloat = 260
-    /// Chosen: room for the 96 orb over one key row.
-    package nonisolated static let layoutPanel: CGFloat = 216
-    /// 2 × margin/vertical + voicebar/height.
-    package nonisolated static let layoutSlim: CGFloat = 60
-    /// 2 × classic/margin-top + voicebar/height.
-    package nonisolated static let layoutSlimClassic: CGFloat = 56
-    /// Under a bottom row of keys (the full keyboard, the panel): the iPhone's.
+    /// Under the bottom row of caps: the iPhone's; less half a row gap is KeyboardKit's bottom edge inset.
     package nonisolated static let marginBottomKeys: CGFloat = 13
-    /// At the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2.
+    /// At the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2; less half a key gap is KeyboardKit's edge inset.
     package nonisolated static let marginSide: CGFloat = 6.5
-    /// The keyboard's top, and the slim bar's bottom.
-    package nonisolated static let marginVertical: CGFloat = 8
+    /// Between the bar and the first row of caps: with voicebar/height it is the iPhone's 52.667 pt band above the keys.
+    package nonisolated static let marginVertical: CGFloat = 8.667
     /// The + without Full Access; a brand button that can't be pressed yet.
     package nonisolated static let opacityDisabled: CGFloat = 0.4
     /// The cross glint when the words land.
     package nonisolated static let opacityGlint: CGFloat = 0.95
     /// Film grain over the dark face: matte, the brand's texture.
     package nonisolated static let opacityGrainDark: CGFloat = 0.14
-    /// Film grain over the light face: paper, lighter.
-    package nonisolated static let opacityGrainLight: CGFloat = 0.08
-    /// The dots at rest, over the key colour.
-    package nonisolated static let opacityGrilleRest: CGFloat = 0.55
-    package nonisolated static let opacityHairline: CGFloat = 0.5
-    /// Key legends over the cap; below 1 they sit back.
-    package nonisolated static let opacityLegend: CGFloat = 1
     /// The + at rest.
     package nonisolated static let opacityLegendMuted: CGFloat = 0.5
-    /// The element when Blurt isn't ready — dim and still, but there: a tap opens the app.
+    /// The mic key's glyph when Blurt isn't ready — dim and still, but there: a tap opens the app.
     package nonisolated static let opacityOff: CGFloat = 0.6
     /// The field's placeholder.
     package nonisolated static let opacityPlaceholder: CGFloat = 0.4
-    package nonisolated static let opacityPopupShadow: CGFloat = 0.12
     /// A key lightens this much while pressed.
     package nonisolated static let opacityPressBrighten: CGFloat = 0.15
     /// A brand button while pressed: a colour change, no lift.
     package nonisolated static let opacityPressed: CGFloat = 0.85
-    /// The light passing over the element at rest: chrome catching light.
-    package nonisolated static let opacitySheen: CGFloat = 0.22
-    /// A soft darkening toward the surface's edges; 0 is none.
-    package nonisolated static let opacitySurfaceVignette: CGFloat = 0
     /// The field's ×.
     package nonisolated static let opacityTermCancel: CGFloat = 0.7
-    /// Under the panel's voice row, above its keys: the top margin again, so the mic is centred between the keyboard's top edge and the keys.
-    package nonisolated static let panelSpacing: CGFloat = 8
-    /// The theme card draws the keyboard at this width.
-    package nonisolated static let pickerPreviewWidth: CGFloat = 393
-    /// The theme card's preview corners.
-    package nonisolated static let pickerRadius: CGFloat = 10
-    /// Then scales it to fit two across.
-    package nonisolated static let pickerScale: CGFloat = 0.42
-    /// The letter pop-up is the key width plus this.
-    package nonisolated static let popupExtraWidth: CGFloat = 18
-    package nonisolated static let popupHeight: CGFloat = 56
-    /// The pop-up rises this far from the key's top: it overlaps the key by popup/height minus this and stays inside the keyboard on the top row.
-    package nonisolated static let popupOffset: CGFloat = 50
-    package nonisolated static let popupRadius: CGFloat = 10
-    /// The one thing that floats.
-    package nonisolated static let popupShadowRadius: CGFloat = 8
-    package nonisolated static let popupShadowY: CGFloat = 2
     /// The brand's buttons and the grille: rectangular, never a pill.
     package nonisolated static let radiusButton: CGFloat = 4
-    /// The brand's cards.
-    package nonisolated static let radiusCard: CGFloat = 12
     /// The brand's featured cards.
     package nonisolated static let radiusHero: CGFloat = 16
     /// The brand's inputs: the key-term field.
     package nonisolated static let radiusInput: CGFloat = 8
-    package nonisolated static let ribsRestHeight: CGFloat = 16
-    /// The ribs asleep: the wave's own bars at rest.
-    package nonisolated static let ribsRestWidth: CGFloat = 40
-    /// Between rows, the iPhone's.
+    /// Between rows, the iPhone's: half above and half below is KeyboardKit's cell inset.
     package nonisolated static let rowGap: CGFloat = 11
-    /// A keyboard at least this wide is the large size class (the Plus and Max phones); narrower is compact (375–402).
-    package nonisolated static let sizeLargeMinWidth: CGFloat = 414
     /// Between a stat's number-and-unit parts, as a fraction of its size.
     package nonisolated static let statPartGapRatio: CGFloat = 0.38
     /// A stat number's tracking, as a fraction of its size.
@@ -523,20 +262,6 @@ package enum DesignTokens {
     package nonisolated static let statUnitGapRatio: CGFloat = 0.15
     /// A stat's mono unit (hr, min, sec) as a fraction of its number's size.
     package nonisolated static let statUnitRatio: CGFloat = 0.46
-    /// The landing flash's vertical arm, as a fraction of the box's height.
-    package nonisolated static let streakArm: CGFloat = 1.4
-    /// The light streak while recording.
-    package nonisolated static let streakHeight: CGFloat = 2
-    /// The hairline at rest.
-    package nonisolated static let streakLine: CGFloat = 1
-    /// The bright point at the centre.
-    package nonisolated static let streakPoint: CGFloat = 4
-    /// 1 paints the face's surface under the keys; 0 leaves it clear, so the host's own keyboard material (iOS 26's rounded container, which insets a third-party keyboard and cannot be painted over) is the surface, seamlessly, and the keys take the container colours.
-    package nonisolated static let surfacePaint: CGFloat = 0
-    /// Where it is full.
-    package nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
-    /// Where the vignette begins, as a fraction of the keyboard's width.
-    package nonisolated static let surfaceVignetteStart: CGFloat = 0.3
     /// The field's hairline.
     package nonisolated static let termBorder: CGFloat = 1
     /// × · field · ✓.
@@ -561,36 +286,12 @@ package enum DesignTokens {
     package nonisolated static let typingResultGap: CGFloat = 20
     /// The least room the words take, so the field below stays put.
     package nonisolated static let typingWordsHeight: CGFloat = 180
-    package nonisolated static let voiceBarHeight: CGFloat = 32
-    /// The voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows.
-    package nonisolated static let voiceBarWidth: CGFloat = 160
-    package nonisolated static let voiceHomeHeight: CGFloat = 112
-    /// The box on the home screen.
-    package nonisolated static let voiceHomeWidth: CGFloat = 280
-    package nonisolated static let voicePanelHeight: CGFloat = 88
-    /// The box in the panel.
-    package nonisolated static let voicePanelWidth: CGFloat = 300
-    /// The element while pressed.
-    package nonisolated static let voicePressScale: CGFloat = 0.94
-    /// Between the mic key's edge and the add key's box (the + or the chip), the key gap.
-    package nonisolated static let voicebarAddtermClearance: CGFloat = 6
-    /// The voice row, where the system puts its suggestion bar.
+    /// The bar above the keys (KeyboardKit's toolbar), in the slot Apple's suggestion bar takes: the status line, the + and the key-term field.
     package nonisolated static let voicebarHeight: CGFloat = 44
-    /// Between the orb and the Full Access note.
-    package nonisolated static let voicebarNoteGap: CGFloat = 10
-    /// A wave bar's width.
-    package nonisolated static let waveBar: CGFloat = 2
-    package nonisolated static let waveBarHeight: CGFloat = 24
-    /// Between wave bars.
-    package nonisolated static let waveGap: CGFloat = 2
-    package nonisolated static let waveHomeHeight: CGFloat = 44
-    package nonisolated static let wavePanelHeight: CGFloat = 40
     package nonisolated static let wordmarkHeight: CGFloat = 22
   }
 
   package enum Typography {
-    /// The clipboard and exclamation glyphs, as a fraction of the voice element's height.
-    package nonisolated static let ratioVoiceGlyph: CGFloat = 0.34
     /// The app's body text.
     package nonisolated static let sizeBody: CGFloat = 16
     /// The app's small text.
@@ -601,18 +302,10 @@ package enum DesignTokens {
     package nonisolated static let sizeEyebrow: CGFloat = 12
     /// The +, × and ✓.
     package nonisolated static let sizeGlyph: CGFloat = 17
-    /// The mono word labels on keys: 123, ABC, #+=, space, the return label.
-    package nonisolated static let sizeLabel: CGFloat = 12
-    /// Every other key.
-    package nonisolated static let sizeLegend: CGFloat = 16
-    /// Letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json).
-    package nonisolated static let sizeLetter: CGFloat = 24
-    /// The one line of words under the mic (the status line, the Full Access note): in the bar its text line leaves the grille its 28 pt inside the 44 pt row.
+    /// The one line of words in the bar (the status line, the Full Access note).
     package nonisolated static let sizeLine: CGFloat = 12
     /// The × on a key-term pill.
     package nonisolated static let sizePillGlyph: CGFloat = 10
-    /// The letter pop-up.
-    package nonisolated static let sizePopup: CGFloat = 32
     /// The × on a text-shortcut row.
     package nonisolated static let sizeRemoveGlyph: CGFloat = 12
     /// The next size down when the stats would not fit.
@@ -650,12 +343,7 @@ package enum DesignTokens {
     /// Uppercase mono at 12: the brand's E1 tracking.
     package nonisolated static let trackingEyebrow: CGFloat = 1.2
     package nonisolated static let weightGlyph: Font.Weight = .medium
-    package nonisolated static let weightLabel: Font.Weight = .medium
-    package nonisolated static let weightLegend: Font.Weight = .medium
-    package nonisolated static let weightLetter: Font.Weight = .regular
-    package nonisolated static let weightPopup: Font.Weight = .regular
     package nonisolated static let weightTerm: Font.Weight = .regular
-    package nonisolated static let weightVoiceGlyph: Font.Weight = .semibold
   }
 
   package enum Motion {
@@ -668,12 +356,6 @@ package enum DesignTokens {
     /// The house curve for everything that moves; nothing springs.
     package nonisolated static let easeSignature: UnitCurve = UnitCurve.bezier(
       startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
-    /// The panel's carousel.
-    package nonisolated static let flip: Double = 0.25
-    /// A facet's flash while recording.
-    package nonisolated static let glintLife: Double = 0.5
-    /// The keyboard resizing.
-    package nonisolated static let heightChange: Double = 0.25
     /// The Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns.
     package nonisolated static let keepOpenFade: Double = 0.6
     /// The first exact corner, this long after the card appears; the rest come as the screen allows.
@@ -682,26 +364,14 @@ package enum DesignTokens {
     package nonisolated static let keepOpenFlare: Double = 0.9
     /// A key lighting.
     package nonisolated static let keyPress: Double = 0.08
-    /// The glint when the words land.
-    package nonisolated static let landing: Double = 0.6
-    /// The orb's press; the one thing that answers at once.
-    package nonisolated static let press: Double = 0.1
-    /// One turn of the ring, the Mac's cadence.
-    package nonisolated static let ringPeriod: Double = 1.6
-    /// One pass of the light over the element at rest.
-    package nonisolated static let sheen: Double = 4
-    /// And while something is happening: the ring's cadence.
-    package nonisolated static let sheenWorking: Double = 1.6
-    /// Every other change on the key: the ring, a glyph, the dimming.
+    /// Every change on the mic key and the +: a glyph, the tint, the dimming.
     package nonisolated static let stateFade: Double = 0.5
-    /// The voice bar becoming the field.
+    /// The bar becoming the key-term field.
     package nonisolated static let termSwap: Double = 0.4
     /// The typing field's border turning, and the countdown's thump.
     package nonisolated static let typingFlash: Double = 0.15
     /// How often the typing test's clock and live speed redraw.
     package nonisolated static let typingTick: Double = 0.1
-    /// The orb and the wave crossing, either way.
-    package nonisolated static let waveFade: Double = 0.7
   }
 
   package enum Gradients {
@@ -710,11 +380,6 @@ package enum DesignTokens {
   /// Every token as `group.name: value`, the way tokens.json renders it, so a
   /// test can pin the compiled values to the file (`DesignTokensTests`).
   package nonisolated static let manifest: [String: String] = [
-    "brand.apple/dark-key": "#6B6B6B",
-    "brand.apple/dark-modifier": "#464646",
-    "brand.apple/dark-surface": "#2B2B2B",
-    "brand.apple/light-modifier": "#ADB3BC",
-    "brand.apple/light-surface": "#D1D5DB",
     "brand.black": "#000000",
     "brand.card": "#EBE8E8",
     "brand.card-border": "#DEDBDB",
@@ -728,10 +393,6 @@ package enum DesignTokens {
     "brand.ink/600": "#3A362F",
     "brand.ink/700": "#33302A",
     "brand.ink/800": "#26231E",
-    "brand.material/dark-key": "#575757",
-    "brand.material/dark-modifier": "#474747",
-    "brand.material/dark-surface": "#373737",
-    "brand.material/light-surface": "#E2E3E8",
     "brand.neutral/300": "#D2D1D0",
     "brand.neutral/500": "#A5A4A2",
     "brand.neutral/700": "#777673",
@@ -747,58 +408,10 @@ package enum DesignTokens {
     "brand.violet/periwinkle": "#B0A7E9",
     "brand.warm-white": "#F2EEE6",
     "brand.white": "#FFFFFF",
-    "themes.dark/container-key": "#575757",
-    "themes.dark/container-key-modifier": "#474747",
-    "themes.dark/field": "#33302A",
-    "themes.dark/field-border": "#3A362F",
-    "themes.dark/key": "#33302A",
-    "themes.dark/key-modifier": "#26231E",
-    "themes.dark/legend": "#F5F3EB",
-    "themes.dark/legend-secondary": "#A5A4A2",
-    "themes.dark/material": "#373737",
     "themes.dark/notice": "#E67F36",
-    "themes.dark/popup": "#33302A",
     "themes.dark/signal": "#67AD82",
-    "themes.dark/surface": "#1D1B16",
-    "themes.light/container-key": "#FFFFFF",
-    "themes.light/container-key-modifier": "#DAD7CB",
-    "themes.light/field": "#FFFFFF",
-    "themes.light/field-border": "#C7C3B2",
-    "themes.light/key": "#FFFFFF",
-    "themes.light/key-modifier": "#DAD7CB",
-    "themes.light/legend": "#1D1B16",
-    "themes.light/legend-secondary": "#777673",
-    "themes.light/material": "#E2E3E8",
     "themes.light/notice": "#E67F36",
-    "themes.light/popup": "#FFFFFF",
     "themes.light/signal": "#01762F",
-    "themes.light/surface": "#ECEBE5",
-    "themes.system-dark/container-key": "#6B6B6B",
-    "themes.system-dark/container-key-modifier": "#464646",
-    "themes.system-dark/field": "#6B6B6B",
-    "themes.system-dark/field-border": "#464646",
-    "themes.system-dark/key": "#6B6B6B",
-    "themes.system-dark/key-modifier": "#464646",
-    "themes.system-dark/legend": "#FFFFFF",
-    "themes.system-dark/legend-secondary": "#FFFFFF",
-    "themes.system-dark/material": "#2B2B2B",
-    "themes.system-dark/notice": "#E67F36",
-    "themes.system-dark/popup": "#6B6B6B",
-    "themes.system-dark/signal": "#67AD82",
-    "themes.system-dark/surface": "#2B2B2B",
-    "themes.system-light/container-key": "#FFFFFF",
-    "themes.system-light/container-key-modifier": "#ADB3BC",
-    "themes.system-light/field": "#FFFFFF",
-    "themes.system-light/field-border": "#ADB3BC",
-    "themes.system-light/key": "#FFFFFF",
-    "themes.system-light/key-modifier": "#ADB3BC",
-    "themes.system-light/legend": "#000000",
-    "themes.system-light/legend-secondary": "#000000",
-    "themes.system-light/material": "#D1D5DB",
-    "themes.system-light/notice": "#E67F36",
-    "themes.system-light/popup": "#FFFFFF",
-    "themes.system-light/signal": "#01762F",
-    "themes.system-light/surface": "#D1D5DB",
     "keyboard.app/accent-dark": "#67AD82",
     "keyboard.app/accent-light": "#01762F",
     "keyboard.app/card-border-dark": "#3A362F",
@@ -823,21 +436,8 @@ package enum DesignTokens {
     "keyboard.app/page-light": "#FDFCF8",
     "keyboard.app/text-dark": "#F5F3EB",
     "keyboard.app/text-light": "#1D1B16",
-    "keyboard.kb/cancel": "#E67F36",
-    "keyboard.kb/field": "#33302A",
-    "keyboard.kb/field-border": "#3A362F",
-    "keyboard.kb/full-access-note": "#E67F36",
-    "keyboard.kb/key": "#33302A",
-    "keyboard.kb/key-modifier": "#26231E",
-    "keyboard.kb/legend": "#F5F3EB",
-    "keyboard.kb/legend-secondary": "#A5A4A2",
-    "keyboard.kb/notice-error": "#E67F36",
-    "keyboard.kb/popup": "#33302A",
-    "keyboard.kb/signal": "#67AD82",
-    "keyboard.kb/surface": "#1D1B16",
     "metrics.addterm/chip-gap": "6",
     "metrics.addterm/chip-max-width": "200",
-    "metrics.addterm/chip-min-width": "96",
     "metrics.addterm/chip-pad": "10",
     "metrics.addterm/inset": "6",
     "metrics.app/button-height": "40",
@@ -848,14 +448,12 @@ package enum DesignTokens {
     "metrics.app/chip-pad-y": "8",
     "metrics.app/header-height": "44",
     "metrics.app/hero-gap": "14",
-    "metrics.app/hero-pad": "20",
     "metrics.app/icon": "20",
     "metrics.app/input-pad-y": "10",
     "metrics.app/line-gap": "6",
     "metrics.app/page-pad": "20",
     "metrics.app/pill-pad-y": "4",
     "metrics.app/pill-remove": "24",
-    "metrics.app/preview-gap": "8",
     "metrics.app/row-pad-y": "8",
     "metrics.app/row-remove": "32",
     "metrics.app/section-gap": "24",
@@ -871,38 +469,7 @@ package enum DesignTokens {
     "metrics.caret/lead": "1",
     "metrics.caret/radius": "1",
     "metrics.caret/width": "2",
-    "metrics.classic/abc-cells": "1.25",
-    "metrics.classic/bottom-inset": "6",
-    "metrics.classic/key-gap": "6",
-    "metrics.classic/key-height": "42",
-    "metrics.classic/key-radius": "5",
-    "metrics.classic/margin-side": "3",
-    "metrics.classic/margin-top": "6",
-    "metrics.classic/row-gap": "12",
-    "metrics.classic/side-gap": "14.25",
-    "metrics.container/inset-min": "8",
-    "metrics.glass/abc-width-402": "43.333",
-    "metrics.glass/bottom-inset": "13",
-    "metrics.glass/key-gap": "6",
-    "metrics.glass/key-height": "43",
-    "metrics.glass/key-radius": "8",
-    "metrics.glass/margin-side": "6.5",
-    "metrics.glass/margin-top": "8",
-    "metrics.glass/reference-width": "402",
-    "metrics.glass/row-gap": "11",
-    "metrics.glass/side-gap": "13.667",
     "metrics.glyph/hit": "44",
-    "metrics.grille/bar-height": "28",
-    "metrics.grille/bar-width": "64",
-    "metrics.grille/dot": "2",
-    "metrics.grille/glint-arm": "1.6",
-    "metrics.grille/glint-width": "1",
-    "metrics.grille/home-height": "108",
-    "metrics.grille/home-width": "240",
-    "metrics.grille/panel-height": "72",
-    "metrics.grille/panel-width": "160",
-    "metrics.grille/pitch": "4",
-    "metrics.grille/sheen-width": "0.35",
     "metrics.keep-open/corner-tolerance": "4",
     "metrics.keep-open/flare-arm": "3",
     "metrics.keep-open/flare-core": "5",
@@ -913,68 +480,29 @@ package enum DesignTokens {
     "metrics.key/abc-width-402": "43.333",
     "metrics.key/gap": "6",
     "metrics.key/height": "43",
-    "metrics.key/letter-width-402": "33.5",
     "metrics.key/min-width": "43.333",
-    "metrics.key/pad": "4",
     "metrics.key/radius": "8",
     "metrics.key/reference-width": "402",
-    "metrics.key/return-width-402": "92.667",
-    "metrics.key/side-gap": "13.667",
-    "metrics.key/side-width-402": "45.583",
-    "metrics.key/space-width-402": "191.667",
-    "metrics.layout/full": "270",
-    "metrics.layout/full-classic": "260",
-    "metrics.layout/panel": "216",
-    "metrics.layout/slim": "60",
-    "metrics.layout/slim-classic": "56",
     "metrics.margin/bottom-keys": "13",
     "metrics.margin/side": "6.5",
-    "metrics.margin/vertical": "8",
+    "metrics.margin/vertical": "8.667",
     "metrics.opacity/disabled": "0.4",
     "metrics.opacity/glint": "0.95",
     "metrics.opacity/grain-dark": "0.14",
-    "metrics.opacity/grain-light": "0.08",
-    "metrics.opacity/grille-rest": "0.55",
-    "metrics.opacity/hairline": "0.5",
-    "metrics.opacity/legend": "1",
     "metrics.opacity/legend-muted": "0.5",
     "metrics.opacity/off": "0.6",
     "metrics.opacity/placeholder": "0.4",
-    "metrics.opacity/popup-shadow": "0.12",
     "metrics.opacity/press-brighten": "0.15",
     "metrics.opacity/pressed": "0.85",
-    "metrics.opacity/sheen": "0.22",
-    "metrics.opacity/surface-vignette": "0",
     "metrics.opacity/term-cancel": "0.7",
-    "metrics.panel/spacing": "8",
-    "metrics.picker/preview-width": "393",
-    "metrics.picker/radius": "10",
-    "metrics.picker/scale": "0.42",
-    "metrics.popup/extra-width": "18",
-    "metrics.popup/height": "56",
-    "metrics.popup/offset": "50",
-    "metrics.popup/radius": "10",
-    "metrics.popup/shadow-radius": "8",
-    "metrics.popup/shadow-y": "2",
     "metrics.radius/button": "4",
-    "metrics.radius/card": "12",
     "metrics.radius/hero": "16",
     "metrics.radius/input": "8",
-    "metrics.ribs/rest-height": "16",
-    "metrics.ribs/rest-width": "40",
     "metrics.row/gap": "11",
-    "metrics.size/large-min-width": "414",
     "metrics.stat/part-gap-ratio": "0.38",
     "metrics.stat/tracking-ratio": "-0.03",
     "metrics.stat/unit-gap-ratio": "0.15",
     "metrics.stat/unit-ratio": "0.46",
-    "metrics.streak/arm": "1.4",
-    "metrics.streak/height": "2",
-    "metrics.streak/line": "1",
-    "metrics.streak/point": "4",
-    "metrics.surface/paint": "0",
-    "metrics.surface/vignette-end": "0.75",
-    "metrics.surface/vignette-start": "0.3",
     "metrics.term/border": "1",
     "metrics.term/gap": "8",
     "metrics.term/height": "36",
@@ -987,34 +515,15 @@ package enum DesignTokens {
     "metrics.typing/pulse": "1.06",
     "metrics.typing/result-gap": "20",
     "metrics.typing/words-height": "180",
-    "metrics.voice/bar-height": "32",
-    "metrics.voice/bar-width": "160",
-    "metrics.voice/home-height": "112",
-    "metrics.voice/home-width": "280",
-    "metrics.voice/panel-height": "88",
-    "metrics.voice/panel-width": "300",
-    "metrics.voice/press-scale": "0.94",
-    "metrics.voicebar/addterm-clearance": "6",
     "metrics.voicebar/height": "44",
-    "metrics.voicebar/note-gap": "10",
-    "metrics.wave/bar": "2",
-    "metrics.wave/bar-height": "24",
-    "metrics.wave/gap": "2",
-    "metrics.wave/home-height": "44",
-    "metrics.wave/panel-height": "40",
     "metrics.wordmark/height": "22",
-    "type.ratio/voice-glyph": "0.34",
     "type.size/body": "16",
     "type.size/caption": "14",
     "type.size/cta": "14",
     "type.size/eyebrow": "12",
     "type.size/glyph": "17",
-    "type.size/label": "12",
-    "type.size/legend": "16",
-    "type.size/letter": "24",
     "type.size/line": "12",
     "type.size/pill-glyph": "10",
-    "type.size/popup": "32",
     "type.size/remove-glyph": "12",
     "type.size/stat-l": "23",
     "type.size/stat-m": "20",
@@ -1034,33 +543,19 @@ package enum DesignTokens {
     "type.tracking/cta": "1.4",
     "type.tracking/eyebrow": "1.2",
     "type.weight/glyph": "medium",
-    "type.weight/label": "medium",
-    "type.weight/legend": "medium",
-    "type.weight/letter": "regular",
-    "type.weight/popup": "regular",
     "type.weight/term": "regular",
-    "type.weight/voice-glyph": "semibold",
     "motion.caret": "0.5",
     "motion.chip-hold": "0.6",
     "motion.colour": "0.2",
     "motion.ease/signature": "0.22,1,0.36,1",
-    "motion.flip": "0.25",
-    "motion.glint-life": "0.5",
-    "motion.height-change": "0.25",
     "motion.keep-open-fade": "0.6",
     "motion.keep-open-first-corner": "9",
     "motion.keep-open-flare": "0.9",
     "motion.key-press": "0.08",
-    "motion.landing": "0.6",
-    "motion.press": "0.1",
-    "motion.ring-period": "1.6",
-    "motion.sheen": "4",
-    "motion.sheen-working": "1.6",
     "motion.state-fade": "0.5",
     "motion.term-swap": "0.4",
     "motion.typing-flash": "0.15",
     "motion.typing-tick": "0.1",
-    "motion.wave-fade": "0.7",
   ]
 }
 // swiftlint:enable type_body_length

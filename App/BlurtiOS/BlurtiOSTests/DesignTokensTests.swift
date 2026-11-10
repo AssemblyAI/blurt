@@ -79,10 +79,8 @@ struct DesignTokensTests {
       "tokens whose value differs: \(changed.map { "\($0): \(compiled[$0] ?? "?") vs \(expected[$0] ?? "?")" })")
   }
 
-  @Test("the brand's faces carry the brand: ink under the dark face, paper under the light, green as the signal")
+  @Test("the brand's faces carry the brand: green as the signal, orange as the notice")
   func faces() {
-    #expect(DesignTokens.Themes.darkSurface == DesignTokens.Brand.ink)
-    #expect(DesignTokens.Themes.lightSurface == DesignTokens.Brand.paper200)
     #expect(DesignTokens.Themes.darkSignal == DesignTokens.Brand.green400)
     #expect(DesignTokens.Themes.lightSignal == DesignTokens.Brand.green700)
     #expect(DesignTokens.Themes.lightNotice == DesignTokens.Brand.orange)

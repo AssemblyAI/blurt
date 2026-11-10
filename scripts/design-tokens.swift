@@ -10,7 +10,7 @@
 // Token values: a hex string ("#01762F"), a number, a weight name, or an alias
 // to another token in braces ("{brand.green/700}", the DTCG spelling). A value
 // may be wrapped as {"value": …, "use": "one line for DESIGN.md"}. Swift names
-// derive from token names by one rule — `kb/key-modifier` → `kbKeyModifier`,
+// derive from token names by one rule — `app/cta-text-light` → `appCtaTextLight`,
 // `green/700` → `green700`.
 
 import Foundation
@@ -75,7 +75,7 @@ struct Gradient {
   let stops: [Stop]
 }
 
-/// `kb/key-modifier` → `kbKeyModifier`; `green/700` → `green700`.
+/// `app/cta-text-light` → `appCtaTextLight`; `green/700` → `green700`.
 func camel(_ name: String) -> String {
   let parts = name.split(whereSeparator: { "/-.".contains($0) }).map(String.init)
   guard let first = parts.first else { return name }
@@ -241,7 +241,7 @@ var swift = """
   /// The design's colours and numbers, from their one source
   /// (`Design/tokens.json`): what the views draw with, what DESIGN.md's tables
   /// say, and what the asset catalog holds, all from the same file. Swift names
-  /// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`).
+  /// follow the token names by one rule (`app/cta-text-light` → `appCtaTextLight`).
   /// `package`: BlurtDesign's, read by the app, the keyboard and the tests.
   package enum DesignTokens {
 
@@ -325,15 +325,9 @@ blocks["motion"] = tokenRows("motion", valueLabel: "Value")
 
 let themeNames = tokens.filter { $0.group == "themes" }.map { String($0.name.split(separator: "/")[0]) }
 let themeOrder = ["light", "dark"] + Set(themeNames).subtracting(["light", "dark"]).sorted()
-let roles = [
-  "surface", "key", "key-modifier", "legend", "legend-secondary", "signal", "popup", "field", "field-border", "notice",
-  "container-key", "container-key-modifier", "material",
-]
+let roles = ["signal", "notice"]
 blocks["themes"] = table(
-  [
-    "Face", "Surface", "Key", "Modifier", "Legend", "Secondary", "Signal", "Pop-up", "Field", "Field border", "Notice",
-    "Key in container", "Modifier in container", "Host material",
-  ],
+  ["Face", "Signal", "Notice"],
   themeOrder.compactMap { theme -> [String]? in
     let cells = roles.compactMap { role in byQualified["themes.\(theme)/\(role)"].map { code(rendered($0)) } }
     guard cells.count == roles.count else { return nil }

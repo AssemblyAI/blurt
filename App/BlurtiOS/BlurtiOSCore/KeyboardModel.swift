@@ -62,7 +62,7 @@ package final class KeyboardModel {
   /// The word highlighted in the host's text, when it could be a key term
   /// (`termCandidate`) and the key terms are in reach (Full Access): the +
   /// grows into a chip holding it, and one tap adds it. Read off the proxy
-  /// on every context change (`readSelection`); the gallery sets it.
+  /// on every context change (`readSelection`).
   package var selectedTerm: String?
   /// Whether `selectedTerm` is already one of Blurt's key terms: the chip
   /// shows a check and adds nothing.

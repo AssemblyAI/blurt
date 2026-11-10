@@ -17,7 +17,7 @@ extension KeyboardModel {
   }
 
   /// The record the line reads. A preview sets `isListening` by hand with no
-  /// record behind it (the gallery, the theme picker): the line then reads
+  /// record behind it (a preview): the line then reads
   /// the readiness it was given rather than a session that is off.
   private var noticeState: ListeningState? {
     if let listeningState { return listeningState }

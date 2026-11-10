@@ -8,7 +8,7 @@ import BlurtiOSCore
   /// `-BlurtProbeField light|dark`: a bare text field that takes the system
   /// keyboard on launch, so the `BlurtiOSProbe` UI test can read that
   /// keyboard's geometry off this simulator — the numbers
-  /// `Design/apple-geometry.json` records and the `key/*` tokens are pinned
+  /// `Design/apple-geometry-glass-402.json` records and the `key/*` tokens are pinned
   /// to (`scripts/apple-geometry.sh`, DESIGN.md › Apple's geometry). Debug
   /// builds only; the keyboard itself never runs here.
   struct KeyboardProbeView: View {

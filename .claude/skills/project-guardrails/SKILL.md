@@ -255,7 +255,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   88%. A UI hook the model needs is a shell-side extension, never SwiftUI in the core.
 - **The keyboard never cancels words behind the user's back.** A cancel over a recording or a
   transcription comes only from the × key or the term field opened over a highlighted word —
-  not from leaving the screen, a swipe across the orb, or the plain +. The fuzz test enforces it.
+  not from leaving the screen, a swipe off the mic key, or the plain +. The fuzz test enforces it.
 - **No private Settings URLs** (`App-Prefs:`): `openSettingsURLString` only, and the copy names
   the whole path (Apps › Blurt › Keyboards).
 - **No bundled brand fonts** — removed over their licence; `BlurtType`'s roles use system faces.

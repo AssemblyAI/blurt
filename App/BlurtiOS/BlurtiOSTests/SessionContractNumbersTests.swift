@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtDesign
 import BlurtEngine
 import CoreFoundation
 import Foundation
@@ -71,6 +72,10 @@ struct SessionContractNumbersTests {
       row("status line", "\"\(VoiceNotice.Copy.secondsLeft(Int(VoiceNotice.countdownWindow)))\""),
       row("held error", "`KeyboardModel.heldError`"),
       row("tap travel", "`KeyboardInteraction.tapTravel` \(points(KeyboardInteraction.tapTravel))"),
+      row("the bar", "`voicebar/height` \(points(DesignTokens.Metrics.voicebarHeight))"),
+      row("the bar", "`margin/vertical` \(points(DesignTokens.Metrics.marginVertical))"),
+      row("the mic's place", "`key/abc-width-402` \(points(DesignTokens.Metrics.keyAbcWidth402))"),
+      row("the mic's place", "`KeyboardLayout.blurt(for:)`"),
       row("silence watchdog", "`UtteranceFeed.silenceSeconds` \(seconds(TimeInterval(UtteranceFeed.silenceSeconds)))"),
       row(
         "silence watchdog",
@@ -180,6 +185,13 @@ struct SessionContractNumbersTests {
   @Test("tap travel: the chip acts only under it")
   func touches() {
     #expect(KeyboardInteraction.tapTravel == 12)
+  }
+
+  @Test("the bar and the mic's place: the band above the keys is Apple's")
+  func barAndMic() {
+    #expect(DesignTokens.Metrics.voicebarHeight == 44)
+    #expect(abs(DesignTokens.Metrics.voicebarHeight + DesignTokens.Metrics.marginVertical - 52.667) < 0.0005)
+    #expect(DesignTokens.Metrics.keyAbcWidth402 == 43.333)
   }
 
   @Test("silence watchdog and the home error")

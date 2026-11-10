@@ -85,7 +85,8 @@ files = sorted(
 )
 modifiers = re.compile(
     r"\.(padding|frame|font|blur|scaleEffect|offset|shadow|opacity|cornerRadius|saturation|brightness"
-    r"|strokeBorder|stroke|lineWidth)\(|\b(spacing|duration|minimumDistance|lineWidth|radius|size|width|height|by):"
+    r"|strokeBorder|stroke|lineWidth)\(|\b(spacing|duration|minimumDistance|lineWidth|radius|size|width|height|by"
+    r"|buttonCornerRadius|rowHeight|buttonInsets):"
 )
 number = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?![\w.])")
 bad = []

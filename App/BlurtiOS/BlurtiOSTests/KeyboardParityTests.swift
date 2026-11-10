@@ -137,6 +137,16 @@ struct BlurtLayoutTests {
     #expect(layout.configuration == .blurt)
   }
 
+  @Test("the bar and the margins make Apple's band above the keys and Apple's keyboard height")
+  func bands() throws {
+    let glass = try AppleGeometry.load("apple-geometry-glass-402")
+    let band = DesignTokens.Metrics.voicebarHeight + DesignTokens.Metrics.marginVertical
+    #expect(abs(band - CGFloat(glass.cap["topBand"] ?? 0)) < 0.001)
+    let rows = 4 * DesignTokens.Metrics.keyHeight + 3 * DesignTokens.Metrics.rowGap
+    let height = band + rows + DesignTokens.Metrics.marginBottomKeys
+    #expect(abs(height - CGFloat(glass.cap["keyboardHeight"] ?? 0)) < 0.001)
+  }
+
   @Test("the mic goes in once: a second pass over the same context adds no second")
   func once() {
     let context = Self.context(.alphabetic, globe: true)
