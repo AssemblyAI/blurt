@@ -13,9 +13,8 @@ extension KeyboardModelFuzzTests {
     case .micUp: model.micUp()
     case .cancel: model.cancel()
     case .swipeOffOrb:
-      // A swipe that began on the orb and travelled after its press went out
-      // (MicControl's `.cancelSentPress`): the press, then its undo — the
-      // swipe's end is never a lift.
+      // A swipe that began on the orb and travelled after its press went
+      // out: the press, then its undo — the swipe's end is never a lift.
       model.micDown()
       model.undoPress()
     case .phaseIdle: model.apply(snapshot(.idle))
@@ -67,10 +66,10 @@ extension KeyboardModelFuzzTests {
     case .beginTerm: model.beginAddingTerm()
     case .cancelTerm: model.cancelAddingTerm()
     case .saveTerm: model.saveTerm()
-    case .typeLetter: model.type(random.pick(["a", "B", "z"]))
-    case .space: model.space()
-    case .deleteBack: model.deleteBackward()
-    case .newline: model.newline()
+    case .termType: model.termType(random.pick(["a", "B", "z"]))
+    case .termSpace: model.termSpace()
+    case .termDelete: model.termDelete()
+    case .termReturn: model.termReturn()
     case .selectWord:
       proxy.selected = "Rizz"
       model.contextChanged()
@@ -82,10 +81,6 @@ extension KeyboardModelFuzzTests {
       model.contextChanged()
     case .addSelected: model.addSelectedTerm()
     case .dismissSelected: model.dismissSelection()
-    case .flipPanel: model.flipPanel(towardsLeading: random.coin())
-    case .toggleSymbols: model.toggleSymbols()
-    case .toggleMore: model.toggleMore()
-    case .toggleShift: model.toggleShift()
     case .appeared:
       model.hasFullAccess = true
       model.appeared()

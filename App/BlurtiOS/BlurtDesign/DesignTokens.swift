@@ -271,6 +271,8 @@ package enum DesignTokens {
   package enum Metrics {
     /// Between the chip's glyph and the word.
     package nonisolated static let addtermChipGap: CGFloat = 6
+    /// The widest the chip grows in the bar, so the status line keeps its room; a longer word truncates.
+    package nonisolated static let addtermChipMaxWidth: CGFloat = 200
     /// The least room a chip needs beside a centred mic; with less, the mic and the chip centre as a pair.
     package nonisolated static let addtermChipMinWidth: CGFloat = 96
     /// The selected-word chip's side padding.
@@ -834,6 +836,7 @@ package enum DesignTokens {
     "keyboard.kb/signal": "#67AD82",
     "keyboard.kb/surface": "#1D1B16",
     "metrics.addterm/chip-gap": "6",
+    "metrics.addterm/chip-max-width": "200",
     "metrics.addterm/chip-min-width": "96",
     "metrics.addterm/chip-pad": "10",
     "metrics.addterm/inset": "6",

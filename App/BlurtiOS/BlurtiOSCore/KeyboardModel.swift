@@ -38,13 +38,6 @@ package final class KeyboardModel {
   /// (`disappeared`, DESIGN.md › The two processes: leaving with a stop out).
   package static let leaveGrace: TimeInterval = BlurtShared.stopDeadline
 
-  package var layout: KeyboardLayout = .panel
-  /// The panel is a two-page carousel — the mic panel and the full keyboard —
-  /// flipped by a swipe in either direction, as often as you like. Which page
-  /// is up; back to the mic each time the keyboard appears.
-  package var panelShowsKeys = false
-  /// The direction of the last flip, so the pages slide the way the finger went.
-  package var flipTowardsLeading = false
   package var snapshot = PhaseSnapshot.idle
   /// The app's readiness record as last read (`SharedStore.listeningState`):
   /// at every appearance, signal, heartbeat and tap. Nil until an app has
@@ -74,20 +67,10 @@ package final class KeyboardModel {
   /// Whether `selectedTerm` is already one of Blurt's key terms: the chip
   /// shows a check and adds nothing.
   package var selectedTermIsKnown = false
-  /// The field's own return key, as iOS labels it: "send", "search", "go"…
-  package var returnLabel: String?
-  /// The letter rows for the user's first keyboard language (AZERTY for
-  /// French, QWERTZ for German and its neighbours, QWERTY otherwise).
-  package var letterRows = LetterLayout.qwerty
   /// Whether a press would record now, as the readiness record says
   /// (`readListeningState`). A preview sets it by hand with no record behind it.
   package var isListening = false
   package var hasFullAccess = false
-  package var needsGlobe = true
-  package var shifted = true
-  package var symbolsPage = false
-  /// The symbols' second page (#+=), only while `symbolsPage`.
-  package var morePage = false
   /// Bumped by the notice clock so the status line's timed rows — the
   /// countdown, the transcription's patience — are read again.
   package var noticeTick = 0
@@ -107,7 +90,6 @@ package final class KeyboardModel {
   /// presence at `leaveGrace` unless the app's answer, or a return to the
   /// screen, gets there first.
   @ObservationIgnored package var leaving: Task<Void, Never>?
-  @ObservationIgnored package var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored package var noticeDwell: Task<Void, Never>?
   /// The one-shot ticks at the handshake's retry delay and deadline while a
   /// press or stop is out, and the command they are for.
@@ -163,48 +145,6 @@ package final class KeyboardModel {
   package var proxy: (any UITextDocumentProxy)? { proxyOverride ?? controller?.textDocumentProxy }
   @ObservationIgnored package var proxyOverride: (any UITextDocumentProxy)?
 
-  /// The chosen theme, by id. Its colours are the shell's: `palette`
-  /// (KeyboardModel+Palette.swift) resolves this, in the host's appearance.
-  package var themeID = SharedStore.themeID
-  /// For a preview: this theme face, whatever Settings and the host say.
-  package var faceOverride: ThemeFace?
-  /// The face to draw: the preview's, else the chosen theme in the host's
-  /// appearance — as `voiceKind` and `micAlignment` resolve theirs.
-  package var face: ThemeFace { faceOverride ?? ThemeFace(themeID: themeID, dark: isDark) }
-  /// TEMPORARY: which mic concept draws, from Settings — or, for a preview
-  /// or a gallery row, whatever it is told. Goes with the losers.
-  package var voiceKind: VoiceElementKind { voiceKindOverride ?? storedVoiceKind }
-  package var storedVoiceKind = SharedStore.voiceElementKind
-  package var voiceKindOverride: VoiceElementKind?
-  /// Where the mic key sits across the row, from Settings (one hand: at the
-  /// thumb's edge) — or, for a preview or a gallery row, whatever it is told.
-  package var micAlignment: MicAlignment { micAlignmentOverride ?? storedMicAlignment }
-  package var storedMicAlignment = SharedStore.micAlignment
-  package var micAlignmentOverride: MicAlignment?
-  /// Whether the app being typed in wants a dark keyboard: what its field
-  /// asks for, else the app's own light or dark appearance.
-  package var isDark = false
-
-  /// What is actually on screen: the panel's carousel may be showing its
-  /// keys, and typing a key term needs them whatever the layout.
-  package var effectiveLayout: KeyboardLayout {
-    if termDraft != nil { return .full }
-    return layout == .panel && panelShowsKeys ? .full : layout
-  }
-
-  /// Told when `effectiveLayout` changes, so the host can resize the keyboard.
-  @ObservationIgnored package var onLayoutChange: (() -> Void)?
-
-  /// A horizontal swipe on the panel: flip to the other page, sliding the way
-  /// the finger went.
-  package func flipPanel(towardsLeading: Bool) {
-    // Only the panel has two pages, and not while the keys are up for a term.
-    guard layout == .panel, termDraft == nil else { return }
-    flipTowardsLeading = towardsLeading
-    panelShowsKeys.toggle()
-    onLayoutChange?()
-  }
-
   /// Whether the phase leaves nothing in flight — the moments the gate has to
   /// be reset, since a dictation can end with no finger event to close it.
   package var isSettled: Bool { snapshot.state.isSettled }
@@ -225,13 +165,12 @@ package final class KeyboardModel {
   }
 
   /// The cursor moved or the text around it changed, including by our own
-  /// typing: re-read where the sentence stands and what the field wants.
+  /// typing: re-read the highlight, and take typing that reached the host
+  /// while the term field is open. The sentence's case, the field's return
+  /// key and its appearance are KeyboardKit's to read.
   package func contextChanged() {
-    readAppearance()
-    readField()
     readSelection()
     claimHostTypingForTerm()
-    updateShift()
   }
 
   /// While the term field is open, characters that arrived in the host field
@@ -262,30 +201,11 @@ package final class KeyboardModel {
     termHostBaseline = proxy.documentContextBeforeInput ?? ""
   }
 
-  /// Auto-capitalisation, as the system keyboard does it: shift comes on at
-  /// the start of a sentence (or of every word, or always) according to what
-  /// the field asks for, and goes off after one letter.
-  package func updateShift() {
-    if let termDraft {
-      // A key term is usually a name, or two: capitalised to start and after
-      // a space, then as typed.
-      shifted = termDraft.isEmpty || termDraft.last == " "
-      return
-    }
-    guard let proxy else { return }
-    let before = proxy.documentContextBeforeInput ?? ""
-    switch proxy.autocapitalizationType ?? .sentences {
-    case .none: break
-    case .allCharacters: shifted = true
-    case .words: shifted = before.isEmpty || before.last?.isWhitespace == true
-    case .sentences: shifted = Self.isSentenceStart(before)
-    @unknown default: break
-    }
-  }
-
-  package static func isSentenceStart(_ before: String) -> Bool {
-    let trimmed = before.reversed().drop { $0 == " " }
-    guard let last = trimmed.first else { return true }
-    return last == "\n" || ".?!".contains(last)
+  /// The term's own case rule, for the keys while the field is open: a key
+  /// term is usually a name, or two — capitalised to start and after a
+  /// space, then as typed. The host's sentence is KeyboardKit's to read.
+  package var termWantsUppercase: Bool {
+    guard let termDraft else { return false }
+    return termDraft.isEmpty || termDraft.last == " "
   }
 }

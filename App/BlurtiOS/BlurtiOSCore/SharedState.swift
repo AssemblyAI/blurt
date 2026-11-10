@@ -23,14 +23,7 @@ package nonisolated enum BlurtShared {
   package static let commandFreshnessWindow: TimeInterval = 10
 
   package nonisolated enum Key {
-    package static let layout = "keyboardLayout"
     package static let autoDictate = "autoDictate"
-    package static let theme = "keyboardTheme"
-    /// TEMPORARY: which mic concept draws (a, b or c), while the three are
-    /// tried in use. Goes with the losers once one is picked.
-    package static let voiceElement = "voiceElement"
-    /// Where the mic key sits across the keyboard (`MicAlignment`).
-    package static let micAlignment = "micAlignment"
     package static let listeningUntil = "listeningUntil"
     package static let windowMinutes = "listeningWindowMinutes"
     /// "Use AirPods mic": the session allows a Bluetooth microphone.
@@ -63,38 +56,6 @@ package nonisolated enum BlurtShared {
     package static let ack = "com.assemblyai.blurt.iphone.ack"
     /// A keyboard appeared or left (`KeyboardPresenceRecord`).
     package static let keyboard = "com.assemblyai.blurt.iphone.keyboard"
-  }
-}
-
-/// Which keyboard the user chose. All three share the same plumbing underneath;
-/// they differ only in how much keyboard sits around the mic.
-package nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identifiable {
-  /// A slim strip: the mic, delete, return and the globe. Typing letters means
-  /// switching back to the system keyboard.
-  case slimBar
-  /// A big orb with cancel beside it and a few keys — the shape Wispr and
-  /// Aqua ship — that swipes to the full keyboard.
-  case panel
-  /// A complete keyboard with the mic as the main key, so nobody has to switch
-  /// keyboards to fix a typo.
-  case full
-
-  package var id: String { rawValue }
-
-  package var title: String {
-    switch self {
-    case .slimBar: "Mic bar"
-    case .panel: "Mic panel"
-    case .full: "Full keyboard"
-    }
-  }
-
-  package var summary: String {
-    switch self {
-    case .slimBar: "Just the mic and a few keys. Switch keyboards to type."
-    case .panel: "A big mic with status and cancel. Swipe sideways for the full keyboard, and back."
-    case .full: "Every letter key, with the orb above them."
-    }
   }
 }
 
@@ -306,39 +267,6 @@ package nonisolated enum SharedStore {
 
   package static func remove(forKey key: String) {
     defaults.removeObject(forKey: key)
-  }
-
-  /// A choice stored by its raw value, or `fallback` for none or an unknown one.
-  private static func choice<C: RawRepresentable>(_ key: String, default fallback: C) -> C where C.RawValue == String {
-    C(rawValue: defaults.string(forKey: key) ?? "") ?? fallback
-  }
-
-  package static var layout: KeyboardLayout {
-    get { choice(BlurtShared.Key.layout, default: .panel) }
-    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.layout) }
-  }
-
-  /// The theme until one is picked: the iPhone's own.
-  package static let defaultThemeID = "system"
-
-  /// Which keyboard theme (`KeyboardPalette.id`).
-  package static var themeID: String {
-    get { defaults.string(forKey: BlurtShared.Key.theme) ?? defaultThemeID }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.theme) }
-  }
-
-  /// TEMPORARY: the mic concept to draw — `VoiceElementKind.rawValue`, the
-  /// shipped one until Settings says otherwise. Read by the keyboard on every
-  /// appearance and by the home screen live. Goes with the losers.
-  package static var voiceElementKind: VoiceElementKind {
-    get { choice(BlurtShared.Key.voiceElement, default: .shipped) }
-    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.voiceElement) }
-  }
-
-  /// Where the mic key sits across the keyboard; the middle until chosen.
-  package static var micAlignment: MicAlignment {
-    get { choice(BlurtShared.Key.micAlignment, default: .center) }
-    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.micAlignment) }
   }
 
   /// Hands-free: a dictation starts the moment the keyboard appears in a text field. Off by default: sessions

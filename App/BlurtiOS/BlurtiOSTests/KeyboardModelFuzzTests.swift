@@ -23,9 +23,8 @@ struct KeyboardModelFuzzTests {
     case answerConnecting, answerError
     case ackStarted, ackBusy, ackNotListening, ackEnded, deadline
     case appNotListening, appListening, stateClosed, stateInterrupted, stateLapsed
-    case beginTerm, cancelTerm, saveTerm, typeLetter, space, deleteBack, newline
+    case beginTerm, cancelTerm, saveTerm, termType, termSpace, termDelete, termReturn
     case selectWord, selectOther, clearSelection, addSelected, dismissSelected
-    case flipPanel, toggleSymbols, toggleMore, toggleShift
     case appeared, disappeared, appearedNoAccess, hostLeaving, contextChanged
     case resultFresh, resultStale, resultForOther
     case hostTyped, hostMovedCursor
@@ -95,12 +94,6 @@ struct KeyboardModelFuzzTests {
     }
   }
 
-  /// The events after which the term field's shift has just been re-read.
-  static let reevaluatesShift: Set<Event> = [
-    .beginTerm, .cancelTerm, .saveTerm, .typeLetter, .space, .deleteBack, .newline, .contextChanged, .selectWord,
-    .selectOther, .clearSelection, .hostTyped, .hostMovedCursor, .appeared, .appearedNoAccess,
-  ]
-
   /// What must be true after every event, whatever came before.
   private func check(
     _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: KeyboardRig.Commands, after event: Event, _ context: String
@@ -110,11 +103,14 @@ struct KeyboardModelFuzzTests {
     #expect((model.termHostBaseline != nil) == fieldOpen, "term baseline vs field — \(context)")
     #expect((model.termHostBaselineAfter != nil) == fieldOpen, "term baseline-after vs field — \(context)")
     #expect(model.termDraftFromSelection == nil || fieldOpen, "seed outlives the field — \(context)")
-    #expect(!fieldOpen || model.effectiveLayout == .full, "keys must be up for the field — \(context)")
-    // Shift follows the term as typed; a tap on shift itself overrides it,
-    // as on the system keyboard, until the next thing that re-reads it.
-    if let draft = model.termDraft, Self.reevaluatesShift.contains(event) {
-      #expect(model.shifted == (draft.isEmpty || draft.last == " "), "term shift rule — \(context)")
+    // The term is a name or two: capitalised to start and after a space,
+    // then as typed; its spaces are one between words, never a run and
+    // never first.
+    if let draft = model.termDraft {
+      #expect(model.termWantsUppercase == (draft.isEmpty || draft.last == " "), "term case rule — \(context)")
+      #expect(!draft.hasPrefix(" ") && !draft.contains("  "), "a term's spaces — \(context)")
+    } else {
+      #expect(!model.termWantsUppercase, "case wanted with no field — \(context)")
     }
     // The chip and its dismissal never both stand.
     #expect(model.dismissedSelection == nil || model.selectedTerm == nil, "chip and dismissal both up — \(context)")
@@ -130,8 +126,6 @@ struct KeyboardModelFuzzTests {
     } else {
       #expect(!model.selectedTermIsKnown, "known without a chip — \(context)")
     }
-    // Pages.
-    #expect(!model.morePage || model.symbolsPage, "#+= page without the symbols — \(context)")
     // The voice picture never shows what the app can't be doing; an error's
     // exclamation is the one glyph that shows over a dimmed key.
     let state = model.voiceState
@@ -154,7 +148,6 @@ struct KeyboardModelFuzzTests {
     case .idle, .unready:
       if !model.isReady { #expect(model.statusLine != nil, "not ready with no line — \(context)") }
     }
-    #expect(!model.panelShowsKeys || model.layout == .panel, "keys page off the panel — \(context)")
     #expect(
       commands.sent.allSatisfy { $0.keyboard == KeyboardProcess.id && $0.controllerID == model.controllerID },
       "command from another keyboard — \(context)")
@@ -196,7 +189,6 @@ struct KeyboardModelFuzzTests {
       model.hasFullAccess = true
       model.appeared()
       #expect(model.termDraft == nil, "field open after an appearance (round \(round))")
-      #expect(!model.panelShowsKeys, "keys page after an appearance (round \(round))")
       #expect(model.gate.isIdle, "gate latched after an appearance (round \(round))")
       #expect(model.isSettled, "in flight after an appearance (round \(round))")
       #expect(model.termSavedAt == nil, "saved check after an appearance (round \(round))")

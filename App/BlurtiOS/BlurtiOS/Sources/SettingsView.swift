@@ -5,21 +5,15 @@ import BlurtiOSCore
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (layout, theme, hands-free), listening, transcription, the account, and
-/// about — a form on the brand's page, its sections under mono eyebrows.
-/// Presented from either tab's gear.
+/// (hands-free), listening, transcription, the account, and about — a form
+/// on the brand's page, its sections under mono eyebrows. Presented from
+/// either tab's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
-  @State private var layout = SharedStore.layout
-  @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @State private var airPodsMic = SharedStore.airPodsMic
-  @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = SharedStore.defaultThemeID
-  /// TEMPORARY: which mic concept to try. Goes with the losers.
-  @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
-    VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
   @State private var confirmsStatsReset = false
   @State private var showsTypingTest = false
@@ -101,46 +95,18 @@ struct SettingsView: View {
     coordinator.apiKey.refreshStatus()
   }
 
+  /// The keyboard is Apple's, so there is nothing of its look to choose; the
+  /// one thing to set is whether it starts dictating on its own.
   private var keyboardSection: some View {
     Section {
-      Picker("Layout", selection: $layout) {
-        ForEach(KeyboardLayout.allCases) { Text($0.title).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: layout) { _, value in SharedStore.layout = value }
-      Text(layout.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
-      // The mic's side, for one hand — the same shape as the layout above: three
-      // segments and a line saying what the choice does.
-      Picker("Mic alignment", selection: $micAlignment) {
-        ForEach(MicAlignment.allCases) { Text($0.title).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: micAlignment) { _, value in SharedStore.micAlignment = value }
-      Text(micAlignment.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption))
-        .foregroundStyle(BlurtBrand.muted)
-      NavigationLink {
-        ThemePickerView()
-      } label: {
-        LabeledContent(
-          "Theme",
-          value: KeyboardPalette.resolve(themeID, dark: false, generation: KeyboardProfile.standInGeneration).name)
-      }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
-      // TEMPORARY: the three mic concepts, to try each in use. Goes with the losers.
-      Picker("Mic", selection: $voiceRaw) {
-        Text("Grille").tag(VoiceElementKind.grille.rawValue)
-        Text("Ribs").tag(VoiceElementKind.ribs.rawValue)
-        Text("Streak").tag(VoiceElementKind.streak.rawValue)
-      }
-      .pickerStyle(.segmented)
     } header: {
       Eyebrow("Keyboard")
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
-          + "Mic is a temporary switch between the three concepts while one is chosen. "
-          + "The keyboard picks up changes the next time it appears.")
+          + "The keyboard picks up the change the next time it appears.")
     }
   }
 

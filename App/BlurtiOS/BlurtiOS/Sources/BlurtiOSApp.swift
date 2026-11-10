@@ -64,13 +64,10 @@ struct BlurtiOSApp: App {
   var body: some Scene {
     WindowGroup {
       #if DEBUG
-        let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
         if let probe = KeyboardProbeView.parse(CommandLine.arguments) {
           // The keyboard over this field is only live if the app runs as it
           // does under the home screen: the coordinator up, listening on request.
           probe.task { await start() }
-        } else if let voice = KeyboardGalleryView.VoiceStillView.parse(CommandLine.arguments) {
-          voice
         } else if CommandLine.arguments.contains("-BlurtTypingTest") {
           // The easter egg as the root, for a screenshot without a tap.
           TypingTestView()
@@ -83,10 +80,8 @@ struct BlurtiOSApp: App {
           // time zero.
           KeepOpenView(
             windowMinutes: SharedStore.windowMinutes, still: CommandLine.arguments.contains("-BlurtGalleryStill"))
-        } else if rows.isEmpty {
-          home
         } else {
-          KeyboardGalleryView(rows: rows, options: .parse(CommandLine.arguments))
+          home
         }
       #else
         home

@@ -1,5 +1,4 @@
 import AssemblyAI
-import BlurtDesign
 import BlurtEngine
 import CoreFoundation
 import Foundation
@@ -71,28 +70,13 @@ struct SessionContractNumbersTests {
       row("status line", "`VoiceNotice.countdownWindow` \(seconds(VoiceNotice.countdownWindow))"),
       row("status line", "\"\(VoiceNotice.Copy.secondsLeft(Int(VoiceNotice.countdownWindow)))\""),
       row("held error", "`KeyboardModel.heldError`"),
-      row("the line's place", "`size/line` \(points(DesignTokens.Typography.sizeLine))"),
-      row("the line's place", "`VoiceBar.lineHeight`, \(String(format: "%.1f", VoiceBar.lineHeight)) pt"),
-      row("the line's place", "`voicebar/height` \(points(DesignTokens.Metrics.voicebarHeight))"),
-      row("the line's place", "`voice/bar-height` \(points(DesignTokens.Metrics.voiceBarHeight))"),
-      row("the line's place", "`grille/bar-height` \(points(DesignTokens.Metrics.grilleBarHeight))"),
-      row(
-        "press delay on the mic",
-        "`KeyboardInteraction.micPressDelay` \(milliseconds(KeyboardInteraction.micPressDelay))"),
       row("tap travel", "`KeyboardInteraction.tapTravel` \(points(KeyboardInteraction.tapTravel))"),
-      row("tap travel", "`KeyboardInteraction.tapSlop` \(points(KeyboardInteraction.tapSlop))"),
-      row("tap travel", "`KeyboardInteraction.micTravel` \(points(KeyboardInteraction.micTravel))"),
-      row("tap travel", "`KeyboardInteraction.swipeDistance` \(points(KeyboardInteraction.swipeDistance))"),
-      row("tap travel", "`KeyboardInteraction.swipeRatio` \(KeyboardInteraction.swipeRatio)×"),
       row("silence watchdog", "`UtteranceFeed.silenceSeconds` \(seconds(TimeInterval(UtteranceFeed.silenceSeconds)))"),
       row(
         "silence watchdog",
         "`UtteranceFeed.startGraceSeconds` \(seconds(TimeInterval(UtteranceFeed.startGraceSeconds)))"),
       row("home error", "`HomeStatus.errorDwell` \(seconds(HomeStatus.errorDwell))"),
       row("lexicon refresh", "`KeyboardModel.lexiconRefreshInterval` \(seconds(KeyboardModel.lexiconRefreshInterval))"),
-      row("height change", "`Motion.heightChange` \(seconds(DesignTokens.Motion.heightChange))"),
-      row("the profile", "`KeyboardProfile.glassOSMajor` \(KeyboardProfile.glassOSMajor)"),
-      row("the profile", "`container/inset-min` \(points(DesignTokens.Metrics.containerInsetMin))"),
       row("term packs", "`TermPack.fileCap` \(TermPack.fileCap / 1024) KB"),
       row("term packs", "`KeyTerms.termCap` \(KeyTerms.termCap) terms"),
       row("term packs", "`TermPack.lengthCap` \(TermPack.lengthCap) characters"),
@@ -193,24 +177,9 @@ struct SessionContractNumbersTests {
     #expect(VoiceNotice.countdownWindow == 30)
   }
 
-  @Test("the line's place: in the bar the band above the line still holds the grille")
-  func linePlace() {
-    #expect(DesignTokens.Typography.sizeLine == 12)
-    #expect(DesignTokens.Metrics.voicebarHeight == 44)
-    #expect(DesignTokens.Metrics.voiceBarHeight == 32)
-    #expect(DesignTokens.Metrics.grilleBarHeight == 28)
-    #expect(VoiceBar.lineHeight > DesignTokens.Typography.sizeLine)
-    #expect(DesignTokens.Metrics.voicebarHeight - VoiceBar.lineHeight >= DesignTokens.Metrics.grilleBarHeight)
-  }
-
-  @Test("press delay and tap travel")
+  @Test("tap travel: the chip acts only under it")
   func touches() {
-    #expect(KeyboardInteraction.micPressDelay == .milliseconds(90))
     #expect(KeyboardInteraction.tapTravel == 12)
-    #expect(KeyboardInteraction.tapSlop == 8)
-    #expect(KeyboardInteraction.micTravel == 24)
-    #expect(KeyboardInteraction.swipeDistance == 48)
-    #expect(KeyboardInteraction.swipeRatio == 1.5)
   }
 
   @Test("silence watchdog and the home error")
@@ -220,12 +189,9 @@ struct SessionContractNumbersTests {
     #expect(HomeStatus.errorDwell == 3)
   }
 
-  @Test("lexicon refresh, the height change and the profile")
-  func keyboardNumbers() {
+  @Test("lexicon refresh: the phone's word list is re-read once an hour")
+  func lexiconRefresh() {
     #expect(KeyboardModel.lexiconRefreshInterval == 3600)
-    #expect(DesignTokens.Motion.heightChange == 0.25)
-    #expect(KeyboardProfile.glassOSMajor == 26)
-    #expect(DesignTokens.Metrics.containerInsetMin == 8)
   }
 
   @Test("term packs: the file, the list and a term")

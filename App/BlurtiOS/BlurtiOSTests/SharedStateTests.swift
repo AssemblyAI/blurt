@@ -1,44 +1,7 @@
-import BlurtDesign
 import Foundation
-import SwiftUI
 import Testing
 
-@testable import BlurtiOS
 @testable import BlurtiOSCore
-
-@Suite("Mic alignment setting")
-struct MicAlignmentSettingTests {
-  @Test("the mic's side round-trips through the App Group; unset or unknown is the middle")
-  func roundTrip() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    #expect(SharedStore.micAlignment == .center)
-    SharedStore.micAlignment = .right
-    #expect(SharedStore.micAlignment == .right)
-    SharedStore.defaults.set("sideways", forKey: BlurtShared.Key.micAlignment)
-    #expect(SharedStore.micAlignment == .center)
-  }
-
-  @Test("left and right are the phone's sides whatever the language reads in; the + leads only at the trailing edge")
-  func sides() {
-    #expect(MicAlignment.left.alignment(in: .leftToRight) == .leading)
-    #expect(MicAlignment.left.alignment(in: .rightToLeft) == .trailing)
-    #expect(MicAlignment.right.alignment(in: .leftToRight) == .trailing)
-    #expect(MicAlignment.right.alignment(in: .rightToLeft) == .leading)
-    #expect(MicAlignment.center.alignment(in: .rightToLeft) == .center)
-    #expect(MicAlignment.right.plusLeads(in: .leftToRight))
-    #expect(MicAlignment.left.plusLeads(in: .rightToLeft))
-    #expect(!MicAlignment.left.plusLeads(in: .leftToRight))
-    #expect(!MicAlignment.center.plusLeads(in: .leftToRight))
-  }
-
-  @Test("the gallery and probe words name a side")
-  func parse() {
-    #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle", "-BlurtGalleryAlign", "right"]) == .right)
-    #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle"]) == nil)
-    #expect(MicAlignment(rawValue: "left") == .left)
-  }
-}
 
 @Suite("Phase snapshot staleness")
 struct PhaseSnapshotTests {
@@ -76,20 +39,6 @@ struct PhaseSnapshotTests {
   }
 }
 
-@Suite("Voice element setting")
-struct VoiceElementSettingTests {
-  @Test("the mic concept round-trips through the App Group; unset or unknown is the shipped one")
-  func roundTrip() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    #expect(SharedStore.voiceElementKind == .shipped)
-    SharedStore.voiceElementKind = .streak
-    #expect(SharedStore.voiceElementKind == .streak)
-    SharedStore.defaults.set("z", forKey: BlurtShared.Key.voiceElement)
-    #expect(SharedStore.voiceElementKind == .shipped)
-  }
-}
-
 @Suite("Shared defaults")
 @MainActor
 struct SharedDefaultsTests {
@@ -111,12 +60,6 @@ struct SharedDefaultsTests {
   func settings() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    #expect(SharedStore.layout == .panel)
-    SharedStore.layout = .full
-    #expect(SharedStore.layout == .full)
-    #expect(SharedStore.themeID == "system")
-    SharedStore.themeID = "blurt"
-    #expect(SharedStore.themeID == "blurt")
     #expect(!SharedStore.autoDictate)
     SharedStore.autoDictate = true
     #expect(SharedStore.autoDictate)
@@ -131,64 +74,5 @@ struct SharedDefaultsTests {
   func lexiconEntries() {
     #expect(LexiconEntry(userInput: "Neil Bisht", documentText: "Neil Bisht").isName)
     #expect(!LexiconEntry(userInput: "omw", documentText: "On my way!").isName)
-  }
-}
-
-@Suite("Layouts and palettes")
-struct LayoutTests {
-  @Test("every layout and mic side has its own name and description for Settings")
-  func settingsCopy() {
-    for cases in [
-      KeyboardLayout.allCases.map { ($0.id, $0.title, $0.summary) },
-      MicAlignment.allCases.map { ($0.id, $0.title, $0.summary) },
-    ] {
-      #expect(Set(cases.map(\.0)).count == cases.count)
-      #expect(Set(cases.map(\.1)).count == cases.count)
-      #expect(Set(cases.map(\.2)).count == cases.count)
-      #expect(cases.allSatisfy { !$0.1.isEmpty && !$0.2.isEmpty })
-    }
-    #expect(KeyboardLayout.full.id == "full")
-    #expect(MicAlignment.left.id == "left")
-  }
-
-  @Test("heights are the rows at the iPhone keyboard's spacing, per generation (DESIGN.md)")
-  func heights() {
-    let glass = KeyboardProfile(generation: .glass, width: 402, hasGlobe: false)
-    #expect(KeyboardLayout.slimBar.height(profile: glass) == 60)
-    #expect(KeyboardLayout.panel.height(profile: glass) == 216)
-    #expect(KeyboardLayout.full.height(profile: glass) == 270)
-    let classic = KeyboardProfile(generation: .classic, width: 390, hasGlobe: false)
-    #expect(KeyboardLayout.slimBar.height(profile: classic) == 56)
-    #expect(KeyboardLayout.panel.height(profile: classic) == 216)
-    #expect(KeyboardLayout.full.height(profile: classic) == 260)
-  }
-
-  @Test("letter rows follow the phone's first language")
-  func letterRows() {
-    #expect(LetterLayout.forPreferredLanguages(["en-US", "fr-FR"]) == LetterLayout.qwerty)
-    #expect(LetterLayout.forPreferredLanguages(["fr-CA"]) == LetterLayout.azerty)
-    #expect(LetterLayout.forPreferredLanguages(["de-DE"]) == LetterLayout.qwertz)
-    #expect(LetterLayout.forPreferredLanguages(["cs"]) == LetterLayout.qwertz)
-    #expect(LetterLayout.forPreferredLanguages([]) == LetterLayout.qwerty)
-  }
-
-  @Test("every theme has a distinct id; the brand has two faces; an unknown id is the brand's on either generation")
-  func palettes() {
-    for generation in [KeyboardProfile.Generation.classic, .glass] {
-      let ids = KeyboardPalette.all(for: generation).map(\.id)
-      #expect(Set(ids).count == ids.count)
-      #expect(KeyboardPalette.resolve("blurt", dark: true, generation: generation).face == .dark)
-      #expect(
-        KeyboardPalette.resolve("blurt", dark: false, generation: generation).keyText == DesignTokens.Themes.lightLegend
-      )
-      #expect(
-        KeyboardPalette.resolve("blurt", dark: true, generation: generation).keyText == DesignTokens.Themes.darkLegend)
-      #expect(KeyboardPalette.resolve("nope", dark: false, generation: generation).id == "blurt")
-    }
-    // The store's default, `system`, is the brand on glass and the iPhone's own keys on classic.
-    #expect(KeyboardPalette.resolve("system", dark: true, generation: .glass) == .brandDark)
-    #expect(KeyboardPalette.resolve("system", dark: true, generation: .classic) == .systemDark)
-    #expect(KeyboardPalette.brandLight != KeyboardPalette.brandDark)
-    #expect(KeyboardPalette.systemLight != KeyboardPalette.brandLight)
   }
 }

@@ -132,14 +132,11 @@ targets:
       - path: ../../Design/brand/AppIcon.icon
       - path: ../../Design/brand/blurt-ready-logo.png
         buildPhase: resources
-      # The keyboard's views and model: the theme picker draws the real keyboard
-      # on its cards, the home screen draws the orb and the meter, and debug
-      # builds render every layout and state (KeyboardGalleryView) for design
-      # work and screenshots. Only the extension's entry point stays out; the
-      # keyboard itself never runs here.
-      - path: BlurtKeyboard/Sources
-        excludes:
-          - KeyboardViewController.swift
+      # What the keyboard and the app both need of the keyboard: the
+      # KeyboardApp (KeyboardKit asks for it in both targets) and the layout
+      # with the mic in it, which the tests read against Apple's measured
+      # geometry. The keyboard's views stay the extension's own.
+      - path: BlurtKeyboard/Sources/Shared
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"

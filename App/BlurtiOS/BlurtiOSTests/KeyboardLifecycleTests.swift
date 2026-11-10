@@ -251,16 +251,4 @@ struct KeyboardLifecycleTests {
     #expect(opened.last == BlurtShared.startURL(reason: .sessionOff))
     #expect(opened.last?.absoluteString == "\(BlurtShared.urlScheme)://\(BlurtShared.startHost)?reason=sessionOff")
   }
-
-  @Test("the mic's side comes from Settings unless a preview says otherwise")
-  func micAlignment() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let model = KeyboardModel()
-    #expect(model.micAlignment == .center)
-    model.storedMicAlignment = .left
-    #expect(model.micAlignment == .left)
-    model.micAlignmentOverride = .right
-    #expect(model.micAlignment == .right)
-  }
 }

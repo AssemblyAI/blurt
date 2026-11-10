@@ -46,21 +46,13 @@ extension KeyboardModel {
     leaving = nil
     // Without a controller (a test's model) the access stays as it was set.
     hasFullAccess = controller?.hasFullAccess ?? hasFullAccess
-    needsGlobe = controller?.needsInputModeSwitchKey ?? true
-    letterRows = LetterLayout.forPreferredLanguages()
-    // Every appearance starts on the mic page with no term half-typed, and on
-    // the page the field asks for: symbols for a number, letters otherwise.
-    panelShowsKeys = false
+    // Every appearance starts with no term half-typed. The page, the case
+    // and the return key are KeyboardKit's to read off the field.
     endTermField()
     dismissedSelection = nil
     termNotice?.cancel()
     termSavedAt = nil
-    symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
-    morePage = false
-    readAppearance()
-    readField()
     readSelection()
-    updateShift()
     hostBundleID = controller.flatMap(HostApp.bundleID(of:))
     KeyboardLog.appeared(
       pid: Self.pid, process: KeyboardProcess.id, controller: controllerID, fullAccess: hasFullAccess,
@@ -80,10 +72,6 @@ extension KeyboardModel {
       noticeDwell?.cancel()
       return
     }
-    layout = SharedStore.layout
-    themeID = SharedStore.themeID
-    storedVoiceKind = SharedStore.voiceElementKind
-    storedMicAlignment = SharedStore.micAlignment
     SharedStore.keyboardEverSeen = true
     // A press or a stop still out is not cleared here: an appearance can
     // follow another with no disappearance between (iOS does that), and its

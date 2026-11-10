@@ -17,23 +17,13 @@ import BlurtiOSCore
     /// can highlight a word in any layout, letter keys or not.
     var text = ""
 
-    /// `-BlurtProbeField light|dark [a|b|c] [slimBar|panel|full] [left|center|right]`:
-    /// the words after the face set the mic concept, the layout and the mic's
-    /// side in the App Group, so the Blurt keyboard — which reads them on every
-    /// appearance — comes up that way for a capture of the real extension
+    /// `-BlurtProbeField light|dark`: the face the field asks for, so the Blurt
+    /// keyboard comes up that way for a capture of the real extension
     /// (`scripts/ios-keyboard-shot.sh`, `scripts/ios-keyboard-flows.sh`).
     static func parse(_ arguments: [String]) -> KeyboardProbeView? {
       guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else { return nil }
       let face = arguments.count > flag + 1 ? arguments[flag + 1] : "light"
       guard face == "light" || face == "dark" else { return nil }
-      // The mic's side is the middle unless a word says otherwise: the App
-      // Group outlives a run, and an earlier `left` must not leak into this one.
-      SharedStore.micAlignment = .center
-      for word in arguments.dropFirst(flag + 2).prefix(while: { !$0.hasPrefix("-") }) {
-        if let kind = VoiceElementKind(rawValue: word) { SharedStore.voiceElementKind = kind }
-        if let layout = KeyboardLayout(rawValue: word) { SharedStore.layout = layout }
-        if let side = MicAlignment(rawValue: word) { SharedStore.micAlignment = side }
-      }
       // `-BlurtProbeResetTerms`: an empty key-term list, so a flow that adds a
       // word finds it new on every run (the App Group outlives the test).
       if arguments.contains("-BlurtProbeResetTerms") { SharedStore.keyTerms = [] }
@@ -56,16 +46,6 @@ import BlurtiOSCore
           UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .accessibilityIdentifier("probe-dismiss")
-        .foregroundStyle(dark ? Color.white : Color.black)
-        // What Settings does while a keyboard is up elsewhere: the layout
-        // changes in the App Group, and the keyboard reads it when it next
-        // appears. One button per layout, so a flow can switch and re-show.
-        HStack {
-          ForEach(KeyboardLayout.allCases) { layout in
-            Button(layout.rawValue) { SharedStore.layout = layout }
-              .accessibilityIdentifier("probe-layout-\(layout.rawValue)")
-          }
-        }
         .foregroundStyle(dark ? Color.white : Color.black)
         Spacer(minLength: 0)
       }

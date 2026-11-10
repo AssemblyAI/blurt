@@ -238,8 +238,8 @@ struct KeyboardModelProtocolTests {
     #expect(proxy.before == "Hi one four")
   }
 
-  @Test("delete right after a dictation takes all of it back; otherwise one character")
-  func deleteTakesBackDictation() {
+  @Test("delete right after a dictation takes all of it back, once; anywhere else it is an ordinary delete")
+  func undoLastInsertion() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()
@@ -251,42 +251,46 @@ struct KeyboardModelProtocolTests {
         forKey: BlurtShared.Key.result)
       model.resultArrived()
     }
+    // Nothing landed yet: nothing to take back.
     proxy.before = "Hi"
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi")
     deliver("there friend")
     #expect(proxy.before == "Hi there friend")
-    model.deleteBackward()
+    #expect(model.undoLastInsertion())
     #expect(proxy.before == "Hi")
     // Only once: the next delete is a character again.
-    model.deleteBackward()
-    #expect(proxy.before == "H")
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi")
 
-    // Typing after the dictation makes delete a character again.
+    // The keyboard's own edit after the dictation ends the undo.
     deliver("again")
-    model.type("!")
-    model.deleteBackward()
-    #expect(proxy.before == "H again")
+    proxy.insertText("!")
+    model.hostEdited()
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi again!")
 
     // So does a caret that no longer sits at the dictation's end, or a selection.
     deliver("moved")
     proxy.before += "x"
-    model.deleteBackward()
-    #expect(proxy.before == "H again moved")
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi again! movedx")
     deliver("chosen")
     proxy.selected = "chosen"
-    model.deleteBackward()
-    #expect(proxy.before == "H again moved chose")
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi again! movedx chosen")
     proxy.selected = nil
 
     // Another field whose text happens to end the same way keeps its text.
     deliver("OK.")
     proxy.documentIdentifier = UUID()
-    model.deleteBackward()
-    #expect(proxy.before == "H again moved chose OK")
-    // Nor does it survive the keyboard leaving the screen.
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi again! movedx chosen OK.")
+    // Nor does the undo survive the keyboard leaving the screen.
     deliver("bye")
     model.disappeared()
-    model.deleteBackward()
-    #expect(proxy.before == "H again moved chose OK by")
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi again! movedx chosen OK. bye")
   }
 
   @Test("the term field never claims a cursor move or a selection")
@@ -326,42 +330,9 @@ struct KeyboardModelProtocolTests {
     proxy.selected = " riz "
     model.beginAddingTerm()
     #expect(model.termDraft == "riz")
-    model.type("z")
+    model.termType("z")
     model.saveTerm()
     #expect(proxy.before == "he said rizz ")
     #expect(SharedStore.keyTerms == ["rizz"])
-  }
-
-  @Test("shift follows the field: words, all characters, none")
-  func shiftModes() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let rig = KeyboardRig()
-    let model = rig.model
-    let proxy = rig.proxy
-    proxy.before = "hello "
-    proxy.autocapitalizationType = .words
-    model.contextChanged()
-    #expect(model.shifted)
-    proxy.before = "hello w"
-    model.contextChanged()
-    #expect(!model.shifted)
-    proxy.autocapitalizationType = .allCharacters
-    model.contextChanged()
-    #expect(model.shifted)
-    proxy.autocapitalizationType = .none
-    model.shifted = false
-    proxy.before = ""
-    model.contextChanged()
-    #expect(!model.shifted)
-  }
-
-  @Test("number fields open on the symbols page")
-  func symbolsForNumbers() {
-    #expect(KeyboardModel.wantsSymbols(.numberPad))
-    #expect(KeyboardModel.wantsSymbols(.phonePad))
-    #expect(KeyboardModel.wantsSymbols(.decimalPad))
-    #expect(!KeyboardModel.wantsSymbols(.default))
-    #expect(!KeyboardModel.wantsSymbols(nil))
   }
 }
