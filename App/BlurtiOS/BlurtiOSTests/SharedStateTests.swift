@@ -120,6 +120,10 @@ struct SharedDefaultsTests {
     #expect(!SharedStore.autoDictate)
     SharedStore.autoDictate = true
     #expect(SharedStore.autoDictate)
+    // On until turned off: delete after a dictation behaves as it shipped.
+    #expect(SharedStore.deleteWholeDictation)
+    SharedStore.deleteWholeDictation = false
+    #expect(!SharedStore.deleteWholeDictation)
     #expect(SharedStore.windowMinutes == 15)
     // 0 is a real choice (until closed), not the unset default.
     SharedStore.windowMinutes = 0

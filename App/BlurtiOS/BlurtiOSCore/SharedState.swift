@@ -26,6 +26,8 @@ package nonisolated enum BlurtShared {
   package nonisolated enum Key {
     package static let layout = "keyboardLayout"
     package static let autoDictate = "autoDictate"
+    /// Whether delete right after a dictation takes all of it back.
+    package static let deleteWholeDictation = "deleteWholeDictation"
     package static let theme = "keyboardTheme"
     /// TEMPORARY: which mic concept draws (a, b or c), while the three are
     /// tried in use. Goes with the losers once one is picked.
@@ -52,38 +54,6 @@ package nonisolated enum BlurtShared {
     package static let phase = "com.assemblyai.blurt.iphone.phase"
     package static let result = "com.assemblyai.blurt.iphone.result"
     package static let lexicon = "com.assemblyai.blurt.iphone.lexicon"
-  }
-}
-
-/// Which keyboard the user chose. All three share the same plumbing underneath;
-/// they differ only in how much keyboard sits around the mic.
-package nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identifiable {
-  /// A slim strip: the mic, delete, return and the globe. Typing letters means
-  /// switching back to the system keyboard.
-  case slimBar
-  /// A big orb with cancel beside it and a few keys — the shape Wispr and
-  /// Aqua ship — that swipes to the full keyboard.
-  case panel
-  /// A complete keyboard with the mic as the main key, so nobody has to switch
-  /// keyboards to fix a typo.
-  case full
-
-  package var id: String { rawValue }
-
-  package var title: String {
-    switch self {
-    case .slimBar: "Mic bar"
-    case .panel: "Mic panel"
-    case .full: "Full keyboard"
-    }
-  }
-
-  package var summary: String {
-    switch self {
-    case .slimBar: "Just the mic and a few keys. Switch keyboards to type."
-    case .panel: "A big mic with status and cancel. Swipe sideways for the full keyboard, and back."
-    case .full: "Every letter key, with the orb above them."
-    }
   }
 }
 
@@ -287,6 +257,16 @@ package nonisolated enum SharedStore {
       return defaults.bool(forKey: BlurtShared.Key.autoDictate)
     }
     set { defaults.set(newValue, forKey: BlurtShared.Key.autoDictate) }
+  }
+
+  /// Delete right after a dictation takes all of it back (`deleteBackward`). On by default, as it shipped;
+  /// off, that delete is one character like any other.
+  package static var deleteWholeDictation: Bool {
+    get {
+      guard defaults.object(forKey: BlurtShared.Key.deleteWholeDictation) != nil else { return true }
+      return defaults.bool(forKey: BlurtShared.Key.deleteWholeDictation)
+    }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.deleteWholeDictation) }
   }
 
   /// How long a listening window stays open with nobody dictating, in minutes.
