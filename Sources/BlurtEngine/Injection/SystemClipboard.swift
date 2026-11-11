@@ -55,11 +55,13 @@
   /// comparison that gates the deferred restore lives here, behind the seam, so a
   /// fake never re-implements it.
   struct SystemClipboard: ClipboardAccess {
+    // Not transient: these words are meant to stay for a paste by hand, so a
+    // clipboard manager keeping them is a feature here.
     func write(_ text: String) { setString(text) }
 
     func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void {
       let saved = snapshot()
-      setString(text)
+      setString(text, transient: true)
       // Snapshot the change count our own write produced. If anything else writes
       // to the pasteboard before the restore fires (e.g. the user copies
       // something), the count moves and the restore leaves their newer contents
@@ -117,11 +119,19 @@
       return PasteboardSnapshot(items: captured, plainText: pasteboard.string(forType: .string))
     }
 
-    func setString(_ text: String) {
+    /// nspasteboard.org's marker for contents that exist only for a moment.
+    /// Clipboard managers (Raycast, Maccy, Alfred) skip an item carrying it, so
+    /// the paste's transcript and the restore that follows it don't land in the
+    /// user's clipboard history as copies they never made. The data is empty:
+    /// the type's presence is the whole signal.
+    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+
+    func setString(_ text: String, transient: Bool = false) {
       noteOwnWrite()
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
       pasteboard.setString(text, forType: .string)
+      if transient { pasteboard.setData(Data(), forType: Self.transientType) }
     }
 
     func restore(_ saved: PasteboardSnapshot) {
@@ -145,6 +155,9 @@
         for (type, data) in item.dataMap {
           pasteboardItem.setData(data, forType: type)
         }
+        // Putting the user's own contents back is not a new copy: without the
+        // marker a clipboard manager records it again, on every dictation.
+        pasteboardItem.setData(Data(), forType: Self.transientType)
         return pasteboardItem
       }
 
@@ -170,6 +183,7 @@
       if let plainText = saved.plainText {
         pasteboard.clearContents()
         pasteboard.setString(plainText, forType: .string)
+        pasteboard.setData(Data(), forType: Self.transientType)
       }
     }
   }

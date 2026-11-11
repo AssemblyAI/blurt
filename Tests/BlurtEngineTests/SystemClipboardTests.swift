@@ -154,6 +154,43 @@
       }
     }
 
+    /// Clipboard managers poll the pasteboard and keep every change. A paste's
+    /// transcript and the restore after it are neither of them copies the user
+    /// made, so both carry the marker those apps skip.
+    @Test("the paste's transcript and the restore after it are both marked transient")
+    func pasteWritesAreTransient() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        pb.clearContents()
+        pb.setString("original", forType: .string)
+        #expect(pb.types?.contains(SystemClipboard.transientType) == false)
+
+        let restore = clip.writeAndPrepareRestore("transcript")
+        #expect(pb.string(forType: .string) == "transcript")
+        #expect(pb.types?.contains(SystemClipboard.transientType) == true)
+
+        restore()
+        #expect(pb.string(forType: .string) == "original")
+        #expect(pb.types?.contains(SystemClipboard.transientType) == true)
+      }
+    }
+
+    @Test("the plain-text floor of a restore is marked transient too")
+    func textFloorRestoreIsTransient() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        clip.setString("transcript")
+        clip.restore(PasteboardSnapshot(items: [SendablePasteboardItem(dataMap: [:])], plainText: "original text"))
+
+        #expect(pb.string(forType: .string) == "original text")
+        #expect(pb.types?.contains(SystemClipboard.transientType) == true)
+      }
+    }
+
     @Test("a clipboard changed after our paste is left alone rather than restored over")
     func restoreSkipsAfterAnExternalWrite() {
       // The change-count guard. The restore is deferred by `pasteSettleDuration`, and
@@ -192,6 +229,8 @@
         clip.write("transcript")
 
         #expect(pb.string(forType: .string) == "transcript")
+        // Left for the user to keep, so a clipboard manager may record it.
+        #expect(pb.types?.contains(SystemClipboard.transientType) == false)
       }
     }
 
