@@ -112,6 +112,12 @@ utterance.
   on AssemblyAI's published benchmarks.
 - **Multilingual** — works in 18 languages, detected automatically, and you
   can code-switch mid-sentence.
+- **Quiets your music** (Experimental, off by default: Settings › Advanced) —
+  start dictating and Spotify or Apple Music pauses, then resumes the moment
+  you stop. Only ever pauses a player that's already playing, so it can't start
+  music you didn't ask for. Browser audio isn't covered: nothing on macOS will
+  tell an app whether a browser tab is playing, and pausing blindly would start
+  playback as often as it stopped it.
 - **Live feedback** — a floating overlay pill shows a real-time mic level
   meter and the pipeline phase; a menu bar indicator mirrors it from anywhere.
 - **Actual synth cues** — start and stop can be cued by real Yamaha DX7 or

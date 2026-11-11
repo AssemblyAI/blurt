@@ -216,6 +216,8 @@ final class AppCoordinator {
       self.overlay?.show(state: state ?? self.lastPhase.overlayStateAfterSpeech)
     }
     router.speechLevel = { [weak self] level in self?.overlay?.pushLevel(level) }
+    // An ask's music stays paused through its answer, a job's until it's done.
+    router.pressSettled = { [weak self] in self?.media.pressSettled() }
     // The pill just goes away on a failed read, so say something went wrong.
     router.speechFailed = { _ in NSSound.beep() }
     speechRouter = router
@@ -331,8 +333,10 @@ final class AppCoordinator {
 
   // MARK: - Dictation render
 
-  /// The record start/stop chimes (see `CueSoundPlayer` below).
+  /// The record start/stop chimes (see `CueSoundPlayer` below), and the music
+  /// pause riding the same recording edges (`MediaPauseController`).
   private let cues = CueSoundPlayer()
+  private let media = MediaPauseController()
 
   /// Called when the user changes a key's sound in Settings: reload that key's
   /// cue players and preview the new voice so the choice is audible immediately.
@@ -377,6 +381,7 @@ final class AppCoordinator {
     isCapturing = phase.isCapturing
 
     cues.transition(for: phase)
+    media.transition(for: phase, recordsCommand: speechRouter?.recordsCommand ?? false)
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the

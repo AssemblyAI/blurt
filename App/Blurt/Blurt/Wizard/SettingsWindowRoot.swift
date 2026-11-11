@@ -83,6 +83,7 @@ private struct AdvancedSettingsTab: View {
     SettingsPane {
       UpdatesSection(model: updaterModel)
       MaintenanceSection()
+      ExperimentalSection()
       ResetSection(coordinator: coordinator)
     }
   }

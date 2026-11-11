@@ -84,10 +84,12 @@ reset_install() {
   echo "==> Resetting TCC permissions for $bundle_id"
   # Microphone (recording), Accessibility (typing into other apps), and
   # ListenEvent / Input Monitoring (the CGEventTap that backs the hold-to-dictate
-  # hotkey — see DictationKeyTap).
+  # hotkey — see DictationKeyTap), and AppleEvents / Automation (controlling
+  # Spotify and Music for the music pause — see MediaPauseController).
   tccutil reset Accessibility "$bundle_id" || true
   tccutil reset Microphone "$bundle_id" || true
   tccutil reset ListenEvent "$bundle_id" || true
+  tccutil reset AppleEvents "$bundle_id" || true
 
   echo "==> Removing duplicate LaunchServices registrations for $bundle_id"
   # Repeated builds leave Blurt.app copies in DerivedData, /tmp, periphery

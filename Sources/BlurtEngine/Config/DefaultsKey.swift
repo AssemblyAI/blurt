@@ -66,6 +66,8 @@ enum DefaultsKey: String, CaseIterable {
   /// Whether a recording starts and stops on its own with meetings
   /// (`MeetingAutoRecordStore`).
   case autoRecordMeetings = "AutoRecordMeetings"
+  /// Whether a recording pauses Spotify and Apple Music (`MediaPauseStore`).
+  case pauseMedia = "PauseMediaWhileDictating"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

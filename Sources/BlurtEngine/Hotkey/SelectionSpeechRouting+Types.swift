@@ -75,3 +75,16 @@ extension SelectionSpeechRouting {
     case working
   }
 }
+
+extension SelectionSpeechRouting {
+  /// What a press of a key bound to `action` does.
+  static func intent(_ action: TriggerKeyAction) -> Intent {
+    switch action {
+    case .ask: .ask
+    case .rewrite: .rewrite
+    case .compose: .compose
+    case .command: .command
+    case .readAloud, .dictate, .off: .read
+    }
+  }
+}
