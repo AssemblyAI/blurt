@@ -59,6 +59,17 @@ struct SelectionSpeechRouting: Sendable {
 
   init() {}
 
+  /// Whether a press of this router's is under way — its selection read, its
+  /// recording, its transcription, its read or answer, its job. False only at
+  /// rest (`.passthrough`), where a dictating key's presses go straight through.
+  var isHandlingPress: Bool { mode != .passthrough }
+
+  /// Whether the press recording now is a command's. The music pause leaves a
+  /// command's recording alone (`MediaPauseGate`).
+  var recordsCommand: Bool {
+    if case .asking(.command, _, _, _) = mode { true } else { false }
+  }
+
   /// What the pill shows while the session records or transcribes a job's
   /// spoken words, in place of "Transcribing": "Rewriting" for a rewrite's
   /// instruction, "Writing" for a composition's, "Working" for a command.
@@ -288,16 +299,6 @@ struct SelectionSpeechRouting: Sendable {
       // spoken — and before the session is free to record it, if it isn't yet.
       let prepare: [Action] = intent == .command ? [.prepareCommand] : []
       return prepare + (sessionBusy ? [] : [.forward(.pressHandingBack(key: nil))])
-    }
-  }
-
-  private static func intent(_ action: TriggerKeyAction) -> Intent {
-    switch action {
-    case .ask: .ask
-    case .rewrite: .rewrite
-    case .compose: .compose
-    case .command: .command
-    case .readAloud, .dictate, .off: .read
     }
   }
 

@@ -6,8 +6,8 @@
 /// still gets **its own script**: AppleScript resolves an app's terminology when
 /// the script compiles, so one script naming an app that isn't installed fails
 /// whole (-2741) — a Mac without Spotify would never pause Music. The host also
-/// scripts only players that are running (`running(among:)`), which spares a
-/// process launch when nothing is.
+/// scripts only players that are running and that Blurt may control
+/// (`AutomationConsent`), which spares a process launch when nothing is.
 /// Deliberately a closed enum rather than a configurable list: each addition needs
 /// its scripting dictionary verified (Spotify's command codes are
 /// `spfyPaus`/`spfyPlay`, Apple Music's `hookPaus`/`hookPlay`, both exposing
@@ -45,7 +45,7 @@ public enum MediaPlayerApp: String, CaseIterable, Sendable {
   case spotify = "Spotify"
   case appleMusic = "Music"
 
-  /// The bundle id a running copy reports (`NSRunningApplication.bundleIdentifier`).
+  /// The bundle id Apple Events address this player by (`AEDeterminePermissionToAutomateTarget`).
   public var bundleIdentifier: String {
     switch self {
     case .spotify: "com.spotify.client"
@@ -53,17 +53,10 @@ public enum MediaPlayerApp: String, CaseIterable, Sendable {
     }
   }
 
-  /// The players among `bundleIDs` (the running apps' ids), in roster order.
-  public static func running(among bundleIDs: some Sequence<String?>) -> [MediaPlayerApp] {
-    let ids = Set(bundleIDs.compactMap(\.self))
-    return allCases.filter { ids.contains($0.bundleIdentifier) }
-  }
-
   /// Pauses this player if it is playing, and returns `paused` when it did. The
   /// `is running` check reads the state without launching the app, which matters
-  /// since it may have quit since the host looked. No `try`: a failure — `-1743`
-  /// for a declined consent prompt — exits non-zero with the error on stderr, for
-  /// the host to log.
+  /// since it may have quit since the host looked. No `try`: a failure exits
+  /// non-zero with the error on stderr, for the host to log.
   public var pauseScript: String {
     """
     if application "\(rawValue)" is running then
@@ -78,34 +71,6 @@ public enum MediaPlayerApp: String, CaseIterable, Sendable {
     """
   }
 
-  /// Asks this player its state and nothing else: the harmless Apple Event the
-  /// switch sends as it turns on, so macOS's consent prompt comes then rather
-  /// than in the middle of a dictation.
-  public var consentScript: String {
-    """
-    if application "\(rawValue)" is running then
-      tell application "\(rawValue)" to get player state
-    end if
-    """
-  }
-
-  /// The AppleScript error number in `osascript`'s stderr — the last
-  /// parenthesized number (`… Not authorized to send Apple events to Music.
-  /// (-1743)`), or nil when there is none.
-  public static func errorNumber(in stderr: String) -> Int? {
-    var number: Int?
-    var rest = Substring(stderr)
-    while let open = rest.firstIndex(of: "("), let close = rest[open...].firstIndex(of: ")") {
-      if let value = Int(rest[rest.index(after: open)..<close]) { number = value }
-      rest = rest[rest.index(after: close)...]
-    }
-    return number
-  }
-
-  /// `errorNumber`'s value for a declined Automation consent: the user said no,
-  /// and asking again on every dictation would only log the same refusal.
-  public static let consentDeclined = -1743
-
   /// Resumes this player only if it is still paused: playback the user changed
   /// during the dictation — stopped it, or started it again — is theirs, and a
   /// player that quit is not relaunched.
@@ -117,5 +82,34 @@ public enum MediaPlayerApp: String, CaseIterable, Sendable {
       end tell
     end if
     """
+  }
+}
+
+/// Whether Blurt may send a player Apple Events: the answer of
+/// `AEDeterminePermissionToAutomateTarget`, asked *without* prompting before
+/// every pause, so a dictation never puts macOS's consent prompt up mid-sentence
+/// and never scripts a player that isn't running. Only the switch turning on (or
+/// its "Allow" button) asks with the prompt.
+public enum AutomationConsent: Equatable, Sendable {
+  case granted
+  /// The user declined; only System Settings can undo it.
+  case denied
+  /// Running, never asked: scripting it would put the prompt up.
+  case notAsked
+  case notRunning
+  /// Any other status, kept for the log.
+  case unknown(Int32)
+
+  /// `noErr`, `errAEEventNotPermitted` (-1743), `errAEEventWouldRequireUserConsent`
+  /// (-1744) and `procNotFound` (-600), as `AEDeterminePermissionToAutomateTarget`
+  /// returns them.
+  public init(status: Int32) {
+    switch status {
+    case 0: self = .granted
+    case -1743: self = .denied
+    case -1744: self = .notAsked
+    case -600: self = .notRunning
+    default: self = .unknown(status)
+    }
   }
 }

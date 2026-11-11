@@ -11,14 +11,15 @@ import Dispatch
 ///
 /// Its own type rather than a member of `DictationSession`, because the press
 /// pipeline is one of several callers: read-aloud's selection read and its
-/// clipboard copy (`SelectionSpeaker`, `SelectionCopy`) run here too.
-enum BlockingIPC {
+/// clipboard copy (`SelectionSpeaker`, `SelectionCopy`) run here too, and the
+/// app's Automation-consent reads (`MediaPauseController.consent`).
+public enum BlockingIPC {
   static let queue = DispatchQueue(
     label: HostIdentity.current.queueLabel("BlockingIPC"), qos: .userInitiated, attributes: .concurrent)
 
   /// Runs `work` on `queue` and awaits it: the awaitable form of
   /// `queue.async`, for a caller that needs the result.
-  static func run<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+  public static func run<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
     await withCheckedContinuation { continuation in
       queue.async { continuation.resume(returning: work()) }
     }

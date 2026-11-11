@@ -111,8 +111,14 @@ struct MaintenanceSection: View {
 /// dictation to disk.
 struct ExperimentalSection: View {
   @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = false
-  /// Which players refused the consent asked as the music switch turned on.
-  @State private var refusedPlayers: [MediaPlayerApp] = []
+  /// Each player's Automation consent, read whenever the section appears, the
+  /// app comes back to the front (from System Settings, say), or the switch
+  /// turns on — so the note is right after a relaunch too.
+  @State private var consent: [MediaPlayerApp: AutomationConsent] = [:]
+  /// The consent read in flight. Each read cancels the one before, so only the
+  /// newest answer lands: one answered after the switch went off can't bring
+  /// back a note.
+  @State private var consentRead: Task<Void, Never>?
 
   var body: some View {
     Section {
@@ -123,21 +129,51 @@ struct ExperimentalSection: View {
       }
       .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
       // Ask for Automation consent now, not mid-dictation.
-      .onChange(of: pauseMedia) { _, isOn in
-        refusedPlayers = []
-        guard isOn else { return }
-        MediaPauseController.requestConsent { refusedPlayers = $0 }
-      }
+      .onChange(of: pauseMedia) { _, isOn in readConsent(prompting: isOn) }
     } header: {
       Text("Experimental")
     } footer: {
-      // Only the consent note: the panes don't scroll, and each row's subtitle
+      // Only the consent notes: the panes don't scroll, and each row's subtitle
       // says what it does.
-      if !refusedPlayers.isEmpty {
-        Text(
-          "Blurt can't control \(refusedPlayers.map(\.rawValue).joined(separator: " or ")). "
-            + "Allow it in System Settings › Privacy & Security › Automation.")
+      if pauseMedia { consentNotes }
+    }
+    .task { readConsent(prompting: false) }
+    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+      readConsent(prompting: false)
+    }
+  }
+
+  @ViewBuilder private var consentNotes: some View {
+    let denied = players(.denied)
+    let notAsked = players(.notAsked)
+    if !denied.isEmpty {
+      Text(
+        "Blurt can't control \(denied). Allow it in System Settings › Privacy & Security › Automation.")
+    }
+    if !notAsked.isEmpty {
+      // A player opened after the switch went on: a dictation won't ask, so ask here.
+      HStack {
+        Text("Blurt needs your permission to control \(notAsked).")
+        Button("Allow…") { readConsent(prompting: true) }
       }
+    }
+  }
+
+  /// The players with `state`, named for a sentence: "Spotify or Music".
+  private func players(_ state: AutomationConsent) -> String {
+    MediaPlayerApp.allCases.filter { consent[$0] == state }.map(\.rawValue).formatted(.list(type: .or))
+  }
+
+  private func readConsent(prompting: Bool) {
+    consentRead?.cancel()
+    // Off, or about to prompt: drop the old notes now, so one from before
+    // doesn't sit under a switch that's off or beside the prompt it asks for.
+    if !pauseMedia || prompting { consent = [:] }
+    guard pauseMedia else { return }
+    consentRead = Task {
+      let answer = await MediaPauseController.consent(prompting: prompting)
+      guard !Task.isCancelled else { return }
+      consent = answer
     }
   }
 }

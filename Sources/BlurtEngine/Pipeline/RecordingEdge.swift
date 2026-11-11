@@ -1,5 +1,5 @@
 /// Which way the recording edge moved on a pipeline-phase change.
-public enum RecordingEdge: Equatable, Sendable {
+enum RecordingEdge: Equatable, Sendable {
   case began
   case ended
 }
@@ -20,13 +20,16 @@ public enum RecordingEdge: Equatable, Sendable {
 /// when the dictation reaches a terminal phase — the transcribe/inject tail is no
 /// longer recording, so anything suppressed for the microphone's benefit should
 /// be restored there rather than a second or two later.
-public struct RecordingEdgeDetector: Sendable {
+struct RecordingEdgeDetector: Sendable {
   private var wasRecording = false
 
-  public init() {}
+  init() {}
+
+  /// Whether the last phase seen was `.recording`: the mic is open.
+  var isRecording: Bool { wasRecording }
 
   /// The edge `phase` crossed, or `nil` when the recording state didn't move.
-  public mutating func edge(for phase: PipelinePhase) -> RecordingEdge? {
+  mutating func edge(for phase: PipelinePhase) -> RecordingEdge? {
     let isRecording = phase == .recording
     defer { wasRecording = isRecording }
     switch (wasRecording, isRecording) {

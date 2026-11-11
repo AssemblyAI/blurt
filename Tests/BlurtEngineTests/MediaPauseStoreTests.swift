@@ -45,13 +45,6 @@ struct MediaPauseStoreTests {
     #expect(MediaPlayerApp.allCases.map(\.bundleIdentifier) == ["com.spotify.client", "com.apple.Music"])
   }
 
-  @Test("only running players are scripted, in roster order")
-  func runningPlayers() {
-    #expect(MediaPlayerApp.running(among: ["com.apple.finder", nil]).isEmpty)
-    #expect(MediaPlayerApp.running(among: ["com.apple.Music"]) == [.appleMusic])
-    #expect(MediaPlayerApp.running(among: ["com.apple.Music", "com.spotify.client"]) == [.spotify, .appleMusic])
-  }
-
   /// AppleScript resolves app terminology at compile time, so a script naming an
   /// uninstalled app fails whole: each player's script must name only that player.
   @Test("each player's scripts name only that player")
@@ -72,20 +65,12 @@ struct MediaPauseStoreTests {
     #expect(MediaPlayerApp.spotify.resumeScript.contains("if player state is paused then play"))
   }
 
-  @Test("the consent request only asks a running player its state")
-  func consentScriptIsHarmless() {
-    let script = MediaPlayerApp.appleMusic.consentScript
-    #expect(script.contains("application \"Music\" is running"))
-    #expect(script.contains("get player state"))
-    #expect(!script.contains("pause") && !script.contains("play\n"))
-  }
-
-  @Test("the AppleScript error number is read from osascript's stderr")
-  func errorNumberParsing() {
-    let declined = "execution error: Not authorized to send Apple events to Music. (-1743)"
-    #expect(MediaPlayerApp.errorNumber(in: declined) == MediaPlayerApp.consentDeclined)
-    #expect(MediaPlayerApp.errorNumber(in: "0:42: syntax error (Expected end of line) (-2741)") == -2741)
-    #expect(MediaPlayerApp.errorNumber(in: "something went wrong") == nil)
-    #expect(MediaPlayerApp.errorNumber(in: "") == nil)
+  @Test("the automation-consent status maps to what the pause and Settings act on")
+  func consentStatusMapping() {
+    #expect(AutomationConsent(status: 0) == .granted)
+    #expect(AutomationConsent(status: -1743) == .denied)
+    #expect(AutomationConsent(status: -1744) == .notAsked)
+    #expect(AutomationConsent(status: -600) == .notRunning)
+    #expect(AutomationConsent(status: -50) == .unknown(-50))
   }
 }
