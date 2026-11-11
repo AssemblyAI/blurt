@@ -66,6 +66,8 @@ enum DefaultsKey: String, CaseIterable {
   /// Whether a recording starts and stops on its own with meetings
   /// (`MeetingAutoRecordStore`).
   case autoRecordMeetings = "AutoRecordMeetings"
+  /// Whether a bare Escape cancels what is in flight (`EscapeCancelStore`).
+  case escapeCancelsDictation = "EscapeCancelsDictation"
   /// Whether a recording pauses Spotify and Apple Music (`MediaPauseStore`).
   case pauseMedia = "PauseMediaWhileDictating"
 

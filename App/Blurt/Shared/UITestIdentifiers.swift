@@ -97,6 +97,7 @@ enum UITestIdentifiers {
   static let noticeLabel = "harness.notice"
   static let developerToggle = "settings.developer.toggle"
   static let developerShowLogs = "settings.developer.showLogs"
+  static let escapeCancelToggle = "settings.experimental.escapeCancel"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let pauseMediaToggle = "settings.pauseMedia.toggle"
   static let rewriteModePicker = "settings.rewriteMode.picker"

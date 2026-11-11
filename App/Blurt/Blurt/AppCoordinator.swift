@@ -187,7 +187,9 @@ final class AppCoordinator {
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
-      onRecordingDiscarded: { router.submit(.cancelRecording) }
+      onRecordingDiscarded: { router.submit(.cancelRecording) },
+      onEscape: { router.escape() },
+      isBusy: { router.isBusy }
     )
     router.syncGateAfterSession = { [weak self] in self?.keyTap?.syncAfterTerminalPhase() }
     router.resetGate = { [weak self] in self?.keyTap?.resetGate() }
@@ -333,8 +335,7 @@ final class AppCoordinator {
 
   // MARK: - Dictation render
 
-  /// The record start/stop chimes (see `CueSoundPlayer` below), and the music
-  /// pause riding the same recording edges (`MediaPauseController`).
+  /// The record start/stop chimes (`CueSoundPlayer` below), and the music pause on the same edges.
   private let cues = CueSoundPlayer()
   private let media = MediaPauseController()
 

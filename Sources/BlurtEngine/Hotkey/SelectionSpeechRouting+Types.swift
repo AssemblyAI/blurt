@@ -4,6 +4,12 @@
 // outside the routing uses the state types.
 
 extension SelectionSpeechRouting {
+  /// How long a read or ask key must stay down, in a mode that holds, before
+  /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
+  /// asker waits this long (plus the mic bring-up) for the start chime before
+  /// speaking; a deliberate tap is over long before it.
+  static let holdDelay = Duration.milliseconds(350)
+
   enum Action: Sendable, Equatable {
     case forward(DictationSession.Command)
     /// Start the Accessibility read. Its result comes back through `selectionResolved`.
@@ -40,8 +46,27 @@ extension SelectionSpeechRouting {
   enum Intent: Sendable, Equatable {
     case read, ask, rewrite, compose, command
 
+    /// The request a key's action makes; every non-request key reads.
+    init(_ action: TriggerKeyAction) {
+      switch action {
+      case .ask: self = .ask
+      case .rewrite: self = .rewrite
+      case .compose: self = .compose
+      case .command: self = .command
+      case .readAloud, .dictate, .off: self = .read
+      }
+    }
+
     /// Whether the press records a spoken request (`.asking`) rather than reading.
     var records: Bool { self != .read }
+
+    /// What dropping a press that reached `.asking` leaves to undo. A command
+    /// prepared its screen there (`.prepareCommand`): its read is under way
+    /// and, in a Chromium browser, its page tree switched on, so `.stopJob`
+    /// stops one and undoes the other — whether it was dropped by a combo,
+    /// nothing said, a press while it transcribed, or an Escape. Nothing for
+    /// any other request, and nothing before `.asking`, which prepared nothing.
+    var abandoned: [Action] { self == .command ? [.stopJob] : [] }
   }
 
   /// How a read or ask press proved itself: a tap (the gate latched), or a
@@ -73,18 +98,5 @@ extension SelectionSpeechRouting {
     /// A rewrite, a composition or a command is under way: the router's one job. Like
     /// `.speaking`, the gate is free under it, and any press abandons it.
     case working
-  }
-}
-
-extension SelectionSpeechRouting {
-  /// What a press of a key bound to `action` does.
-  static func intent(_ action: TriggerKeyAction) -> Intent {
-    switch action {
-    case .ask: .ask
-    case .rewrite: .rewrite
-    case .compose: .compose
-    case .command: .command
-    case .readAloud, .dictate, .off: .read
-    }
   }
 }

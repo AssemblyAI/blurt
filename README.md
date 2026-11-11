@@ -118,6 +118,12 @@ utterance.
   music you didn't ask for. Browser audio isn't covered: nothing on macOS will
   tell an app whether a browser tab is playing, and pausing blindly would start
   playback as often as it stopped it.
+- **Escape to throw it away** (Experimental, off by default: Settings ›
+  Advanced) — press <kbd>esc</kbd> to throw a dictation away: while you're
+  still speaking, or after, until the text lands. A rewrite, a
+  composition, a command or a spoken answer stops too. Nothing is pasted, though
+  audio already sent has been transcribed, and an Escape after the paste can't
+  undo it. Escape isn't swallowed, so it still reaches whatever app you're in.
 - **Live feedback** — a floating overlay pill shows a real-time mic level
   meter and the pipeline phase; a menu bar indicator mirrors it from anywhere.
 - **Actual synth cues** — start and stop can be cued by real Yamaha DX7 or

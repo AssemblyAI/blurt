@@ -147,6 +147,11 @@ import Foundation
       perform(routing.submit(command))
     }
 
+    /// A bare Escape with something in flight: stop it all (`SelectionSpeechRouting.escape`).
+    public func escape() { perform(routing.escape()) }
+    /// Whether a dictation, press, request, read, answer or job is under way.
+    public var isBusy: Bool { routing.isBusy }
+
     /// `DictationKeyTap`'s latch: the press was a tap.
     public func keyLatched() {
       perform(routing.keyLatched())

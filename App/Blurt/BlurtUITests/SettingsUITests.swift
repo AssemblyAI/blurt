@@ -108,6 +108,21 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(picker.value as? String, "None", "Choosing None should stick as the selection")
   }
 
+  /// The Escape cancel is an experimental switch: shown in the Advanced pane with
+  /// developer mode off, off by default, and on with a click.
+  func testEscapeCancelIsAnExperimentalSwitchThatDefaultsOff() {
+    let advanced = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
+    let developer = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
+    XCTAssertTrue(developer.waitForExistence(timeout: 10), "Developer mode toggle not found")
+    XCTAssertEqual("\(developer.value ?? "")", "0", "Developer mode should start switched off")
+
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.escapeCancelToggle)
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Cancel-with-Escape toggle not found")
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Cancel with Escape should default OFF")
+    toggle.click()
+    XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should turn Cancel with Escape on")
+  }
+
   /// The media pause is an experimental switch: shown in the Advanced pane with
   /// developer mode off, off by default, and on with a click.
   func testMediaPauseIsAnExperimentalSwitchThatDefaultsOff() {

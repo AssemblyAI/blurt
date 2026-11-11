@@ -40,6 +40,7 @@ struct PersistedSettingsTests {
     // The text shortcuts: left out, a reset would keep expanding the user's
     // phrases into their old snippets.
     #expect(PersistedSettings.allDefaultsKeys.contains(TextShortcutStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(EscapeCancelStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(MediaPauseStore.defaultsKey))
   }
 
@@ -49,7 +50,7 @@ struct PersistedSettingsTests {
     // ReadAloudStyleStore and StyleProfileStore three each): a removed store
     // must leave the roster in the same change, and a key listed twice would hint
     // at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 23)
+    #expect(PersistedSettings.allDefaultsKeys.count == 24)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -84,12 +85,13 @@ struct PersistedSettingsTests {
       ReadAloudStyleStore.skipsJargonDefaultsKey,
       ReadAloudStyleStore.voiceDefaultsKey,
       MeetingAutoRecordStore.defaultsKey,
+      EscapeCancelStore.defaultsKey,
       MediaPauseStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 23)
+    #expect(storeKeys.count == 24)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

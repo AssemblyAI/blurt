@@ -925,7 +925,21 @@ three of them pure engine logic:
   among the losses and the gate is reset. The host passes the raw `CGEventSource.flagsState` read
   in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
-  shell `if`.
+  shell `if`. It also routes an Escape — `Event.fromKeyDown`: keycode 53, not a key-repeat, its switch on —
+  arriving as `.escapeDown(rawFlags:)`. The app passes the switch as `EscapeCancelStore`
+  (`BlurtEscapeCancelsDictation`, off by default, the Advanced pane's Experimental section), read at
+  the keystroke and only for an Escape; off, the event is `.keyDown(53)`, so Escape takes the
+  ordinary-key path exactly as on main and nothing else is asked. Only a **bare** one counts: no ⌘⌥⌃⇧ beyond the held trigger's own
+  generic bit (an Escape over a held right ⌘ carries `maskCommand`), and not with that trigger's twin
+  held too, so ⌘Esc with both ⌘s and ⌥⌘Esc stay shortcuts. The router decides it, since only it knows
+  which trigger is held. A bare one is a discard only with the gate live or the host's `inFlight` (`handle(_:at:inFlight:)`, what the gate can't see: a dictation
+  past its recording, a request, a job, a read) true, since the tap is listen-only and sees every
+  Escape on the system: the router `reset()`s — gate, `modifierIsDown` and `activeKeyCode` — so another
+  key works at once, and returns `.discard`, the one action that means it. Any `reset()` remembers a
+  trigger still held through it (`heldThroughReset`): its re-reported down bit and its key-up are
+  inert until it is let go, or the re-report would read as a fresh press and start a new dictation —
+  after a discard, and again at the `syncAfterTerminalPhase` reset the discarded dictation's end
+  brings. Dropped-event recovery checks it against the held flags, since its release may be lost. Otherwise the ordinary-key path again.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
 `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
@@ -933,9 +947,20 @@ key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator
 `syncAfterTerminalPhase()` on every terminal phase: a dictation can end with no key event to close
 the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
 and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
-`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. The tap
-**swallows nothing**: a lone modifier types nothing, and combos pass through so normal shortcuts keep
-working.
+`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. An Escape's
+`inFlight` is the read-aloud router's `isBusy` (its own mode, or the session busy), and the tap maps
+`.discard` to `SelectionSpeechRouter.escape()` and `.cancel` to a combo's `submit(.cancel)`, deriving
+nothing from the event itself. `escape()` stops, from every routing mode, the router's own work — a job before it
+pastes, a read or answer, a request — and cancels a busy session, which a combo would leave running
+under a press still deciding. With nothing of the router's under way the cancel goes to the session
+unconditionally, and `DictationSession.cancel()` decides by its own phase (a no-op at rest), so a
+stale "in flight" can't strand a dictation. The ready screen's own hidden Esc button cancels as on main
+whatever the switch: it also answers ⌘-period, which the tap never routes, and with the tap's Escape
+on, its second cancel lands on a session the first already ended, where `cancel()` is a no-op. The
+tap **swallows nothing**: a lone modifier types nothing, combos pass through so normal shortcuts keep
+working, and the Escape cancel does **not** consume the keystroke — Escape still reaches the focused
+app. Making it exclusive would require an active (`.defaultTap`) tap, which is ruled out because
+macOS would then block on this process for every system-wide keystroke.
 
 Because the tap can't swallow `fn`, macOS's own 🌐 action ("Press 🌐 key to": emoji, input source,
 or Apple Dictation — each with its own sound or popup) would fire on every `fn` dictation. The

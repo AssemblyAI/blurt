@@ -111,6 +111,7 @@ struct MaintenanceSection: View {
 /// dictation to disk.
 struct ExperimentalSection: View {
   @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = false
+  @AppStorage(EscapeCancelStore.defaultsKey) private var escapeCancels = false
   /// Each player's Automation consent, read whenever the section appears, the
   /// app comes back to the front (from System Settings, say), or the switch
   /// turns on — so the note is right after a relaunch too.
@@ -130,6 +131,12 @@ struct ExperimentalSection: View {
       .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
       // Ask for Automation consent now, not mid-dictation.
       .onChange(of: pauseMedia) { _, isOn in readConsent(prompting: isOn) }
+      Toggle(isOn: $escapeCancels) {
+        SettingLabel(
+          title: "Cancel with Escape", systemImage: "escape",
+          subtitle: "Esc discards a dictation, request or answer in progress, from any app.")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.escapeCancelToggle)
     } header: {
       Text("Experimental")
     } footer: {

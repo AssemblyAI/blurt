@@ -46,6 +46,39 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     }
   }
 
+  /// `CGEventFlags`' generic ⌘, ⌥, ⌃ and ⇧ bits — `maskCommand`,
+  /// `maskAlternate`, `maskControl`, `maskShift` — raw, so the engine stays
+  /// free of CoreGraphics. Each is set by either side's key.
+  static let commandFlag: UInt64 = 0x10_0000
+  static let optionFlag: UInt64 = 0x8_0000
+  static let controlFlag: UInt64 = 0x4_0000
+  static let shiftFlag: UInt64 = 0x2_0000
+
+  /// The generic `CGEventFlags` bit this key sets along with its device bit —
+  /// `maskCommand`, `maskAlternate`, `maskControl` — which its other-side twin
+  /// sets too. Zero for `fn`: its secondary-fn bit is its device bit, and no
+  /// shortcut reads it as a modifier.
+  var sharedModifierMask: UInt64 {
+    switch self {
+    case .rightCommand, .leftCommand: return Self.commandFlag
+    case .rightOption, .leftOption: return Self.optionFlag
+    case .leftControl: return Self.controlFlag
+    case .function: return 0
+    }
+  }
+
+  /// The device bits of both sides of this key's modifier — this key's and its
+  /// twin's (right ⌃ is `NX_DEVICERCTLKEYMASK`, `0x2000`) — so a twin held as
+  /// well can be told from this key alone.
+  var twinDeviceMask: UInt64 {
+    switch self {
+    case .rightCommand, .leftCommand: return Self.leftCommand.deviceModifierMask | Self.rightCommand.deviceModifierMask
+    case .rightOption, .leftOption: return Self.leftOption.deviceModifierMask | Self.rightOption.deviceModifierMask
+    case .leftControl: return deviceModifierMask | 0x2000
+    case .function: return deviceModifierMask
+    }
+  }
+
   /// Inline sentence form, e.g. "Tap or hold right ⌘ to dictate".
   public var label: String {
     switch self {
