@@ -53,6 +53,17 @@ struct SelectionSpeechRouting: Sendable {
 
   init() {}
 
+  /// Whether a press of this router's is under way — its selection read, its
+  /// recording, its transcription, its read or answer, its job. False only at
+  /// rest (`.passthrough`), where a dictating key's presses go straight through.
+  var isHandlingPress: Bool { mode != .passthrough }
+
+  /// Whether the press recording now is a command's. The music pause leaves a
+  /// command's recording alone (`MediaPauseGate`).
+  var recordsCommand: Bool {
+    if case .asking(.command, _, _, _) = mode { true } else { false }
+  }
+
   /// What the pill shows while the session records or transcribes a job's
   /// spoken words, in place of "Transcribing": "Rewriting" for a rewrite's
   /// instruction, "Writing" for a composition's, "Working" for a command.
@@ -363,17 +374,13 @@ struct SelectionSpeechRouting: Sendable {
     return [.syncGateAfterSession] + intent.abandoned
   }
 
-  /// Whether anything is under way: a dictation the session is busy with, or a
-  /// press, request, read, answer or job of this router's. What makes an Escape
-  /// worth acting on (`DictationKeyRouter`'s `inFlight`).
-  var isBusy: Bool { mode != .passthrough || sessionBusy }
+  /// A press of this router's or a busy session: an Escape's `inFlight` (`DictationKeyRouter`).
+  var isBusy: Bool { isHandlingPress || sessionBusy }
 
   /// Escape: throw away everything in flight, and paste nothing. Unlike a combo
-  /// (`submit(.cancel)`), which a press still deciding absorbs and an earlier
-  /// dictation outlives, this stops the router's own work *and* cancels a busy
-  /// session. In passthrough the cancel goes to the session unconditionally: it
-  /// decides by its own phase (`cancel()` is a no-op at rest), so a moment-stale
-  /// "busy" can't strand a dictation. The key router has already cleared the gate.
+  /// (`submit(.cancel)`), it stops the router's own work *and* cancels a busy
+  /// session. In passthrough the cancel goes to the session unconditionally — its
+  /// `cancel()` is a no-op at rest — so a moment-stale "busy" can't strand a dictation.
   mutating func escape() -> [Action] {
     let busy: [Action] = sessionBusy ? [.forward(.cancel)] : []
     defer { mode = .passthrough }
@@ -382,8 +389,7 @@ struct SelectionSpeechRouting: Sendable {
     case .deciding:
       staleReads += 1  // its selection read is still out
       return busy
-    // Not yet asking, so nothing was prepared: as with a combo (`submit`).
-    case .selected: return busy
+    case .selected: return busy  // nothing prepared yet, as with a combo (`submit`)
     case .asking(let intent, _, let started, _), .transcribing(let intent, _, let started):
       // Unstarted, the session is busy with an earlier dictation: discard it too.
       return (started || sessionBusy ? [.forward(.cancel)] : []) + intent.abandoned

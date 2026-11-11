@@ -209,5 +209,5 @@ public struct HostIdentity: Sendable, Equatable {
 
   /// A dispatch-queue label under this identity's reverse-DNS prefix, matching
   /// what the queues were named when the prefix was a constant.
-  func queueLabel(_ name: String) -> String { "\(subsystem).\(name)" }
+  public func queueLabel(_ name: String) -> String { "\(subsystem).\(name)" }
 }

@@ -112,6 +112,12 @@ utterance.
   on AssemblyAI's published benchmarks.
 - **Multilingual** — works in 18 languages, detected automatically, and you
   can code-switch mid-sentence.
+- **Quiets your music** (Experimental, off by default: Settings › Advanced) —
+  start dictating and Spotify or Apple Music pauses, then resumes the moment
+  you stop. Only ever pauses a player that's already playing, so it can't start
+  music you didn't ask for. Browser audio isn't covered: nothing on macOS will
+  tell an app whether a browser tab is playing, and pausing blindly would start
+  playback as often as it stopped it.
 - **Escape to throw it away** (Experimental, off by default: Settings ›
   Advanced) — press <kbd>esc</kbd> to throw a dictation away: while you're
   still speaking, or after, until the text lands. A rewrite, a
