@@ -3,8 +3,8 @@ import Foundation
 /// Persists the experimental "Escape cancels a dictation" switch in
 /// `UserDefaults`. Off by default; the Settings window's Advanced pane flips it
 /// (its Experimental section), so the gesture can be trialled before it is
-/// everyone's. Developer mode has no say in it. `DictationKeyTap` reads it at an
-/// Escape with something in flight, so a change applies to the next keystroke.
+/// everyone's. Developer mode has no say in it. `DictationKeyTap` reads it at each
+/// Escape, so a change applies to the next keystroke.
 /// Same shape as `DeveloperModeStore`.
 public struct EscapeCancelStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe

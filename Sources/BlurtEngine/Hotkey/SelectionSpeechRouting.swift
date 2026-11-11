@@ -83,10 +83,10 @@ struct SelectionSpeechRouting: Sendable {
       case .dictate, .off: return [.forward(.press(key: key))]
       case .command, .compose:
         // Nothing to read: the press only has to prove itself.
-        mode = .selected(Self.intent(action), "")
+        mode = .selected(Intent(action), "")
         return holds ? [.startHoldTimer] : []
       case .readAloud, .ask, .rewrite:
-        mode = .deciding(Self.intent(action), trigger: nil, ended: false)
+        mode = .deciding(Intent(action), trigger: nil, ended: false)
         return holds ? [.readSelection, .startHoldTimer] : [.readSelection]
       }
     case .speaking:
@@ -102,7 +102,7 @@ struct SelectionSpeechRouting: Sendable {
     case .transcribing(let intent, _, let started):
       // A press while the request is transcribing drops it, for the same reason.
       mode = .passthrough
-      return (started ? [.forward(.cancel), .resetGate] : [.resetGate]) + abandon(intent)
+      return (started ? [.forward(.cancel), .resetGate] : [.resetGate]) + intent.abandoned
     case .deciding(_, trigger: _, ended: true):
       // The press is over and the gate idle, only its read still out: this is a
       // fresh press, not one riding the old. Swallowing it would leave the gate
@@ -170,7 +170,7 @@ struct SelectionSpeechRouting: Sendable {
       mode = .passthrough
       // Unstarted, the session is still busy with the earlier dictation, which
       // a cancel would throw away. A recovery reset still goes through.
-      return (started || command == .cancelRecording ? [.forward(command)] : []) + abandon(intent)
+      return (started || command == .cancelRecording ? [.forward(command)] : []) + intent.abandoned
     case .press, .pressHandingBack:
       return []
     }
@@ -191,7 +191,7 @@ struct SelectionSpeechRouting: Sendable {
     switch command {
     case .cancel:
       mode = .passthrough
-      return (started ? [.forward(.cancel)] : []) + abandon(intent)
+      return (started ? [.forward(.cancel)] : []) + intent.abandoned
     case .release, .cancelRecording:
       // Nothing is recording, so the session treats either as a no-op.
       return [.forward(command)]
@@ -360,7 +360,7 @@ struct SelectionSpeechRouting: Sendable {
     // Nothing said, or the request failed or was cancelled: a dictation ending
     // without a key event, like any other.
     mode = .passthrough
-    return [.syncGateAfterSession] + abandon(intent)
+    return [.syncGateAfterSession] + intent.abandoned
   }
 
   /// Whether anything is under way: a dictation the session is busy with, or a
@@ -379,13 +379,14 @@ struct SelectionSpeechRouting: Sendable {
     defer { mode = .passthrough }
     switch mode {
     case .passthrough: return [.forward(.cancel)]
-    case .deciding(let intent, _, _):
+    case .deciding:
       staleReads += 1  // its selection read is still out
-      return busy + abandon(intent)
-    case .selected(let intent, _): return busy + abandon(intent)
+      return busy
+    // Not yet asking, so nothing was prepared: as with a combo (`submit`).
+    case .selected: return busy
     case .asking(let intent, _, let started, _), .transcribing(let intent, _, let started):
       // Unstarted, the session is busy with an earlier dictation: discard it too.
-      return (started || sessionBusy ? [.forward(.cancel)] : []) + abandon(intent)
+      return (started || sessionBusy ? [.forward(.cancel)] : []) + intent.abandoned
     case .speaking: return [.stopSpeech] + busy
     case .working: return [.stopJob] + busy
     }

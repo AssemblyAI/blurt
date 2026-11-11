@@ -69,11 +69,14 @@ struct SelectionSpeechRoutingEscapeTests {
     #expect(routing.holdElapsed().isEmpty)
   }
 
-  @Test("a command not yet proven drops its prepared screen")
+  @Test("a command not yet proven has no screen to undo, as with a combo")
   func selectedCommand() {
+    // `.prepareCommand` runs only once the press proves itself (`.asking`), so
+    // a `.stopJob` here would end an interface nothing began.
     var routing = SelectionSpeechRouting()
     _ = routing.press(key: .rightOption, action: .command, holds: true)
-    #expect(routing.escape() == [.stopJob])
+    #expect(routing.escape().isEmpty)
+    #expect(routing.holdElapsed().isEmpty)
   }
 
   @Test("a request recording or transcribing is cancelled in the session")

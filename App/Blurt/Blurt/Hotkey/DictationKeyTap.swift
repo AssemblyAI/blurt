@@ -57,8 +57,7 @@ final class DictationKeyTap {
   /// is in flight (the read-aloud router's `escape()`), which a combo's
   /// `onCancel` would not all reach.
   private let onEscape: @MainActor () -> Void
-  /// Whether anything is in flight that the gate can't see — a dictation past
-  /// its recording, a request, a job, a read — asked at each bare Escape.
+  /// The router's `inFlight` (`DictationKeyRouter.handle`).
   private let isBusy: @MainActor () -> Bool
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
@@ -98,10 +97,7 @@ final class DictationKeyTap {
     // were each corrected away from — the tap would name the old key while the
     // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
     // re-reads this, but nothing enforces that it runs before the first event.
-    // Escape cancels only with its experimental switch on; the router reads it
-    // at the keystroke.
-    self.router = DictationKeyRouter(
-      activations: Self.boundActivations(), escapeCancels: { EscapeCancelStore().isEnabled })
+    self.router = DictationKeyRouter(activations: Self.boundActivations())
   }
 
   deinit {
@@ -239,7 +235,7 @@ final class DictationKeyTap {
 
     guard let routed = routerEvent(type: type, event: event) else { return }
     let now = reference.duration(to: ContinuousClock.now)
-    dispatch(router.handle(routed, at: now) { isBusy() })
+    dispatch(router.handle(routed, at: now, inFlight: isBusy))
   }
 
   /// Reduces a `CGEvent` to the router's CoreGraphics-free event shape, or nil
@@ -250,10 +246,10 @@ final class DictationKeyTap {
     case .flagsChanged:
       return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
-      let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-      let flags = event.flags.rawValue
-      let isBare = DictationKeyRouter.Event.isBareEscape(keyCode: keyCode, rawFlags: flags, isAutorepeat: isRepeat)
-      return isBare ? .escapeDown : .keyDown(keyCode: keyCode)
+      // Escape cancels only with its experimental switch on, read at the keystroke.
+      return .fromKeyDown(
+        keyCode: keyCode, isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+        escapeCancels: EscapeCancelStore().isEnabled, rawFlags: event.flags.rawValue)
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       #if UITEST_HOOKS
         // A simulated press is "held" while the test clicks the harness's
