@@ -84,8 +84,9 @@ struct SelectionCopyTests {
   @Test("returns what the ⌘C copied and puts the user's clipboard back")
   func copiesAndRestores() async {
     let pasteboard = FakeCopyPasteboard()
-    let text = await copy(pasteboard, answering: "  The pre-push gate blocked it.  ").copySelection(maxCharacters: 100)
-    #expect(text == "The pre-push gate blocked it.")
+    // As copied, edges included: Rewrite Selection pastes over all of it.
+    let text = await copy(pasteboard, answering: "  The pre-push gate blocked it.\n").copySelection(maxCharacters: 100)
+    #expect(text == "  The pre-push gate blocked it.\n")
     #expect(pasteboard.string == "user's clipboard")
   }
 
@@ -216,5 +217,6 @@ struct SelectionCopyTests {
   func invisibleCopy() async {
     let pasteboard = FakeCopyPasteboard()
     #expect(await copy(pasteboard, answering: "\u{200B}").copySelection(maxCharacters: 100) == nil)
+    #expect(await copy(pasteboard, answering: " \n").copySelection(maxCharacters: 100) == nil)
   }
 }

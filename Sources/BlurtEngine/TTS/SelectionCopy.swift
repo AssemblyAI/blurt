@@ -113,7 +113,7 @@
         copied == nil ? restoreLateCopy(saved, after: settled, ownWrites: writesAtSettle, on: clock) : nil
       // The same cleanup as the AX read, so a zero-width-only copy isn't spoken.
       return (
-        FocusCapture.visibleTextOrNil(FocusCapture.clip(copied?.trimmedNonEmpty(), to: maxCharacters)), lateWatch
+        FocusCapture.selectionText(copied, maxChars: maxCharacters), lateWatch
       )
     }
 

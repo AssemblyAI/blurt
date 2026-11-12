@@ -136,6 +136,25 @@ struct FocusCaptureTests {
     #expect(FocusCapture.clip(nil, to: 4) == nil)
   }
 
+  // MARK: selectionText
+
+  /// Rewrite Selection pastes over the whole highlight, so the read keeps the
+  /// whitespace a triple-clicked line or an indented one is selected with.
+  @Test("a selection keeps the whitespace at its edges")
+  func selectionKeepsEdges() {
+    #expect(FocusCapture.selectionText("First line.\n", maxChars: 100) == "First line.\n")
+    #expect(FocusCapture.selectionText("  indented", maxChars: 100) == "  indented")
+    #expect(FocusCapture.selectionText("abcdefgh", maxChars: 3) == "abc")
+  }
+
+  @Test("a selection of only whitespace or invisible characters is no selection")
+  func selectionWithoutContentIsNil() {
+    #expect(FocusCapture.selectionText(" \n\t", maxChars: 100) == nil)
+    #expect(FocusCapture.selectionText("\u{200B}\n", maxChars: 100) == nil)
+    #expect(FocusCapture.selectionText("   abc", maxChars: 3) == nil)
+    #expect(FocusCapture.selectionText(nil, maxChars: 100) == nil)
+  }
+
   // MARK: visibleTextOrNil
 
   @Test("visibleTextOrNil collapses an all-invisible AX read to nil")

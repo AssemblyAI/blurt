@@ -55,6 +55,18 @@ struct SelectionRewriterTests {
     #expect(calls.value == 0)
   }
 
+  @Test("a selection splits into the whitespace at its edges and the words between")
+  func edges() {
+    let line = SelectionEdges("  First line.\r\n")
+    #expect(line.leading == "  " && line.words == "First line." && line.trailing == "\r\n")
+    #expect(line.around("The opening line.") == "  The opening line.\r\n")
+    let bare = SelectionEdges("hey all")
+    #expect(bare.leading.isEmpty && bare.words == "hey all" && bare.trailing.isEmpty)
+    #expect(bare.around("Dear all,") == "Dear all,")
+    let blank = SelectionEdges(" \n ")
+    #expect(blank.words.isEmpty && blank.around("x") == " \n x")
+  }
+
   @Test("a rewrite cut off at the token cap is never handed back to paste")
   func truncated() async {
     let transport = FakeHTTPTransport { _ in (200, completion("Dear team, the", finishReason: "length")) }
