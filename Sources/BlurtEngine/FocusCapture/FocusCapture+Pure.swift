@@ -61,6 +61,16 @@ extension FocusCapture {
   /// spaces, joiners, bidi marks, BOM, …). Regular whitespace (space/tab/newline)
   /// is deliberately preserved: a caret that already follows real whitespace must
   /// stay non-`nil` so the separator logic adds no extra space.
+  /// A selection exactly as highlighted, whitespace at its edges included, up to
+  /// `maxChars` characters — or nil when what's left holds nothing visible.
+  /// Untrimmed because Rewrite Selection pastes over the whole highlight: a line
+  /// triple-clicked with its line break must come back with one
+  /// (`SelectionEdges`). Readers that want just the words trim it themselves.
+  static func selectionText(_ text: String?, maxChars: Int) -> String? {
+    let clipped = clip(text, to: maxChars)
+    return visibleTextOrNil(clipped.trimmedNonEmpty()) == nil ? nil : clipped
+  }
+
   static func visibleTextOrNil(_ text: String?) -> String? {
     guard let text else { return nil }
     let hasVisible = text.contains { character in
