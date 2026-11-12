@@ -55,6 +55,24 @@ struct SelectionRewriterTests {
     #expect(calls.value == 0)
   }
 
+  /// A triple-clicked line is selected with its line break, and the paste
+  /// replaces the whole highlight: a rewrite that came back without it would
+  /// join the line to the next one.
+  @Test("only the words are sent; the whitespace around the selection comes back where it was")
+  func keepsSelectionEdges() async throws {
+    let sent = ValueBox<URLRequest?>(nil)
+    let transport = FakeHTTPTransport { request in
+      sent.value = request
+      return (200, completion("Dear all,"))
+    }
+    let rewrite = try await rewriter(transport).rewrite("  hey all\n", as: "make it more formal")
+    #expect(rewrite == "  Dear all,\n")
+    let body = try #require(sent.value?.httpBody)
+    let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+    let messages = try #require(object["messages"] as? [[String: String]])
+    #expect(messages.last?["content"]?.hasPrefix("<highlighted_text>\nhey all\n</highlighted_text>") == true)
+  }
+
   @Test("a selection splits into the whitespace at its edges and the words between")
   func edges() {
     let line = SelectionEdges("  First line.\r\n")

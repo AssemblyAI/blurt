@@ -191,18 +191,15 @@ import Foundation
     /// answer, a rewrite, a composition, a command.
     private func performTask(_ action: SelectionSpeechRouting.Action) {
       switch action {
-      case .speak(let selection):
+      case .speak(let text):
         // Read per press, like the switch itself, so a Settings change applies
         // to the next read.
         let style = ReadAloudStyleStore(defaults: defaults).style
-        // The selection arrives with its edges for a rewrite; a read wants the words.
-        let text = selection.trimmingCharacters(in: .whitespacesAndNewlines)
         run { [speaker] onLevel in try await speaker.speak(text, style: style, onLevel: onLevel) }
       case .answer(let request, let selection):
         let style = ReadAloudStyleStore(defaults: defaults).style
-        let words = selection.trimmingCharacters(in: .whitespacesAndNewlines)
         run(startCueDelay: Self.answerCueGap) { [speaker] onLevel in
-          try await speaker.answer(request, about: words, style: style, onLevel: onLevel)
+          try await speaker.answer(request, about: selection, style: style, onLevel: onLevel)
         }
       case .stopSpeech:
         speech?.cancel()
@@ -249,13 +246,8 @@ import Foundation
     /// pill as a dictation's paste would be (`PipelinePhase.overlayState`). A
     /// rewrite this router stopped reports nothing more: `.stopJob` already
     /// ended it.
-    /// The rewriter sees only the words: the whitespace around them is the
-    /// highlight's, and goes back where it was (`SelectionEdges`).
     private func rewrite(_ selection: String, as request: String) {
-      let edges = SelectionEdges(selection)
-      paste(as: .rewriting, named: "rewrite") { [rewriter] in
-        edges.around(try await rewriter.rewrite(String(edges.words), as: request))
-      }
+      paste(as: .rewriting, named: "rewrite") { [rewriter] in try await rewriter.rewrite(selection, as: request) }
     }
 
     /// Writes what the spoken `instructions` describe and pastes it at the

@@ -15,12 +15,12 @@ struct SelectionSpeechRouterRewriteTests {
   /// transcribing the instruction as "Make it more formal.", up to the
   /// rewriter's call. The rig's events record what the pill was told.
   private func rewrite(
-    _ rewriter: StubRewriter, selection: String = "hey all", injectorError: (any Error & Sendable)? = nil
+    _ rewriter: StubRewriter, injectorError: (any Error & Sendable)? = nil
   ) async throws -> Rig {
     let fixture = makeSession(mode: .transcript("Make it more formal."))
     await fixture.injector.setError(injectorError)
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: GatedSpeaker(), rewriter: rewriter, readSelection: { selection },
+      session: fixture.session, speaker: GatedSpeaker(), rewriter: rewriter, readSelection: { "hey all" },
       defaults: defaults)
     TriggerKeyStyleStore(defaults: defaults).setChoice(.rewrite, for: .rightOption)
     let events = JobEvents(watching: router)
@@ -54,18 +54,6 @@ struct SelectionSpeechRouterRewriteTests {
     // Nothing for the separator to go on: the paste replaces, never follows.
     #expect(await injector.insertedPrior == [nil])
     #expect(await injector.insertedWindowTitles == [nil])
-  }
-
-  /// A triple-clicked line is selected with its line break, and the paste
-  /// replaces the whole highlight: a rewrite that came back without it would
-  /// join the line to the next one.
-  @Test("the whitespace around the selection stays where it was; only the words are rewritten")
-  func keepsSelectionEdges() async throws {
-    let rewriter = StubRewriter(reply: "Dear all,")
-    let rig = try await rewrite(rewriter, selection: "  hey all\n")
-    #expect(try await rig.outcomes() == [.pasted])
-    #expect(rewriter.calls == [RewriteCall(selection: "hey all", request: "Make it more formal.")])
-    #expect(await rig.injector.inserted == ["  Dear all,\n"])
   }
 
   @Test("with nothing editable focused, the rewrite is a quiet Copied, as a dictation's would be")
