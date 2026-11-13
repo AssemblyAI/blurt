@@ -293,7 +293,7 @@ struct KeyboardModelProtocolTests {
     #expect(proxy.before == "Hi again! movedx chosen OK. bye")
   }
 
-  @Test("with delete whole dictation off, delete after a dictation is one character")
+  @Test("with delete whole dictation off, delete after a dictation is an ordinary delete: the undo declines")
   func deleteAfterDictationIsOneCharacterWhenOff() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
@@ -307,10 +307,12 @@ struct KeyboardModelProtocolTests {
       forKey: BlurtShared.Key.result)
     model.resultArrived()
     #expect(proxy.before == "Hi there friend")
-    model.deleteBackward()
-    #expect(proxy.before == "Hi there frien")
-    model.deleteBackward()
-    #expect(proxy.before == "Hi there frie")
+    // The handler then lets KeyboardKit delete one character, as any key.
+    #expect(!model.undoLastInsertion())
+    #expect(proxy.before == "Hi there friend")
+    SharedStore.deleteWholeDictation = true
+    #expect(model.undoLastInsertion())
+    #expect(proxy.before == "Hi")
   }
 
   @Test("the term field never claims a cursor move or a selection")
