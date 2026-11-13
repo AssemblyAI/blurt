@@ -96,7 +96,7 @@ keyboard's keys and bar take KeyboardKit's own colours; the two brand tints it k
 
 `scripts/ios-test.sh` runs `BlurtiOSTests` on a simulator (CI's `ios-build` job runs it after
 the build): the core's logic — the App Group contract (key terms, stale snapshots), the
-keyboard's own rules (the term field's keys and case, the chip, the one-tap undo) against a
+keyboard's own rules (the term field's keys and case, the chip) against a
 fake text field, the gate against the app's phases, the Darwin signals, term packs — and what
 the UI builds on it (the voice state, the layout with the mic against KeyboardKit's own, the
 tokens). The engine's

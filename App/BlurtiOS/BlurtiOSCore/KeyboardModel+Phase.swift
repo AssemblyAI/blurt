@@ -80,8 +80,6 @@ extension KeyboardModel {
     // snapshot: the user may have typed since.
     let inserted = InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput)
     proxy.insertText(inserted)
-    lastInsertion = Insertion(
-      text: inserted, document: proxy.documentIdentifier, textAfter: proxy.documentContextAfterInput ?? "")
     resultLandedAt = now()
     KeyboardLog.result(result.id, inserted: true, why: result.recipient == nil ? "for whoever is up" : "addressed here")
     // Not typing, so not the term field's to claim.

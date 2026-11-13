@@ -30,26 +30,10 @@ extension KeyboardModel {
   }
 
   /// The keyboard's own edit to the host's text replaces whatever was
-  /// highlighted, and ends the dictation's undo: the picture follows at once,
-  /// not on the host's next notification.
+  /// highlighted: the chip follows at once, not on the host's next
+  /// notification.
   package func hostEdited() {
-    lastInsertion = nil
     readSelection()
-  }
-
-  /// Delete right after a dictation takes back all of it — but only in the
-  /// field it landed in, while the caret still sits at its end with nothing
-  /// highlighted. Another field, a moved caret, a selection, or a host that
-  /// shows less context than the dictation's length is not the dictation,
-  /// and the delete is an ordinary one (false): text that merely ends the
-  /// same way isn't the dictation. With Settings' "Delete whole dictation"
-  /// off, it is always an ordinary delete.
-  package func undoLastInsertion() -> Bool {
-    guard SharedStore.deleteWholeDictation, let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy)
-    else { return false }
-    for _ in inserted.text { proxy.deleteBackward() }
-    hostEdited()
-    return true
   }
 
   // MARK: Quick-add key term
@@ -234,22 +218,5 @@ extension KeyboardModel {
       responder = current.next
     }
     KeyboardLog.hop(url, asked: false)
-  }
-}
-
-/// A dictation's words as they landed (`KeyboardModel.lastInsertion`): the
-/// text, the field it went into, and what followed the caret then.
-package struct Insertion: Equatable {
-  package let text: String
-  package let document: UUID
-  package let textAfter: String
-
-  /// Whether the caret still sits at the end of these words in the same
-  /// field, with nothing highlighted and the text on both sides as it was
-  /// left.
-  func isAtCaret(in proxy: any UITextDocumentProxy) -> Bool {
-    proxy.documentIdentifier == document && (proxy.selectedText ?? "").isEmpty
-      && (proxy.documentContextAfterInput ?? "") == textAfter
-      && proxy.documentContextBeforeInput?.hasSuffix(text) == true
   }
 }

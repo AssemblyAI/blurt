@@ -315,13 +315,10 @@ a keyboard that comes up without Full Access starts from idle with the gate
 reset. `KeyboardModelFuzzTests` drives the model through ten thousand random
 event sequences and checks these invariants after every one.
 
-Delete right after a dictation landed takes all of it back, the one-tap undo
-(`KeyboardModel.undoLastInsertion`, routed by the handler on delete's press):
-only in the field the words went into, while the caret still sits at their
-end with nothing highlighted; anywhere else the delete is an ordinary one.
-The handler tells the model when a key edited the host's text
-(`hostEdited`), so the undo and the chip follow the text at once rather
-than on the host's next notification.
+Delete is KeyboardKit's, one character like any key, right after a
+dictation too. The handler tells the model when a key edited the host's
+text (`hostEdited`), so the chip follows the text at once rather than on
+the host's next notification.
 
 ## The bar above the keys
 
@@ -705,8 +702,7 @@ the keyboard opened the app to start a session, a green banner points at iOS's
 time, a copy button); `POWERED BY ASSEMBLYAI`.
 
 **Settings** (`SettingsView`): a form on the page, its sections under
-eyebrows — Keyboard (hands-free; delete whole dictation — on by default; off, delete
-after a dictation is one character), Listening (the window),
+eyebrows — Keyboard (hands-free), Listening (the window),
 Transcription (enhanced transcripts, output styles), Account (the API key, and where to get one),
 About (with AssemblyAI's privacy policy). Styles, the import sheet, the key entry and the consent
 sheet share the form's chrome (`brandForm()`).

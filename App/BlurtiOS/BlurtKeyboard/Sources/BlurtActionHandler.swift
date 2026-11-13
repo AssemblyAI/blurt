@@ -21,10 +21,6 @@ final class BlurtActionHandler: StandardKeyboardActionHandler {
     guard let model else { return super.handle(gesture, on: action) }
     if action == .blurtMic { return handleMic(gesture, model: model) }
     if model.termDraft != nil, routeToTerm(gesture, on: action, model: model) { return }
-    if gesture == .press, action == .backspace, model.undoLastInsertion() {
-      triggerFeedback(for: gesture, on: action)
-      return
-    }
     super.handle(gesture, on: action)
     if Self.editsHost(gesture, on: action) { model.hostEdited() }
   }

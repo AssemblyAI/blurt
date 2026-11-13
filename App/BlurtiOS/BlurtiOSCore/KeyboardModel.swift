@@ -81,10 +81,6 @@ package final class KeyboardModel {
   @ObservationIgnored package var observers: [DarwinObserver] = []
   @ObservationIgnored package var gate = DictationKeyGate()
   @ObservationIgnored package var lastResultID: UUID?
-  /// What the last dictation put in the field, separator included, so one
-  /// delete takes the whole of it back. Any keystroke into the host clears it,
-  /// and so does the keyboard leaving the screen.
-  @ObservationIgnored package var lastInsertion: Insertion?
   @ObservationIgnored package var heartbeat: Task<Void, Never>?
   /// The leave held back behind a stop still out (`disappeared`): ends
   /// presence at `leaveGrace` unless the app's answer, or a return to the

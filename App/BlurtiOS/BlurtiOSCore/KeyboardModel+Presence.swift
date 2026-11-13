@@ -121,7 +121,6 @@ extension KeyboardModel {
     noticeClock?.cancel()
     endOwnedDictation()
     KeyboardLog.disappeared(pid: Self.pid, process: KeyboardProcess.id, controller: controllerID)
-    lastInsertion = nil
     guard handshake.stopID != nil else {
       leave()
       return
