@@ -14,20 +14,53 @@ IOS_SIM_SIGNING=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIR
 # shellcheck disable=SC2034 # used by the scripts that source this file
 IOS_DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
 
+# ios_resolve_packages DERIVED → resolves the iPhone project's packages into
+# DERIVED/SourcePackages before the build, retrying. KeyboardKit and LicenseKit
+# arrive as two git clones and two zips from GitHub releases; a transient fetch
+# failure would otherwise read as a red build with no test run behind it. The
+# pins are printed so a moved tag shows in the log (project.yml names
+# KeyboardKit's version; its manifest names LicenseKit's and both checksums).
+ios_resolve_packages() {
+  local derived="$1" attempt resolved
+  resolved="$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  for attempt in 1 2 3; do
+    if xcodebuild -resolvePackageDependencies -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" \
+      -scheme BlurtiOS -derivedDataPath "$derived" -quiet; then
+      python3 -c '
+import json, sys
+for pin in json.load(open(sys.argv[1]))["pins"]:
+    state = pin["state"]
+    print("resolved:", pin["identity"], state.get("version", "?"), state.get("revision", "?")[:12])
+' "$resolved"
+      return 0
+    fi
+    echo "ios: package resolution failed (attempt $attempt of 3)" >&2
+    [ "$attempt" -lt 3 ] && sleep 20
+  done
+  return 1
+}
+
 # ios_pick_device NAME → prints "udid<TAB>name" for the available simulator
 # called NAME on the newest iOS runtime, else for whichever iPhone this Mac
-# (or CI runner) has; prints nothing if there is none.
+# (or CI runner) has; prints nothing if there is none. BLURT_SIM_RUNTIME
+# ("18.6", or "18" for any 18.x) keeps the pick to simulators on that
+# runtime — the iOS 18 leg of the keyboard flows, where the keyboard draws
+# its classic profile.
 ios_pick_device() {
   xcrun simctl list devices available -j | python3 -c '
 import json, re, sys
-wanted = sys.argv[1]
+wanted, runtime = sys.argv[1], sys.argv[2]
 runtimes = json.load(sys.stdin)["devices"]
 def version(rt):
     m = re.search(r"iOS-(\d+)-(\d+)", rt)
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+def on_runtime(rt):
+    if not runtime:
+        return True
+    return ".".join(str(n) for n in version(rt)).startswith(runtime) or str(version(rt)[0]) == runtime
 found = []
 for rt, devs in runtimes.items():
-    if "iOS" not in rt:
+    if "iOS" not in rt or not on_runtime(rt):
         continue
     for d in devs:
         if d["name"].startswith("iPhone"):
@@ -37,7 +70,7 @@ if not found:
 found.sort(key=lambda f: (f[1], f[0]))
 best = found[-1]
 print(best[3] + "\t" + best[2])
-' "$1"
+' "$1" "${BLURT_SIM_RUNTIME:-}"
 }
 
 # The simulator every script picks unless BLURT_SIM_DEVICE names another.
@@ -50,7 +83,7 @@ ios_require_device() {
   local picked
   picked="$(ios_pick_device "${BLURT_SIM_DEVICE:-$IOS_DEFAULT_DEVICE}")"
   if [ -z "$picked" ]; then
-    echo "$1: no iPhone simulator available (xcrun simctl list devices)" >&2
+    echo "$1: no iPhone simulator available (xcrun simctl list devices${BLURT_SIM_RUNTIME:+; BLURT_SIM_RUNTIME=$BLURT_SIM_RUNTIME})" >&2
     exit 1
   fi
   # shellcheck disable=SC2034 # used by the scripts that source this file
@@ -63,4 +96,48 @@ ios_require_device() {
 ios_wait_booted() {
   xcrun simctl boot "$1" 2>/dev/null || true
   xcrun simctl bootstatus "$1" -b >/dev/null
+}
+
+# ios_device_scale UDID → prints the simulator's screen scale (2 or 3): the
+# pixels per point a screenshot of it has, read from its device type's
+# profile (the iPhone SE is 2×, every Face ID phone 3×).
+ios_device_scale() {
+  xcrun simctl list devices -j | python3 -c '
+import json, subprocess, sys
+udid = sys.argv[1]
+devices = json.load(sys.stdin)["devices"]
+kind = next((d["deviceTypeIdentifier"] for devs in devices.values() for d in devs if d["udid"] == udid), None)
+if kind is None:
+    sys.exit(f"ios_device_scale: no simulator {udid}")
+types = json.loads(subprocess.run(["xcrun", "simctl", "list", "devicetypes", "-j"], capture_output=True, text=True,
+                                  check=True).stdout)["devicetypes"]
+bundle = next(t["bundlePath"] for t in types if t["identifier"] == kind)
+scale = subprocess.run(["plutil", "-extract", "capabilities.ArtworkTraits.ArtworkDeviceScaleFactor", "raw",
+                        bundle + "/Contents/Resources/capabilities.plist"], capture_output=True, text=True,
+                       check=True).stdout.strip()
+print(int(float(scale)))
+' "$1"
+}
+
+# ios_device_runtime_id UDID → prints the simulator's runtime identifier
+# (com.apple.CoreSimulator.SimRuntime.iOS-27-0).
+ios_device_runtime_id() {
+  xcrun simctl list devices -j | python3 -c '
+import json, sys
+udid = sys.argv[1]
+for rt, devs in json.load(sys.stdin)["devices"].items():
+    if any(d["udid"] == udid for d in devs):
+        print(rt)
+        break
+' "$1"
+}
+
+# ios_device_runtime UDID → prints the iOS version the simulator runs ("27.0").
+ios_device_runtime() {
+  ios_device_runtime_id "$1" | python3 -c '
+import re, sys
+rt = sys.stdin.read().strip()
+m = re.search(r"iOS-(\d+)-(\d+)", rt)
+print(f"{m.group(1)}.{m.group(2)}" if m else rt)
+'
 }

@@ -58,6 +58,7 @@ echo "testing on $NAME${SANITIZER:+ under the $SANITIZER sanitizer}"
 ios_wait_booted "$UDID"
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+ios_resolve_packages "$DERIVED"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS="$DERIVED/BlurtiOSTests-$STAMP.xcresult"
 # The whole xcodebuild log, kept rather than `-quiet`ed away: ios-check.sh feeds

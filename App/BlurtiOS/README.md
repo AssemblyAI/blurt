@@ -18,9 +18,10 @@ The iPhone app and the keyboard it ships. Same engine as the Mac app
   shared defaults, Darwin notifications to wake each other. Full Access is what
   lets the keyboard reach the group — without it the keyboard still types, and says
   what it needs.
-- **Three layouts, the user's choice**: a slim mic bar, a mic panel (the Wispr /
-  Aqua shape), or a full keyboard with the mic as the main key. One keyboard
-  target, one setting, one set of plumbing.
+- **The keyboard is Apple's**, on KeyboardKit's free core: KeyboardKit draws the
+  iPhone's own keyboard and owns the typing; Blurt adds the mic key in the bottom
+  row and the key-term bar above the keys, and nothing else (`DESIGN.md`). One
+  keyboard target, one set of plumbing.
 
 ## Build
 
@@ -31,18 +32,36 @@ open BlurtiOS.xcodeproj                  # scheme BlurtiOS builds and embeds the
 
 CI builds it for the simulator on every PR (`check.yml`'s `ios-build` job). On a
 Mac with only the Command Line Tools — no iOS SDK — `scripts/ios-typecheck.sh`
-typechecks both targets against the Mac Catalyst frameworks with the same
-flags, which catches the Swift 6 isolation errors before CI does. Running
+typechecks `BlurtiOSCore` and `BlurtDesign`, and either UI module that does not
+import KeyboardKit, against the Mac Catalyst frameworks with the same flags,
+which catches the Swift 6 isolation errors before CI does. Running
 on a phone needs Xcode with a team that can provision the App Group. The ids in
 `project.yml` (`com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard`,
 `group.com.assemblyai.blurt.iphone`) are AssemblyAI's, so they register under the AssemblyAI team;
 anyone building under another team changes them locally (see Testing on a phone).
 
+## Dependencies
+
+Two packages, both in `project.yml`: the local `BlurtEngine` (the pipeline the Mac app runs) and
+[KeyboardKit](https://github.com/KeyboardKit/KeyboardKit) 11 — the free core only (no licence key,
+no Pro feature, none of its plugin products), pinned with `exactVersion`, the one remote package
+this app carries. It is a closed-source binary under its own licence: nothing of it is checked in;
+SPM downloads `KeyboardKit.zip` and its dependency LicenseKit's from GitHub releases at build time,
+verified against the checksums their manifests pin, which with the exact pin fixes the resolution
+without a `Package.resolved` (the generated project, where Xcode would write one, is not committed).
+The app target links and embeds it; the keyboard imports it without linking (`link: false`) and
+loads the app's copy through `@executable_path/../../Frameworks` — a second copy in the .appex is
+what KeyboardKit warns crashes at runtime and what App Store validation rejects (ITMS-90206).
+`check.sh`'s dependency guard allows exactly this URL in this file; a bump is a reviewed diff to
+`project.yml`. The first resolve clones KeyboardKit's full history (about three minutes); the
+scripts retry it (`ios_resolve_packages` in `scripts/ios-lib.sh`) and print the pins they resolved.
+
 ## Design
 
-`DESIGN.md` — the tokens, the orb, the meter, the three layouts, the
-app's screens, all traced to the Mac app's sources, plus the gallery that renders every layout
-and state for a screenshot and the launch flags that reach every app state.
+`DESIGN.md` — the app's screens and their tokens, traced to the brand system and the Mac
+app's sources; the keyboard as KeyboardKit draws it, the mic key and the bar; Apple's geometry
+as the probe measured it and the parity run that checks the keyboard against it; and the
+launch flags that reach the app's screens for a screenshot.
 
 ## Getting Xcode
 
@@ -69,18 +88,22 @@ and the pieces every screen is built from (card, page, form, eyebrow, button, wo
 
 It is a static framework, so the app and the keyboard each link their own copy beside the
 engine's, and its API is `package` (one `SWIFT_PACKAGE_NAME` across the project), not `public`:
-nothing outside this project can see it, and periphery still reports what nothing uses. A
-preview hands the model a `ThemeFace`, not a palette — the colours are the UI's
-(`KeyboardModel+Palette.swift`).
+nothing outside this project can see it, and periphery still reports what nothing uses. The
+keyboard's keys and bar take KeyboardKit's own colours; the two brand tints it keeps are
+`BlurtTint`'s (`BlurtKeyboard/Sources`).
 
 ## Unit tests
 
 `scripts/ios-test.sh` runs `BlurtiOSTests` on a simulator (CI's `ios-build` job runs it after
-the build): the core's logic — the App Group contract (key terms, stale snapshots, layouts),
-the keyboard's rules (sentence start, the double space, the term field, return labels, letter
-rows) against a fake text field, the gate against the app's phases, the Darwin signals, term
-packs — and what the UI builds on it (palettes, the voice element, the gallery). The engine's
-own tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here.
+the build): the core's logic — the App Group contract (key terms, stale snapshots), the
+keyboard's own rules (the term field's keys and case, the chip) against a
+fake text field, the gate against the app's phases, the Darwin signals, term packs — and what
+the UI builds on it (the voice state, the layout with the mic against KeyboardKit's own, the
+tokens). The engine's
+own tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here; every
+number in `DESIGN.md` › The two processes has one in `SessionContractNumbersTests`, which reads
+it off its named constant and greps the table for the constant's name beside the value the code
+holds, so the table and the code cannot drift apart silently.
 
 The suite holds the same gates as the engine's: warnings are errors, a plain run fails when
 `BlurtiOSCore` drops below the engine's own line-coverage floor (`MIN_IOS_COVERAGE`, 88%, in the
@@ -89,7 +112,9 @@ job runs it again under ThreadSanitizer and AddressSanitizer (`BLURT_IOS_SANITIZ
 `address` locally). `scripts/ios-check.sh` runs the whole iPhone bar in one go — the tests and
 the coverage gate, then `swiftlint analyze` and periphery over this project — and is what CI's
 `ios-build` job and a local `scripts/check.sh` run. The views are not in that figure, as the Mac shell's aren't in the engine's:
-they are checked on sight, through the gallery and the probe's screenshot flows.
+the keyboard is measured against Apple's by the parity probe (`scripts/keyboard-parity.sh`) and
+checked on sight through the probe's screenshots and flows (`scripts/ios-keyboard-shot.sh`,
+`scripts/ios-keyboard-flows.sh`).
 
 ## Testing in the simulator
 
@@ -112,50 +137,115 @@ mic. The keyboard's crash logs, if any, land in `~/Library/Logs/DiagnosticReport
 and `xcrun simctl spawn booted log show --last 5m --predicate 'process == "BlurtKeyboard"'`
 shows its console.
 
+The listening window is one state machine (`BlurtiOSCore/ListeningWindowMachine.swift`) read by one
+interpreter (`BlurtiOS/Sources/ListeningWindow.swift`): what the app publishes for the keyboard is the
+`listeningState` record (DESIGN.md › The two processes, and every number — the readiness record, its
+15 s lease, the lifetime from the last word, the interruption rules), and every transition is one log
+line, `window <from> → <to> on <event> gen=<n> launch=<uuid>`, under the `ListeningWindow` category.
+Two debug launch arguments shape it: `-BlurtIdleMode held|pip` picks what the mic does between
+dictations (held open, or parked under the zero-height Picture in Picture keeper, which is the
+default wherever Picture in Picture is supported; the mode in use is logged at launch), and
+`-BlurtDeviceTrace YES` writes one JSON line per transition, command, ack, watchdog release, result
+and hop to `Library/Logs/Blurt/trace.jsonl` — ids, states, reasons and times, never the dictated text.
+The console for both processes is one predicate:
+
+```bash
+xcrun simctl spawn booted log show --last 5m \
+  --predicate 'subsystem == "com.assemblyai.blurt.iphone" AND category IN {"ListeningWindow", "Capture", "Commands", "Relay", "Keyboard"}'
+```
+
+Two environment variables shape the simulator's microphone in a debug build. They reach the
+app through `simctl launch`, which forwards every `SIMCTL_CHILD_*` variable it finds, so
+`SIMCTL_CHILD_BLURT_SIM_FAULT=refuseStart scripts/ios-sim.sh` sets one for the launch.
+`BLURT_SIM_AUDIO_FILE=<path>` plays a 16 kHz mono 16-bit WAV into every utterance in place of
+the Mac's microphone, so a probe dictates real speech with nobody speaking. `BLURT_SIM_FAULT`
+makes the source fail the way a phone's microphone does (`SimulatorAudioSource+Fault.swift`),
+with the same typed failures (`ListeningSourceFailure`) and events (`SourceEvent`), so the app's
+and the keyboard's answers to each can be seen without a phone call. The timed ones count from
+the moment the session turns on; the app's log lines for them say `(simulated)`.
+
+| `BLURT_SIM_FAULT`       | What the microphone does                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refuseStart`           | every start — turning the session on, a hold, a parked press — throws `configureFailed(-12782)`, the simulator's own capture error                                                |
+| `refuseBackgroundStart` | the session turns on and holds; a parked press's start throws `backgroundStartRefused(561015905)`, iOS's `!rec`                                                                   |
+| `silentFrames`          | every chunk is digital silence, so an utterance trips the 1 s silence watchdog (`silent`)                                                                                         |
+| `interruptAfter:<s>`    | after `<s>` seconds the microphone is taken (`interrupted(audioDeviceInUseByAnotherClient)`: no frames, presses refused) and given back `<s>` seconds later (`interruptionEnded`) |
+| `runtimeErrorAfter:<s>` | after `<s>` seconds the session dies (`runtimeError(-12782)`) and stays dead until the session is turned off                                                                      |
+| `routeChangeAfter:<s>`  | after `<s>` seconds the route changes (`routeChanged(newDeviceAvailable, BluetoothHFP)`); nothing else changes                                                                    |
+
 ## Testing on a phone
 
-1. Install Xcode 26.6 or newer — CI's runner has 26.6 (`xcodes install 26.6 --select`, or
-   the Mac App Store). A phone on iOS 27 needs Xcode 27, which needs macOS 26.6. Then once:
+`scripts/ios-device.sh` is the whole loop on a real iPhone, with Xcode's command-line tools
+only — no Xcode window, no debugger — and the device gate a capture change runs before it
+lands: `preflight → install → launch → dictate → pull → syslog --negative`.
 
-   ```bash
-   sudo xcode-select -s /Applications/Xcode.app
-   sudo xcodebuild -license accept
-   sudo xcodebuild -runFirstLaunch
-   xcodebuild -downloadPlatform iOS      # only for the simulator; a phone needs no download
-   ```
+Once: Xcode 26.6 or newer (a phone on iOS 27 needs Xcode 27, which needs macOS 26.6; see
+Getting Xcode), then `sudo xcode-select -s /Applications/Xcode.app`,
+`sudo xcodebuild -license accept`, `sudo xcodebuild -runFirstLaunch` (a phone needs no
+`-downloadPlatform`), and `scripts/bootstrap.sh` for xcodegen. Sign in to Xcode with an Apple ID on
+the org's team (Settings → Accounts): the App Group needs a paid team, a free Personal Team cannot
+register one. The build signs on AssemblyAI's (`BLURT_TEAM`, default `B2VQF7Q2QY`); automatic
+signing registers `com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard` and
+`group.com.assemblyai.blurt.iphone` under it on the first build, and fails if another team already
+owns them. The phone: plugged in, unlocked, "Trust This Computer" accepted, Developer Mode on
+(Settings › Privacy & Security). `BLURT_DEVICE` names it by UDID or name; the default is Neil's
+iPhone 13.
 
-   `scripts/bootstrap.sh` from the repo root installs xcodegen and the linters if `brew` has not.
+1. `scripts/ios-device.sh preflight` — the phone is `available` in `xcrun devicectl list devices`,
+   Developer Mode is on, it has been unlocked since it booted, whether Blurt is installed; then the
+   checklist of what no script can see: Settings › Developer › Enable UI Automation, the Blurt
+   keyboard on with Full Access (Settings › Apps › Blurt › Keyboards), an API key in Blurt. Exits
+   non-zero naming what is missing.
+2. `scripts/ios-device.sh install` — `xcodegen`, a Debug build for the phone with automatic signing
+   (derived data in `$TMPDIR/blurt-device-dd-<checkout hash>`, one per checkout), then
+   `devicectl device install app`. It replaces whatever Blurt is on the phone (same bundle id). On
+   the phone, trust the developer app once (Settings › General › VPN & Device Management).
+3. `scripts/ios-device.sh launch` — Blurt with `-BlurtDeveloperMode YES -BlurtDeviceTrace YES` (the
+   engine's dictation log and the trace, both under `Library/Logs/Blurt`); any arguments you pass
+   replace that. A Debug build keeps each flag's value in its defaults (`LaunchFlags`), so the hop's
+   relaunch — SpringBoard, no arguments — goes on logging; `… NO` turns one off. A locked phone is
+   reported plainly:
+   unlock it and run `launch` again. On a fresh install: **Paste your key** (or
+   `DEVICECTL_CHILD_BLURT_DEBUG_API_KEY=<key> scripts/ios-device.sh launch`, which a Debug build
+   takes from its environment), **Allow** sending your voice to AssemblyAI, **Allow** the microphone,
+   then **Open Settings** › **Apps › Blurt › Keyboards** (a phone may open straight on Blurt's page):
+   Blurt on, **Allow Full Access**.
+4. Dictate: turn the **session** on, go to Messages or Notes, hold the globe key, pick Blurt, tap
+   the mic — tap again to stop, or hold it while you talk; the words land in the field. With the
+   session off, the tap opens Blurt instead, which turns the session on and brings Messages back by
+   itself (`HostReturn`; the trace's `hop` line carries the host and its `return` line says whether
+   iOS agreed — refused, Blurt stays in front with its "◀" hint). Repeat at
+   the waits the flow asks for, and try Hands-free from Settings → Keyboard (the keyboard reads
+   the change the next time it comes up). `scripts/ios-device.sh kill blurt` or
+   `kill keyboard` ends either process mid-dictation (the relaunch and dead-keyboard flows).
+5. `scripts/ios-device.sh pull <dir> --syslog` — Blurt's own logs under `<dir>/Logs` (none on the
+   phone yet is not a failure; `trace.jsonl` is among them once the app has been launched with
+   `-BlurtDeviceTrace YES`) and the phone's system log into `<dir>/device.logarchive`
+   (`--last 15m` by default). `log collect` needs root, so macOS asks for an administrator
+   password: the one way to run it from a script without typing a password into the terminal.
+6. `scripts/ios-device.sh syslog <dir>/device.logarchive --negative` — the negative system
+   predicate every run asserts: no `start recording in the background` / `561145187` / `!rec` line
+   naming Blurt; exit 1 with the lines when there is one. Without `--negative` it prints Blurt's
+   own lines, the system's lines about it (SpringBoard, runningboardd, audiomxd) and any refusal,
+   minus the usual noise; `--last` counts back from the archive's end.
 
-2. Sign in to Xcode with your Apple ID (Settings → Accounts) and note your team ID (the ten
-   characters after the team's name). The App Group needs a paid team — a free Personal Team
-   cannot register one, so use the org's team, not your own.
-3. `cd App/BlurtiOS && BLURT_TEAM=<your team id> xcodegen generate && open BlurtiOS.xcodeproj`.
-   Automatic signing registers `com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard` and
-   `group.com.assemblyai.blurt.iphone` under that team on the first build; it fails if another team already
-   owns them.
-4. Plug the phone in (Developer Mode on: Settings → Privacy & Security), pick it as the run
-   destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →
-   General → VPN & Device Management). In the app: **Paste your key**, **Allow** sending your voice to AssemblyAI, **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
-   (a phone may open straight on Blurt's page): turn on Blurt and **Allow Full Access**.
-5. Back in the app, turn the **session** on, then go to Messages, hold the globe key, pick Blurt,
-   and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.
-6. Try the other two layouts from the app's Keyboard picker; the keyboard reads the choice the
-   next time it comes up.
+`flows` and `check` — the scripted G1–G9 flows and their per-flow predicates — are stubs until
+`DeviceFlows` lands with the device gate.
 
 ## What is still a stub
 
-- **Autocorrect and the suggestion bar** on the full keyboard.
-
+- **Autocorrect and the emoji keyboard** are KeyboardKit Pro and not wired: the keyboard
+  runs the free core only, so autocorrect is off and the emoji switcher is hidden.
 - **Sign in with AssemblyAI.** The shipping app will sign the user in and get a key
   behind the scenes; that service does not exist yet. Until it does, every build
   (TestFlight included) takes a pasted API key (`KeyEntryView`), as the Mac app does.
 - **Returning to the host app.** After "Start Blurt" the user swipes back; iOS 26.4
   ended automatic switch-back for everyone.
-- **The full keyboard** has no autocorrect or suggestions yet.
 
 ## What to verify on a phone first
 
 The listening window's life in the background (capture keeps flowing after the
 swipe back; battery over an hour); keyboard → app → back on iOS 26 and 27; the
-keyboard's memory with the orb growing into the wave; how long the lexicon takes on a phone
-with thousands of contacts; and, once the service exists, sign-in end to end.
+keyboard's memory with KeyboardKit's views up and the waveform following the level; how long
+the lexicon takes on a phone with thousands of contacts; and, once the service exists, sign-in
+end to end.

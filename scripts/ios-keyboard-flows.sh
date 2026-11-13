@@ -1,22 +1,23 @@
 #!/bin/bash
 # Drive the real Blurt keyboard through its flows in the simulator — the
 # extension in its own process over a field in the app, with the app
-# listening — for each face × mic concept × layout, and collect a screenshot
-# of every step. The truth about the keyboard as used, which the gallery
-# (the app's process, no host, no touches) cannot give.
+# listening — on each face, and collect a screenshot of every step. The truth
+# about the keyboard as used.
 #
-#   scripts/ios-keyboard-flows.sh                       # the whole matrix
-#   scripts/ios-keyboard-flows.sh --face dark --voice a --layout panel
-#   scripts/ios-keyboard-flows.sh --layout full --align right   # the mic at an edge (Settings › alignment)
+#   scripts/ios-keyboard-flows.sh                       # both faces
+#   scripts/ios-keyboard-flows.sh --face dark
+#   BLURT_SIM_RUNTIME=18.6 BLURT_SIM_DEVICE="iPhone 16e (18.6)" scripts/ios-keyboard-flows.sh
+#       # the same flows on an iOS 18 simulator (the classic generation)
 #
-# The probe app sets the layout, mic concept and side in the App Group for
-# each run; a run with --align puts the side back to the middle at the end,
-# so Neil's own keyboard on this simulator never inherits a probe's setting.
+# Every run checks the mic sits in the bottom row between space and return,
+# and the + in the bar above the keys.
 #
 # Prints one FLOW-OK / FLOW-FAIL line per step; screenshots land in
-# .build/design/flows/<face>-<voice>-<layout>/, with a sheet.png of every
-# step's keyboard side by side. Blurt must be enabled as a keyboard on the
-# simulator once by hand.
+# .build/design/flows/<face>/, with a sheet.png of every step's keyboard side
+# by side. Blurt must be enabled as a keyboard on the simulator once by hand.
+# A simulator whose Keychain holds no key opens no window:
+# BLURT_DEBUG_API_KEY=<key> scripts/ios-keyboard-flows.sh hands one to the app
+# (debug builds only).
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,9 +26,6 @@ cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/scripts/ios-lib.sh"
 DERIVED="$IOS_DERIVED"
 FACES="light dark"
-VOICES="a b c"
-LAYOUTS="panel full slimBar"
-ALIGN=""
 OUT="$REPO_ROOT/.build/design/flows"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,24 +33,12 @@ while [ $# -gt 0 ]; do
       FACES="${2:?}"
       shift 2
       ;;
-    --voice)
-      VOICES="${2:?}"
-      shift 2
-      ;;
-    --layout)
-      LAYOUTS="${2:?}"
-      shift 2
-      ;;
     --out)
       OUT="${2:?}"
       shift 2
       ;;
-    --align)
-      ALIGN="${2:?}"
-      shift 2
-      ;;
     *)
-      echo "usage: ios-keyboard-flows.sh [--face light|dark] [--voice a|b|c] [--layout slimBar|panel|full] [--align left|right] [--out DIR]" >&2
+      echo "usage: ios-keyboard-flows.sh [--face light|dark] [--out DIR]" >&2
       exit 2
       ;;
   esac
@@ -73,23 +59,22 @@ xcrun simctl privacy "$UDID" grant microphone com.assemblyai.blurt.iphone
 
 for face in $FACES; do
   xcrun simctl ui "$UDID" appearance "$face"
-  for voice in $VOICES; do
-    for layout in $LAYOUTS; do
-      name="$face-$voice-$layout${ALIGN:+-$ALIGN}"
-      dir="$OUT/$name"
-      rm -rf "$dir"
-      mkdir -p "$dir"
-      echo "==> $name"
-      TEST_RUNNER_BLURT_PROBE_ARGS="$face $voice $layout${ALIGN:+ $ALIGN}" xcodebuild test \
-        -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSProbe \
-        -only-testing:BlurtiOSProbe/BlurtKeyboardFlows \
-        -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
-        -resultBundlePath "$dir/flows.xcresult" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never \
-        2>&1 | grep -E "^FLOW-|XCTAssertTrue failed|Blurt never came up|error:|TEST BUILD FAILED" | grep -v "XCTAssertTrue failed" | sed "s/^/    /"
-      # xcodebuild's own verdict, read before any other command replaces it.
-      if [ "${PIPESTATUS[0]}" -ne 0 ]; then FAILED_RUNS+=("$name"); fi
-      xcrun xcresulttool export attachments --path "$dir/flows.xcresult" --output-path "$dir/attachments" >/dev/null 2>&1
-      python3 - "$dir" <<'PY'
+  name="$face"
+  dir="$OUT/$name"
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  echo "==> $name"
+  TEST_RUNNER_BLURT_PROBE_ARGS="$face" \
+    TEST_RUNNER_BLURT_DEBUG_API_KEY="${BLURT_DEBUG_API_KEY:-}" xcodebuild test \
+    -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSProbe \
+    -only-testing:BlurtiOSProbe/BlurtKeyboardFlows \
+    -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
+    -resultBundlePath "$dir/flows.xcresult" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never \
+    2>&1 | grep -E "^FLOW-|XCTAssertTrue failed|Blurt never came up|error:|TEST BUILD FAILED" | grep -v "XCTAssertTrue failed" | sed "s/^/    /"
+  # xcodebuild's own verdict, read before any other command replaces it.
+  if [ "${PIPESTATUS[0]}" -ne 0 ]; then FAILED_RUNS+=("$name"); fi
+  xcrun xcresulttool export attachments --path "$dir/flows.xcresult" --output-path "$dir/attachments" >/dev/null 2>&1
+  python3 - "$dir" <<'PY'
 import json, os, shutil, sys
 d = sys.argv[1]
 try:
@@ -102,43 +87,29 @@ for test in manifest:
         if name.startswith("flow-"):
             shutil.copy(os.path.join(d, "attachments", a["exportedFileName"]), os.path.join(d, name.split("_")[0] + ".png"))
 PY
-      # The sheet: the bottom of every step's screenshot — the field is at
-      # the top, the keyboard at the bottom — captioned with the step.
-      captions=()
-      for shot in "$dir"/flow-*.png; do
-        [ -e "$shot" ] || continue
-        case "$shot" in *-crop.png) continue ;; esac
-        crop="${shot%.png}-crop.png"
-        h=$(sips -g pixelHeight "$shot" | awk '/pixelHeight/ {print $2}')
-        w=$(sips -g pixelWidth "$shot" | awk '/pixelWidth/ {print $2}')
-        ch=$((h * 45 / 100))
-        # sips wants the offset plus the height strictly inside the image.
-        sips -c "$ch" "$w" --cropOffset $((h - ch - 1)) 0 "$shot" --out "$crop" >/dev/null
-        step=$(basename "$shot" .png)
-        captions+=("${step#flow-??-}=$crop")
-      done
-      if [ ${#captions[@]} -gt 0 ]; then
-        swift "$REPO_ROOT/scripts/design-diff.swift" sheet --out "$dir/sheet.png" --columns 3 --scale 0.5 \
-          "${captions[@]}" >/dev/null
-      fi
-    done
+  # The sheet: the bottom of every step's screenshot — the field is at
+  # the top, the keyboard at the bottom — captioned with the step.
+  captions=()
+  for shot in "$dir"/flow-*.png; do
+    [ -e "$shot" ] || continue
+    case "$shot" in *-crop.png) continue ;; esac
+    crop="${shot%.png}-crop.png"
+    h=$(sips -g pixelHeight "$shot" | awk '/pixelHeight/ {print $2}')
+    w=$(sips -g pixelWidth "$shot" | awk '/pixelWidth/ {print $2}')
+    ch=$((h * 45 / 100))
+    # sips wants the offset plus the height strictly inside the image.
+    sips -c "$ch" "$w" --cropOffset $((h - ch - 1)) 0 "$shot" --out "$crop" >/dev/null
+    step=$(basename "$shot" .png)
+    captions+=("${step#flow-??-}=$crop")
   done
+  if [ ${#captions[@]} -gt 0 ]; then
+    swift "$REPO_ROOT/scripts/design-diff.swift" sheet --out "$dir/sheet.png" --columns 3 --scale 0.5 \
+      "${captions[@]}" >/dev/null
+  fi
 done
 xcrun simctl ui "$UDID" appearance light
 echo "ios-keyboard-flows: screenshots in $OUT"
-
-# An --align run leaves the App Group's side where the probe set it: put it
-# back through the simulator's own defaults daemon (a plist edit alone is
-# not seen until cfprefsd reloads).
-if [ -n "$ALIGN" ]; then
-  GROUP="$(xcrun simctl get_app_container "$UDID" com.assemblyai.blurt.iphone groups 2>/dev/null | awk -F'\t' '/group.com.assemblyai.blurt.iphone/ {print $2}')"
-  if [ -n "$GROUP" ]; then
-    xcrun simctl spawn "$UDID" defaults write "$GROUP/Library/Preferences/group.com.assemblyai.blurt.iphone" micAlignment center
-    echo "ios-keyboard-flows: mic alignment back to the middle"
-  fi
-fi
-
-if [ "${#FAILED_RUNS[@]}" -gt 0 ]; then
+if [ ${#FAILED_RUNS[@]} -gt 0 ]; then
   echo "ios-keyboard-flows: ${#FAILED_RUNS[@]} run(s) failed: ${FAILED_RUNS[*]}" >&2
   exit 1
 fi

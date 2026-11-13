@@ -8,7 +8,7 @@ import BlurtiOSCore
   /// `-BlurtProbeField light|dark`: a bare text field that takes the system
   /// keyboard on launch, so the `BlurtiOSProbe` UI test can read that
   /// keyboard's geometry off this simulator — the numbers
-  /// `Design/apple-geometry.json` records and the `key/*` tokens are pinned
+  /// `Design/apple-geometry-glass-402.json` records and the `key/*` tokens are pinned
   /// to (`scripts/apple-geometry.sh`, DESIGN.md › Apple's geometry). Debug
   /// builds only; the keyboard itself never runs here.
   struct KeyboardProbeView: View {
@@ -16,24 +16,18 @@ import BlurtiOSCore
     /// `-BlurtProbeText <word>`: the field starts with this in it, so a flow
     /// can highlight a word in any layout, letter keys or not.
     var text = ""
+    /// `-BlurtProbeSentences`: the field capitalizes sentences, as Messages
+    /// does, so a flow can watch the keys' case; the geometry probes keep the
+    /// field's default of none, so Apple's keys are read at rest.
+    var sentences = false
 
-    /// `-BlurtProbeField light|dark [a|b|c] [slimBar|panel|full] [left|center|right]`:
-    /// the words after the face set the mic concept, the layout and the mic's
-    /// side in the App Group, so the Blurt keyboard — which reads them on every
-    /// appearance — comes up that way for a capture of the real extension
+    /// `-BlurtProbeField light|dark`: the face the field asks for, so the Blurt
+    /// keyboard comes up that way for a capture of the real extension
     /// (`scripts/ios-keyboard-shot.sh`, `scripts/ios-keyboard-flows.sh`).
     static func parse(_ arguments: [String]) -> KeyboardProbeView? {
       guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else { return nil }
       let face = arguments.count > flag + 1 ? arguments[flag + 1] : "light"
       guard face == "light" || face == "dark" else { return nil }
-      // The mic's side is the middle unless a word says otherwise: the App
-      // Group outlives a run, and an earlier `left` must not leak into this one.
-      SharedStore.micAlignment = .center
-      for word in arguments.dropFirst(flag + 2).prefix(while: { !$0.hasPrefix("-") }) {
-        if let kind = VoiceElementKind(rawValue: word) { SharedStore.voiceElementKind = kind }
-        if let layout = KeyboardLayout(rawValue: word) { SharedStore.layout = layout }
-        if let side = MicAlignment(rawValue: word) { SharedStore.micAlignment = side }
-      }
       // `-BlurtProbeResetTerms`: an empty key-term list, so a flow that adds a
       // word finds it new on every run (the App Group outlives the test).
       if arguments.contains("-BlurtProbeResetTerms") { SharedStore.keyTerms = [] }
@@ -41,12 +35,13 @@ import BlurtiOSCore
       if let flag = arguments.firstIndex(of: "-BlurtProbeText"), arguments.count > flag + 1 {
         text = arguments[flag + 1]
       }
-      return KeyboardProbeView(dark: face == "dark", text: text)
+      return KeyboardProbeView(
+        dark: face == "dark", text: text, sentences: arguments.contains("-BlurtProbeSentences"))
     }
 
     var body: some View {
       VStack {
-        ProbeField(dark: dark, text: text)
+        ProbeField(dark: dark, text: text, sentences: sentences)
           .frame(height: DesignTokens.Metrics.keyMinWidth)
           .padding()
         // Puts the keyboard away without leaving the field, so a flow can
@@ -56,16 +51,6 @@ import BlurtiOSCore
           UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .accessibilityIdentifier("probe-dismiss")
-        .foregroundStyle(dark ? Color.white : Color.black)
-        // What Settings does while a keyboard is up elsewhere: the layout
-        // changes in the App Group, and the keyboard reads it when it next
-        // appears. One button per layout, so a flow can switch and re-show.
-        HStack {
-          ForEach(KeyboardLayout.allCases) { layout in
-            Button(layout.rawValue) { SharedStore.layout = layout }
-              .accessibilityIdentifier("probe-layout-\(layout.rawValue)")
-          }
-        }
         .foregroundStyle(dark ? Color.white : Color.black)
         Spacer(minLength: 0)
       }
@@ -81,6 +66,7 @@ import BlurtiOSCore
   private struct ProbeField: UIViewRepresentable {
     let dark: Bool
     let text: String
+    let sentences: Bool
 
     func makeUIView(context: Context) -> UITextField {
       let field = UITextField()
@@ -88,7 +74,7 @@ import BlurtiOSCore
       field.text = text
       field.keyboardAppearance = dark ? .dark : .light
       field.autocorrectionType = .yes
-      field.autocapitalizationType = .none
+      field.autocapitalizationType = sentences ? .sentences : .none
       field.borderStyle = .roundedRect
       field.placeholder = "probe"
       DispatchQueue.main.async { field.becomeFirstResponder() }

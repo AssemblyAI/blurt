@@ -5,21 +5,15 @@ import BlurtiOSCore
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (layout, theme, hands-free, delete), listening, transcription, the account, and
-/// about — a form on the brand's page, its sections under mono eyebrows.
-/// Presented from either tab's gear.
+/// (hands-free), listening, transcription, the account, and about — a form
+/// on the brand's page, its sections under mono eyebrows. Presented from
+/// either tab's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
-  @State private var layout = SharedStore.layout
-  @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
-  @State private var deleteWholeDictation = SharedStore.deleteWholeDictation
   @State private var windowMinutes = SharedStore.windowMinutes
-  @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = SharedStore.defaultThemeID
-  /// TEMPORARY: which mic concept to try. Goes with the losers.
-  @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
-    VoiceElementKind.shipped.rawValue
+  @State private var airPodsMic = SharedStore.airPodsMic
   @State private var showsKeyEntry = false
   @State private var confirmsStatsReset = false
   @State private var showsTypingTest = false
@@ -101,48 +95,18 @@ struct SettingsView: View {
     coordinator.apiKey.refreshStatus()
   }
 
+  /// The keyboard is Apple's, so there is nothing of its look to choose; the
+  /// one thing to set is whether it starts dictating on its own.
   private var keyboardSection: some View {
     Section {
-      Picker("Layout", selection: $layout) {
-        ForEach(KeyboardLayout.allCases) { Text($0.title).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: layout) { _, value in SharedStore.layout = value }
-      Text(layout.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
-      // The mic's side, for one hand — the same shape as the layout above: three
-      // segments and a line saying what the choice does.
-      Picker("Mic alignment", selection: $micAlignment) {
-        ForEach(MicAlignment.allCases) { Text($0.title).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: micAlignment) { _, value in SharedStore.micAlignment = value }
-      Text(micAlignment.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption))
-        .foregroundStyle(BlurtBrand.muted)
-      NavigationLink {
-        ThemePickerView()
-      } label: {
-        LabeledContent("Theme", value: KeyboardPalette.resolve(themeID, dark: false).name)
-      }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
-      Toggle("Delete whole dictation", isOn: $deleteWholeDictation)
-        .onChange(of: deleteWholeDictation) { _, value in SharedStore.deleteWholeDictation = value }
-      // TEMPORARY: the three mic concepts, to try each in use. Goes with the losers.
-      Picker("Mic", selection: $voiceRaw) {
-        Text("Grille").tag(VoiceElementKind.grille.rawValue)
-        Text("Ribs").tag(VoiceElementKind.ribs.rawValue)
-        Text("Streak").tag(VoiceElementKind.streak.rawValue)
-      }
-      .pickerStyle(.segmented)
     } header: {
       Eyebrow("Keyboard")
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
-          + "Delete whole dictation makes delete right after a dictation take all of it back; "
-          + "off, delete removes one character. "
-          + "Mic is a temporary switch between the three concepts while one is chosen. "
-          + "The keyboard picks up changes the next time it appears.")
+          + "The keyboard picks up the change the next time it appears.")
     }
   }
 
@@ -154,11 +118,20 @@ struct SettingsView: View {
         Text("1 hour").tag(60)
         Text("Until I stop it").tag(0)
       }
-      .onChange(of: windowMinutes) { _, value in SharedStore.windowMinutes = value }
+      .onChange(of: windowMinutes) { _, value in
+        SharedStore.windowMinutes = value
+        // The window that is open takes the new length, not only the next one.
+        coordinator.windowMinutesChanged()
+      }
+      Toggle("Use AirPods mic", isOn: $airPodsMic)
+        .onChange(of: airPodsMic) { _, value in SharedStore.airPodsMic = value }
     } header: {
       Eyebrow("Listening")
     } footer: {
-      Text("How long the mic stays open with nobody dictating, so the keyboard can start without opening Blurt.")
+      Text(
+        "How long a session stays on with nobody dictating, counted from the last word, so the keyboard can start "
+          + "without opening Blurt. With AirPods, the phone's own mic is used and music stays stereo; "
+          + "Use AirPods mic takes theirs instead, from the next session.")
     }
   }
 

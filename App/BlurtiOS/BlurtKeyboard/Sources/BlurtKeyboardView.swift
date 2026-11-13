@@ -1,0 +1,69 @@
+import BlurtDesign
+import BlurtiOSCore
+import KeyboardKit
+import SwiftUI
+
+/// Apple's keyboard, drawn by KeyboardKit, with Blurt's two additions: the
+/// mic key in the bottom row (`KeyboardLayout.blurt`, `MicKey`) and the bar
+/// above the keys (`BlurtToolbar`). Every other key is KeyboardKit's standard
+/// one, untouched. The mic wears the 123 key's style, the system key Apple's
+/// own in-row mic sits on, so it reads as one of the row.
+struct BlurtKeyboardView: View {
+  var services: KeyboardServices
+  /// Observed, so the layout is rebuilt as KeyboardKit changes the case,
+  /// the page or the locale: a layout handed over once kept the uppercase
+  /// letters the keyboard came up with, and typed them.
+  @ObservedObject var context: KeyboardContext
+  var model: BlurtiOSCore.KeyboardModel
+
+  var body: some View {
+    KeyboardView(
+      layout: .blurt(for: context),
+      services: services,
+      buttonContent: { params in
+        if params.item.action == .blurtMic {
+          MicKey(model: model)
+        } else {
+          params.view
+        }
+      },
+      // The mic's name and state for VoiceOver and the probe, on the key
+      // itself: KeyboardKit names a custom action's key after the action.
+      buttonView: { params in
+        if params.item.action == .blurtMic {
+          params.view
+            .accessibilityLabel(model.voiceState.accessibilityLabel)
+            .accessibilityValue(model.voiceState.accessibilityValue)
+            .accessibilityIdentifier("blurt-mic")
+        } else if params.item.action == .space {
+          // The hold that moves the cursor comes sooner than KeyboardKit's
+          // half second (`motion/space-hold`).
+          params.view.keyboardGestureConfiguration(
+            GestureButtonConfiguration(longPressDelay: DesignTokens.Motion.spaceHold))
+        } else {
+          params.view
+        }
+      },
+      collapsedView: { $0.view },
+      emojiKeyboard: { $0.view },
+      toolbar: { _ in BlurtToolbar(model: model) }
+    )
+    // The bar above the keys at Apple's suggestion bar's height, and the
+    // keyboard's edges as the layout measured them (`KeyboardLayoutConfiguration.blurt`).
+    .keyboardToolbarStyle(Keyboard.ToolbarStyle(height: DesignTokens.Metrics.voicebarHeight))
+    .keyboardViewStyle(KeyboardViewStyle(edgeInsets: KeyboardLayoutConfiguration.blurt.edgeInsets))
+    // Every cap at Apple's corner (the probe's fitted radius, `key/radius`);
+    // the mic in the 123 key's style, the system key Apple's own in-row mic
+    // sits on.
+    .keyboardButtonStyle { params in
+      var style =
+        params.action == .blurtMic
+        ? Keyboard.ButtonStyleBuilderParams(
+          action: .keyboardType(.numeric), context: params.context, isPressed: params.isPressed
+        ).standardStyle()
+        : params.standardStyle()
+      style.cornerRadius = DesignTokens.Metrics.keyRadius
+      return style
+    }
+  }
+}

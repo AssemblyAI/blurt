@@ -208,8 +208,12 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   generated from `project.yml`; edit that and run `xcodegen generate`. check.sh
   fails on pbxproj drift (a PreToolUse hook also blocks edits to it).
 - The engine has **no external SPM dependencies** (Foundation/Security/
-  AVFoundation/CoreAudio only). Don't add one to `Sources/BlurtEngine/`. The app
-  carries exactly one remote package, Sparkle; check.sh rejects any other.
+  AVFoundation/CoreAudio only). Don't add one to `Sources/BlurtEngine/`. Each
+  app carries only the remote packages check.sh allowlists for it, pinned with
+  `exactVersion:` on the line after the url — Sparkle (Mac), KeyboardKit
+  (iPhone; free core, closed-source binary) — and check.sh rejects any other
+  URL, a `github:` shorthand, or any floating version key. A new package is an
+  allowlist entry reviewed on its own, not a line in project.yml.
 - Unit tests use **Swift Testing**, not XCTest (the `BlurtUITests` XCUITest
   bundle is the one exception — XCUIAutomation requires XCTest). **Never touch
   the real Keychain in tests** — `APIKeyStore` is the production item; use an
@@ -236,6 +240,11 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   listens and transcribes, the keyboard is a remote control over the App Group that inserts
   the words. No `AVFoundation` in `BlurtKeyboard/`, `BlurtDesign/` or `BlurtiOSCore/` (the keyboard
   links it) (mechanized).
+- **KeyboardKit is linked by the app only** (`App/BlurtiOS/project.yml`): the keyboard imports it
+  with `link: false` and loads the app's copy through `@executable_path/../../Frameworks`; a second
+  copy in the .appex is a crash or an ITMS-90206 rejection. Free core only — no licence key, no Pro
+  feature, no plugin product, nothing of KeyboardKit's checked in (closed source, its own licence;
+  SPM fetches the binary). On a bump, `otool -L` / `nm -u` the binary for capture or speech frameworks.
 - The app's microphone is a _listening window_, opened once while the app is in front and
   kept open, not a per-press capture — the two rows marked "(macOS shell)" above do not apply.
 - Insertion is the keyboard's `textDocumentProxy`; the clipboard is only the fallback when no
@@ -246,7 +255,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   88%. A UI hook the model needs is a shell-side extension, never SwiftUI in the core.
 - **The keyboard never cancels words behind the user's back.** A cancel over a recording or a
   transcription comes only from the × key or the term field opened over a highlighted word —
-  not from leaving the screen, a swipe across the orb, or the plain +. The fuzz test enforces it.
+  not from leaving the screen, a swipe off the mic key, or the plain +. The fuzz test enforces it.
 - **No private Settings URLs** (`App-Prefs:`): `openSettingsURLString` only, and the copy names
   the whole path (Apps › Blurt › Keyboards).
 - **No bundled brand fonts** — removed over their licence; `BlurtType`'s roles use system faces.

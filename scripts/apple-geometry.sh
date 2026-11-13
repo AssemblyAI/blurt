@@ -2,12 +2,19 @@
 # Measure the iPhone's own keyboard on the simulator and write what it found:
 # the BlurtiOSProbe UI test launches the app on `-BlurtProbeField`, reads every
 # key's frame off the system keyboard (both faces), and this turns the
-# attachment into App/BlurtiOS/Design/apple-geometry.json — the table the
-# keyboard's `key/*`, `row/gap` and `margin/*` tokens are pinned to
-# (AppleGeometryTests) and the crop scripts/design-diff.swift measures the
-# corner radius from.
+# attachment into App/BlurtiOS/Design/apple-geometry-<profile>.json — the
+# oracle scripts/keyboard-parity.sh reads Blurt's keyboard (KeyboardKit's,
+# with the mic in the row) against, which AppleGeometryTests checks parses
+# with every number read here, and the crop scripts/design-diff.swift
+# measures the corner radius from. One file per
+# profile: `glass-402` (the iPhone 18 Pro on iOS 26+, the default),
+# `classic-390` (the iPhone 16e on iOS 18.6: a Face ID phone) and
+# `classic-375` (the iPhone SE on iOS 18.6: a globe in the keyboard). The
+# JSON records the simulator's device, os, runtime and scale.
 #
-#   scripts/apple-geometry.sh                 # iPhone 18 Pro, writes the JSON and prints the table
+#   scripts/apple-geometry.sh                 # iPhone 18 Pro, writes the glass-402 JSON and prints the table
+#   BLURT_SIM_RUNTIME=18.6 BLURT_SIM_DEVICE="iPhone 16e (18.6)" scripts/apple-geometry.sh --profile classic-390
+#   BLURT_SIM_RUNTIME=18.6 BLURT_SIM_DEVICE="iPhone SE (3rd generation) (18.6)" scripts/apple-geometry.sh --profile classic-375
 #   BLURT_SIM_DEVICE="iPhone 17" scripts/apple-geometry.sh --out /tmp/geometry.json
 #
 # Needs the on-screen keyboard: in Device Hub / Simulator, "Always simulate
@@ -19,30 +26,49 @@ cd "$REPO_ROOT"
 # shellcheck source=scripts/ios-lib.sh
 source "$REPO_ROOT/scripts/ios-lib.sh"
 DERIVED="$IOS_DERIVED"
-OUT="$REPO_ROOT/App/BlurtiOS/Design/apple-geometry.json"
+PROFILE="glass-402"
+OUT=""
 WORK="$REPO_ROOT/.build/design/probe"
 while [ $# -gt 0 ]; do
   case "$1" in
+    --profile)
+      PROFILE="${2:?}"
+      shift 2
+      ;;
     --out)
       OUT="${2:?}"
       shift 2
       ;;
     *)
-      echo "usage: apple-geometry.sh [--out FILE.json]" >&2
+      echo "usage: apple-geometry.sh [--profile glass-402|classic-390|classic-375] [--out FILE.json]" >&2
       exit 2
       ;;
   esac
 done
+case "$PROFILE" in
+  glass-402 | classic-390 | classic-375) ;;
+  *)
+    echo "apple-geometry: unknown profile '$PROFILE' (glass-402, classic-390 or classic-375)" >&2
+    exit 2
+    ;;
+esac
+OUT="${OUT:-$REPO_ROOT/App/BlurtiOS/Design/apple-geometry-$PROFILE.json}"
 
 ios_require_device apple-geometry
 ios_wait_booted "$UDID"
+# The capture's pixels per point come from the device type, not a constant:
+# the SE is 2×, the Face ID phones 3×. The os and runtime go into the JSON.
+SCALE="$(ios_device_scale "$UDID")"
+OS="$(ios_device_runtime "$UDID")"
+RUNTIME="$(ios_device_runtime_id "$UDID")"
 rm -rf "$WORK"
 mkdir -p "$WORK"
 
-echo "==> measuring the system keyboard on $NAME"
+echo "==> measuring the system keyboard on $NAME (iOS $OS, ${SCALE}x) for the $PROFILE profile"
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
 RESULTS="$WORK/probe.xcresult"
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSProbe \
+  -only-testing:BlurtiOSProbe/AppleKeyboardProbe \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet
 xcrun xcresulttool export attachments --path "$RESULTS" --output-path "$WORK/attachments" >/dev/null
@@ -52,10 +78,11 @@ xcrun xcresulttool export attachments --path "$RESULTS" --output-path "$WORK/att
 # themselves — widths, gaps, height, radius, the surface's top edge and the
 # margins — are read off the light screenshot by design-diff.swift measure,
 # with the probes placed inside the caps from the cells.
-python3 - "$WORK/attachments" "$OUT" "$NAME" "$WORK" "$REPO_ROOT" <<'PY'
+python3 - "$WORK/attachments" "$OUT" "$NAME" "$WORK" "$REPO_ROOT" "$SCALE" "$OS" "$RUNTIME" "$PROFILE" <<'PY'
 import json, os, shutil, subprocess, sys
 from datetime import date
-attachments, out, device, work, root = sys.argv[1:6]
+attachments, out, device, work, root, scale, os_version, runtime, profile = sys.argv[1:10]
+scale = int(scale)  # the capture's pixels per point: the device type's
 manifest = json.load(open(os.path.join(attachments, "manifest.json")))
 found = {}
 for test in manifest:
@@ -85,7 +112,6 @@ r3 = lambda v: round(v * 1000) / 1000
 # through (a glyph is inside the cap; the edges are found past it).
 def probe(c):
     return f'{c["x"] + c["w"] / 2},{c["y"] + c["h"] / 2}'
-scale = 3  # the iPhone 18 Pro; the capture's pixels per point
 def measure(face, probes, columns):
     args = ["swift", os.path.join(root, "scripts/design-diff.swift"), "measure", shots[face], "--scale", str(scale),
             "--surface", f'{space["x"] + space["w"] / 2},{q["y"] - 3}']
@@ -135,8 +161,10 @@ cap = {
     "systemBarBelow": r3(win["h"] - kb["y"] - kb["h"]),
 }
 geometry = {
-    "device": device, "width": win["w"], "measured": date.today().isoformat(),
+    "profile": profile, "device": device, "width": win["w"], "os": os_version, "runtime": runtime, "scale": scale,
+    "measured": date.today().isoformat(),
     "sources": {
+        "os": "the simulator runtime the probe ran on (xcrun simctl list devices); the scale is the device type's",
         "cells": "XCUITest key frames (BlurtiOSProbe) — touch cells, no gaps",
         "caps": "pixel scan of the light screenshot (scripts/design-diff.swift measure)",
         "radius": "circle fitted to the top-left inset of the q cap over its first 12 pt (±0.25)",

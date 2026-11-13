@@ -69,11 +69,11 @@ import glob, os, re, sys
 # BlurtiOSCore (the model, the voice state, the interaction rules) is not
 # globbed at all: it draws nothing, so it has no design literals to carry.
 exempt = {
-    "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "MotionHeld.swift", "FilmGrain.swift",
+    "KeyboardViewController.swift", "FilmGrain.swift",
 }
 app_exempt = {
     "BlurtiOSApp.swift", "DictationCoordinator.swift", "ListeningWindow.swift", "ListeningSource.swift",
-    "AudioSource.swift", "SimulatorAudioSource.swift", "KeyboardGalleryView.swift", "KeyboardProbeView.swift",
+    "AudioSource.swift", "SimulatorAudioSource.swift", "KeyboardProbeView.swift",
 }
 files = sorted(
     [path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)
@@ -85,7 +85,8 @@ files = sorted(
 )
 modifiers = re.compile(
     r"\.(padding|frame|font|blur|scaleEffect|offset|shadow|opacity|cornerRadius|saturation|brightness"
-    r"|strokeBorder|stroke|lineWidth)\(|\b(spacing|duration|minimumDistance|lineWidth|radius|size|width|height|by):"
+    r"|strokeBorder|stroke|lineWidth)\(|\b(spacing|duration|minimumDistance|lineWidth|radius|size|width|height|by"
+    r"|buttonCornerRadius|rowHeight|buttonInsets):"
 )
 number = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?![\w.])")
 bad = []

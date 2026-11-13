@@ -39,6 +39,14 @@ package enum BlurtBrand {
   package nonisolated static let cta = adaptive(DesignTokens.Keyboard.appCtaLight, DesignTokens.Keyboard.appCtaDark)
   package nonisolated static let ctaText = adaptive(
     DesignTokens.Keyboard.appCtaTextLight, DesignTokens.Keyboard.appCtaTextDark)
+  /// The wordmark drifting on the Blurt-is-on card takes these in turn, one
+  /// per wall it touches: the accent, the text, a lighter green, the muted grey.
+  package nonisolated static let keepOpenTints = [
+    adaptive(DesignTokens.Keyboard.appKeepOpenTint1Light, DesignTokens.Keyboard.appKeepOpenTint1Dark),
+    adaptive(DesignTokens.Keyboard.appKeepOpenTint2Light, DesignTokens.Keyboard.appKeepOpenTint2Dark),
+    adaptive(DesignTokens.Keyboard.appKeepOpenTint3Light, DesignTokens.Keyboard.appKeepOpenTint3Dark),
+    adaptive(DesignTokens.Keyboard.appKeepOpenTint4Light, DesignTokens.Keyboard.appKeepOpenTint4Dark),
+  ]
 
   /// A colour that follows the interface style it is drawn in, as an asset
   /// catalog colour does, without needing one: the library carries no catalog,
