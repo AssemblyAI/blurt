@@ -5,13 +5,14 @@ import BlurtiOSCore
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (hands-free), listening, transcription, the account, and about — a form
-/// on the brand's page, its sections under mono eyebrows. Presented from
+/// (hands-free, delete), listening, transcription, the account, and about — a
+/// form on the brand's page, its sections under mono eyebrows. Presented from
 /// either tab's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
   @State private var autoDictate = SharedStore.autoDictate
+  @State private var deleteWholeDictation = SharedStore.deleteWholeDictation
   @State private var windowMinutes = SharedStore.windowMinutes
   @State private var airPodsMic = SharedStore.airPodsMic
   @State private var showsKeyEntry = false
@@ -101,12 +102,16 @@ struct SettingsView: View {
     Section {
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
+      Toggle("Delete whole dictation", isOn: $deleteWholeDictation)
+        .onChange(of: deleteWholeDictation) { _, value in SharedStore.deleteWholeDictation = value }
     } header: {
       Eyebrow("Keyboard")
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
-          + "The keyboard picks up the change the next time it appears.")
+          + "Delete whole dictation makes delete right after a dictation take all of it back; "
+          + "off, delete removes one character. "
+          + "The keyboard picks up changes the next time it appears.")
     }
   }
 

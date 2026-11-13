@@ -71,6 +71,11 @@ import Foundation
     /// error — or nil when a press abandoned it, and the pill goes back to
     /// what the session is doing.
     public var jobPill: (OverlayUIState?) -> Void = { _ in }
+    /// Called after every routing step that leaves the router at rest — a
+    /// level, not an edge: every dictation key event and every session phase at
+    /// rest calls it too, as does the step that ends an answer or a job. The
+    /// music pause resumes here, once the mic has closed.
+    public var pressSettled: () -> Void = {}
     /// Counts reads, so a stopped read's late end can't take down a newer read's pill.
     private var speechGeneration = 0
     /// The read the pill is showing, or nil once it ended: a level still on its
@@ -142,6 +147,11 @@ import Foundation
       perform(routing.submit(command))
     }
 
+    /// A bare Escape with something in flight: stop it all (`SelectionSpeechRouting.escape`).
+    public func escape() { perform(routing.escape()) }
+    /// Whether a dictation, press, request, read, answer or job is under way.
+    public var isBusy: Bool { routing.isBusy }
+
     /// `DictationKeyTap`'s latch: the press was a tap.
     public func keyLatched() {
       perform(routing.keyLatched())
@@ -152,24 +162,28 @@ import Foundation
     }
 
     private func perform(_ actions: [SelectionSpeechRouting.Action]) {
-      for action in actions {
-        switch action {
-        case .forward(let command): session.submit(command)
-        case .prepareCommand: Task { [performer] in await performer.commandStarting() }
-        case .readScreen:
-          screenRead?.cancel()
-          screenRead = Task { [performer] in await performer.screenContext() }
-        case .readSelection:
-          Task { [weak self] in
-            let selection = await self?.readSelection()
-            guard let self else { return }
-            self.perform(self.routing.selectionResolved(selection))
-          }
-        case .startHoldTimer: startHoldTimer()
-        case .syncGateAfterSession: syncGateAfterSession()
-        case .resetGate: resetGate()
-        case .speak, .answer, .stopSpeech, .rewrite, .compose, .runCommand, .stopJob: performTask(action)
+      for action in actions { perform(action) }
+      // Every routing step comes through here, so this sees every return to rest.
+      if !routing.isHandlingPress { pressSettled() }
+    }
+
+    private func perform(_ action: SelectionSpeechRouting.Action) {
+      switch action {
+      case .forward(let command): session.submit(command)
+      case .prepareCommand: Task { [performer] in await performer.commandStarting() }
+      case .readScreen:
+        screenRead?.cancel()
+        screenRead = Task { [performer] in await performer.screenContext() }
+      case .readSelection:
+        Task { [weak self] in
+          let selection = await self?.readSelection()
+          guard let self else { return }
+          self.perform(self.routing.selectionResolved(selection))
         }
+      case .startHoldTimer: startHoldTimer()
+      case .syncGateAfterSession: syncGateAfterSession()
+      case .resetGate: resetGate()
+      case .speak, .answer, .stopSpeech, .rewrite, .compose, .runCommand, .stopJob: performTask(action)
       }
     }
 
@@ -321,6 +335,9 @@ import Foundation
     /// words — "Rewriting", "Writing", "Working" — or nil for a dictation's "Transcribing":
     /// what `PipelinePhase.overlayState(whileSpeaking:processingAs:)` asks.
     public var processingState: OverlayUIState? { routing.processingState }
+
+    /// Whether the recording under way is a command's.
+    public var recordsCommand: Bool { routing.recordsCommand }
 
     /// Reports the read the pill is showing as over, once: the meter to 0, then
     /// `speechEnded`.

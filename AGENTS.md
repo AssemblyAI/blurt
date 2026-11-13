@@ -955,7 +955,21 @@ three of them pure engine logic:
   among the losses and the gate is reset. The host passes the raw `CGEventSource.flagsState` read
   in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
-  shell `if`.
+  shell `if`. It also routes an Escape — `Event.fromKeyDown`: keycode 53, not a key-repeat, its switch on —
+  arriving as `.escapeDown(rawFlags:)`. The app passes the switch as `EscapeCancelStore`
+  (`BlurtEscapeCancelsDictation`, off by default, the Advanced pane's Experimental section), read at
+  the keystroke and only for an Escape; off, the event is `.keyDown(53)`, so Escape takes the
+  ordinary-key path exactly as on main and nothing else is asked. Only a **bare** one counts: no ⌘⌥⌃⇧ beyond the held trigger's own
+  generic bit (an Escape over a held right ⌘ carries `maskCommand`), and not with that trigger's twin
+  held too, so ⌘Esc with both ⌘s and ⌥⌘Esc stay shortcuts. The router decides it, since only it knows
+  which trigger is held. A bare one is a discard only with the gate live or the host's `inFlight` (`handle(_:at:inFlight:)`, what the gate can't see: a dictation
+  past its recording, a request, a job, a read) true, since the tap is listen-only and sees every
+  Escape on the system: the router `reset()`s — gate, `modifierIsDown` and `activeKeyCode` — so another
+  key works at once, and returns `.discard`, the one action that means it. Any `reset()` remembers a
+  trigger still held through it (`heldThroughReset`): its re-reported down bit and its key-up are
+  inert until it is let go, or the re-report would read as a fresh press and start a new dictation —
+  after a discard, and again at the `syncAfterTerminalPhase` reset the discarded dictation's end
+  brings. Dropped-event recovery checks it against the held flags, since its release may be lost. Otherwise the ordinary-key path again.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
 `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
@@ -963,9 +977,20 @@ key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator
 `syncAfterTerminalPhase()` on every terminal phase: a dictation can end with no key event to close
 the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
 and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
-`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. The tap
-**swallows nothing**: a lone modifier types nothing, and combos pass through so normal shortcuts keep
-working.
+`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. An Escape's
+`inFlight` is the read-aloud router's `isBusy` (its own mode, or the session busy), and the tap maps
+`.discard` to `SelectionSpeechRouter.escape()` and `.cancel` to a combo's `submit(.cancel)`, deriving
+nothing from the event itself. `escape()` stops, from every routing mode, the router's own work — a job before it
+pastes, a read or answer, a request — and cancels a busy session, which a combo would leave running
+under a press still deciding. With nothing of the router's under way the cancel goes to the session
+unconditionally, and `DictationSession.cancel()` decides by its own phase (a no-op at rest), so a
+stale "in flight" can't strand a dictation. The ready screen's own hidden Esc button cancels as on main
+whatever the switch: it also answers ⌘-period, which the tap never routes, and with the tap's Escape
+on, its second cancel lands on a session the first already ended, where `cancel()` is a no-op. The
+tap **swallows nothing**: a lone modifier types nothing, combos pass through so normal shortcuts keep
+working, and the Escape cancel does **not** consume the keystroke — Escape still reaches the focused
+app. Making it exclusive would require an active (`.defaultTap`) tap, which is ruled out because
+macOS would then block on this process for every system-wide keystroke.
 
 Because the tap can't swallow `fn`, macOS's own 🌐 action ("Press 🌐 key to": emoji, input source,
 or Apple Dictation — each with its own sound or popup) would fire on every `fn` dictation. The
@@ -1348,6 +1373,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   CoreAudio UID — empty/unset follows the system default; re-read at every press, and a pinned
   device that isn't connected falls back to the system default without unpinning),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y),
+  **`MediaPauseStore`** (`BlurtPauseMediaWhileDictating`, experimental and off by default, the
+  Advanced pane's Experimental section, independent of developer mode; gates pausing Spotify/Apple
+  Music while recording, read on each edge into recording),
   **`TextShortcutStore`** (`BlurtTextShortcuts`, the JSON list of spoken phrase → saved text
   pairs; re-read per transcript via the session's `textShortcutsProvider` and applied locally by
   `TextShortcutExpander` between the response and the paste — never on the wire. Like
@@ -1385,10 +1413,82 @@ target (`App/Blurt/Blurt/SoundPackCatalog.swift`) by `scripts/generate-sounds.sw
 `.m4a` files they name, because a voice list whose cues live in someone else's bundle is a picker in
 which every choice plays silence. Regenerate both halves together — `check.sh`'s sound-catalog guard
 exists because a drift plays silence with no error — and note that adding or removing a voice changes
-the app target's file list, so `xcodegen generate` and a committed `.pbxproj` are part of that edit. **`RecordingCueGate`** is the
-pure edge detector deciding when the chimes fire — on the `.recording` edge, i.e. once audio is
-actually flowing, never at the press (see the latency notes above for why that ordering is
-load-bearing); the AppKit `CueSoundPlayer` just plays what it resolves.
+the app target's file list, so `xcodegen generate` and a committed `.pbxproj` are part of that edit. **`RecordingCueGate`** decides
+which chime fires on each recording edge — on the `.recording` edge, i.e. once audio is actually
+flowing, never at the press (see the latency notes above for why that ordering is load-bearing); the
+AppKit `CueSoundPlayer` just plays what it resolves.
+
+**`RecordingEdgeDetector`** is the shared primitive underneath: a pure detector reporting `.began` on
+the not-recording→recording transition and `.ended` on the reverse, silent everywhere else (the host
+feeds it _every_ phase). `RecordingCueGate` is a thin mapping over it, and `MediaPauseGate` builds on it —
+they want identical edges, so the edge logic exists once. Note `.ended` fires when the **mic closes**,
+not at a terminal phase: anything suppressed for the microphone's benefit is restored as recording
+stops, not a second later when the paste lands — unless the press goes on to speak or act, below.
+
+Music: **`MediaPauseController`** (`App/Blurt/Blurt/`) pauses the user's music while the mic is open
+and restores it after, so what they're listening to stays out of the transcript. Driven from
+`AppCoordinator.render(_:)` like the chimes, and from `SelectionSpeechRouter.pressSettled`; its
+decisions are the engine's **`MediaPauseGate`**. The resume comes from `pressSettled` once the mic has
+closed: a dictation never takes the router out of rest, so its music returns in the render its mic
+closes in; an ask's waits until the router is back at rest, so it never plays over the spoken answer,
+and a rewrite's or composition's until it pastes. A **command's recording is not paused at all**
+(`recordsCommand`): the command may be about the music, and the planner's play/pause key would toggle
+the player Blurt paused back on. Experimental for now, so it can be trialled
+before it is the default: off unless its own switch in the Advanced pane's Experimental section is on,
+whatever developer mode says (trying it shouldn't mean logging every dictation to disk). Scoped to
+**scriptable players** — `MediaPlayerApp` (Spotify, Apple Music). Both expose
+`player state` through one shared script shape, so a dictation pauses only a player that is _already
+playing_ and resumes only what it paused (tracked on the controller's serial queue, not against the
+setting, so flipping the toggle off mid-dictation can't strand the music paused). `if application …
+is running` is the idiom that reads the running state _without_ launching the app — a dictation must
+never boot a music player. It cannot start anything unbidden. It
+pauses rather than ducks the volume (an earlier ducking attempt, #171, was closed unmerged).
+
+**Browsers are deliberately not covered — don't "fix" this.** Pausing safely needs to know something
+is playing, and no public API answers that for a browser. All three routes were measured on macOS 26
+and rejected: CoreAudio's device-level `kAudioDevicePropertyDeviceIsRunningSomewhere` reads busy with
+the app quit and total silence; per-process `kAudioProcessPropertyIsRunningOutput` (public since
+14.4) reports nothing for other processes without system-audio-recording consent, a far heavier
+permission than the feature is worth; and MediaRemote (`MRMediaRemoteGetNowPlayingApplicationIsPlaying`)
+is gated for unentitled apps, returning `false` while Spotify was demonstrably playing. A blind
+system play/pause media key — the only thing that _reaches_ a browser — was built as an opt-in
+fallback, tried in real use, and **removed**: with no state to read it toggles rather than pauses, so
+it started playback that wasn't running. `MediaPlayerApp`'s doc carries the same warning next to the
+code.
+
+The scripts run in a short-lived **`/usr/bin/osascript` child process**, not in-process
+`NSAppleScript` — a correctness requirement, not a style choice. In-process OSA leaked internally per
+invocation (`scripts/leaks.sh` failed twice on backtraces through `executeAndReturnError`, and an
+`autoreleasepool` did **not** help), and the leak only reproduced on CI. In a child the OSA
+allocations die with `osascript`, so no Blurt frame can appear in a leak backtrace. TCC still
+attributes the event to Blurt as the **responsible process**, so the prompt names Blurt and reads its
+`NSAppleEventsUsageDescription`. Each player gets **its own script** (`MediaPlayerApp.pauseScript` / `resumeScript`): AppleScript resolves an
+app's terminology at compile time, so one script naming both failed whole (-2741) on a Mac without
+Spotify and Music never paused. The resume plays a player only if it is still paused, so playback
+the user changed meanwhile is left alone — though a pause the user made themselves mid-dictation is
+indistinguishable from Blurt's, so it is resumed too (a known limitation). Each `osascript` is
+killed after 5 s, with both pipes drained concurrently; only a pause that _said_ it paused counts — one
+that timed out may have found the player already paused by the user, and the still-paused check would
+then start music they had stopped. The invocations sit on a **serial `DispatchQueue`**
+so the restore always observes what the pause did, and the whole thing is fire-and-forget, so a
+wedged player can never delay a recording. Quitting (a Sparkle relaunch included) always resumes on
+`willTerminateNotification` — whether the gate still held the resume or it is already queued — killing
+a pause still in flight first, then waiting at most 2 s (1 s a script); with nothing paused the queue
+is idle and it returns at once. **A dictation never puts the consent prompt up**: before scripting, the
+pause asks `AEDeterminePermissionToAutomateTarget` _without_ prompting (`AutomationConsent`), and
+scripts only a `.granted` player — which also skips a player that isn't running, with no `NSWorkspace`
+scan on the main actor. The prompt is asked only from Settings — as the switch turns on, or from the
+"Allow…" button the Experimental section shows for a running player never asked — on a **queue of its
+own**, since it blocks until the user answers and the dictation's pause and resume must not wait
+behind it. The section re-reads consent on appear and whenever the app comes to the front, so its
+"can't control" note survives a relaunch.
+Reset clears the Automation grant with the others (`PermissionsReset.Service.appleEvents`,
+`scripts/reset-lib.sh`). `MediaPlayerApp` (the roster, its scripts, and `AutomationConsent`) is its own file beside
+`MediaPauseStore`. Sending
+Apple Events needs **two** build-side pieces, both in `project.yml`: `NSAppleEventsUsageDescription`
+(without it macOS _terminates_ the process on the first send instead of prompting) and the
+`com.apple.security.automation.apple-events` entitlement (the hardened runtime otherwise blocks
+outgoing events). A user who declines the consent prompt gets the note and an inert feature for that player.
 
 `CueSoundPlayer` decodes and pre-rolls the players once so the first chime never stalls the pill, and
 that pre-roll is bound to the output route it was made against. Blurt's own capture invalidates it:

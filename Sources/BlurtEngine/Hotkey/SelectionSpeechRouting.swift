@@ -43,12 +43,6 @@
 /// for a dictation, while `.resetGate` just clears it, because no recording is
 /// involved.
 struct SelectionSpeechRouting: Sendable {
-  /// How long a read or ask key must stay down, in a mode that holds, before
-  /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
-  /// asker waits this long (plus the mic bring-up) for the start chime before
-  /// speaking; a deliberate tap is over long before it.
-  static let holdDelay = Duration.milliseconds(350)
-
   private var mode = Mode.passthrough
   /// Whether the session's last phase was in flight. A terminal phase is then
   /// that dictation's end, never a hand-back press that hasn't started.
@@ -58,6 +52,17 @@ struct SelectionSpeechRouting: Sendable {
   private var staleReads = 0
 
   init() {}
+
+  /// Whether a press of this router's is under way — its selection read, its
+  /// recording, its transcription, its read or answer, its job. False only at
+  /// rest (`.passthrough`), where a dictating key's presses go straight through.
+  var isHandlingPress: Bool { mode != .passthrough }
+
+  /// Whether the press recording now is a command's. The music pause leaves a
+  /// command's recording alone (`MediaPauseGate`).
+  var recordsCommand: Bool {
+    if case .asking(.command, _, _, _) = mode { true } else { false }
+  }
 
   /// What the pill shows while the session records or transcribes a job's
   /// spoken words, in place of "Transcribing": "Rewriting" for a rewrite's
@@ -89,10 +94,10 @@ struct SelectionSpeechRouting: Sendable {
       case .dictate, .off: return [.forward(.press(key: key))]
       case .command, .compose:
         // Nothing to read: the press only has to prove itself.
-        mode = .selected(Self.intent(action), "")
+        mode = .selected(Intent(action), "")
         return holds ? [.startHoldTimer] : []
       case .readAloud, .ask, .rewrite:
-        mode = .deciding(Self.intent(action), trigger: nil, ended: false)
+        mode = .deciding(Intent(action), trigger: nil, ended: false)
         return holds ? [.readSelection, .startHoldTimer] : [.readSelection]
       }
     case .speaking:
@@ -108,7 +113,7 @@ struct SelectionSpeechRouting: Sendable {
     case .transcribing(let intent, _, let started):
       // A press while the request is transcribing drops it, for the same reason.
       mode = .passthrough
-      return (started ? [.forward(.cancel), .resetGate] : [.resetGate]) + abandon(intent)
+      return (started ? [.forward(.cancel), .resetGate] : [.resetGate]) + intent.abandoned
     case .deciding(_, trigger: _, ended: true):
       // The press is over and the gate idle, only its read still out: this is a
       // fresh press, not one riding the old. Swallowing it would leave the gate
@@ -176,7 +181,7 @@ struct SelectionSpeechRouting: Sendable {
       mode = .passthrough
       // Unstarted, the session is still busy with the earlier dictation, which
       // a cancel would throw away. A recovery reset still goes through.
-      return (started || command == .cancelRecording ? [.forward(command)] : []) + abandon(intent)
+      return (started || command == .cancelRecording ? [.forward(command)] : []) + intent.abandoned
     case .press, .pressHandingBack:
       return []
     }
@@ -197,7 +202,7 @@ struct SelectionSpeechRouting: Sendable {
     switch command {
     case .cancel:
       mode = .passthrough
-      return (started ? [.forward(.cancel)] : []) + abandon(intent)
+      return (started ? [.forward(.cancel)] : []) + intent.abandoned
     case .release, .cancelRecording:
       // Nothing is recording, so the session treats either as a no-op.
       return [.forward(command)]
@@ -291,16 +296,6 @@ struct SelectionSpeechRouting: Sendable {
     }
   }
 
-  private static func intent(_ action: TriggerKeyAction) -> Intent {
-    switch action {
-    case .ask: .ask
-    case .rewrite: .rewrite
-    case .compose: .compose
-    case .command: .command
-    case .readAloud, .dictate, .off: .read
-    }
-  }
-
   /// The read ended on its own, or failed. The caller must not report a read it
   /// stopped itself: a key stop has already moved on, and a newer read may be
   /// playing. The read's key may still hold the gate (latched by a tap), so
@@ -376,14 +371,30 @@ struct SelectionSpeechRouting: Sendable {
     // Nothing said, or the request failed or was cancelled: a dictation ending
     // without a key event, like any other.
     mode = .passthrough
-    return [.syncGateAfterSession] + abandon(intent)
+    return [.syncGateAfterSession] + intent.abandoned
   }
 
-  /// A command dropped before it ran — nothing said, a combo, a press while
-  /// it transcribed — still has its screen read under way and, in a Chromium
-  /// browser, its page tree switched on: `.stopJob` stops one and undoes the
-  /// other. Nothing for any other request.
-  private func abandon(_ intent: Intent) -> [Action] {
-    intent == .command ? [.stopJob] : []
+  /// A press of this router's or a busy session: an Escape's `inFlight` (`DictationKeyRouter`).
+  var isBusy: Bool { isHandlingPress || sessionBusy }
+
+  /// Escape: throw away everything in flight, and paste nothing. Unlike a combo
+  /// (`submit(.cancel)`), it stops the router's own work *and* cancels a busy
+  /// session. In passthrough the cancel goes to the session unconditionally — its
+  /// `cancel()` is a no-op at rest — so a moment-stale "busy" can't strand a dictation.
+  mutating func escape() -> [Action] {
+    let busy: [Action] = sessionBusy ? [.forward(.cancel)] : []
+    defer { mode = .passthrough }
+    switch mode {
+    case .passthrough: return [.forward(.cancel)]
+    case .deciding:
+      staleReads += 1  // its selection read is still out
+      return busy
+    case .selected: return busy  // nothing prepared yet, as with a combo (`submit`)
+    case .asking(let intent, _, let started, _), .transcribing(let intent, _, let started):
+      // Unstarted, the session is busy with an earlier dictation: discard it too.
+      return (started || sessionBusy ? [.forward(.cancel)] : []) + intent.abandoned
+    case .speaking: return [.stopSpeech] + busy
+    case .working: return [.stopJob] + busy
+    }
   }
 }

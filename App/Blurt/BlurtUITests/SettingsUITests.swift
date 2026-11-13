@@ -108,6 +108,33 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(picker.value as? String, "None", "Choosing None should stick as the selection")
   }
 
+  /// The Escape cancel is an experimental switch: shown in the Advanced pane with
+  /// developer mode off, off by default, and on with a click.
+  func testEscapeCancelIsAnExperimentalSwitchThatDefaultsOff() {
+    let advanced = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
+    let developer = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
+    XCTAssertTrue(developer.waitForExistence(timeout: 10), "Developer mode toggle not found")
+    XCTAssertEqual("\(developer.value ?? "")", "0", "Developer mode should start switched off")
+
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.escapeCancelToggle)
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Cancel-with-Escape toggle not found")
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Cancel with Escape should default OFF")
+    toggle.click()
+    XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should turn Cancel with Escape on")
+  }
+
+  /// The media pause is an experimental switch: shown in the Advanced pane with
+  /// developer mode off, off by default, and on with a click.
+  func testMediaPauseIsAnExperimentalSwitchThatDefaultsOff() {
+    let advanced = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.pauseMediaToggle)
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Pause-music toggle not found")
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Pausing music should default OFF")
+    toggle.click()
+    let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 1"), object: toggle)
+    XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 10), .completed, "Clicking should turn pausing music on")
+  }
+
   /// Developer mode starts off (the UI-test launch resets persisted settings)
   /// and a click switches it on. Matched by identifier rather than element type
   /// so the test doesn't care whether AppKit exposes the SwiftUI switch as a
@@ -146,9 +173,11 @@ final class SettingsUITests: BlurtUITestCase {
   /// The Advanced pane's reset button asks first, and dismissing the
   /// confirmation leaves the install exactly as it was.
   ///
-  /// Everything happens on the Advanced pane, against the developer-mode switch
+  /// Everything happens on the Advanced pane, against an Experimental switch
   /// — one of the settings `PersistedSettings.resetAll` clears — so "nothing was
   /// reset" is observable without switching tabs or opening the API-key sheet.
+  /// Not developer mode, whose rows and footer grow the pane: the panes don't
+  /// scroll, so a taller one pushed the reset button off a small CI screen.
   /// That isn't tidiness: the sheet leaves its own "Cancel" in the accessibility
   /// tree, which made an app-level query for the alert's Cancel ambiguous, and
   /// dismissing with Escape instead closed the settings window along with the
@@ -166,10 +195,11 @@ final class SettingsUITests: BlurtUITestCase {
     // Switch on a setting the sweep would clear, so a reset that ran anyway is
     // visible in the same pane. (The UI-test launch resets persisted settings,
     // so this starts off.)
-    let developerMode = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
-    XCTAssertTrue(developerMode.waitForExistence(timeout: 10), "Developer mode toggle not found")
-    developerMode.click()
-    XCTAssertEqual("\(developerMode.value ?? "")", "1", "Clicking should switch developer mode on")
+    let setting = advanced.anyDescendant(identified: UITestIdentifiers.pauseMediaToggle)
+    XCTAssertTrue(setting.waitForExistence(timeout: 10), "Pause music toggle not found")
+    setting.click()
+    let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 1"), object: setting)
+    XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 10), .completed, "Clicking should switch Pause music on")
 
     let reset = advanced.anyDescendant(identified: UITestIdentifiers.installReset)
     XCTAssertTrue(reset.waitForExistence(timeout: 10), "Reset button not found")
@@ -205,7 +235,7 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
     XCTAssertEqual(
-      "\(developerMode.value ?? "")", "1",
+      "\(setting.value ?? "")", "1",
       "Cancelling the confirmation should leave the settings alone")
   }
 

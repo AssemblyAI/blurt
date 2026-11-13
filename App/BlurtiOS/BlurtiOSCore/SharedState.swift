@@ -24,6 +24,8 @@ package nonisolated enum BlurtShared {
 
   package nonisolated enum Key {
     package static let autoDictate = "autoDictate"
+    /// Whether delete right after a dictation takes all of it back.
+    package static let deleteWholeDictation = "deleteWholeDictation"
     package static let listeningUntil = "listeningUntil"
     package static let windowMinutes = "listeningWindowMinutes"
     /// "Use AirPods mic": the session allows a Bluetooth microphone.
@@ -277,6 +279,16 @@ package nonisolated enum SharedStore {
       return defaults.bool(forKey: BlurtShared.Key.autoDictate)
     }
     set { defaults.set(newValue, forKey: BlurtShared.Key.autoDictate) }
+  }
+
+  /// Delete right after a dictation takes all of it back (`deleteBackward`). On by default, as it shipped;
+  /// off, that delete is one character like any other.
+  package static var deleteWholeDictation: Bool {
+    get {
+      guard defaults.object(forKey: BlurtShared.Key.deleteWholeDictation) != nil else { return true }
+      return defaults.bool(forKey: BlurtShared.Key.deleteWholeDictation)
+    }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.deleteWholeDictation) }
   }
 
   /// How long a listening window stays open with nobody dictating, in minutes.

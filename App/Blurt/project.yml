@@ -180,6 +180,11 @@ targets:
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
         # The main window's Record button: system audio beside the microphone.
         NSAudioCaptureUsageDescription: Blurt records your Mac's audio alongside your microphone so it can transcribe meetings and calls with AssemblyAI.
+        # Required to send Apple Events at all: without this key macOS terminates
+        # the process on the first send rather than prompting. Shown in the
+        # "Blurt wants to control Spotify" / "... control Music" consent dialogs, so it
+        # must read as a reason, not a feature name. See MediaPauseController.
+        NSAppleEventsUsageDescription: Blurt pauses your music while you dictate so it doesn't end up in your transcript.
         # Sign in with AssemblyAI; unset or empty values turn it off (see
         # `configFiles` above and `OAuthConfiguration.blurt`).
         BlurtOAuthClientID: $(BLURT_OAUTH_CLIENT_ID)
@@ -206,6 +211,11 @@ targets:
         com.apple.security.app-sandbox: false
         com.apple.security.device.audio-input: true
         com.apple.security.network.client: true
+        # The hardened runtime blocks outgoing Apple Events unless the app carries
+        # this exception. Blurt is notarized WITH the hardened runtime (see
+        # release-build.sh), so the entitlement — not just the usage string — is
+        # what makes the media pause work in a shipped build.
+        com.apple.security.automation.apple-events: true
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine

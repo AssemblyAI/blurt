@@ -8,14 +8,17 @@ import os
 /// keycode 54, dictating and left ⌥ reading aloud), each under its own
 /// tap/hold mode — `TriggerKeyBindings`, to detect down/up, and
 /// `keyDown` for any *other* key, or a mouse-button down, to spot a modifier
-/// combo (⌘C, ⌘V, ⌘-click…). The per-event decision lives in the engine — `DictationKeyRouter`
-/// (keycode relevance + down/up edge dedup) over `DictationKeyGate` (tap/hold
-/// semantics) — so this type only reduces each `CGEvent` to a router event and
-/// owns the tap lifecycle.
+/// combo (⌘C, ⌘V, ⌘-click…) or, when its switch is on, an Escape cancel. The per-event decision lives in the
+/// engine — `DictationKeyRouter` (keycode relevance, down/up edge dedup, Escape
+/// routing) over `DictationKeyGate` (tap/hold semantics) — so this type only
+/// reduces each `CGEvent` to a router event and owns the tap lifecycle.
 ///
 /// Unlike the old chord trigger, this **swallows nothing**: a lone modifier
 /// types nothing into the focused app, and combos must pass through so normal
-/// shortcuts keep working. The tap is therefore created `.listenOnly` — an
+/// shortcuts keep working. That includes the Escape cancel — cancelling a
+/// dictation does *not* consume the keystroke, so Escape still reaches whatever
+/// is focused. Making it exclusive would mean an active tap, which the paragraph
+/// below rules out. The tap is therefore created `.listenOnly` — an
 /// active (`.defaultTap`) tap would make macOS synchronously wait on this
 /// process before delivering every keystroke system-wide, so any main-thread
 /// stall in Blurt would add typing latency in *other* apps.
@@ -50,6 +53,13 @@ final class DictationKeyTap {
   /// Seeded from the persisted binding in `init` — see the note there.
   private var router: DictationKeyRouter
 
+  /// The router's `.discard` — a bare Escape with its switch on: stop whatever
+  /// is in flight (the read-aloud router's `escape()`), which a combo's
+  /// `onCancel` would not all reach.
+  private let onEscape: @MainActor () -> Void
+  /// The router's `inFlight` (`DictationKeyRouter.handle`).
+  private let isBusy: @MainActor () -> Bool
+
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
 
@@ -70,13 +80,17 @@ final class DictationKeyTap {
     onStop: @escaping @MainActor () -> Void,
     onCancel: @escaping @MainActor () -> Void,
     onLatch: @escaping @MainActor () -> Void,
-    onRecordingDiscarded: @escaping @MainActor () -> Void
+    onRecordingDiscarded: @escaping @MainActor () -> Void,
+    onEscape: @escaping @MainActor () -> Void,
+    isBusy: @escaping @MainActor () -> Bool
   ) {
     self.onStart = onStart
     self.onStop = onStop
     self.onCancel = onCancel
     self.onLatch = onLatch
     self.onRecordingDiscarded = onRecordingDiscarded
+    self.onEscape = onEscape
+    self.isBusy = isBusy
     // Every half of the binding comes from its store, not a hard-coded
     // `.rightCommand` / `.tapOrHold`: `fromPersisted` owns the unset default, and
     // restating it here is the same mistake `ObservedKeyBindings` and `KeysSettingsTab`
@@ -221,7 +235,7 @@ final class DictationKeyTap {
 
     guard let routed = routerEvent(type: type, event: event) else { return }
     let now = reference.duration(to: ContinuousClock.now)
-    dispatch(router.handle(routed, at: now))
+    dispatch(router.handle(routed, at: now, inFlight: isBusy))
   }
 
   /// Reduces a `CGEvent` to the router's CoreGraphics-free event shape, or nil
@@ -232,7 +246,10 @@ final class DictationKeyTap {
     case .flagsChanged:
       return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
-      return .keyDown(keyCode: keyCode)
+      // Escape cancels only with its experimental switch on, read at the keystroke.
+      return .fromKeyDown(
+        keyCode: keyCode, isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+        escapeCancels: EscapeCancelStore().isEnabled, rawFlags: event.flags.rawValue)
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       #if UITEST_HOOKS
         // A simulated press is "held" while the test clicks the harness's
@@ -253,6 +270,7 @@ final class DictationKeyTap {
       onStart(activeKey)
     case .stop: onStop()
     case .cancel: onCancel()
+    case .discard: onEscape()
     case .latch: onLatch()
     case .none: break
     }

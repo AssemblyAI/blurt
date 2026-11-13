@@ -42,9 +42,11 @@ extension KeyboardModel {
   /// highlighted. Another field, a moved caret, a selection, or a host that
   /// shows less context than the dictation's length is not the dictation,
   /// and the delete is an ordinary one (false): text that merely ends the
-  /// same way isn't the dictation.
+  /// same way isn't the dictation. With Settings' "Delete whole dictation"
+  /// off, it is always an ordinary delete.
   package func undoLastInsertion() -> Bool {
-    guard let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy) else { return false }
+    guard SharedStore.deleteWholeDictation, let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy)
+    else { return false }
     for _ in inserted.text { proxy.deleteBackward() }
     hostEdited()
     return true

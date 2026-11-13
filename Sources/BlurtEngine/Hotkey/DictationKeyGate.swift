@@ -16,7 +16,10 @@ public struct DictationKeyGate: Sendable {
   /// nothing to do on it, since the recording just keeps going, but it is the
   /// only moment a tap is distinguishable from a hold, and read-aloud's router
   /// needs exactly that (a tap over a selection reads it; a hold asks about it).
-  public enum Action: Sendable, Equatable { case none, start, stop, cancel, latch }
+  /// `discard` is the router's alone: a bare Escape with its switch on, which
+  /// throws away everything in flight (`DictationKeyRouter.Event.escapeDown`),
+  /// where `cancel` is a combo's.
+  public enum Action: Sendable, Equatable { case none, start, stop, cancel, latch, discard }
 
   /// A release held at least this long counts as a hold (push-to-talk stop);
   /// shorter is a tap. 1 s is a good default when one key does both jobs.
