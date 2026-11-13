@@ -362,8 +362,8 @@ package enum DesignTokens {
     package nonisolated static let keepOpenFirstCorner: Double = 9
     /// The cross flare when the wordmark lands in a corner.
     package nonisolated static let keepOpenFlare: Double = 0.9
-    /// The space bar's hold before it moves the cursor: KeyboardKit's half second made it wait.
-    package nonisolated static let spaceHold: Double = 0.25
+    /// The space bar's hold before it moves the cursor; a tap on space is under this, so it still types a space.
+    package nonisolated static let spaceHold: Double = 0.15
     /// The typing field's border turning, and the countdown's thump.
     package nonisolated static let typingFlash: Double = 0.15
     /// How often the typing test's clock and live speed redraw.
@@ -547,7 +547,7 @@ package enum DesignTokens {
     "motion.keep-open-fade": "0.6",
     "motion.keep-open-first-corner": "9",
     "motion.keep-open-flare": "0.9",
-    "motion.space-hold": "0.25",
+    "motion.space-hold": "0.15",
     "motion.typing-flash": "0.15",
     "motion.typing-tick": "0.1",
   ]

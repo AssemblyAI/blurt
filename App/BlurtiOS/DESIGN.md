@@ -192,7 +192,8 @@ KeyboardKit's, as Apple draws them: the caps, their colour and corner, the
 press, the callouts, shift and caps lock, delete and its repeat, 123 / #+= /
 ABC turning the pages, the space bar's hold moving the cursor
 (`spacebarLongPressBehavior` = `.moveInputCursor`, after `motion/space-hold`
-0.25 s rather than KeyboardKit's half second) and the input clicks.
+0.15 s rather than KeyboardKit's half second — just past a tap, so a tap
+still types a space) and the input clicks.
 The case is KeyboardKit's rule too — uppercase at a sentence's start in a
 field that capitalizes sentences, lowercase after the first letter, shift
 for one letter — and the layout follows it: `BlurtKeyboardView` observes
@@ -628,18 +629,18 @@ over the brand's transition; everything else moves on the house curve
 
 <!-- tokens:begin motion -->
 
-| Token                    | Value           | Swift                        | Use                                                                                              |
-| ------------------------ | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| `caret`                  | `0.5`           | `Motion.caret`               | the caret's blink                                                                                |
-| `chip-hold`              | `0.6`           | `Motion.chipHold`            | holding the chip opens the field instead of adding; longer than a firm tap                       |
-| `colour`                 | `0.2`           | `Motion.colour`              | a colour or fill changing state: the brand's transition                                          |
-| `ease/signature`         | `0.22,1,0.36,1` | `Motion.easeSignature`       | the house curve for everything that moves; nothing springs                                       |
-| `keep-open-fade`         | `0.6`           | `Motion.keepOpenFade`        | the Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns |
-| `keep-open-first-corner` | `9`             | `Motion.keepOpenFirstCorner` | the first exact corner, this long after the card appears; the rest come as the screen allows     |
-| `keep-open-flare`        | `0.9`           | `Motion.keepOpenFlare`       | the cross flare when the wordmark lands in a corner                                              |
-| `space-hold`             | `0.25`          | `Motion.spaceHold`           | the space bar's hold before it moves the cursor: KeyboardKit's half second made it wait          |
-| `typing-flash`           | `0.15`          | `Motion.typingFlash`         | the typing field's border turning, and the countdown's thump                                     |
-| `typing-tick`            | `0.1`           | `Motion.typingTick`          | how often the typing test's clock and live speed redraw                                          |
+| Token                    | Value           | Swift                        | Use                                                                                                      |
+| ------------------------ | --------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `caret`                  | `0.5`           | `Motion.caret`               | the caret's blink                                                                                        |
+| `chip-hold`              | `0.6`           | `Motion.chipHold`            | holding the chip opens the field instead of adding; longer than a firm tap                               |
+| `colour`                 | `0.2`           | `Motion.colour`              | a colour or fill changing state: the brand's transition                                                  |
+| `ease/signature`         | `0.22,1,0.36,1` | `Motion.easeSignature`       | the house curve for everything that moves; nothing springs                                               |
+| `keep-open-fade`         | `0.6`           | `Motion.keepOpenFade`        | the Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns         |
+| `keep-open-first-corner` | `9`             | `Motion.keepOpenFirstCorner` | the first exact corner, this long after the card appears; the rest come as the screen allows             |
+| `keep-open-flare`        | `0.9`           | `Motion.keepOpenFlare`       | the cross flare when the wordmark lands in a corner                                                      |
+| `space-hold`             | `0.15`          | `Motion.spaceHold`           | the space bar's hold before it moves the cursor; a tap on space is under this, so it still types a space |
+| `typing-flash`           | `0.15`          | `Motion.typingFlash`         | the typing field's border turning, and the countdown's thump                                             |
+| `typing-tick`            | `0.1`           | `Motion.typingTick`          | how often the typing test's clock and live speed redraw                                                  |
 
 <!-- tokens:end motion -->
 
