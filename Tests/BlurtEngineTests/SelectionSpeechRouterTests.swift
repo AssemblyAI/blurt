@@ -43,6 +43,18 @@ struct SelectionSpeechRouterTests {
     #expect(transport.spoken == ["Hello there."])
   }
 
+  @Test("a read speaks the selection without the whitespace around it")
+  func readTrimsSelection() async throws {
+    let transport = FakeSpeechTransport()
+    let (router, _) = router(transport, selection: "\n  Hello there.\n")
+    var ended = false
+    router.speechEnded = { ended = true }
+    router.press(key: .leftOption)
+    router.keyLatched()
+    try await waitUntil { ended }
+    #expect(transport.spoken == ["Hello there."])
+  }
+
   @Test("with nothing selected, left ⌥ reads nothing and clears the gate")
   func nothingSelected() async throws {
     let transport = FakeSpeechTransport()

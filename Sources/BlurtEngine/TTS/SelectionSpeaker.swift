@@ -83,10 +83,14 @@
     /// catches up (`bufferTarget`). `onLevel`, when
     /// given, hears the loudness of what's playing about 20 times a second
     /// while it plays, then a final 0 — the pill's meter.
+    /// The selection arrives with the whitespace around it, which Rewrite
+    /// Selection keeps (`SelectionEdges`); a read wants only the words, and so
+    /// does the kept clip's text.
     func speak(
       _ text: String, style: ReadAloudStyle = .standard, onLevel: (@Sendable (Float) -> Void)? = nil
     ) async throws {
-      try await speak(text, style: style, onLevel: onLevel, request: nil)
+      let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      try await speak(words, style: style, onLevel: onLevel, request: nil)
     }
 
     /// `speak`, kept as a clip (`clips`) when there is somewhere to keep it:
@@ -152,7 +156,7 @@
       _ request: String, about selection: String, style: ReadAloudStyle,
       onLevel: (@Sendable (Float) -> Void)? = nil
     ) async throws {
-      let reply = try await llm.answer(request, about: selection)
+      let reply = try await llm.answer(request, about: selection.trimmingCharacters(in: .whitespacesAndNewlines))
       try Task.checkCancellation()
       try await speak(reply, style: style.verbatim, onLevel: onLevel, request: request)
     }
