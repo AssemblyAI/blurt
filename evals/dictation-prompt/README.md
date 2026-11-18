@@ -16,14 +16,17 @@ verified off-Mac. A harness whose own correctness is unchecked is a bad instrume
 
 ## The corpora
 
-Each source supplies `(disfluent input, clean target)` pairs. The first two are **real**:
-the disfluencies are the ones actual speakers produced and human annotators labelled, not
-ones we thought to write down.
+Each source supplies `(disfluent input, clean target)` pairs. The registered ones are
+**real**: the disfluencies are the ones actual speakers produced, not ones we thought to
+write down. A bare run loads **both** registered corpora (`--source nyra,voicearena`), and
+they do different jobs: nyra is what the search learns from, Voice Arena is what decides
+and reports the winner.
 
-| `--source`       | What it is                                                                                                                                                                                                                        | Measures         |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand**, repackaged with casing repaired so the formatting axis is live. Costs some fidelity for that. | content + format |
-| `builtin`        | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                 | content + format |
+| `--source`             | What it is                                                                                                                                                                                                                                                                                    | Measures         |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `nyra` (default)       | [`nyralabs/disfluency_speech_english`][nyra] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand**, repackaged with casing repaired so the formatting axis is live. Costs some fidelity for that.                                                             | content + format |
+| `voicearena` (default) | [`VoiceArena/Dictation_Dataset`][va] — the 151-clip public split of the [Voice Arena dictation benchmark][vab], which ranks Blurt against thirteen other Mac dictation tools. Real dictation (email, chat, notes, code, AI prompts) with recorded audio. **Dev and test only.** CC BY-NC 4.0. | content + format |
+| `builtin`              | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                                                                             | content + format |
 
 `--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
 as-is; anything with only a reference goes through the injector.
@@ -33,6 +36,35 @@ path** — `--source builtin` needs no network and no key, which is what lets th
 `--dry-run` verify the pipeline end to end. It also keeps a **severity dial** (`--severity`)
 and a **punctuation-restoration** task (`--strip-formatting`) that the real corpus cannot pose,
 though on a dozen bundled sentences those are smoke tests rather than measurements.
+
+### How Voice Arena reaches the eval
+
+Each clip ships `spoken_text` (the words as said) and `intended_text` (what should land on
+the page), but the input side here is **neither**: it is the service's own verbatim
+transcript of the recording, made once per clip through the buffered
+`/v1/transcribe` route and cached at `~/.cache/blurt-evals/voicearena-stt.json`. The
+first run needs `ASSEMBLYAI_API_KEY` for that; later runs make no calls.
+
+The reason is that the rewrite never sees spoken forms. Measured 2026-11-18: the STT pass
+already writes "sixty two thousand" as `$62,000`, "plan dot start date" as
+`plan.startDate`, "version three" as `version 3`. Scoring `spoken_text` would hand the
+stand-in inverse text normalization the production pipeline has already done. From the
+STT transcript, what is left is the rewrite's real job — self-corrections ("over by
+$7,000. Wait, no, the budget was $58,000"), restarts, hedges. On the same clips the
+service's default rewrite left "Actually, no, the last 3 commits, not just one"
+unresolved, which is the headroom this set exposes and nyra cannot: Switchboard has
+almost no explicit self-corrections. `--voicearena-input spoken` uses `spoken_text`
+instead; it needs no key, which is its only advantage.
+
+**Why dev and test only.** `Source.held_out` puts these rows in dev and test, in the two
+slices' proportion, before anything else, and only into train if both are full. The set
+is there to judge the search. Training on it would let the reflector study the clips it is
+later scored on, which is exactly what Voice Arena's own private split (608 clips) exists
+to prevent. At default sizes that is 98 dev rows and 49 test rows, about 11% of each — the
+selection is still mostly nyra. No word ceiling applies, so the long-form clips stay in.
+
+The license is **non-commercial**. Loading it for internal evaluation is what this does;
+nothing from it is redistributed or committed here.
 
 ### How the hand annotation reaches the eval
 
@@ -60,6 +92,8 @@ It does not pose punctuation _restoration_, since both sides are already punctua
 `--source builtin --strip-formatting` does, on a dozen bundled sentences.
 
 [nyra]: https://huggingface.co/datasets/nyralabs/disfluency_speech_english
+[va]: https://huggingface.co/datasets/VoiceArena/Dictation_Dataset
+[vab]: https://voicearena.com/dictation-bench
 [ds]: https://huggingface.co/datasets/amaai-lab/DisfluencySpeech
 [dq]: https://huggingface.co/datasets/google-research-datasets/disfl_qa
 
@@ -135,7 +169,7 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--reflection-model openai/claude-opus-4-8` | Deliberately not `--model`: a 4B model writing its own instructions is the weakest link in the loop. The `openai/` prefix is LiteLLM routing, stripped before the gateway sees it.                                                                                |
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
 | `--auto heavy`                              | 27 reflection trials (light is 10, medium 18). This is the **only** knob that changes how many ideas get tried — corpus size does not. Merge is off: crossover needs more than one predictor, so it would only re-evaluate duplicates.                            |
-| `--split train --limit 4000`                | The sources' own held-out splits are only ~250 rows; nyra's `train` is 4458. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                     |
+| `--source nyra,voicearena` · `--limit 4000` | Each source reads its own split — nyra's 4458-row `train`, Voice Arena's only split, `test` — and `--limit` applies per source. Voice Arena goes to dev and test; everything else past them becomes train, and train rows are free — see below.                   |
 | `--dev-fraction 900` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for **resolution**: see below.                                                                                                            |
 | `--gepa-valset 450` (rows)                  | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone. Raised for the same reason as dev.                                  |
 | `--reflection-minibatch-size 8`             | Scored examples the reflector sees before rewriting. GEPA's default is 3, which on a task this well-solved is often three near-perfect examples and almost no failure to generalise from.                                                                         |
@@ -206,7 +240,9 @@ slightly worse instruction, not misreporting one. Raise `--dev-fraction` to 0.15
 care more about a confident selection than about search cost.
 
 `uv run` reads the PEP 723 header at the top of the script and installs DSPy into a throwaway
-environment. With plain `pip`, `pip install "dspy>=3.0"` is the only requirement.
+environment. With plain `pip`, `pip install "dspy>=3.0,<3.5"` is the only requirement. The cap is
+deliberate: DSPy 3.5.0 reworked its LM layer, and every `openai/` model call through the LLM Gateway
+then fails with "Not found".
 
 Anonymous reads of the Hugging Face datasets-server are rate limited, so a long run — or a few
 short ones back to back — will start getting 429s. Authenticating lifts the limit: run
@@ -261,7 +297,8 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 
 | Flag                 | Default                      | What it changes                                                                                        |
 | -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--source`           | `disfluency-speech`          | Which corpus to score against — see the table above.                                                   |
+| `--source`           | `nyra,voicearena`            | Which corpora to score against, comma-separated — see the table above.                                 |
+| `--voicearena-input` | `stt`                        | Voice Arena's input side: the service's cached STT transcript, or `spoken` for the dataset's own.      |
 | `--model`            | `openai/qwen3.5-4b-32k-fast` | The LiteLLM model standing in for the service's rewrite model.                                         |
 | `--reflection-model` | `openai/claude-opus-4-8`     | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
 | `--api-base`         | the AssemblyAI gateway       | Endpoint for both models. `""` falls back to the provider's own.                                       |
@@ -271,7 +308,7 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 | `--optimizer`        | `gepa`                       | `none` only ranks the candidates; both optimizers search instructions only.                            |
 | `--start`            | `prior-winner`               | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
 | `--auto`             | `heavy`                      | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
-| `--split`            | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
+| `--split`            | each source's own            | Overrides the split read from every source. nyra defaults to `train`, Voice Arena to `test`.           |
 | `--limit`            | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
 | `--dev-fraction`     | `150` (rows)                 | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
 | `--gepa-valset`      | `50` (rows)                  | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                  |
@@ -378,35 +415,39 @@ the same envelope the service applies them in (see the plain adapter), so the st
 as-emitted is the string that was measured; a hand-tidied copy is an unscored string that
 looks scored.
 
-### The 2048-character cap
+### No length cap
 
-`config.llm_instruction` accepts at most **2048 characters**. Over that, the API rejects the
-whole request — HTTP 400 `bad_request`, _"llm_instruction: String should have at most 2048
-characters"_ — before it looks at the audio. There is no degraded mode: no transcript comes
-back, so in the app every dictation fails with the overlay's "Try again".
+`config.llm_instruction` used to accept at most **2048 characters** — HTTP 400, _"llm_instruction:
+String should have at most 2048 characters"_, measured 2026-08-11 — and a 3057-character GEPA
+winner once shipped over it and broke all dictation. Most of this harness's search machinery
+existed to stay under it: a soft target below the cap, budgets restated in words and
+sentences, a re-ask on every over-long proposal, a section-dropping trim, a pre-flight
+check, and a refusal at selection.
 
-Two things make this easy to get wrong, and it has gone wrong once already — a 3057-character
-GEPA winner shipped and broke all dictation:
+**That cap is gone.** Re-probed 2026-11-18 against the live route in both rewrite modes —
+Fast (no `rewrite_mode`) and `"smart"` — with instructions of 2049, 4096, 8192, 16384,
+32768 and 49152 characters: every one returned 200 and rewrote correctly. The only limit
+left is on the whole `config` JSON part, 64 KiB (400 _"`config` part too large"_), which no
+reflector comes near. So all of the length machinery has been removed and the search may
+write as long an instruction as scores best.
 
-- **It is not the same cap as `config.stt_prompt`'s**, which is 4096
-  (`STTPrompt.characterCap` on the Swift side) and counted in Unicode scalars rather than UTF-8
-  bytes. Borrowing the other field's figure is what let the oversized instruction through: the
-  test that should have caught it asserted 4096. (That field has been `config.prompt`, then
-  `config.conversation_context`, and is now `config.stt_prompt` — which is `prompt` renamed, so
-  the borrowing hazard has outlived every one of those names.)
-- **Neither limit is in the published API reference.** Both were measured against the live
-  endpoint on 2026-08-11. Re-probe before trusting them indefinitely.
+**The app has not followed.** `CleanupInstruction.characterCap` on the Swift side is still
+2048, and `CleanupInstruction.sendable` drops an instruction over it — silently falling back
+to the service default. The CLI prints a warning next to any winner over 2048 bytes; raise
+that constant in the same change that ships one. The style-profile headroom
+(`CleanupInstruction.sendable(appending:)`) is computed against the same constant.
 
 ### The safeguards the corpus cannot defend
 
 `PRIOR_WINNER` forbids answering the transcript and forbids translating it. Those clauses are
 why dictating "what time is it?" pastes the question instead of an answer, and why non-English
 speech survives as spoken. **Nothing in the scoring can see either property**: every corpus
-here is conversational English between two humans, so an instruction that drops them scores
-exactly the same — while freeing ~90 characters under a cap the reflector is explicitly told to
-cut toward. Deleting them is what a well-behaved optimizer _should_ do given what it can see.
+here is English, and none punishes an answer to a dictated question, so an instruction that
+drops them scores exactly the same. Dropping them is what a well-behaved optimizer _should_ do
+given what it can see. (Voice Arena does contain dictated questions — 43 of 151 — so a model
+that answered them would now lose WER, but nothing checks translation.)
 
-So they are gated rather than measured, by the same `objections` mechanism as the length cap:
+So they are gated rather than measured, by the `objections` mechanism:
 the proposer rejects and re-asks, and selection refuses a winner without them. Matching is on
 stems (`answer`, `translat`), so any phrasing passes — a false accept is far cheaper than a
 false reject that burns retries on a good instruction.
@@ -414,30 +455,11 @@ false reject that burns retries on a good instruction.
 "Do not rephrase" is deliberately **not** gated. Substituting a content word raises WER
 directly, so the score already defends that one. The gate is only for what nothing else sees.
 
-The harness enforces the cap in three places, none of which is sufficient alone:
-
-| Where                                        | What it catches                                      | Strength                     |
-| -------------------------------------------- | ---------------------------------------------------- | ---------------------------- |
-| `check_candidate_lengths()`, before any call | A hand-written candidate in `candidates.py`          | Hard — exits before spending |
-| GEPA feedback text (`--optimizer gepa`)      | Tells the reflector the ceiling as it rewrites       | Advisory — it can ignore it  |
-| `CappedInstructionProposer` (GEPA only)      | An over-cap proposal, before GEPA ever scores it     | Hard — rejects and re-asks   |
-| `CappedInstructionProposer` (GEPA only)      | A proposal naming a DSPy signature field             | Hard — rejects and re-asks   |
-| Selection, after the run                     | An over-cap optimizer result, however well it scored | Hard — refuses to report it  |
-
-The third row is the one that makes this a search constraint rather than a report. Length
-cannot enter the objective: GEPA's metric is handed one scored example and never sees the
-candidate instruction, and longer instructions tend to score better, so an unconstrained search
-drifts over the cap and the run ends with nothing sendable. `CappedInstructionProposer` is
-GEPA's documented `instruction_proposer` hook — it delegates to GEPA's own reflection prompt,
-then rejects any proposal over the cap and re-asks against the rejected draft with the overage
-spelled out (`candidates.shortening_directive`). After three tries it returns the instruction
-**unchanged** rather than a truncation: cutting at 2048 characters lands mid-sentence, and a
-mangled instruction that happens to score well is how bad prompts reach a build. The run
-reports how many proposals it rejected, so a search that spent itself fighting the cap is
-visible rather than inferred from a disappointing score.
-
-**MIPROv2 gets none of this.** It searches on a bare scalar and exposes no proposal hook, so
-`--optimizer mipro` is constrained only by the final refusal; the CLI says so when you run it.
+`program.GatedInstructionProposer` is GEPA's documented `instruction_proposer` hook. It
+delegates to GEPA's own reflection prompt, then rejects any proposal that drops a safeguard,
+names a DSPy field, or copies the constraints block, and re-asks against the rejected draft.
+After five tries it returns the instruction **unchanged** rather than a hand-patched one. The
+same `objections` check refuses an optimizer result at selection, however well it scored.
 
 ### Why the proposer also rejects field names
 
@@ -457,12 +479,10 @@ The leak regenerates every run, which is why it is a gate rather than a one-time
 faults are reported in the same re-ask, so one revision round fixes everything rather than
 surfacing the next fault a round later.
 
-**Nothing is exempt, `prior-winner` included.** That candidate is the instruction from the
-run that broke dictation, compressed under the cap — see below — so it passes the same
-pre-flight check as everything else, and if a later edit pushes it back over, the run stops
-before spending anything.
+**Nothing is exempt, `prior-winner` included.** It passes the same pre-flight safeguard check
+as everything else, and if a later edit strips one, the run stops before spending anything.
 
-### `prior-winner`, and how it got under the cap
+### `prior-winner`, and how it got under the (former) cap
 
 `candidates.PRIOR_WINNER` is the strongest instruction the harness has produced. The run that
 emitted it wrote 3057 characters, 1009 over the cap, and it shipped in that state once. It was
@@ -487,8 +507,8 @@ It plays three roles at once, which is what makes the run cheap to read:
 
 - **`BASELINE`** — the bar a new search has to clear to be worth shipping, and what the winner
   is scored against on the held-out test split.
-- **The default `--start`** — GEPA evolves from it, and because it fits the cap the search
-  begins inside the feasible region rather than spending its first trials just getting legal.
+- **The default `--start`** — GEPA evolves from it. It was cut down to leave the search room
+  under the old cap; with the cap gone, the search is free to put back what was cut.
 - **An ordinary candidate** — scored in the sweep like any other, so it may simply win, and a
   run that fails to beat it costs nothing extra to discover.
 
@@ -522,9 +542,12 @@ optimises toward whatever it prefers, but the instruction ships to AssemblyAI's 
 model, which we neither know nor select. Beating a stand-in is not evidence of beating the
 real thing.
 
-`--verify-live N` closes that loop. After a winner is picked it takes N **held-out** rows,
-speaks the disfluent side with `say`, converts to 16 kHz mono PCM, and POSTs it to the real
-`/v1/transcribe/live` with the winner as `config.llm_instruction`:
+`--verify-live N` closes that loop. After a winner is picked it takes N **held-out** rows and
+POSTs their audio to the real `/v1/transcribe/live` with the winner as `config.llm_instruction`.
+Voice Arena rows come first in the test slice and are played **as recorded** — real people
+dictating — converted to 16 kHz mono PCM. Only rows without a recording fall back to speaking
+the disfluent side with `say`. `--rewrite-mode smart` asks for the larger rewrite model, as the
+app's Smart setting does; the dictation docs recommend Smart whenever `llm_instruction` is set.
 
 ```bash
 export ASSEMBLYAI_API_KEY=...
@@ -566,23 +589,25 @@ the opposite of what was expected of that clause and is not visible in a mean.
 Blurt ships today, so it is the comparison `guessed-default` could only ever guess at — the one
 the README has flagged as unanswerable since this harness was written.
 
-Read the **ranking, not the absolute scores**. Synthesised speech is not dictated speech,
+For rows played with `say`, read the **ranking, not the absolute scores**. Synthesised speech is not dictated speech,
 `say` pronounces "um" as a word rather than producing a real hesitation, and the STT pass adds
 its own errors before the rewrite runs. Every candidate hears the same audio, so comparisons
 between them hold. macOS only, and off by default — it costs real transcription.
 
 ## Files
 
-| File                         | What it holds                                                                                 |
-| ---------------------------- | --------------------------------------------------------------------------------------------- |
-| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                                              |
-| `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.                            |
-| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                                      |
-| `disfluency.py`              | The seeded, additive disfluency injector.                                                     |
-| `metrics.py`                 | Token alignment, the two word-error-rate axes, the false-start surcharge, GEPA feedback text. |
-| `live.py`                    | Synthesis + the real `/v1/transcribe/live` round trip, for `--verify-live`.                   |
-| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers.                     |
-| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting.                     |
+| File                         | What it holds                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                                                                    |
+| `candidates.py`              | The instructions under test, the shippability gate, and the GEPA seed.                                              |
+| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                                                            |
+| `voicearena.py`              | Voice Arena's input side: the service's STT transcript per clip, fetched once and cached.                           |
+| `voicearena_baseline.py`     | Blurt on the Voice Arena public set as the leaderboard scores it (`amend-va` judge), per-stage failure attribution. |
+| `disfluency.py`              | The seeded, additive disfluency injector.                                                                           |
+| `metrics.py`                 | Token alignment, the two word-error-rate axes, the false-start surcharge, GEPA feedback text.                       |
+| `live.py`                    | Recorded or synthesized audio + the real `/v1/transcribe/live` round trip, for `--verify-live`.                     |
+| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers.                                           |
+| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting.                                           |
 
 ```bash
 python3 -m pytest evals/dictation-prompt/test_eval.py

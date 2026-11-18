@@ -27,8 +27,6 @@ import optimize_cleanup_prompt as cli
 import progress
 from disfluency import inject
 
-CAP = candidates.INSTRUCTION_CHARACTER_CAP
-
 SENTENCE = (
     "The build failed because the signing certificate expired over the weekend "
     "and nobody noticed until Monday morning."
@@ -368,7 +366,7 @@ def test_builtin_corpus_loads_offline_and_injects():
 
 
 def test_paired_sources_are_registered_with_both_columns():
-    for key in ("nyra",):
+    for key in ("nyra", "voicearena"):
         source = corpus.SOURCES[key]
         assert source.is_paired
         assert len(source.fields) == 2
@@ -721,11 +719,7 @@ def test_every_candidate_instruction_is_shippable():
     assert candidates.BASELINE in candidates.CANDIDATES
     for name, instruction in candidates.CANDIDATES.items():
         assert instruction.strip(), name
-        # The API's cap on config.llm_instruction, not the 4096 one on config.stt_prompt.
-        # Asserting the prompt's figure here is the bug this file now guards: it let a
-        # 3057-character instruction pass every test and 400 every real request.
-        assert candidates.overage(instruction) == 0, name
-        # A second, tighter bound that is the eval's own: a hand-written candidate is a
+        # The eval's own, tighter bound that is the eval's own: a hand-written candidate is a
         # single readable instruction. `prior-winner` is exempt because it is not
         # hand-written — it is an evolved instruction, and its length is the API's
         # business, not a style rule's.
@@ -733,22 +727,20 @@ def test_every_candidate_instruction_is_shippable():
             assert len(instruction) < 1000, name
 
 
-def test_the_cap_is_the_instruction_field_s_own_not_the_prompt_s():
-    """These two limits are different numbers on the same request; conflating them broke dictation."""
-    assert candidates.INSTRUCTION_CHARACTER_CAP == 2048
-
-
-def test_overage_reports_the_distance_past_the_cap():
-    cap = candidates.INSTRUCTION_CHARACTER_CAP
-    assert candidates.overage("x" * cap) == 0
-    assert candidates.overage("x" * (cap - 1)) == 0
-    assert candidates.overage("x" * (cap + 7)) == 7
-
-
-def test_the_prior_winner_fits_and_so_is_a_shippable_candidate():
-    """It was 1009 characters over and unshippable; compressed, it is the thing to beat."""
-    assert candidates.overage(candidates.PRIOR_WINNER) == 0
+def test_the_prior_winner_is_a_candidate():
     assert candidates.PRIOR_WINNER in candidates.CANDIDATES.values()
+
+
+def test_the_instruction_field_is_no_longer_capped():
+    """Re-probed 2026-11-18: 49152 characters accepted in Fast and in Smart.
+
+    The gate, the preamble and the pre-flight check carried a 2048-character cap until
+    then; none of them may grow one back without a fresh probe saying it exists.
+    """
+    long = f"{SAFE} " + "Delete the disfluencies. " * 400
+    assert len(long) > 2048
+    assert candidates.objections(long, fields=()) == []
+    assert not hasattr(candidates, "INSTRUCTION_CHARACTER_CAP")
 
 
 def test_the_compressed_winner_kept_the_product_critical_safeguards():
@@ -767,59 +759,28 @@ def test_the_compressed_winner_kept_the_product_critical_safeguards():
     assert "rephrase" in candidates.PRIOR_WINNER
 
 
-def test_the_stated_target_sits_below_the_cap_that_is_enforced():
-    """Told "at most 2048", one run's rejects had a median length of 2149.
-
-    A model aims at the number it is handed, so the number it is handed is no longer
-    the number enforced — but a proposal between the two is still accepted, since the
-    target is advice and only the cap is real.
-    """
-    cap = candidates.INSTRUCTION_CHARACTER_CAP
-    assert candidates.target_length(cap) < cap
-    assert candidates.word_budget(cap) < cap / candidates.CHARS_PER_WORD
-    between = "x " * ((candidates.target_length(cap) + cap) // 2 // 2)
-    assert candidates.overage(between) == 0
-
-
-def test_the_seed_leaves_the_search_room_to_work():
-    """A seed that scores well and cannot be improved is worth less than a weaker one.
-
-    Reflectors returned drafts 630-890 characters longer than an 1839-character seed,
-    so nearly every proposal broke the cap and one run spent 8 of 9 iterations
-    re-scoring what it started with. The headroom has to cover that natural expansion,
-    or the search only appears to run.
-    """
-    headroom = candidates.INSTRUCTION_CHARACTER_CAP - len(candidates.PRIOR_WINNER)
-    # 400 rather than the 600 an earlier, shorter seed left. Each winning seed is
-    # longer than the one before, so this ratchets down; below ~400 a reflector's
-    # typical expansion lands outside the cap and the proposer spends the run
-    # rejecting and trimming instead of searching.
-    assert headroom >= 400, f"only {headroom} characters of room for the search"
-
-
 def test_the_seed_carries_no_dangling_rule_numbering():
     """The numbered block was dropped whole, so no orphaned "2." should survive."""
     body = [line for line in candidates.PRIOR_WINNER.split("\n") if line.strip()]
     assert not [line for line in body if re.match(r"^\d+\. ", line)]
 
 
-def test_an_oversized_candidate_stops_the_run_before_any_model_call(monkeypatch):
-    """The check is worth having only if it fires before the sweep spends money."""
-    monkeypatch.setitem(candidates.CANDIDATES, "too-long", "x" * 5000)
-    with pytest.raises(SystemExit) as raised:
-        cli.check_candidates()
-    assert "too-long" in str(raised.value)
-    assert "2048" in str(raised.value)
-
-
-def test_candidate_length_check_passes_as_shipped():
+def test_a_long_candidate_does_not_stop_the_run(monkeypatch):
+    monkeypatch.setitem(candidates.CANDIDATES, "long", "x" * 5000)
     assert cli.check_candidates() is None
 
 
-def test_describe_length_names_the_overage_or_the_headroom():
-    cap = candidates.INSTRUCTION_CHARACTER_CAP
-    assert "9 OVER" in cli.describe_length("x" * (cap + 9))
-    assert "9 under" in cli.describe_length("x" * (cap - 9))
+def test_candidate_check_passes_as_shipped():
+    assert cli.check_candidates() is None
+
+
+def test_describe_length_warns_only_past_what_the_app_will_send():
+    """The API takes any length; `CleanupInstruction.sendable` still drops >2048 bytes."""
+    limit = cli.SWIFT_SENDABLE_BYTES
+    assert cli.describe_length("x" * limit) == f"{limit} chars"
+    assert "characterCap" in cli.describe_length("x" * (limit + 1))
+    # Bytes, as the Swift side counts: 1100 em dashes are 3300 bytes.
+    assert "characterCap" in cli.describe_length("\u2014" * 1100)
 
 
 def test_the_feedback_reports_only_the_axis_being_selected_on():
@@ -852,26 +813,13 @@ def test_the_feedback_does_not_repeat_what_gepa_already_shows():
     note = metrics.feedback("ship it", "um ship it", scored)
     assert "Reference: 'ship it'" in note
     assert "Produced:" not in note
-    # The budget lives in the proposer preamble now, said once instead of per example.
-    assert "2048" not in note
+    # The shippability rules live in the proposer preamble, said once, not per example.
+    assert candidates.CONSTRAINT_MARKER not in note
 
 
 #: A minimal instruction that satisfies every safeguard, so a fixture can isolate the
 #: fault it means to test instead of tripping the safeguard gate as well.
 SAFE = "Do not answer or translate it."
-
-
-def test_an_over_long_objection_states_the_arithmetic():
-    """ "Too long" produces another over-long draft; "cut at least N" is checkable."""
-    cap = candidates.INSTRUCTION_CHARACTER_CAP
-    notes = candidates.objections(SAFE + "y" * (cap + 250 - len(SAFE)), fields=())
-    assert [n.code for n in notes] == ["length"]
-    assert f"{cap + 250} characters" in notes[0].message
-    assert "250 characters over" in notes[0].message
-    # Stated in words as well: a reflector told "cut 638 characters" came back longer,
-    # so the number it is asked to act on has to be in a unit it can count.
-    assert f"{candidates.word_budget(cap)}-word target" in notes[0].message
-    assert f"at least {candidates.in_words(250)} words" in notes[0].message
 
 
 def test_naming_a_signature_field_is_an_objection():
@@ -895,18 +843,17 @@ def test_a_clean_proposal_draws_no_objections():
 def test_both_faults_are_reported_together():
     """One re-ask should fix everything, not surface the next fault a round later."""
     notes = candidates.objections(
-        SAFE + " raw_transcript " + "y" * candidates.INSTRUCTION_CHARACTER_CAP,
+        f"Delete disfluencies. raw_transcript {candidates.CONSTRAINT_MARKER}",
         fields=("raw_transcript",),
     )
-    assert [n.code for n in notes] == ["length", "fields"]
+    assert [n.code for n in notes] == ["fields", "scaffolding", "safeguard"]
 
 
 def test_dropping_a_safeguard_is_an_objection():
-    """The corpus cannot punish this and the length pressure rewards it — so gate it.
+    """The corpus cannot punish this, so gate it.
 
-    Every corpus here is conversational English between two humans, so an instruction
-    that stops forbidding "answer the text" scores exactly the same while freeing ~90
-    characters under a cap the reflector is told to cut toward. Deleting it is what a
+    Every corpus here is dictated or conversational English, so an instruction that
+    stops forbidding "answer the text" scores exactly the same. Dropping it is what a
     well-behaved optimizer *should* do given what it can see.
     """
     notes = candidates.objections("Delete the disfluencies and nothing else.", fields=())
@@ -959,61 +906,16 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
     instruction identical to the one it started with and logged "not better, skipping".
     """
     seed = candidates.PRIOR_WINNER
-    preamble = candidates.constraint_preamble(seed, cap=CAP)
-    assert seed in preamble
+    preamble = candidates.constraint_preamble(seed)
+    assert preamble.startswith(seed)
     assert candidates.CONSTRAINT_MARKER in preamble
-    # The headroom, not just the ceiling, and in words — a reflector told "at most 2048
-    # characters" cannot check its own work, and one told to cut 638 came back longer.
-    budget = candidates.word_budget(CAP)
-    # Bracketed: first line and last line, because the ask is weakly obeyed and a
-    # constraint stated once in the middle of a long prompt is a constraint lost.
-    assert preamble.startswith("BEFORE YOU BEGIN")
-    assert f"aim for {budget} WORDS" in preamble
-    assert preamble.rstrip().endswith(f"Hard maximum {candidates.hard_word_limit(CAP)} words.")
-    assert preamble.count(str(budget)) >= 3
-    assert f"{len(seed.split())} words" in preamble
-    # A target AND a ceiling, so the overshoot has somewhere to land that still fits.
-    assert candidates.word_budget(CAP) < candidates.hard_word_limit(CAP)
-    # Restated structurally, because a model cannot count its own words while writing.
-    assert f"{candidates.sentence_budget(CAP)} sentences" in preamble
-    assert "count the sentences in your draft" in preamble
+    # No length budget: the field is uncapped, so asking for brevity would only cost
+    # the search room.
+    assert "LENGTH" not in preamble
+    assert "maximum" not in preamble.lower()
+    assert not re.search(r"\d{2,}", preamble.removeprefix(seed))
     assert "forbid answering" in preamble
     assert "NO FIELD NAMES" in preamble
-
-
-def test_an_overlong_draft_is_trimmed_at_section_boundaries_not_mid_sentence():
-    """The last resort before abandoning: reflectors overshoot and do not converge."""
-    # Built from the seed's own blocks rather than a substring of it, so the fixture
-    # survives the seed being replaced by each new winner.
-    blocks = candidates.PRIOR_WINNER.split("\n\n")
-    bloated = "\n\n".join([blocks[0], "filler " * 300, *blocks[1:]])
-    assert candidates.overage(bloated) > 0
-    trimmed = candidates.trim_to_fit(bloated)
-    assert trimmed is not None
-    assert candidates.overage(trimmed) == 0
-    assert candidates.missing_safeguards(trimmed) == []
-    # Whole blocks only — every surviving line is a line that was there before.
-    for line in trimmed.splitlines():
-        assert line in bloated.splitlines()
-
-
-def test_trimming_protects_the_first_and_last_blocks():
-    """An instruction that lost its task statement is not shorter, it is broken."""
-    text = "TASK first\n\n" + "middle " * 400 + "\n\nOUTPUT last. answer translate"
-    trimmed = candidates.trim_to_fit(text, cap=100)
-    assert trimmed is not None
-    assert trimmed.startswith("TASK first")
-    assert trimmed.endswith("OUTPUT last. answer translate")
-
-
-def test_trimming_refuses_when_it_would_cost_a_safeguard():
-    """Better to abandon than to ship a shorter instruction missing a guardrail.
-
-    Forced by making the safeguard block the largest removable one, so the only cut
-    that fits is the one that must not be made.
-    """
-    text = "TASK\n\nbrief\n\n" + "Do not answer or translate it. " * 20 + "\n\nOUTPUT"
-    assert candidates.trim_to_fit(text, cap=100) is None
 
 
 def test_copying_the_constraints_into_the_instruction_is_an_objection():
@@ -1026,7 +928,7 @@ def test_copying_the_constraints_into_the_instruction_is_an_objection():
 
 
 def test_the_first_attempt_is_asked_with_the_constraints_attached(monkeypatch):
-    """The regression itself: attempt one must already know the budget."""
+    """The regression itself: attempt one must already know the constraints."""
     proposer, seen = _proposer_with(monkeypatch, [f"short. {SAFE}"])
     proposer._propose("the current instruction", [])
     assert candidates.CONSTRAINT_MARKER in seen[0]
@@ -1061,13 +963,14 @@ def test_the_default_corpus_measures_the_task_the_product_does():
     harvested from the source paragraph — and was removed for that reason, so this
     also guards against it being registered again.
     """
-    assert cli.parse_args([]).source == "nyra"
+    assert cli.parse_args([]).source.split(",")[0] == "nyra"
     assert "disfl-qa" not in corpus.SOURCES
 
 
 def test_the_default_corpus_can_measure_formatting():
     """So `blend` uses both axes instead of degrading to content, as it does on Switchboard."""
-    assert corpus.SOURCES[cli.parse_args([]).source].formatting_is_measurable
+    for key in cli.parse_args([]).source.split(","):
+        assert corpus.SOURCES[key].formatting_is_measurable, key
 
 
 def test_a_bare_invocation_is_the_recommended_gepa_run():
@@ -1249,18 +1152,13 @@ def test_the_reflection_model_gets_far_more_room_than_the_task_model():
     assert args.reflection_max_tokens > args.max_tokens
 
 
-def test_overage_accepts_an_explicit_cap():
-    assert candidates.overage("x" * 60, cap=50) == 10
-    assert candidates.overage("x" * 40, cap=50) == 0
-
-
 # --------------------------------------------------------------------------
-# The GEPA proposer gate — the cap as a search constraint, not just a report
+# The GEPA proposer gate — shippability as a search constraint, not just a report
 # --------------------------------------------------------------------------
 
 
-def _proposer_with(monkeypatch, drafts, cap=50, attempts=3):
-    """A CappedInstructionProposer whose reflection step returns `drafts` in order.
+def _proposer_with(monkeypatch, drafts, attempts=3):
+    """A GatedInstructionProposer whose reflection step returns `drafts` in order.
 
     Stubbing GEPA's `InstructionProposalSignature` is what keeps this offline: the
     accept/retry decision is ours and testable, while the reflection prompt behind
@@ -1281,34 +1179,31 @@ def _proposer_with(monkeypatch, drafts, cap=50, attempts=3):
     # No `fields=`: the constructor defaults to (INPUT_FIELD, OUTPUT_FIELD), so these
     # tests gate on the same names a real run does. Spelling them here again would keep
     # passing — while gating nothing — the day the signature's fields are renamed.
-    proposer = program_module.CappedInstructionProposer(cap, attempts=attempts)
+    proposer = program_module.GatedInstructionProposer(attempts=attempts)
     return proposer, seen
 
 
-def test_a_proposal_within_the_cap_is_accepted_first_try(monkeypatch):
-    proposer, seen = _proposer_with(monkeypatch, [f"short. {SAFE}"])
-    assert proposer._propose("original", []) == f"short. {SAFE}"
+def test_a_clean_proposal_is_accepted_first_try_however_long(monkeypatch):
+    long = f"{SAFE} " + "Delete the disfluencies. " * 400
+    proposer, seen = _proposer_with(monkeypatch, [long])
+    assert proposer._propose("original", []) == long
     assert (proposer.rejected, proposer.abandoned) == (0, 0)
     assert len(seen) == 1
 
 
-def test_an_over_cap_proposal_is_rejected_and_re_asked(monkeypatch):
-    proposer, seen = _proposer_with(monkeypatch, [SAFE + "z" * 80, f"fits. {SAFE}"])
-    assert proposer._propose("original", []) == f"fits. {SAFE}"
+def test_a_proposal_missing_a_safeguard_is_rejected_and_re_asked(monkeypatch):
+    proposer, seen = _proposer_with(monkeypatch, ["Delete fillers only.", f"fixed. {SAFE}"])
+    assert proposer._propose("original", []) == f"fixed. {SAFE}"
     assert proposer.rejected == 1
     assert proposer.abandoned == 0
-    # The retry compresses the rejected draft rather than re-deriving from the original.
-    assert "z" * 80 in seen[1]
-    # 30 chars of SAFE + 80 of filler against a cap of 50.
-    assert "60 characters over" in seen[1]
+    # The retry revises the rejected draft rather than re-deriving from the original.
+    assert "Delete fillers only." in seen[1]
 
 
-def test_giving_up_returns_the_original_not_a_truncation(monkeypatch):
-    """A truncated instruction lands mid-sentence; scoring one is how bad prompts ship."""
-    proposer, _ = _proposer_with(monkeypatch, [SAFE + "z" * 80] * 3, attempts=3)
-    result = proposer._propose("original", [])
-    assert result == "original"
-    assert len(result) != 50
+def test_giving_up_returns_the_original_not_a_patched_draft(monkeypatch):
+    """A hand-patched instruction is unscored wording; scoring one is how bad prompts ship."""
+    proposer, _ = _proposer_with(monkeypatch, ["Delete fillers only."] * 3, attempts=3)
+    assert proposer._propose("original", []) == "original"
     assert (proposer.rejected, proposer.abandoned) == (3, 1)
 
 
@@ -1463,3 +1358,218 @@ def test_program_is_the_only_module_that_imports_dspy():
         and re.search(r"^\s*(import dspy|from dspy)", path.read_text(), re.MULTILINE)
     ]
     assert offenders == []
+
+
+# --------------------------------------------------------------------------
+# Voice Arena: the dictation benchmark as the selecting and reporting set
+# --------------------------------------------------------------------------
+
+
+def _va_row(clip_id: str, spoken: str, intended: str) -> dict:
+    return {
+        "id": clip_id,
+        "spoken_text": spoken,
+        "intended_text": intended,
+        "audio": [{"src": f"https://example.invalid/{clip_id}.flac", "type": "audio/flac"}],
+    }
+
+
+VA_ROWS = [
+    _va_row(
+        f"dict_{i:04d}",
+        f"It's room four eighteen, no, four sixteen for patient {i}.",
+        f"It's room 416 for patient {i}.",
+    )
+    for i in range(6)
+]
+
+
+def _fake_sources(monkeypatch, nyra_rows, va_rows):
+    def fake_rows(spec, limit):
+        return iter(va_rows if spec.key == "voicearena" else nyra_rows)
+
+    monkeypatch.setattr(corpus, "_rows_via_api", fake_rows)
+
+
+def _nyra_row(i: int) -> dict:
+    return {
+        "verbatim_transcript": f"um so we shipped the build on day {i} you know",
+        "intended_transcript": f"So we shipped the build on day {i}.",
+    }
+
+
+def test_voicearena_is_registered_as_held_out_dictation_with_no_word_ceiling():
+    source = corpus.SOURCES["voicearena"]
+    assert (source.input_field, source.target_field) == ("spoken_text", "intended_text")
+    assert source.held_out and source.input_from_stt
+    # Long-form clips run to ~200 words; the conversational ceiling would drop them.
+    assert source.max_words is None
+    assert corpus._usable_reference("word " * 200, for_injection=False, max_words=None)
+
+
+def test_the_default_run_weaves_both_corpora():
+    assert cli.parse_args([]).source == corpus.DEFAULT_SOURCES == "nyra,voicearena"
+
+
+def test_sources_combine_and_dedupe_across_corpora(monkeypatch):
+    shared = _va_row(
+        "dict_dup", "So we shipped the build on day 0.", "So we shipped the build on day 0."
+    )
+    _fake_sources(monkeypatch, [_nyra_row(i) for i in range(4)], [*VA_ROWS, shared])
+    loaded = corpus.load(source="nyra,voicearena", limit=50, voicearena_input="spoken")
+    assert loaded.source == "nyra+voicearena"
+    sources = [u.source for u in loaded.utterances]
+    # 4 nyra + 6 voicearena; the duplicate reference was already taken by nyra.
+    assert (sources.count("nyra"), sources.count("voicearena")) == (4, 6)
+    assert set(loaded.detail) == {"nyra", "voicearena"}
+    va = [u for u in loaded.utterances if u.source == "voicearena"]
+    assert all(u.held_out and u.audio_url for u in va)
+    assert not any(u.held_out for u in loaded.utterances if u.source == "nyra")
+
+
+def test_held_out_rows_fill_dev_and_test_before_train():
+    """The benchmark judges the search; it must not be what the reflector studies."""
+    rows = [corpus.Utterance(reference=f"r{i}", disfluent=f"d{i}") for i in range(90)]
+    rows += [
+        corpus.Utterance(reference=f"v{i}", disfluent=f"v{i}", held_out=True) for i in range(30)
+    ]
+    train, dev, test = corpus.split(rows, 7, dev_size=40, test_size=20)
+    assert not any(u.held_out for u in train)
+    assert (sum(u.held_out for u in dev), sum(u.held_out for u in test)) == (20, 10)
+    assert (len(dev), len(test), len(train)) == (40, 20, 60)
+    # Recorded clips first, so --verify-live N reaches them before synthesized rows.
+    assert all(u.held_out for u in test[:10])
+
+
+def test_held_out_rows_overflow_into_train_only_when_dev_and_test_are_full():
+    rows = [
+        corpus.Utterance(reference=f"v{i}", disfluent=f"v{i}", held_out=True) for i in range(50)
+    ]
+    train, dev, test = corpus.split(rows, 7, dev_size=10, test_size=10)
+    assert (len(dev), len(test), len(train)) == (10, 10, 30)
+
+
+def test_stt_input_is_the_services_transcript_and_is_cached(monkeypatch, tmp_path):
+    """The rewrite is handed the STT's text, which already writes numbers out."""
+    import live
+    import voicearena
+
+    calls = []
+
+    def fake_transcribe(audio, api_key, filename, content_type, url=live.BUFFERED_URL):
+        calls.append(filename)
+        return {"text": "It's room 418, no, 416 for the patient."}
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(live, "transcribe_encoded", fake_transcribe)
+    monkeypatch.setattr("urllib.request.urlopen", lambda url, timeout=0: FakeResponse(b"flac"))
+    path = tmp_path / "stt.json"
+    first = voicearena.transcripts(VA_ROWS[:2], "key", path)
+    assert set(first.values()) == {"It's room 418, no, 416 for the patient."}
+    assert len(calls) == 2
+    # Second run: served from the cache, no key needed, no calls made.
+    assert voicearena.transcripts(VA_ROWS[:2], None, path) == first
+    assert len(calls) == 2
+
+
+def test_a_missing_transcript_without_a_key_fails_rather_than_falling_back(tmp_path):
+    import voicearena
+
+    with pytest.raises(RuntimeError, match="--voicearena-input spoken"):
+        voicearena.transcripts(VA_ROWS[:1], None, tmp_path / "empty.json")
+
+
+def test_a_changed_clip_is_not_served_a_stale_transcript():
+    import voicearena
+
+    edited = dict(VA_ROWS[0], spoken_text="something else entirely")
+    assert voicearena.cache_key(edited) != voicearena.cache_key(VA_ROWS[0])
+
+
+def test_live_verification_plays_the_recording_when_there_is_one(monkeypatch):
+    import live
+
+    monkeypatch.setattr(live, "require_tools", lambda: None)
+    monkeypatch.setattr(live, "recorded", lambda url, directory: b"recorded")
+    monkeypatch.setattr(live, "synthesize", lambda text, directory, voice=None: b"say")
+    with_audio = corpus.Utterance(reference="a", disfluent="a", audio_url="https://x/a.flac")
+    without = corpus.Utterance(reference="b", disfluent="b")
+    prepared = live.synthesize_all([with_audio, without])
+    assert [pcm for _, pcm in prepared] == [b"recorded", b"say"]
+
+
+def test_smart_rewrite_mode_reaches_the_request(monkeypatch):
+    import live
+
+    sent = {}
+
+    def fake_post(url, body, boundary, api_key):
+        sent["body"] = body
+        return {}
+
+    monkeypatch.setattr(live, "_post", fake_post)
+    live.transcribe(b"", "key", "Clean it.", rewrite_mode="smart")
+    assert b'"rewrite_mode": "smart"' in sent["body"]
+    live.transcribe(b"", "key", "Clean it.")
+    assert b"rewrite_mode" not in sent["body"]
+
+
+# --------------------------------------------------------------------------
+# voicearena_baseline: leaderboard-style scoring, attributed to a stage
+# --------------------------------------------------------------------------
+
+
+def test_each_clip_is_attributed_to_the_stage_that_decided_it():
+    import voicearena_baseline as vb
+
+    assert vb.bucket(stt_edits=0, draft_edits=0) == "pass"
+    assert vb.bucket(stt_edits=5, draft_edits=0) == "rewrite fixed it"
+    assert vb.bucket(stt_edits=0, draft_edits=3) == "rewrite broke it"
+    assert vb.bucket(stt_edits=5, draft_edits=3) == "both fail"
+
+
+def test_zer_counts_zero_edit_drafts_and_amend_pools_characters():
+    """ZER is per draft; AMEND pools, so a long draft weighs more — as amend-va does."""
+    import voicearena_baseline as vb
+
+    rows = [
+        {"draft_edits": 0, "draft_chars": 100, "stt_edits": 0, "stt_chars": 100},
+        {"draft_edits": 10, "draft_chars": 300, "stt_edits": 20, "stt_chars": 300},
+        {"draft_edits": None, "draft_chars": None, "stt_edits": 1, "stt_chars": 50},
+    ]
+    summary = vb.summarize(rows)
+    assert (summary["scored"], summary["unscored"]) == (2, 1)
+    assert summary["draft_zer"] == 50.0
+    assert summary["draft_amend"] == pytest.approx(2.5)
+    assert summary["stt_amend"] == pytest.approx(5.0)
+    assert summary["buckets"] == {"pass": 1, "both fail": 1}
+
+
+def test_fetched_pages_are_cached_and_reused(monkeypatch, tmp_path):
+    """Every run re-reads ~40 pages; the rows API rate-limits that, token or not."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    calls = []
+
+    def fake_fetch(url, headers, source, token):
+        calls.append(url)
+        return {"rows": [{"row": {"n": len(calls)}}]} if len(calls) == 1 else {"rows": []}
+
+    monkeypatch.setattr(corpus, "_fetch_page", fake_fetch)
+    first = list(corpus._rows_via_api(corpus.SOURCES["nyra"], 1))
+    fetched = len(calls)
+    second = list(corpus._rows_via_api(corpus.SOURCES["nyra"], 1))
+    assert first == second == [{"n": 1}]
+    # The second run reads the cached first page; only the empty probe page refetches.
+    assert len(calls) == fetched + 1
+
+
+def test_signed_audio_rows_are_never_cached():
+    """Voice Arena's audio URLs expire; a cached row would break --verify-live later."""
+    assert corpus.SOURCES["voicearena"].cache_rows is False
+    assert corpus.SOURCES["nyra"].cache_rows is True

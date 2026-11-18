@@ -16,7 +16,7 @@ import dspy
 from gepa.strategies.instruction_proposal import InstructionProposalSignature
 
 import metrics
-from candidates import constraint_preamble, objections, revision_directive, trim_to_fit
+from candidates import constraint_preamble, objections, revision_directive
 from corpus import Utterance
 
 #: The harness's own signature field names. They exist for DSPy's benefit and appear
@@ -24,7 +24,7 @@ from corpus import Utterance
 #: bare transcript as the user turn, and the service sends the bare transcript too.
 #:
 #: Named here rather than inline because the proposer has to reject instructions that
-#: mention them (see `CappedInstructionProposer`), and a gate spelling the names a
+#: mention them (see `GatedInstructionProposer`), and a gate spelling the names a
 #: second time would silently stop matching the day the signature is renamed.
 INPUT_FIELD = "raw_transcript"
 OUTPUT_FIELD = "cleaned_transcript"
@@ -152,8 +152,8 @@ def make_feedback_metric(axis: str):
     `axis` decides which score the reflector is shown, and it is shown only that one.
     Reporting an axis nobody selected on points the search at noise — see
     `metrics.feedback` for why the formatting score in particular is misleading on the
-    default corpus. The length budget is not here at all; it belongs in the proposer's
-    preamble, said once with the real target rather than eight times with the cap.
+    default corpus. The proposer's constraints are not here either: they are said once,
+    in its preamble, rather than once per scored example.
     """
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
@@ -221,7 +221,7 @@ def evaluate(
     )
 
 
-class CappedInstructionProposer:
+class GatedInstructionProposer:
     """GEPA `ProposalFn` that will not hand back an instruction that cannot ship.
 
     What disqualifies one is `candidates.objections`' to define — none of it visible to
@@ -229,11 +229,11 @@ class CappedInstructionProposer:
     there needs no change here.
 
     Why this exists rather than a penalty in the metric: GEPA's metric is handed one
-    scored *example* and never sees the candidate instruction, so neither property can
-    enter the objective there. Stating them in feedback prose (`make_feedback_metric`)
-    only asks nicely, and longer instructions tend to score better — so an
-    unconstrained search drifts and the run ends with nothing sendable. This is the
-    documented hook for constraining what the search may even consider: a bad proposal
+    scored *example* and never sees the candidate instruction, so none of these
+    properties can enter the objective there. Stating them in feedback prose
+    (`make_feedback_metric`) only asks nicely, and nothing in the score rewards
+    keeping them — so an unconstrained search drifts and the run ends with nothing
+    sendable. This is the documented hook for constraining what the search may even consider: a bad proposal
     is rejected and re-asked before GEPA ever evaluates it, so no search budget is
     spent scoring a candidate that could not ship.
 
@@ -242,14 +242,13 @@ class CappedInstructionProposer:
     the accept/retry decision around it is ours.
 
     On giving up after `attempts` tries it returns the instruction **unchanged**, not
-    a patched-up one. Truncating at the cap lands mid-sentence and deleting a field
-    name by hand can leave a dangling clause; a mangled instruction that happens to
-    score well is exactly the kind of thing that reaches a build and breaks it. A
+    a patched-up one. Deleting a field name by hand can leave a dangling clause, and
+    re-inserting a safeguard sentence is wording nothing scored; a mangled
+    instruction that happens to score well is exactly the kind of thing that reaches a build and breaks it. A
     no-op mutation costs GEPA one wasted step and keeps the pool honest.
     """
 
-    def __init__(self, cap: int, attempts: int = 5, fields: tuple[str, ...] = ()):
-        self.cap = cap
+    def __init__(self, attempts: int = 5, fields: tuple[str, ...] = ()):
         self.attempts = attempts
         self.fields = fields or (INPUT_FIELD, OUTPUT_FIELD)
         #: Proposals rejected, over the whole run — reported by the CLI so a search
@@ -257,8 +256,6 @@ class CappedInstructionProposer:
         self.rejected = 0
         #: Components the retries never got clean, left unchanged.
         self.abandoned = 0
-        #: Components rescued by cutting the last draft at section boundaries.
-        self.trimmed = 0
 
     def __call__(self, candidate, reflective_dataset, components_to_update) -> dict[str, str]:
         return {
@@ -283,8 +280,7 @@ class CappedInstructionProposer:
         # rejection. Stating them only in retries cost one run 8 of its 9 iterations:
         # every proposal was rejected `attempts` times, abandoned, and GEPA spent the
         # iteration re-scoring an instruction identical to the one it started with.
-        document = constraint_preamble(current, self.cap)
-        last = current
+        document = constraint_preamble(current)
         for attempt in range(1, self.attempts + 1):
             proposed = InstructionProposalSignature.run(
                 lm=self._lm_call,
@@ -293,7 +289,7 @@ class CappedInstructionProposer:
                     "dataset_with_feedback": dataset_with_feedback,
                 },
             )["new_instruction"]
-            notes = objections(proposed, self.fields, self.cap)
+            notes = objections(proposed, self.fields)
             if not notes:
                 return proposed
             self.rejected += 1
@@ -307,24 +303,6 @@ class CappedInstructionProposer:
             # revision of what it just wrote, which is a smaller ask than re-deriving
             # a compliant instruction from scratch.
             document = revision_directive(proposed, notes)
-            last = proposed
-
-        # Reflectors overshoot this cap badly and do not reliably converge when asked to
-        # cut — one run saw attempt 2 come back *longer* than attempt 1 despite being
-        # told to delete 638 characters. So rather than throw away five reflection calls
-        # and re-score the instruction we started with, cut the last draft down
-        # mechanically at section boundaries and let GEPA judge the result. If the trim
-        # cost quality, the candidate loses this iteration on merit; nothing unscored
-        # survives it.
-        if (trimmed := trim_to_fit(last, self.cap)) and not objections(
-            trimmed, self.fields, self.cap
-        ):
-            self.trimmed += 1
-            print(
-                f"    trimmed the last draft to fit: {len(last)} -> {len(trimmed)} chars "
-                "by dropping whole sections"
-            )
-            return trimmed
 
         self.abandoned += 1
         print("    giving up on this component; leaving the instruction unchanged")
@@ -343,7 +321,7 @@ class ModelSpec:
     #:
     #: Not sized for the answer — a cleaned transcript is a sentence or two. It is
     #: headroom for reasoning tokens, which count against the same budget on current
-    #: models, and for the instruction-length proposals GEPA writes.
+    #: models, and for the instruction proposals GEPA writes.
     #:
     #: Sized generously because truncation here is silently corrupting rather than
     #: loud. `PlainChatAdapter.parse` treats the whole completion as the answer (it
@@ -420,7 +398,7 @@ def optimize(
     validation: list[Utterance],
     auto: str,
     num_threads: int,
-    proposer: CappedInstructionProposer,
+    proposer: GatedInstructionProposer,
     reflection_minibatch_size: int = 8,
 ):
     """Evolve the instruction, returning the optimized program.
@@ -430,13 +408,13 @@ def optimize(
     decides which instruction ships, and a set that steered the search cannot also
     judge it without flattering whatever the search overfit.
 
-    The length cap reaches it twice: as prose in the proposer's preamble, which only
-    asks, and as `proposer`'s rejection of anything that does not fit, which does not.
+    The shippability gate reaches it twice: as prose in the proposer's preamble, which
+    only asks, and as `proposer`'s rejection of anything that fails it, which does not.
     The rejection is the constraint; the prose makes the first attempt likelier to
-    land and so saves retries. The caller length-checks the winner regardless.
+    land and so saves retries. The caller re-checks the winner regardless.
 
     MIPROv2 was offered alongside this and has been removed. It searches on a bare
-    scalar and exposes no proposal hook, so the cap could not constrain its search at
+    scalar and exposes no proposal hook, so the gate could not constrain its search at
     all — only refuse its output afterwards — and its multi-field proposal prompts go
     through the configured adapter, which for a small `--model` means the marker
     protocol that model cannot follow.

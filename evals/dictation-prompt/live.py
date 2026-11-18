@@ -31,8 +31,12 @@ rather than producing a real hesitation, and the STT pass introduces its own err
 before the rewrite ever runs. Read it as "does this instruction beat that one on the
 real rewrite model", which is exactly the question the text harness cannot ask.
 
-macOS only — `say` and `afconvert` are the synthesis path. There is no fallback,
-because a silent switch to a different TTS would change what is being measured.
+**Recorded audio, where a corpus has it.** Voice Arena rows carry a recording of a real
+person dictating, and those are played as recorded (`recorded`) rather than spoken by
+`say` — the caveats above about synthesized speech do not apply to them.
+
+macOS only — `say` and `afconvert` are the synthesis and conversion path. There is no
+fallback, because a silent switch to a different TTS would change what is being measured.
 """
 
 from __future__ import annotations
@@ -93,7 +97,9 @@ def synthesize(text: str, directory: Path, voice: str | None = None) -> bytes:
     return wav.read_bytes()[44:]
 
 
-def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
+def _multipart(
+    audio: bytes, config: dict, filename: str = "audio.pcm", content_type: str = "audio/pcm"
+) -> tuple[bytes, str]:
     """The `config` + `audio` body, framed exactly as the Swift client frames it.
 
     `config` leads, because the streaming route cannot open its upstream call
@@ -102,6 +108,9 @@ def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
     bytes in this same order; this harness tunes the instruction that rides in
     the `config` part, so a body shaped differently from the app's would be
     tuning against a different request.
+
+    `filename` and `content_type` exist for `transcribe_encoded`, which sends a FLAC
+    file to the buffered route; the live route only decodes raw PCM incrementally.
     """
     boundary = f"eval-{uuid.uuid4()}"
     body = bytearray()
@@ -110,14 +119,20 @@ def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
     body += b"Content-Type: application/json\r\n\r\n"
     body += json.dumps(config).encode()
     body += f"\r\n--{boundary}\r\n".encode()
-    body += b'Content-Disposition: form-data; name="audio"; filename="audio.pcm"\r\n'
-    body += b"Content-Type: audio/pcm\r\n\r\n"
-    body += pcm
+    body += f'Content-Disposition: form-data; name="audio"; filename="{filename}"\r\n'.encode()
+    body += f"Content-Type: {content_type}\r\n\r\n".encode()
+    body += audio
     body += f"\r\n--{boundary}--\r\n".encode()
     return bytes(body), boundary
 
 
-def transcribe(pcm: bytes, api_key: str, instruction: str | None, url: str = DICTATION_URL) -> dict:
+def transcribe(
+    pcm: bytes,
+    api_key: str,
+    instruction: str | None,
+    url: str = DICTATION_URL,
+    rewrite_mode: str | None = None,
+) -> dict:
     """One `/v1/transcribe/live` round trip. `instruction=None` asks for the default.
 
     That `None` is the comparison the text harness has never been able to make:
@@ -129,11 +144,41 @@ def transcribe(pcm: bytes, api_key: str, instruction: str | None, url: str = DIC
     a top-level string). It sent the nested `config.llm.instruction` until
     2026-09-10; both are accepted by the route, but a harness tuning a field the
     app does not send is tuning the wrong request.
+
+    `rewrite_mode` mirrors the app's Fast/Smart setting: None omits the key (Fast, the
+    default) and `"smart"` asks for the larger rewrite model, exactly as
+    `RewriteMode.wireValue` does on the Swift side.
     """
     config: dict = {"sample_rate": SAMPLE_RATE, "channels": 1}
     if instruction:
         config["llm_instruction"] = instruction
+    if rewrite_mode:
+        config["rewrite_mode"] = rewrite_mode
     body, boundary = _multipart(pcm, config)
+    return _post(url, body, boundary, api_key)
+
+
+#: The buffered route. Unlike `/live` it decodes encoded audio (FLAC, WAV) itself.
+BUFFERED_URL = "https://dictation.assemblyai.com/v1/transcribe"
+
+
+def transcribe_encoded(
+    audio: bytes, api_key: str, filename: str, content_type: str, url: str = BUFFERED_URL
+) -> dict:
+    """Transcribe an encoded file through the buffered route, no instruction sent.
+
+    For building a corpus's input side from recorded audio (`voicearena.py`), where
+    only the verbatim `text` is wanted. The buffered route decodes the file itself, so
+    this path needs no `afconvert` and runs off-Mac. Measured 2026-11-18: a FLAC sent
+    to `/live` is refused with 415 ("cannot be decoded incrementally"), and the same
+    file sent here comes back transcribed.
+    """
+    body, boundary = _multipart(audio, {}, filename=filename, content_type=content_type)
+    return _post(url, body, boundary, api_key)
+
+
+def _post(url: str, body: bytes, boundary: str, api_key: str) -> dict:
+    """POST a multipart body, turning an HTTP error into `Unavailable` with its detail."""
     request = urllib.request.Request(  # noqa: S310 — fixed https endpoint
         url,
         data=body,
@@ -170,20 +215,56 @@ class LiveResult:
         return metrics.score(self.reference, self.rewritten, self.verbatim)
 
 
+def recorded(url: str, directory: Path) -> bytes:
+    """Download a recorded clip and convert it to the raw PCM `/live` takes.
+
+    For corpora that ship real audio (`voicearena`). `afconvert` reads the FLAC and
+    resamples it to 16 kHz mono, the same retargeting `synthesize` applies to `say`.
+    """
+    encoded, wav = directory / "clip.flac", directory / "clip.wav"
+    with urllib.request.urlopen(url, timeout=90) as response:  # noqa: S310 — dataset asset
+        encoded.write_bytes(response.read())
+    subprocess.run(
+        [
+            "afconvert",
+            "-f",
+            "WAVE",
+            "-d",
+            f"LEI16@{SAMPLE_RATE}",
+            "-c",
+            "1",
+            str(encoded),
+            str(wav),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return wav.read_bytes()[44:]
+
+
 def synthesize_all(utterances: list[Utterance]) -> list[tuple[Utterance, bytes]]:
-    """Speak every utterance's *disfluent* side once, and hand back the audio.
+    """Audio for every utterance, prepared once: the recording if it has one, else `say`.
 
-    The disfluent side, not the reference: the point is to give the rewrite model
-    something that needs cleaning up.
+    A recording is the speaker's own voice saying the disfluent side, which is what
+    the product actually hears; `say` stands in only where a corpus has no audio. With
+    it, the "synthesized speech is not dictated speech" caveat no longer applies.
 
-    Separate from `verify` so a caller comparing several instructions synthesizes once
-    and replays the same bytes. That halves the `say`/`afconvert` subprocess work of a
+    Separate from `verify` so a caller comparing several instructions prepares once
+    and replays the same bytes. That halves the subprocess and download work of a
     `--verify-baseline` run, and it is what makes "the same audio for every candidate"
     structurally true rather than true because `say` happens to be deterministic.
     """
     require_tools()
     with tempfile.TemporaryDirectory(prefix="blurt-live-") as directory:
-        return [(u, synthesize(u.disfluent, Path(directory))) for u in utterances]
+        return [
+            (
+                u,
+                recorded(u.audio_url, Path(directory))
+                if u.audio_url
+                else synthesize(u.disfluent, Path(directory)),
+            )
+            for u in utterances
+        ]
 
 
 def verify(
@@ -193,6 +274,7 @@ def verify(
     *,
     url: str = DICTATION_URL,
     on_example=None,
+    rewrite_mode: str | None = None,
 ) -> list[LiveResult]:
     """Send already-synthesized audio through the real endpoint and score the rewrite.
 
@@ -203,7 +285,7 @@ def verify(
     """
     results = []
     for utterance, pcm in spoken:
-        response = transcribe(pcm, api_key, instruction, url)
+        response = transcribe(pcm, api_key, instruction, url, rewrite_mode=rewrite_mode)
         results.append(
             LiveResult(
                 reference=utterance.reference,

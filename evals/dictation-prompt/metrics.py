@@ -461,11 +461,8 @@ def feedback(
       Outputs" next to the input, so repeating it is tokens for nothing — which is why
       this takes no `hypothesis` argument at all; `scored` already carries the diff.
       The reference is the one thing GEPA does not show, which is why that stays.
-    - **The length budget.** It belongs in `candidates.constraint_preamble`, said once
-      with the real target, not repeated on all eight examples of a minibatch — and
-      said there in words against a target *below* the cap, which is the opposite of
-      what a per-example "at most 2048 characters" was teaching. One run's rejected
-      proposals had a median length of 2149 against that 2048.
+    - **The shippability rules.** They belong in `candidates.constraint_preamble`,
+      said once, not repeated on all eight examples of a minibatch.
     - **The axis nobody selected on.** Only `axis` is reported. Naming the formatting
       score on a corpus whose formatting the harness refuses to trust — `--metric
       blend` degrades to `content` on a corpus with unreliable target casing —
