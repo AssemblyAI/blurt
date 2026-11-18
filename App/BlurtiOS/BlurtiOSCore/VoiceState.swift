@@ -84,11 +84,13 @@ package nonisolated struct VoiceState: Equatable {
     }
   }
 
-  /// Only the two notices that need saying carry a glyph.
+  /// Only the two notices that need saying carry a glyph. The exclamation
+  /// shows whether or not Blurt is ready: a failure often is why it isn't
+  /// (the mic taken, the window closed under the dictation), and the line
+  /// beneath the dimmed key says which.
   package var glyph: Glyph? {
-    guard isReady else { return nil }
     switch phase {
-    case .copied: return .clipboard
+    case .copied: return isReady ? .clipboard : nil
     case .error: return .exclamation
     case .idle, .connecting, .recording, .processing, .pasted: return nil
     }

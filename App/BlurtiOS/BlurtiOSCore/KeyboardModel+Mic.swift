@@ -1,126 +1,118 @@
 import BlurtEngine
-import Foundation
-import UIKit
 
-// MARK: - The mic key: the engine's gate, driven by the finger
+// MARK: - The mic key: the handshake, driven by the finger
 
 extension KeyboardModel {
   /// Whether a tap on the orb can do anything but open the app.
   package var isReady: Bool { hasFullAccess && isListening }
 
-  /// What the voice control shows, from the phase the app published.
-  package var voiceState: VoiceState { VoiceState(snapshot: snapshot, isReady: isReady) }
+  /// Why a press would not record now, as the record says it; `sessionOff`
+  /// with no record, or with no Full Access to read one.
+  package var readinessReason: FailureReason? {
+    guard hasFullAccess else { return .sessionOff }
+    guard !isListening else { return nil }
+    return listeningState?.notReady(now: now()) ?? .sessionOff
+  }
 
-  /// Finger down on the orb. Ignored, with a buzz, while the last dictation
-  /// is still being transcribed: a press then would be dropped by the engine
-  /// and the user would talk into nothing.
+  /// What the voice control shows: the phase the app published — or, from
+  /// the press going out until the app answers it, the mic coming up.
+  package var voiceState: VoiceState {
+    if showsConnecting, snapshot.state.isSettled { return VoiceState(phase: .connecting, isReady: isReady) }
+    return VoiceState(snapshot: snapshot, isReady: isReady)
+  }
+
+  /// Finger down on the mic key: the signal. The readiness record is read now
+  /// — not a beat ago — and the status line's own routing comes first: a line
+  /// that says the tap opens Blurt makes it so, whatever the record says, so
+  /// the words and the tap can never disagree. Then the handshake decides: a
+  /// press, a stop of the dictation running, a buzz over words being made.
   package func micDown() {
-    guard isReady else { return }
-    switch snapshot.state {
-    case .connecting, .processing:
-      if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
-      return
-    case .idle, .recording, .pasted, .copied, .error:
-      let action = gate.modifierDown(at: elapsed)
-      if action == .start { pressSentOver = snapshot.state }
-      perform(action)
+    readListeningState()
+    let line = statusLine
+    heldError = nil
+    touchDown = elapsed
+    let ready: Bool
+    let reason: FailureReason?
+    switch line?.tapOpens {
+    case .hop(let hop):
+      ready = false
+      reason = hop ?? readinessReason
+    case .setup:
+      ready = false
+      reason = .sessionOff
+    case .press, .buzz, nil:
+      ready = isReady
+      reason = readinessReason
     }
+    KeyboardLog.readiness(sequence: listeningState?.sequence, ready: ready, reason: reason)
+    let event = PressHandshake.Event.micDown(
+      ready: ready, reason: reason, phase: snapshot.state, inFlight: snapshot.dictation)
+    perform(handshake.handle(event, now: now()))
   }
 
-  /// Finger up. When Blurt isn't ready — no Full Access, or the app isn't
-  /// listening — this is the tap that opens the app, whose checklist says what
-  /// is missing (opening the app needs no Full Access; everything else does).
-  /// The gate comes up either way, so a press the finger made while the app
-  /// was still there is never left armed.
+  /// Finger up. The gate is told, so it stays in step; the handshake gets
+  /// how long the finger was down: a hold's lift is the stop, sent at once;
+  /// a tap's lift sends nothing; a refused press hops.
   package func micUp() {
-    perform(gate.modifierUp(at: elapsed))
-    if !isReady { openApp() }
+    let lift = elapsed
+    let held = touchDown.map { lift - $0 } ?? .zero
+    _ = gate.modifierUp(at: lift)
+    touchDown = nil
+    perform(handshake.handle(.micUp(heldFor: held / .seconds(1)), now: now()))
   }
 
+  /// The × key: the dictation ends and its words are thrown away.
   package func cancel() {
-    gate.reset()
-    send(.cancel)
-  }
-
-  package var elapsed: Duration { clockStart.duration(to: ContinuousClock.now) }
-
-  package func perform(_ action: DictationKeyGate.Action) {
-    switch action {
-    case .start: send(.press)
-    case .stop:
-      // The engine drops a release before it is recording (the mic still
-      // coming up): hold it for the first recording phase instead.
-      if snapshot.state == .connecting {
-        releasePending = true
-      } else {
-        send(.release)
-      }
-    case .cancel:
-      releasePending = false
-      send(.cancel)
-    // A latch keeps the recording going; only the Mac's read-aloud router acts on
-    // it. A discard is the Mac's Escape, which never reaches the keyboard's gate.
-    case .none, .latch, .discard: break
-    }
-  }
-
-  package func send(_ kind: KeyboardCommand.Kind) {
-    // Only a press primes the request with the field's text; a release or a
-    // cancel carries none of it across to the app.
-    let isPress = kind == .press
-    let command = KeyboardCommand(
-      id: UUID(), kind: kind, priorText: isPress ? proxy?.documentContextBeforeInput : nil,
-      selectedText: isPress ? proxy?.selectedText : nil, sentAt: Date(), keyboard: instanceID)
-    transport(command)
-    unansweredPressCommand = isPress ? command : nil
-    // A press the app never answers would leave the gate latched over
-    // nothing. Either notification can be missed: first catch up with a phase
-    // the app may have published unheard; if the picture is still as it was,
-    // the press itself was missed — put it back (the app takes a command out
-    // of the store as it reads it) and signal again. The same id, so an app
-    // that did read it ignores the copy.
-    commandRetry?.cancel()
-    guard kind == .press else { return }
-    let stateAtSend = snapshot.state
-    commandRetry = Task { [weak self] in
-      try? await Task.sleep(for: Self.commandRetryDelay)
-      guard !Task.isCancelled, let self else { return }
-      phaseChanged()
-      guard snapshot.state == stateAtSend else { return }
-      transport(command)
-    }
-  }
-
-  /// Lets go of a press the app can no longer answer — it drops one older
-  /// than `BlurtShared.commandFreshnessWindow` unread, and an app that was
-  /// killed answers nothing — so its latch can't outlive it. True when it did.
-  @discardableResult
-  package func expireUnansweredPress() -> Bool {
-    guard let press = unansweredPressCommand, !press.isFresh() else { return false }
-    unansweredPressCommand = nil
-    return true
-  }
-
-  /// The gate's half of the same rule: a latch held only for an expired
-  /// press goes with it, once nothing is in flight.
-  func letGoOfExpiredPress() {
-    if expireUnansweredPress(), isSettled { gate.reset() }
+    perform(handshake.handle(.cancelTapped, now: now()))
   }
 
   /// A swipe that began on the orb (the panel's carousel) after its press
-  /// went out: undo exactly what that press did. A fresh press is cancelled;
-  /// a press over a recording a tap had latched only re-latches it, so
-  /// flipping to the keys mid-dictation doesn't throw the words away; a press
-  /// the orb ignored (busy, or Blurt not ready) undoes nothing.
-  ///
-  /// Nor does a fresh press sent over a dictation the app was still running:
-  /// the picture can say recording for a moment after this keyboard released
-  /// it (leaving the screen, opening the term field), and the engine drops a
-  /// press then, so it started nothing — a cancel would land on the words
-  /// being transcribed.
+  /// went out: undo exactly what that press did, while nothing has been
+  /// recorded — the press unanswered, or its dictation still coming up. Over
+  /// a recording or words being made the swipe undoes nothing: the press
+  /// latched onto it at most, and a cancel would land on the words — the
+  /// picture can say recording for a moment after this keyboard released
+  /// it, and a press the orb ignored started nothing.
   package func undoPress() {
-    let action = gate.otherKeyDown()
-    if action == .cancel, pressSentOver == .recording || pressSentOver == .processing { return }
-    perform(action)
+    switch snapshot.state {
+    case .recording, .processing: return
+    case .idle, .connecting, .pasted, .copied, .error: perform(handshake.undoBeforeRecording(now: now()))
+    }
+  }
+
+  /// A tap: finger down and up at once. Hands-free presses this way, and so
+  /// does a tap on the status line — the line says what the tap does, and
+  /// `micDown` routes it exactly as it would a tap on the mic.
+  package func tapMic() {
+    micDown()
+    micUp()
+  }
+
+  /// The term field takes the mic's row, so a dictation in flight is closed
+  /// first — nothing runs on with no key to stop it. What goes out follows
+  /// the phase: a recording is released, so the words still land, unless
+  /// `keepWords` is false (a cancel); words being made are left to land, or
+  /// cancelled; a mic still coming up, or a press unanswered, is cancelled
+  /// either way, since nothing has been recorded. A stop already out needs
+  /// no second. The phase is the handshake's own for a dictation it owns and
+  /// the picture's otherwise: over a press unanswered the picture may show
+  /// another keyboard's recording, which a nameless cancel from the
+  /// keyboard on screen would end.
+  package func endDictation(keepWords: Bool) {
+    let phase: PhaseSnapshot.State
+    switch handshake.state {
+    case .idle, .unready, .stopping: return
+    case .owned(_, let owned): phase = owned
+    case .pressing, .foreign: phase = snapshot.state
+    }
+    let dictation = handshake.dictationID
+    switch phase {
+    case .recording:
+      perform([keepWords ? .sendRelease(dictation: dictation) : .sendCancel(dictation: dictation)])
+    case .processing:
+      if !keepWords { perform([.sendCancel(dictation: dictation)]) }
+    case .idle, .connecting, .pasted, .copied, .error:
+      perform([.sendCancel(dictation: dictation)])
+    }
   }
 }

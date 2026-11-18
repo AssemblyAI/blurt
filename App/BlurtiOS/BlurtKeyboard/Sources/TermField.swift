@@ -1,27 +1,31 @@
 import BlurtDesign
 import BlurtiOSCore
+import KeyboardKit
 import SwiftUI
 
-/// The voice bar as a field — the brand's input, a rectangle with a hairline,
-/// never a capsule: × to leave, what has been typed with a caret, ✓ to save.
-/// Return saves too. × and ✓ are the same glyph keys as the +.
+/// The bar as a field, in a key's own colours: × to leave, what has been
+/// typed with a caret, ✓ to save. Return saves too. × and ✓ are the same
+/// glyph keys as the +.
 struct TermField: View {
-  var model: KeyboardModel
-  @Environment(\.keyboardPalette) private var palette
+  var model: BlurtiOSCore.KeyboardModel
+  @EnvironmentObject private var keyboardContext: KeyboardContext
 
   var body: some View {
+    let scheme = keyboardContext.colorScheme
     HStack(spacing: DesignTokens.Metrics.termGap) {
-      GlyphKey(symbol: "xmark", tint: palette.keyText.opacity(DesignTokens.Metrics.opacityTermCancel), label: "Cancel")
-      {
+      GlyphKey(
+        symbol: "xmark", tint: BlurtTint.legend(scheme).opacity(DesignTokens.Metrics.opacityTermCancel), label: "Cancel"
+      ) {
         model.cancelAddingTerm()
       }
       HStack(spacing: 0) {
         if let draft = model.termDraft, !draft.isEmpty {
-          Text(draft).foregroundStyle(palette.keyText)
+          Text(draft).foregroundStyle(BlurtTint.legend(scheme))
           Caret(gap: .leading)
         } else {
           Caret(gap: .trailing)
-          Text("New key term").foregroundStyle(palette.keyText.opacity(DesignTokens.Metrics.opacityPlaceholder))
+          Text("New key term")
+            .foregroundStyle(BlurtTint.legend(scheme).opacity(DesignTokens.Metrics.opacityPlaceholder))
         }
         Spacer(minLength: 0)
       }
@@ -32,29 +36,29 @@ struct TermField: View {
       .frame(height: DesignTokens.Metrics.termHeight)
       .background(
         RoundedRectangle(cornerRadius: DesignTokens.Metrics.termRadius)
-          .fill(palette.field)
-          .strokeBorder(palette.fieldBorder, lineWidth: DesignTokens.Metrics.termBorder)
+          .fill(BlurtTint.field(scheme))
+          .strokeBorder(BlurtTint.edge(scheme), lineWidth: DesignTokens.Metrics.termBorder)
       )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Key term: \(model.termDraft ?? "")")
-      GlyphKey(symbol: "checkmark", tint: palette.signal, label: "Save the key term") { model.saveTerm() }
+      GlyphKey(symbol: "checkmark", tint: BlurtTint.signal(scheme), label: "Save the key term") { model.saveTerm() }
         .disabled(model.termDraft?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
     }
     .padding(.horizontal, DesignTokens.Metrics.termInset)
   }
 }
 
-/// A blinking caret, as a text field's; held on while motion is held.
+/// A blinking caret, as a text field's; held on under Reduce Motion.
 private struct Caret: View {
   var gap: Edge.Set
-  @Environment(\.keyboardPalette) private var palette
-  @Environment(\.keyboardMotionHeld) private var motionHeld
+  @EnvironmentObject private var keyboardContext: KeyboardContext
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     TimelineView(.periodic(from: .now, by: DesignTokens.Motion.caret)) { timeline in
-      let on = motionHeld || Int(timeline.date.timeIntervalSinceReferenceDate / DesignTokens.Motion.caret) % 2 == 0
+      let on = reduceMotion || Int(timeline.date.timeIntervalSinceReferenceDate / DesignTokens.Motion.caret) % 2 == 0
       RoundedRectangle(cornerRadius: DesignTokens.Metrics.caretRadius)
-        .fill(palette.signal)
+        .fill(BlurtTint.signal(keyboardContext.colorScheme))
         .frame(width: DesignTokens.Metrics.caretWidth, height: DesignTokens.Metrics.caretHeight)
         .opacity(on ? 1 : 0)
         .padding(gap, DesignTokens.Metrics.caretLead)

@@ -376,10 +376,12 @@ identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
 require_clean_tree "building a release artifact"
 
 step "Verify pinned dependencies"
-# The app currently carries no external SPM packages (only the local
-# BlurtEngine), so Xcode generates no Package.resolved. If a dependency is ever
-# added, this gate ensures its pins are committed and reviewed rather than
-# floating. Absent a Package.resolved there is nothing to pin, so pass.
+# The Mac app's one remote package is Sparkle, so Xcode writes its pin to the
+# Package.resolved beside the committed project; the gate is that the pin is
+# tracked and reviewed, never floating. (The iPhone app pins KeyboardKit with
+# `exactVersion:` in App/BlurtiOS/project.yml instead — its project, and so
+# its Package.resolved, is generated and not committed, and check.sh enforces
+# the pin's shape. This script builds the Mac app only.)
 RESOLVED="$APP_DIR/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 if [ -f "$RESOLVED" ]; then
   git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \

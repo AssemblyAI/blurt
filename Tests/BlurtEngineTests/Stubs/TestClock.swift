@@ -1,11 +1,12 @@
-import Foundation
 import Synchronization
 
 /// A manually-advanced `Clock` for deterministic timer tests: a `sleep` parks
 /// until `advance(by:)` moves virtual time past its deadline (or the sleeping
 /// task is cancelled). No wall-clock waiting, so the auto-release timer can be
-/// exercised without racing real milliseconds.
-final class TestClock: Clock, Sendable {
+/// exercised without racing real milliseconds. Compiled into the iPhone tests
+/// too (App/BlurtiOS/project.yml), whose default isolation is the main actor:
+/// `nonisolated` keeps it a clock any task can step.
+nonisolated final class TestClock: Clock, Sendable {
   struct Instant: InstantProtocol {
     let offset: Duration
     func advanced(by duration: Duration) -> Instant { Instant(offset: offset + duration) }

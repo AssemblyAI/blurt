@@ -1,14 +1,11 @@
 #!/bin/bash
 # A screenshot of the real Blurt keyboard — the extension in its own process,
-# over a text field in the app — as the gallery cannot take one: what renders
-# in the app's process (the gallery, the home hero) can differ from what the
-# extension may draw. The BlurtiOSProbe UI test launches the app on
-# -BlurtProbeField, which sets the face, the mic concept and the layout in the
-# App Group, taps the globe until Blurt's keyboard is up, and attaches the
-# screen; this exports it.
+# over a text field in the app. The BlurtiOSProbe UI test launches the app on
+# -BlurtProbeField with the face, taps the globe until Blurt's keyboard is up,
+# and attaches the screen; this exports it.
 #
-#   scripts/ios-keyboard-shot.sh                                  # light, the shipped mic, the saved layout
-#   scripts/ios-keyboard-shot.sh --face dark --voice b --layout panel --out .build/design/ext/panel-b.png
+#   scripts/ios-keyboard-shot.sh                                  # light
+#   scripts/ios-keyboard-shot.sh --face dark --out .build/design/ext/dark.png
 #
 # Blurt must be enabled as a keyboard on the simulator once by hand
 # (Settings → General → Keyboard → Keyboards → Add New Keyboard → Blurt).
@@ -20,8 +17,6 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/ios-lib.sh"
 DERIVED="$IOS_DERIVED"
 FACE=light
-VOICE=""
-LAYOUT=""
 OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,25 +24,17 @@ while [ $# -gt 0 ]; do
       FACE="${2:?}"
       shift 2
       ;;
-    --voice)
-      VOICE="${2:?}"
-      shift 2
-      ;;
-    --layout)
-      LAYOUT="${2:?}"
-      shift 2
-      ;;
     --out)
       OUT="${2:?}"
       shift 2
       ;;
     *)
-      echo "usage: ios-keyboard-shot.sh [--face light|dark] [--voice a|b|c] [--layout slimBar|panel|full] [--out FILE.png]" >&2
+      echo "usage: ios-keyboard-shot.sh [--face light|dark] [--out FILE.png]" >&2
       exit 2
       ;;
   esac
 done
-[ -n "$OUT" ] || OUT="$REPO_ROOT/.build/design/ext/keyboard-$FACE${VOICE:+-$VOICE}${LAYOUT:+-$LAYOUT}.png"
+[ -n "$OUT" ] || OUT="$REPO_ROOT/.build/design/ext/keyboard-$FACE.png"
 mkdir -p "$(dirname "$OUT")"
 
 ios_require_device ios-keyboard-shot
@@ -63,7 +50,7 @@ xcodebuild build -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme B
 xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
 # xcodebuild hands the test runner only the environment variables prefixed
 # TEST_RUNNER_; the test reads BLURT_PROBE_ARGS.
-if ! TEST_RUNNER_BLURT_PROBE_ARGS="$FACE $VOICE $LAYOUT" xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" \
+if ! TEST_RUNNER_BLURT_PROBE_ARGS="$FACE" xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" \
   -scheme BlurtiOSProbe -only-testing:BlurtiOSProbe/BlurtKeyboardShot \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$WORK/shot.xcresult" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet; then

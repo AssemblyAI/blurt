@@ -1,0 +1,60 @@
+{
+  "cap": {
+    "abc": 42.75,
+    "bottomMargin": 6,
+    "gap": 6,
+    "height": 42,
+    "keyboardHeight": 260,
+    "letter": 33.0,
+    "marginRight": 3,
+    "marginSide": 3,
+    "radius": 5,
+    "return": 91.5,
+    "rowGap": 12,
+    "side": 44.25,
+    "sideGap": 14.25,
+    "space": 189.0,
+    "systemBarBelow": null,
+    "topBand": 50
+  },
+  "cell": {
+    "delete": 58.5,
+    "firstRowTop": null,
+    "keyboardHeight": 216,
+    "keyboardTop": null,
+    "letter": 39.0,
+    "more": 48.75,
+    "return": 97.5,
+    "row": 54,
+    "shift": 58.5,
+    "space": 195.0
+  },
+  "colors": {
+    "dark": {
+      "key": "#6B6B6B",
+      "modifier": "#464646",
+      "surface": "#2B2B2B"
+    },
+    "light": {
+      "key": "#FFFFFF",
+      "modifier": "#ADB3BC",
+      "surface": "#D1D5DB"
+    }
+  },
+  "darkFaceIdentical": null,
+  "device": "iPhone 16e (18.6)",
+  "legend": {
+    "lHeight": null,
+    "pointSizeEstimate": null
+  },
+  "measured": "unmeasured",
+  "os": "18.6",
+  "profile": "classic-390",
+  "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
+  "scale": 3,
+  "sources": {
+    "all": "UNMEASURED: the plan's fallback rule (cell = W/10, cap = cell - 2 x 3, cap height 42, row pitch 54, bottom inset 6, radius 5; 123 and the globe 1.25 cells, return 2.5, shift and delete 1.5 with a 14.25 pt gap to the letters). Xcode 27's downloader refused every iOS 18.x runtime (22G86, 22F77, 22E238: 'not available for download'), so replace this file by running scripts/apple-geometry.sh --profile <profile> on an iOS 18.6 simulator"
+  },
+  "unmeasured": true,
+  "width": 390
+}

@@ -63,8 +63,8 @@ globs go in one invocation so `hook-lib.sh` and `release-lib.sh` are in the inpu
   touches actors, async, the mic capture path, the dictation pipeline, or the keyboard's hand-off
   with the iPhone app (`BlurtiOSCore`'s model, `DictationCoordinator`, `ListeningWindow`).
 - **`macos-hig-reviewer`** — run after editing views in `App/Blurt/` (wizard, settings, overlay).
-  Mac only: the iPhone's views answer to `App/BlurtiOS/DESIGN.md`, checked on sight through the
-  gallery and the probe's screenshots (`scripts/design-capture.sh`, `scripts/ios-keyboard-shot.sh`).
+  Mac only: the iPhone's keyboard is Apple's (KeyboardKit) and answers to the parity probe
+  (`scripts/keyboard-parity.sh`) and the probe's screenshots (`scripts/ios-keyboard-shot.sh`).
 - **`cleanup-reviewer`** — quality-only review (reuse, simplification/dead code, efficiency,
   altitude), one agent per angle. Use it for `/simplify`-style passes instead of writing the
   guardrails into an ad-hoc prompt: it loads `project-guardrails` itself and already knows the

@@ -9,7 +9,7 @@
 #   scripts/ios-sim.sh --screenshot out.png  # …then capture the screen
 #   scripts/ios-sim.sh --no-build …          # reuse the last build (a capture loop builds once)
 #   BLURT_SIM_DEVICE="iPhone 17" scripts/ios-sim.sh
-#   BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording" scripts/ios-sim.sh --screenshot panel.png
+#   BLURT_LAUNCH_ARGS="-BlurtKeepOpen -BlurtGalleryStill" scripts/ios-sim.sh --screenshot keep-open.png
 #   BLURT_SHOT_DELAY=5 …                     # seconds before the screenshot (default 3)
 #
 # The named simulator, or whichever iPhone this Mac has. Xcode 27 replaced

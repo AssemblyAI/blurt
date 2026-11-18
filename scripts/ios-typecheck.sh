@@ -10,9 +10,11 @@
 # are errors, and every declaration defaults to the main actor.
 #
 # What it cannot see: APIs that differ between Catalyst and iOS proper, code
-# signing, linking, and the generated project itself. CI stays the authority;
-# this is the fast local loop for the App/BlurtiOS sources. The unit tests
-# (`@testable import`) need the real build: scripts/ios-test.sh.
+# signing, linking, the generated project itself, and any module that imports
+# KeyboardKit (a binary package with no Catalyst slice; those are skipped with
+# a note). CI stays the authority; this is the fast local loop for the
+# App/BlurtiOS sources. The unit tests (`@testable import`) need the real
+# build: scripts/ios-test.sh.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -67,16 +69,36 @@ xcrun swiftc "${IOS_FLAGS[@]}" -application-extension -module-name BlurtDesign \
   -emit-module -emit-module-path "$WORK/BlurtDesign.swiftmodule" "$IOS"/BlurtDesign/*.swift \
   "$IOS"/../Shared/*.swift
 
-# The app also compiles the keyboard's sources, all but its entry point
-# (project.yml: the theme picker and the home screen draw the real keyboard
-# and orb), and CI builds Debug, so `#if DEBUG` code is checked too.
+# KeyboardKit is a binary, iOS-only package: nothing here can resolve it, and
+# its XCFramework has no Mac Catalyst slice to point swiftc at. A module whose
+# sources import it is skipped, with a note; CI's ios-build job compiles it
+# for real.
+imports_keyboardkit() {
+  grep -lE '^[[:space:]]*(@[A-Za-z_]+[[:space:]]+)?import[[:space:]]+KeyboardKit\b' "$@" >/dev/null 2>&1
+}
+skip_note() {
+  echo "ios-typecheck: $1 skipped — it imports KeyboardKit (binary, iOS only); CI's ios-build job compiles it"
+}
+
+# The app also compiles the keyboard's shared sources (project.yml: the
+# KeyboardApp and the layout, which the tests read), and CI builds Debug, so
+# `#if DEBUG` code is checked too.
 echo "BlurtiOS"
-find "$IOS/BlurtKeyboard/Sources" -name '*.swift' ! -name KeyboardViewController.swift -print0 \
-  | xargs -0 xcrun swiftc "${TARGET_FLAGS[@]}" -D DEBUG -module-name BlurtiOS \
-    "$IOS"/BlurtiOS/Sources/*.swift
+APP_FILES=("$IOS"/BlurtiOS/Sources/*.swift)
+while IFS= read -r -d '' f; do APP_FILES+=("$f"); done \
+  < <(find "$IOS/BlurtKeyboard/Sources" -name '*.swift' ! -name KeyboardViewController.swift -print0)
+if imports_keyboardkit "${APP_FILES[@]}"; then
+  skip_note BlurtiOS
+else
+  xcrun swiftc "${TARGET_FLAGS[@]}" -D DEBUG -module-name BlurtiOS "${APP_FILES[@]}"
+fi
 
 echo "BlurtKeyboard"
-xcrun swiftc "${TARGET_FLAGS[@]}" -application-extension -module-name BlurtKeyboard \
-  "$IOS"/BlurtKeyboard/Sources/*.swift
+if imports_keyboardkit "$IOS"/BlurtKeyboard/Sources/*.swift; then
+  skip_note BlurtKeyboard
+else
+  xcrun swiftc "${TARGET_FLAGS[@]}" -application-extension -module-name BlurtKeyboard \
+    "$IOS"/BlurtKeyboard/Sources/*.swift
+fi
 
 echo "ios-typecheck: ok"

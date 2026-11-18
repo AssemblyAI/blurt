@@ -46,73 +46,60 @@ private func typingModel(before: String = "", selected: String? = nil) -> (Keybo
 
 @Suite("Keyboard model: typing rules")
 struct KeyboardModelTypingTests {
-  @Test("sentence start: empty, after a full stop and a space, after a newline")
-  func sentenceStart() {
-    #expect(KeyboardModel.isSentenceStart(""))
-    #expect(KeyboardModel.isSentenceStart("Hello. "))
-    #expect(KeyboardModel.isSentenceStart("Hello?"))
-    #expect(KeyboardModel.isSentenceStart("Line\n"))
-    #expect(!KeyboardModel.isSentenceStart("Hello "))
-    #expect(!KeyboardModel.isSentenceStart("Hello, "))
-  }
-
-  @Test("a letter goes to the field and lowers shift")
-  func typing() {
-    let (model, proxy) = typingModel()
-    model.shifted = true
-    model.type("H")
-    #expect(proxy.before == "H")
-    #expect(!model.shifted)
-  }
-
-  @Test("two quick spaces after a word become a full stop and a space")
-  func doubleSpace() {
-    let (model, proxy) = typingModel(before: "hello")
-    model.space()
-    #expect(proxy.before == "hello ")
-    model.space()
-    #expect(proxy.before == "hello. ")
-  }
-
-  @Test("two quick spaces after punctuation stay spaces")
-  func doubleSpaceAfterPunctuation() {
-    let (model, proxy) = typingModel(before: "hello.")
-    model.space()
-    model.space()
-    #expect(proxy.before == "hello.  ")
-  }
-
-  @Test("the term field takes the keys instead of the host, and return saves nothing empty")
+  @Test("the term field takes the keys instead of the host; closed, its keys do nothing")
   func termField() {
     let (model, proxy) = typingModel(before: "yo ")
+    model.termType("x")
+    model.termSpace()
+    model.termDelete()
+    model.termReturn()
+    #expect(model.termDraft == nil)
+    #expect(proxy.before == "yo ")
     model.beginAddingTerm()
     #expect(model.termDraft == "")
-    #expect(model.effectiveLayout == .full)
-    model.type("R")
-    model.type("i")
-    model.space()
-    model.type("z")
-    model.deleteBackward()
+    model.termType("R")
+    model.termType("i")
+    model.termSpace()
+    model.termType("z")
+    model.termDelete()
     #expect(model.termDraft == "Ri ")
     #expect(proxy.before == "yo ")
     model.cancelAddingTerm()
     #expect(model.termDraft == nil)
   }
 
-  @Test("a swipe while a term is open flips nothing; the panel is back on the mic when the term closes")
-  func noFlipDuringTerm() {
+  @Test("a space in the term is one between words: never first, never a run")
+  func termSpace() {
     let (model, _) = typingModel()
-    model.layout = .panel
-    model.flipPanel(towardsLeading: true)
-    #expect(model.panelShowsKeys)
-    model.flipPanel(towardsLeading: false)
-    #expect(!model.panelShowsKeys)
     model.beginAddingTerm()
-    model.flipPanel(towardsLeading: true)
-    #expect(!model.panelShowsKeys)
-    #expect(model.effectiveLayout == .full)
-    model.cancelAddingTerm()
-    #expect(model.effectiveLayout == .panel)
+    model.termSpace()
+    #expect(model.termDraft == "")
+    model.termType("N")
+    model.termSpace()
+    model.termSpace()
+    #expect(model.termDraft == "N ")
+    model.termDelete()
+    model.termDelete()
+    model.termSpace()
+    #expect(model.termDraft == "")
+  }
+
+  @Test("return saves the term; with nothing typed it closes the field and saves nothing")
+  func termReturn() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (model, _) = typingModel()
+    model.hasFullAccess = true
+    model.beginAddingTerm()
+    model.termReturn()
+    #expect(model.termDraft == nil)
+    #expect(SharedStore.keyTerms.isEmpty)
+    model.beginAddingTerm()
+    model.termType("R")
+    model.termType("i")
+    model.termReturn()
+    #expect(model.termDraft == nil)
+    #expect(SharedStore.keyTerms == ["Ri"])
   }
 
   @Test("a selection seeds the term and is replaced on save")
@@ -120,7 +107,7 @@ struct KeyboardModelTypingTests {
     let (model, proxy) = typingModel(before: "he said ", selected: "riz")
     model.beginAddingTerm()
     #expect(model.termDraft == "riz")
-    model.type("z")
+    model.termType("z")
     model.saveTerm()
     #expect(model.termDraft == nil)
     #expect(proxy.before == "he said rizz")
@@ -142,17 +129,6 @@ struct KeyboardModelTypingTests {
     model.contextChanged()
     #expect(model.termDraft == "Ri")
     #expect(proxy.before == "yo hello")
-  }
-
-  @Test("the return key wears the field's word")
-  func returnLabel() {
-    let (model, proxy) = typingModel()
-    proxy.returnKeyType = .send
-    model.contextChanged()
-    #expect(model.returnLabel == "send")
-    proxy.returnKeyType = .default
-    model.contextChanged()
-    #expect(model.returnLabel == nil)
   }
 
   // MARK: The chip for a highlighted word
@@ -312,7 +288,7 @@ struct KeyboardModelChipTests {
     model.hasFullAccess = true
     model.contextChanged()
     model.beginAddingTerm()
-    model.type("z")
+    model.termType("z")
     // The host moved the cursor but still reports the old selection for a moment.
     proxy.before = "he said riz and"
     model.saveTerm()
@@ -320,33 +296,20 @@ struct KeyboardModelChipTests {
     #expect(proxy.before == "he said riz and")
   }
 
-  @Test("a key term capitalises after a space too")
-  func termShift() {
+  @Test("a key term capitalises to start and after a space, then as typed; closed, the field wants nothing")
+  func termCase() {
     let (model, _) = typingModel()
-    model.hasFullAccess = true
+    #expect(!model.termWantsUppercase)
     model.beginAddingTerm()
-    #expect(model.shifted)
-    model.type("N")
-    #expect(!model.shifted)
-    model.space()
-    #expect(model.shifted)
-    model.type("B")
-    #expect(!model.shifted)
+    #expect(model.termWantsUppercase)
+    model.termType("N")
+    #expect(!model.termWantsUppercase)
+    model.termSpace()
+    #expect(model.termWantsUppercase)
+    model.termType("B")
+    #expect(!model.termWantsUppercase)
     #expect(model.termDraft == "N B")
-  }
-
-  @Test("123 opens the symbols, #+= the second page, 123 there the first, ABC the letters")
-  func symbolPages() {
-    let (model, _) = typingModel()
-    #expect(!model.symbolsPage && !model.morePage)
-    model.toggleSymbols()
-    #expect(model.symbolsPage && !model.morePage)
-    model.toggleMore()
-    #expect(model.symbolsPage && model.morePage)
-    model.toggleMore()
-    #expect(model.symbolsPage && !model.morePage)
-    model.toggleMore()
-    model.toggleSymbols()
-    #expect(!model.symbolsPage && !model.morePage)
+    model.cancelAddingTerm()
+    #expect(!model.termWantsUppercase)
   }
 }

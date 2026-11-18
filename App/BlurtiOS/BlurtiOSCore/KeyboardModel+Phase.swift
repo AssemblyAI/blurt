@@ -7,7 +7,17 @@ import UIKit
 extension KeyboardModel {
   package func phaseChanged() {
     guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
-    apply(current.isStale ? .idle : current)
+    apply(current.isStale(now: now()) ? .idle : current)
+    // The result's own signal can be missed, or held while this process was
+    // suspended: a phase that says the words are being made, or were, is
+    // one more moment to look for them.
+    if expectsResult { resultArrived() }
+  }
+
+  /// Words may be on their way to this keyboard: a dictation of its own is
+  /// in flight or being stopped, or the app is transcribing one.
+  package var expectsResult: Bool {
+    handshake.isOwned || handshake.stopID != nil || snapshot.state == .processing
   }
 
   package func apply(_ current: PhaseSnapshot, haptics wantsHaptics: Bool = true) {
@@ -16,27 +26,22 @@ extension KeyboardModel {
     if let dismissedNoticeAt, current.at == dismissedNoticeAt { return }
     let previous = snapshot.state
     // A dictation in flight belongs to an app that is there to run it: with
-    // the app gone (killed, the mic taken), the picture is idle, not a mic
-    // nobody can stop.
+    // the app gone — its lease lapsed, or no record at all — the picture is
+    // idle, not a mic nobody can stop. A record merely not ready (the window
+    // closed or interrupted) is an app alive to end the dictation itself.
     var current = current
-    isListening = SharedStore.isListening
-    if !isListening, current.noticeDwellSeconds == nil, current.state != .idle { current = .idle }
+    readListeningState()
+    let appGone = listeningState.map { $0.leaseUntil <= now() } ?? true
+    if appGone, current.noticeDwellSeconds == nil, current.state != .idle { current = .idle }
     snapshot = current
+    if current.state == .error { heldError = current }
     if wantsHaptics, current.state != previous { haptics(from: previous, to: current.state) }
-    // A release the finger made while the mic was still coming up goes out
-    // now that it is recording; anything else in the meantime clears it.
-    if releasePending {
-      releasePending = false
-      if current.state == .recording {
-        send(.release)
-        gate.reset()
-        return
-      }
-    }
-    syncGate(with: current)
+    // The handshake follows the phase as shown: the press it answers, the
+    // dictation it names, the end of one.
+    perform(handshake.handle(.phase(current), now: now()))
     // A notice is over after its dwell: the Mac pill fades out, this orb goes
-    // back to its resting circle. Only the picture settles — a gate latched by
-    // a tap the app hasn't answered yet is left alone.
+    // back to its resting circle. Only the picture settles — the line for an
+    // error stays (`heldError`) until the next tap.
     noticeDwell?.cancel()
     dismissedNoticeAt = nil
     if let seconds = current.noticeDwellSeconds {
@@ -48,38 +53,24 @@ extension KeyboardModel {
         snapshot = .idle
       }
     }
-  }
-
-  /// The gate follows the app, both ways — see the comments inside.
-  private func syncGate(with current: PhaseSnapshot) {
-    // The gate follows the app, both ways. A dictation that ended without a
-    // finger event (auto-release, an error) would leave it latched and swallow
-    // the next tap — the same sync the Mac shell does on every terminal phase.
-    // But only a phase that answers our press may settle it: the previous
-    // dictation's notice can land a moment after a new press, and resetting
-    // then would make the next tap a second press instead of the stop.
-    // And a dictation in flight that this keyboard didn't start (hands-free
-    // in another app, or a previous keyboard process) must latch it, so the
-    // next tap is the stop rather than a press the engine drops.
-    // A press too old for the app to take will never be answered at all.
-    letGoOfExpiredPress()
-    if !isSettled || current.command == unansweredPress { unansweredPressCommand = nil }
-    if isSettled, !gate.isIdle {
-      if unansweredPress == nil { gate.reset() }
-    } else if !isSettled, gate.isIdle, current.state != .processing {
-      // Only a recording (or one coming up) can be stopped by a tap; while
-      // the words are being transcribed there is nothing for the gate to hold.
-      _ = gate.modifierDown(at: elapsed)
-      _ = gate.modifierUp(at: elapsed)
-    }
+    if current.state != previous || noticeClock == nil { runNoticeClock(for: current) }
   }
 
   package func resultArrived() {
-    guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
-      result.id != lastResultID, let proxy,
-      Date().timeIntervalSince(result.deliveredAt) < Self.resultFreshnessWindow,
-      result.recipient == nil || result.recipient == instanceID
-    else { return }
+    guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) else { return }
+    guard result.id != lastResultID else { return }
+    guard let proxy else {
+      KeyboardLog.result(result.id, inserted: false, why: "no field")
+      return
+    }
+    guard now().timeIntervalSince(result.deliveredAt) < Self.resultFreshnessWindow else {
+      KeyboardLog.result(result.id, inserted: false, why: "stale")
+      return
+    }
+    guard result.recipient == nil || result.recipient == KeyboardProcess.id else {
+      KeyboardLog.result(result.id, inserted: false, why: "for \(result.recipient ?? "")")
+      return
+    }
     lastResultID = result.id
     // Taken out of the store once inserted, so no other keyboard process —
     // each host app runs its own — can insert the same words again; the app
@@ -89,9 +80,8 @@ extension KeyboardModel {
     // snapshot: the user may have typed since.
     let inserted = InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput)
     proxy.insertText(inserted)
-    lastInsertion = Insertion(
-      text: inserted, document: proxy.documentIdentifier, textAfter: proxy.documentContextAfterInput ?? "")
-    resultLandedAt = Date()
+    resultLandedAt = now()
+    KeyboardLog.result(result.id, inserted: true, why: result.recipient == nil ? "for whoever is up" : "addressed here")
     // Not typing, so not the term field's to claim.
     if termDraft != nil { termHostBaseline = proxy.documentContextBeforeInput ?? "" }
     // The words replaced whatever was highlighted: the chip for that word

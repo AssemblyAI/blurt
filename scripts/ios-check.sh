@@ -49,8 +49,10 @@ if [ -s "$BUILD_LOG" ]; then
   # The iPhone modules' compile commands only. The build also compiles the
   # engine — for iOS, where its `#if os(macOS)` files are inactive and
   # SourceKit can't resolve them — and check.sh analyzes the engine from the
-  # Mac build, where they are live.
-  grep -v -- '-module-name BlurtEngine ' "$BUILD_LOG" >"$APP_LOG" || true
+  # Mac build, where they are live; and KeyboardKit's one source target
+  # (KeyboardKitDependencies, third-party, outside every path .swiftlint.yml
+  # includes).
+  grep -vE -- '-module-name (BlurtEngine|KeyboardKitDependencies) ' "$BUILD_LOG" >"$APP_LOG" || true
   swiftlint analyze --strict --quiet --compiler-log-path "$APP_LOG" App/BlurtiOS || FAILED+=("swiftlint analyze")
 else
   echo "error: no build log to analyze — the build above did not run" >&2
