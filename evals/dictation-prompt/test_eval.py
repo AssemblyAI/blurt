@@ -1621,3 +1621,15 @@ def test_a_downloaded_recording_is_served_locally(monkeypatch, tmp_path):
     voicearena.audio_path(row).parent.mkdir(parents=True)
     voicearena.audio_path(row).write_bytes(b"flac")
     assert voicearena.local_or_url(row) == str(voicearena.audio_path(row))
+
+
+def test_a_hostile_clip_id_cannot_escape_the_audio_cache(monkeypatch, tmp_path):
+    """Clip ids come from a third-party dataset and become file names."""
+    import voicearena
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    directory = (tmp_path / "blurt-evals" / "voicearena-audio").resolve()
+    for hostile in ("../../etc/passwd", "/abs/path", "a/../../b", "..", "x\x00y"):
+        path = voicearena.audio_path({"id": hostile, "spoken_text": "s"})
+        assert path.parent == directory, hostile
+    assert voicearena.audio_path(VA_ROWS[0]).name.startswith("dict_0000-")

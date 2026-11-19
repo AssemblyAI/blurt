@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 DATASET = "VoiceArena/Dictation_Dataset"
@@ -50,8 +51,19 @@ def cache_key(row: dict) -> str:
 
 
 def audio_path(row: dict) -> Path:
-    """Where a clip's recording is kept on disk, keyed like its transcript."""
-    return cache_path().parent / "voicearena-audio" / f"{cache_key(row).replace(':', '-')}.flac"
+    """Where a clip's recording is kept on disk, keyed like its transcript.
+
+    The clip id comes from a third-party dataset, so it is reduced to
+    `[A-Za-z0-9_-]` before it becomes a file name — an id like `../../x` must not
+    write outside the cache — and the result is checked to stay in the directory.
+    Ids the set actually uses (`dict_0007`) pass through unchanged.
+    """
+    directory = (cache_path().parent / "voicearena-audio").resolve()
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", cache_key(row).replace(":", "-"))
+    path = (directory / f"{safe}.flac").resolve()
+    if path.parent != directory:
+        raise ValueError(f"unsafe Voice Arena clip id: {row.get('id')!r}")
+    return path
 
 
 def ensure_audio(rows: list[dict]) -> None:
