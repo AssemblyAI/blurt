@@ -53,6 +53,16 @@ struct VoiceStateTests {
     }
   }
 
+  @Test("an error shows its exclamation and keeps its words for VoiceOver whether or not Blurt is ready")
+  func errorRegardless() {
+    let error = VoiceState(snapshot: snapshot(.error, message: "The mic went silent."), isReady: false)
+    #expect(error.glyph == .exclamation)
+    #expect(error.ring == .solid(.error))
+    #expect(error.dimmed && !error.canCancel)
+    #expect(error.accessibilityValue == "The mic went silent.")
+    #expect(error.accessibilityLabel == "Start Blurt")
+  }
+
   @Test("the app's overlay state maps onto the same phases; no target is copied")
   func overlay() {
     #expect(VoiceState(overlay: .noTarget, windowOpen: true, level: 0).phase == .copied)

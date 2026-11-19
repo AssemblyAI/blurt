@@ -1,28 +1,31 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import BlurtiOSCore
 
 /// The keyboard model driven through thousands of random event sequences —
-/// every finger, phase, host and lifecycle event the real keyboard sees, in
-/// any order — with the invariants that must hold after every one of them
-/// checked each time. Seeded, so a failure names the sequence that made it.
-/// This is the "nothing is ever left stale" check: a state the model can be
-/// driven into and not out of shows up here as a broken invariant.
+/// every finger, phase, ack, record, host and lifecycle event the real
+/// keyboard sees, in any order — with the invariants that must hold after
+/// every one of them checked each time. Seeded, so a failure names the
+/// sequence that made it. This is the "nothing is ever left stale" check: a
+/// state the model can be driven into and not out of shows up here as a
+/// broken invariant. The event table is in `KeyboardModelFuzzTests+Drive.swift`.
 @Suite("Keyboard model: random transition sequences", .serialized)
 @MainActor
 struct KeyboardModelFuzzTests {
-  /// One event the fuzz can send. `apply` phases come as the app would
-  /// publish them; the rest are the keyboard's own entry points.
+  /// One event the fuzz can send. Phases come as the app would publish
+  /// them, named for the dictation the handshake knows or for another; acks
+  /// answer the last command; the rest are the keyboard's own entry points.
   enum Event: CaseIterable {
     case micDown, micUp, cancel, swipeOffOrb
     case phaseIdle, phaseConnecting, phaseRecording, phaseProcessing, phasePasted, phaseCopied, phaseError
     case answerConnecting, answerError
-    case appNotListening, appListening
-    case beginTerm, cancelTerm, saveTerm, typeLetter, space, deleteBack, newline
+    case ackStarted, ackBusy, ackNotListening, ackEnded, deadline
+    case appNotListening, appListening, stateClosed, stateInterrupted, stateLapsed
+    case beginTerm, cancelTerm, saveTerm, termType, termSpace, termDelete, termReturn
     case selectWord, selectOther, clearSelection, addSelected, dismissSelected
-    case flipPanel, toggleSymbols, toggleMore, toggleShift
-    case appeared, disappeared, appearedNoAccess, contextChanged
+    case appeared, disappeared, appearedNoAccess, hostLeaving, contextChanged
     case resultFresh, resultStale, resultForOther
     case hostTyped, hostMovedCursor
   }
@@ -38,16 +41,7 @@ struct KeyboardModelFuzzTests {
       return z ^ (z >> 31)
     }
     mutating func pick<T>(_ items: [T]) -> T { items[Int(next() % UInt64(items.count))] }
-  }
-
-  /// Set by an event after which the command ledger starts over.
-  private final class Flag {
-    var value = false
-  }
-  private let epochFlag = Flag()
-  private var epoch: Bool {
-    get { epochFlag.value }
-    nonmutating set { epochFlag.value = newValue }
+    mutating func coin() -> Bool { next() % 2 == 0 }
   }
 
   @Test(
@@ -60,80 +54,63 @@ struct KeyboardModelFuzzTests {
     let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
     model.appeared()
     var trace: [Event] = []
-    // The press the app has not taken yet: closed by our release or cancel,
-    // by any in-flight phase (the app is on it), or by a settled phase that
-    // names it. A second press while one is open is the protocol broken.
-    var pressOpen: UUID?
     for step in 0..<2000 {
       let event = random.pick(Event.allCases)
       trace.append(event)
-      let before = commands.sent.count
-      // Read before the event: whether words were in flight, and whether a
-      // word is highlighted for the term field to open over.
+      let context = "seed \(seed) step \(step) after \(event); last 12: \(trace.suffix(12))"
+      // Read before the event: the handshake as it stood, whether words were
+      // in flight, whether a word is highlighted for the term field to open
+      // over, and which commands had gone out.
+      let before = model.handshake
       let stateBefore = model.snapshot.state
       let seededTerm = KeyboardModel.termCandidate(from: proxy.selectedText) != nil
-      drive(model, proxy, event, &random)
-      if epoch {
-        commands.sent.removeAll()
-        pressOpen = nil
-      }
-      for command in commands.sent.dropFirst(min(before, commands.sent.count)) {
+      let sentBefore = commands.sent
+      drive(rig, event, &random)
+      for command in commands.sent.dropFirst(sentBefore.count) {
+        // The same command again is the handshake's resend: nothing new.
+        guard !sentBefore.contains(where: { $0.id == command.id }) else { continue }
         switch command.kind {
         case .press:
-          #expect(
-            pressOpen == nil || pressOpen == command.id,
-            "two presses in flight — seed \(seed) step \(step) after \(event); last 12: \(trace.suffix(12))")
-          pressOpen = command.id
-        case .release, .cancel: pressOpen = nil
+          // Never two of our starting commands in flight: a press goes out
+          // only with no press of ours unanswered and no stop out.
+          #expect(before.pressID == nil && before.stopID == nil, "a press over a press or stop out — \(context)")
+        case .release, .cancel:
+          // Never a release or cancel without the dictation's id once it is known.
+          if let known = before.dictationID {
+            #expect(command.dictationID == known, "an ending for the wrong dictation — \(context)")
+          }
         }
         // The user's words are never thrown away behind their back. A cancel
         // over a recording or a transcription is only ever theirs to ask for:
         // the × key, or the term field opened over a highlighted word (whose
-        // words would land on the word being fixed). Leaving the screen, a
-        // swipe across the orb, the plain + — none of them may drop speech.
+        // words would land on the word being fixed). Leaving the screen, the
+        // host leaving, a swipe across the orb, the plain + — none may drop speech.
         if command.kind == .cancel, stateBefore == .recording || stateBefore == .processing {
           let asked = event == .cancel || (event == .beginTerm && seededTerm)
-          #expect(
-            asked,
-            "words dropped: cancel in \(stateBefore) by \(event) — seed \(seed) step \(step); last 12: \(trace.suffix(12))"
-          )
+          #expect(asked, "words dropped: cancel in \(stateBefore) by \(event) — \(context)")
         }
       }
-      if Self.phaseEvents.contains(event), !model.isSettled || model.snapshot.command == pressOpen {
-        pressOpen = nil
-      }
-      check(
-        model, proxy, commands, after: event,
-        "seed \(seed) step \(step) after \(event); last 12: \(trace.suffix(12))")
+      check(model, proxy, commands, context)
     }
   }
 
-  /// The events that apply a phase from the app.
-  static let phaseEvents: Set<Event> = [
-    .phaseIdle, .phaseConnecting, .phaseRecording, .phaseProcessing, .phasePasted, .phaseCopied, .phaseError,
-    .answerConnecting, .answerError, .appNotListening, .appListening,
-  ]
-
-  /// The events after which the term field's shift has just been re-read.
-  static let reevaluatesShift: Set<Event> = [
-    .beginTerm, .cancelTerm, .saveTerm, .typeLetter, .space, .deleteBack, .newline, .contextChanged, .selectWord,
-    .selectOther, .clearSelection, .hostTyped, .hostMovedCursor, .appeared, .appearedNoAccess,
-  ]
-
   /// What must be true after every event, whatever came before.
   private func check(
-    _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: KeyboardRig.Commands, after event: Event, _ context: String
+    _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: KeyboardRig.Commands, _ context: String
   ) {
     // The term field's bookkeeping lives and dies with the field.
     let fieldOpen = model.termDraft != nil
     #expect((model.termHostBaseline != nil) == fieldOpen, "term baseline vs field — \(context)")
     #expect((model.termHostBaselineAfter != nil) == fieldOpen, "term baseline-after vs field — \(context)")
     #expect(model.termDraftFromSelection == nil || fieldOpen, "seed outlives the field — \(context)")
-    #expect(!fieldOpen || model.effectiveLayout == .full, "keys must be up for the field — \(context)")
-    // Shift follows the term as typed; a tap on shift itself overrides it,
-    // as on the system keyboard, until the next thing that re-reads it.
-    if let draft = model.termDraft, Self.reevaluatesShift.contains(event) {
-      #expect(model.shifted == (draft.isEmpty || draft.last == " "), "term shift rule — \(context)")
+    // The term is a name or two: capitalised to start and after a space,
+    // then as typed; its spaces are one between words, never a run and
+    // never first.
+    if let draft = model.termDraft {
+      #expect(model.termWantsUppercase == (draft.isEmpty || draft.last == " "), "term case rule — \(context)")
+      #expect(!draft.hasPrefix(" ") && !draft.contains("  "), "a term's spaces — \(context)")
+    } else {
+      #expect(!model.termWantsUppercase, "case wanted with no field — \(context)")
     }
     // The chip and its dismissal never both stand.
     #expect(model.dismissedSelection == nil || model.selectedTerm == nil, "chip and dismissal both up — \(context)")
@@ -149,23 +126,31 @@ struct KeyboardModelFuzzTests {
     } else {
       #expect(!model.selectedTermIsKnown, "known without a chip — \(context)")
     }
-    // Pages.
-    #expect(!model.morePage || model.symbolsPage, "#+= page without the symbols — \(context)")
-    // The voice picture never shows what the app can't be doing.
+    // The voice picture never shows what the app can't be doing; an error's
+    // exclamation is the one glyph that shows over a dimmed key.
     let state = model.voiceState
     if !state.isReady {
-      #expect(
-        !state.isRecording && state.glyph == nil && !state.canCancel, "in-flight picture with no app — \(context)")
+      #expect(!state.isRecording && !state.canCancel, "in-flight picture with no app — \(context)")
+      #expect(state.glyph == nil || state.glyph == .exclamation, "a notice's glyph with no app — \(context)")
     }
-    // A latched gate is either a press of ours the app hasn't settled, or a
-    // dictation in flight that the app published (started elsewhere, or a
-    // phase that arrived after our cancel): never a latch over nothing.
+    // A latched gate is only ever held by the handshake: our press out, a
+    // dictation we own or latched onto, or our stop out — never over nothing.
     if !model.gate.isIdle {
-      let inFlight = !model.isSettled
-      #expect(commands.sent.last?.kind == .press || inFlight, "gate latched with no press out — \(context)")
+      let held = !model.handshake.isIdle && model.handshake.unreadyReason == nil
+      #expect(held, "gate latched with nothing of ours in flight — \(context)")
     }
-    #expect(!model.panelShowsKeys || model.layout == .panel, "keys page off the panel — \(context)")
-    #expect(commands.sent.allSatisfy { $0.keyboard == model.instanceID }, "command from another keyboard — \(context)")
+    // Not ready, the line says why. With a press, a dictation or a stop in
+    // the handshake's hands the line may be nil — that is the deadline's
+    // business and the picture's; from rest or refused it never is.
+    switch model.handshake.state {
+    case .pressing, .owned, .foreign, .stopping:
+      break
+    case .idle, .unready:
+      if !model.isReady { #expect(model.statusLine != nil, "not ready with no line — \(context)") }
+    }
+    #expect(
+      commands.sent.allSatisfy { $0.keyboard == KeyboardProcess.id && $0.controllerID == model.controllerID },
+      "command from another keyboard — \(context)")
     // A result is never left in the store once it was inserted here.
     if let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) {
       #expect(pending.id != model.lastResultID, "inserted result still in the store — \(context)")
@@ -178,127 +163,87 @@ struct KeyboardModelFuzzTests {
     defer { suite.tearDown() }
     var random = Random(state: 42)
     let rig = KeyboardRig()
-    let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
+    let (model, commands) = (rig.model, rig.commands)
     // Hands-free off: a tap must be the press here, not the stop of one the
     // appearance started.
     SharedStore.autoDictate = false
     model.appeared()
+    // A controller in a window for the hop to walk to the application —
+    // attached only around the tap: an appearance would read Full Access off
+    // it, and outside an extension there is none.
+    let (hops, window) = rig.capturingHops()
+    defer { window.isHidden = true }
+    let controller = model.controller
+    model.controller = nil
     for round in 0..<200 {
-      for _ in 0..<25 { drive(model, proxy, random.pick(Event.allCases), &random) }
-      // The keyboard goes away and comes back, the app idle and listening.
+      for _ in 0..<25 { drive(rig, random.pick(Event.allCases), &random) }
+      appDies(rig, hops, controller: controller, round: round, &random)
+      // The keyboard goes away; whatever it had out runs to its deadline;
+      // the app ends whatever dictation was still in flight (its own end, or
+      // the watchdog's) and it comes back with the app idle and listening.
       model.disappeared()
+      drive(rig, .deadline, &random)
+      if let dictation = model.handshake.dictationID { model.apply(snapshot(.pasted, dictation: dictation)) }
       SharedStore.write(snapshot(.idle), forKey: BlurtShared.Key.phase)
       KeyboardRig.listening(true)
       model.hasFullAccess = true
       model.appeared()
       #expect(model.termDraft == nil, "field open after an appearance (round \(round))")
-      #expect(!model.panelShowsKeys, "keys page after an appearance (round \(round))")
       #expect(model.gate.isIdle, "gate latched after an appearance (round \(round))")
       #expect(model.isSettled, "in flight after an appearance (round \(round))")
       #expect(model.termSavedAt == nil, "saved check after an appearance (round \(round))")
-      // And a tap is a press.
+      #expect(model.handshake.isIdle, "handshake not at rest after an appearance (round \(round))")
+      // An error's line is the one thing kept, by design, until the tap that
+      // clears it; that tap opens Blurt, and the ready record rests the handshake.
+      if let line = model.statusLine, case .hop = line.tapOpens {
+        model.tapMic()
+        model.stateChanged()
+      }
+      #expect(model.statusLine == nil, "a line after an appearance (round \(round))")
+      // And a tap is a press; answered, the next tap is its release.
       let before = commands.sent.count
-      model.micDown()
-      model.micUp()
+      model.tapMic()
       #expect(
         commands.sent.count == before + 1 && commands.sent.last?.kind == .press, "tap is not a press (round \(round))")
-      model.apply(snapshot(.recording))
-      model.micDown()
-      model.micUp()
+      let dictation = UUID()
+      rig.answer(.started(dictation))
+      model.apply(snapshot(.recording, dictation: dictation))
+      model.tapMic()
       #expect(commands.sent.last?.kind == .release, "second tap is not a release (round \(round))")
-      model.apply(snapshot(.pasted))
+      #expect(commands.sent.last?.dictationID == dictation, "release for the wrong dictation (round \(round))")
+      rig.answer(.stopped(dictation))
+      model.apply(snapshot(.pasted, dictation: dictation))
       model.apply(snapshot(.idle))
     }
   }
-}
 
-// The event → model call table, apart from the fuzz loop and its checks so
-// neither crowds the other.
-extension KeyboardModelFuzzTests {
-  // swiftlint:disable:next cyclomatic_complexity function_body_length
-  private func drive(_ model: KeyboardModel, _ proxy: FakeProxy, _ event: Event, _ random: inout Random) {
-    epoch = false
-    switch event {
-    case .micDown: model.micDown()
-    case .micUp: model.micUp()
-    case .cancel: model.cancel()
-    case .swipeOffOrb:
-      // A swipe that began on the orb and travelled after its press went out
-      // (MicControl's `.cancelSentPress`): the press, then its undo.
-      model.micDown()
-      model.undoPress()
-    case .phaseIdle: model.apply(snapshot(.idle))
-    case .phaseConnecting: model.apply(snapshot(.connecting))
-    case .phaseRecording: model.apply(snapshot(.recording))
-    case .phaseProcessing: model.apply(snapshot(.processing))
-    case .phasePasted: model.apply(snapshot(.pasted))
-    case .phaseCopied: model.apply(snapshot(.copied))
-    case .phaseError: model.apply(snapshot(.error))
-    case .answerConnecting:
-      model.apply(PhaseSnapshot(state: .connecting, message: nil, level: 0, at: Date(), command: model.unansweredPress))
-    case .answerError:
-      model.apply(PhaseSnapshot(state: .error, message: nil, level: 0, at: Date(), command: model.unansweredPress))
-    case .appNotListening:
-      KeyboardRig.listening(false)
-      model.apply(model.snapshot)
-    case .appListening:
-      KeyboardRig.listening(true)
-      model.apply(model.snapshot)
-    case .beginTerm: model.beginAddingTerm()
-    case .cancelTerm: model.cancelAddingTerm()
-    case .saveTerm: model.saveTerm()
-    case .typeLetter: model.type(random.pick(["a", "B", "z"]))
-    case .space: model.space()
-    case .deleteBack: model.deleteBackward()
-    case .newline: model.newline()
-    case .selectWord:
-      proxy.selected = "Rizz"
-      model.contextChanged()
-    case .selectOther:
-      proxy.selected = random.pick(["Gyatt", "neil bisht", " Rizz "])
-      model.contextChanged()
-    case .clearSelection:
-      proxy.selected = nil
-      model.contextChanged()
-    case .addSelected: model.addSelectedTerm()
-    case .dismissSelected: model.dismissSelection()
-    case .flipPanel: model.flipPanel(towardsLeading: random.next() % 2 == 0)
-    case .toggleSymbols: model.toggleSymbols()
-    case .toggleMore: model.toggleMore()
-    case .toggleShift: model.toggleShift()
-    case .appeared:
-      model.hasFullAccess = true
-      model.appeared()
-    case .appearedNoAccess:
-      // Without Full Access the keyboard can't reach the app: whatever was
-      // in flight is the app's to end; the command ledger starts over.
-      model.hasFullAccess = false
-      model.appeared()
-      model.hasFullAccess = true
-      epoch = true
-    case .disappeared: model.disappeared()
-    case .contextChanged: model.contextChanged()
-    case .resultFresh:
-      SharedStore.write(
-        DictationResult(id: UUID(), text: "words", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result)
-      model.resultArrived()
-    case .resultStale:
-      SharedStore.write(
-        DictationResult(id: UUID(), text: "old", deliveredAt: Date().addingTimeInterval(-60), recipient: nil),
-        forKey: BlurtShared.Key.result)
-      model.resultArrived()
-    case .resultForOther:
-      SharedStore.write(
-        DictationResult(id: UUID(), text: "theirs", deliveredAt: Date(), recipient: "someone-else"),
-        forKey: BlurtShared.Key.result)
-      model.resultArrived()
-    case .hostTyped:
-      proxy.before += "x"
-      model.contextChanged()
-    case .hostMovedCursor:
-      proxy.before += "ab"
-      proxy.after = String(proxy.after.dropFirst(2))
-      model.contextChanged()
+  /// The app dies under whatever was going on: its lease lapses, the next
+  /// read of the record refuses whatever the handshake held (a stop out runs
+  /// to its own deadline first), the line says to tap, and the tap hops —
+  /// with `suspended`, or with the held notice's own reason, since the words
+  /// and the tap never disagree — and the gate comes up.
+  private func appDies(
+    _ rig: KeyboardRig, _ hops: KeyboardRig.Hops, controller: UIInputViewController?, round: Int,
+    _ random: inout Random
+  ) {
+    let model = rig.model
+    KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+    model.stateChanged()
+    if model.handshake.stopID != nil {
+      drive(rig, .deadline, &random)
+      model.stateChanged()
     }
+    #expect(model.handshake.unreadyReason == .suspended, "a dead app not seen (round \(round))")
+    #expect(model.gate.isIdle, "gate held over a dead app (round \(round))")
+    let line = model.statusLine
+    #expect(line != nil, "a dead app with no line (round \(round))")
+    let expected: FailureReason? =
+      if case .hop(let reason) = line?.tapOpens { reason ?? .suspended } else { .suspended }
+    let hopsBefore = hops.opened.count
+    model.controller = controller
+    model.tapMic()
+    model.controller = nil
+    #expect(hops.opened.count == hopsBefore + 1, "the tap over a dead app did not hop (round \(round))")
+    #expect(hops.opened.last == BlurtShared.startURL(reason: expected), "the hop's reason (round \(round))")
   }
 }

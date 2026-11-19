@@ -2,58 +2,38 @@ import BlurtEngine
 import Foundation
 import UIKit
 
-// MARK: - Typing and the app
+// MARK: - The keys that are Blurt's: the term field's, and the undo
 
 extension KeyboardModel {
-  package func type(_ text: String) {
-    UIDevice.current.playInputClick()
-    if termDraft != nil {
-      termDraft?.append(text)
-      updateShift()
-      return
-    }
-    proxy?.insertText(text)
-    if shifted, !symbolsPage { shifted = false }
-    typedIntoHost()
+  /// A character typed while the term field is open goes into the term, not
+  /// the host. (The host's typing is KeyboardKit's.)
+  package func termType(_ text: String) {
+    guard termDraft != nil else { return }
+    termDraft?.append(text)
+  }
+
+  /// A space in the term: one between words, never a run and never first.
+  package func termSpace() {
+    guard let draft = termDraft, !draft.isEmpty, !draft.hasSuffix(" ") else { return }
+    termDraft?.append(" ")
+  }
+
+  package func termDelete() {
+    guard termDraft != nil else { return }
+    _ = termDraft?.popLast()
+  }
+
+  /// Return saves the term.
+  package func termReturn() {
+    guard termDraft != nil else { return }
+    saveTerm()
   }
 
   /// The keyboard's own edit to the host's text replaces whatever was
-  /// highlighted: the picture follows at once, not on the host's next
+  /// highlighted: the chip follows at once, not on the host's next
   /// notification.
-  private func typedIntoHost() {
-    lastInsertion = nil
+  package func hostEdited() {
     readSelection()
-  }
-
-  /// Delete right after a dictation takes back all of it — but only in the
-  /// field it landed in, while the caret still sits at its end with nothing
-  /// highlighted. Another field, a moved caret, a selection, or a host that
-  /// shows less context than the dictation's length falls back to deleting one
-  /// character: text that merely ends the same way isn't the dictation. With
-  /// Settings' "Delete whole dictation" off, it is always one character.
-  package func deleteBackward() {
-    UIDevice.current.playInputClick()
-    if termDraft != nil {
-      _ = termDraft?.popLast()
-      updateShift()
-      return
-    }
-    if SharedStore.deleteWholeDictation, let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy) {
-      for _ in inserted.text { proxy.deleteBackward() }
-    } else {
-      proxy?.deleteBackward()
-    }
-    typedIntoHost()
-  }
-
-  package func newline() {
-    UIDevice.current.playInputClick()
-    if termDraft != nil {
-      saveTerm()
-      return
-    }
-    proxy?.insertText("\n")
-    typedIntoHost()
   }
 
   // MARK: Quick-add key term
@@ -124,35 +104,21 @@ extension KeyboardModel {
   /// had selected a word — the one Blurt got wrong — it is the starting
   /// point, and saving also replaces it in the text with what they typed.
   /// The field takes the mic key's row, so a dictation in flight is closed
-  /// first — nothing runs on with no key to stop it. From the plain + a
-  /// recording is released and the words still land; from a highlighted
-  /// word it is cancelled: the words would land *over* the word being fixed
-  /// (a result replaces the selection), and the user's intent is the word.
-  /// Words already being transcribed follow the same rule: from the plain +
-  /// they still land (the mic is off; there is nothing to stop), from a
-  /// highlighted word they are cancelled.
+  /// first — nothing runs on with no key to stop it (`endDictation`). From
+  /// the plain + a recording is released and the words still land; from a
+  /// highlighted word it is cancelled: the words would land *over* the word
+  /// being fixed (a result replaces the selection), and the user's intent is
+  /// the word. Words already being transcribed follow the same rule: from
+  /// the plain + they still land (the mic is off; there is nothing to stop),
+  /// from a highlighted word they are cancelled. The gate stays the
+  /// handshake's: it comes up when the stop is answered, not here.
   package func beginAddingTerm() {
     let seed = Self.termCandidate(from: proxy?.selectedText) ?? ""
-    switch snapshot.state {
-    case .recording: perform(seed.isEmpty ? .stop : .cancel)
-    case .connecting: perform(.cancel)
-    case .processing:
-      // The gate may still be latched from the tap that started it (an
-      // auto-release has no finger event to close it): that is no reason to
-      // cancel.
-      if !seed.isEmpty { perform(.cancel) }
-    case .idle, .pasted, .copied, .error:
-      // A press the app hasn't answered yet would start a dictation under
-      // the field: it is taken back.
-      if unansweredPress != nil || !gate.isIdle { perform(.cancel) }
-    }
-    gate.reset()
+    endDictation(keepWords: seed.isEmpty)
     termDraftFromSelection = seed.isEmpty ? nil : seed
     termHostBaseline = proxy?.documentContextBeforeInput ?? ""
     termHostBaselineAfter = proxy?.documentContextAfterInput ?? ""
     termDraft = seed
-    updateShift()
-    onLayoutChange?()
   }
 
   /// Closes the term field: the draft and the baselines it was typed against
@@ -168,8 +134,6 @@ extension KeyboardModel {
     endTermField()
     // The highlight may still stand: the chip comes back as it is now.
     readSelection()
-    updateShift()
-    onLayoutChange?()
   }
 
   /// Saves the term to Blurt's key terms — read on the very next dictation —
@@ -203,8 +167,6 @@ extension KeyboardModel {
     readSelection()
     dismissSelection()
     noteTermSaved(thenDismissChip: false)
-    updateShift()
-    onLayoutChange?()
   }
 
   /// A success haptic, and the + (or the chip) shows a check for a moment;
@@ -231,96 +193,30 @@ extension KeyboardModel {
   /// How long the + (or the chip) shows its check after a term was saved.
   package static let termNoticeDwell: TimeInterval = 1.2
 
-  /// A space — or, tapped twice quickly after a word, the system keyboard's
-  /// "." shortcut: the first space becomes a full stop and a space.
-  package func space() {
-    UIDevice.current.playInputClick()
-    if termDraft != nil {
-      if termDraft?.isEmpty == false, termDraft?.hasSuffix(" ") == false { termDraft?.append(" ") }
-      updateShift()
+  /// Brings the app forward — to open the microphone, the one thing a
+  /// keyboard cannot do for itself, or to finish its setup — at the URL the
+  /// handshake chose (`BlurtShared.startURL`, `setupURL`). iOS gives
+  /// extensions no `UIApplication.shared`, so this walks the responder chain
+  /// to the application object and asks it, the way every keyboard that
+  /// opens its app does. With `open(_:options:)`: since iOS 18 the old
+  /// `openURL:` only logs "BUG IN CLIENT OF UIKIT" and opens nothing. The
+  /// log says whether an application was there to ask: nothing here can
+  /// tell whether it then opened (a later iOS may refuse an extension
+  /// without Full Access), so the setup line stays up until the app answers.
+  package func openApp(url: URL) {
+    guard let controller else {
+      KeyboardLog.hop(url, asked: false)
       return
     }
-    let now = ContinuousClock.now
-    let before = proxy?.documentContextBeforeInput ?? ""
-    if let last = lastSpaceAt, now - last < .milliseconds(450), before.hasSuffix(" "), !before.hasSuffix("  "),
-      let previous = before.dropLast().last, previous.isLetter || previous.isNumber
-    {
-      proxy?.deleteBackward()
-      proxy?.insertText(". ")
-      lastSpaceAt = nil
-    } else {
-      proxy?.insertText(" ")
-      lastSpaceAt = now
-    }
-    typedIntoHost()
-    updateShift()
-  }
-
-  package func toggleShift() { shifted.toggle() }
-
-  /// 123 / ABC: the symbols come up on their first page, or the letters return.
-  package func toggleSymbols() {
-    symbolsPage.toggle()
-    morePage = false
-  }
-
-  /// #+= / 123: between the two symbol pages; nothing on the letters.
-  package func toggleMore() {
-    guard symbolsPage else { return }
-    morePage.toggle()
-  }
-
-  package func globe() { controller?.advanceToNextInputMode() }
-
-  /// Brings the app forward to open the microphone — the one thing a keyboard
-  /// cannot do for itself. iOS gives extensions no `UIApplication.shared`, so
-  /// this walks the responder chain to the application object and asks it, the
-  /// way every keyboard that opens its app does. With `open(_:options:)`: since
-  /// iOS 18 the old `openURL:` only logs "BUG IN CLIENT OF UIKIT" and opens
-  /// nothing.
-  package func openApp() {
-    guard let controller,
-      let url = URL(string: "\(BlurtShared.urlScheme)://\(BlurtShared.startHost)")
-    else { return }
     var responder: UIResponder? = controller
     while let current = responder {
       if let application = current as? UIApplication {
+        KeyboardLog.hop(url, asked: true)
         urlOpener(application, url)
         return
       }
       responder = current.next
     }
-  }
-}
-
-/// A dictation's words as they landed (`KeyboardModel.lastInsertion`): the
-/// text, the field it went into, and what followed the caret then.
-package struct Insertion: Equatable {
-  package let text: String
-  package let document: UUID
-  package let textAfter: String
-
-  /// Whether the caret still sits at the end of these words in the same
-  /// field, with nothing highlighted and the text on both sides as it was
-  /// left.
-  func isAtCaret(in proxy: any UITextDocumentProxy) -> Bool {
-    proxy.documentIdentifier == document && (proxy.selectedText ?? "").isEmpty
-      && (proxy.documentContextAfterInput ?? "") == textAfter
-      && proxy.documentContextBeforeInput?.hasSuffix(text) == true
-  }
-}
-
-/// The three letter rows, by the language the user types in most.
-package nonisolated enum LetterLayout {
-  package static let qwerty = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-  package static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn"]
-  package static let qwertz = ["qwertzuiop", "asdfghjkl", "yxcvbnm"]
-
-  /// From the phone's own language order — no setting to make.
-  package static func forPreferredLanguages(_ languages: [String] = Locale.preferredLanguages) -> [String] {
-    guard let first = languages.first?.lowercased() else { return qwerty }
-    if first.hasPrefix("fr") { return azerty }
-    if ["de", "cs", "sk", "hu"].contains(where: { first.hasPrefix($0) }) { return qwertz }
-    return qwerty
+    KeyboardLog.hop(url, asked: false)
   }
 }

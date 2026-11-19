@@ -18,11 +18,13 @@ struct HomeView: View {
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
 
+  /// The card's words come off the window's own record — the one the keyboard
+  /// decides on — and the failure the coordinator is holding for a moment.
   private var status: HomeStatus {
     HomeStatus(
-      overlay: coordinator.overlay, windowOpen: coordinator.window.isOpen,
-      windowMinutes: SharedStore.windowMinutes, micDenied: coordinator.microphoneDenied,
-      hasKey: coordinator.apiKey.hasAPIKey, micGranted: microphoneGranted, keyboardSeen: keyboardSeen)
+      state: coordinator.window.state, windowMinutes: SharedStore.windowMinutes, error: coordinator.error,
+      micDenied: coordinator.microphoneDenied, hasKey: coordinator.apiKey.hasAPIKey, micGranted: microphoneGranted,
+      keyboardSeen: keyboardSeen)
   }
 
   var body: some View {

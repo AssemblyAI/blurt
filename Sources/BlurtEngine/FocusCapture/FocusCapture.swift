@@ -56,7 +56,8 @@
         prior = visibleTextOrNil(priorText(of: element, selection: selection, maxChars: maxPriorChars))
         // The selected range's text (empty when there's no selection). Capped like
         // prior text so a huge highlight can't dominate the context budget.
-        selected = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxSelectedChars))
+        // Trimmed here, as it always was: only a rewrite needs the edges.
+        selected = selectedText(of: element, selection: selection, maxChars: maxSelectedChars).trimmedNonEmpty()
       }
       return FocusedFieldContext(
         priorText: prior,
@@ -246,11 +247,11 @@
       if var selectedRange = selection, selectedRange.length > 0 {
         selectedRange.length = min(selectedRange.length, maxChars)
         if let slice = string(of: element, in: selectedRange) {
-          return clip(slice.trimmedNonEmpty(), to: maxChars)
+          return selectionText(slice, maxChars: maxChars)
         }
       }
 
-      return clip(stringValue(element, kAXSelectedTextAttribute), to: maxChars)
+      return selectionText(rawStringValue(element, kAXSelectedTextAttribute), maxChars: maxChars)
     }
 
     /// The title of the window containing the focused element, if exposed.

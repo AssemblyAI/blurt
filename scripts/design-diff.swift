@@ -1,5 +1,6 @@
-#!/usr/bin/env swift  // Pixel tools for the design loop, with no dependencies beyond AppKit — the  // same shape as beautify.swift and screenshot.swift. Four commands:  //  //   swift scripts/design-diff.swift crop <in.png> <out.png> [--expect-height <px>]  //       Cuts the keyboard out of a whole-screen simulator capture: finds the  //       magenta (#FF00FF) registration border the gallery's -BlurtGalleryBare  //       mode draws round the row and writes what is inside it. With
-//       --expect-height, fails unless the crop is that tall (±1 px).
+#!/usr/bin/env swift
+// Pixel tools for the design loop, with no dependencies beyond AppKit — the
+// same shape as beautify.swift and screenshot.swift. Three commands:
 //
 //   swift scripts/design-diff.swift diff <a.png> <b.png> --out <triptych.png> --json <metrics.json>
 //       [--mask x,y,w,h]... [--threshold 8]
@@ -80,58 +81,6 @@ func flags(_ name: String, in args: inout [String]) -> [String] {
   var values: [String] = []
   while let value = flag(name, in: &args) { values.append(value) }
   return values
-}
-
-// MARK: - crop
-
-func isSentinel(_ p: (r: Int, g: Int, b: Int)) -> Bool {
-  abs(p.r - 255) <= 6 && p.g <= 6 && abs(p.b - 255) <= 6
-}
-
-func crop(_ args: [String]) {
-  var args = args
-  let expected = flag("--expect-height", in: &args).map { Int($0) ?? -1 }
-  guard args.count == 2 else { fail("crop <in.png> <out.png> [--expect-height <px>]") }
-  let source = load(args[0])
-  var minX = Int.max
-  var minY = Int.max
-  var maxX = -1
-  var maxY = -1
-  for y in 0..<source.height {
-    for x in 0..<source.width where isSentinel(source[x, y]) {
-      minX = min(minX, x)
-      maxX = max(maxX, x)
-      minY = min(minY, y)
-      maxY = max(maxY, y)
-    }
-  }
-  guard maxX >= 0 else { fail("no #FF00FF registration border in \(args[0]) — launch with -BlurtGalleryBare") }
-  // The border's thickness: walk down from the top edge along the middle
-  // column. The sides may have no border at all — the keyboard rows are drawn
-  // at the phone's full width, bordered above and below only — so each side is
-  // inset only where the middle row does start with the sentinel.
-  let midX = (minX + maxX) / 2
-  let midY = (minY + maxY) / 2
-  var thickness = 0
-  while minY + thickness <= maxY, isSentinel(source[midX, minY + thickness]) { thickness += 1 }
-  guard thickness > 0, thickness < 40 else { fail("registration border looks wrong (thickness \(thickness))") }
-  let leftInset = isSentinel(source[minX, midY]) ? thickness : 0
-  let rightInset = isSentinel(source[maxX, midY]) ? thickness : 0
-  let x0 = minX + leftInset
-  let y0 = minY + thickness
-  let width = maxX - minX + 1 - leftInset - rightInset
-  let height = maxY - minY + 1 - 2 * thickness
-  guard width > 0, height > 0 else { fail("registration border encloses nothing") }
-  if let expected, abs(height - expected) > 1 {
-    fail("crop is \(height) px tall, expected \(expected) (the layout height × the device scale)")
-  }
-  var out = Pixels(width: width, height: height, bytes: [UInt8](repeating: 0, count: width * height * 4))
-  for y in 0..<height {
-    let from = ((y0 + y) * source.width + x0) * 4
-    out.bytes.replaceSubrange((y * width * 4)..<((y + 1) * width * 4), with: source.bytes[from..<(from + width * 4)])
-  }
-  save(out, to: args[1])
-  print("crop: \(width)×\(height) at (\(x0),\(y0)), border \(thickness) px → \(args[1])")
 }
 
 // MARK: - diff
@@ -439,10 +388,9 @@ func measure(_ args: [String]) {
 }
 
 var arguments = Array(CommandLine.arguments.dropFirst())
-guard let command = arguments.first else { fail("usage: design-diff.swift crop|diff|sheet|measure …") }
+guard let command = arguments.first else { fail("usage: design-diff.swift diff|sheet|measure …") }
 arguments.removeFirst()
 switch command {
-case "crop": crop(arguments)
 case "diff": diff(arguments)
 case "sheet": sheet(arguments)
 case "measure": measure(arguments)

@@ -7,8 +7,8 @@ import XCTest
 /// nothing in it more than once (a drawing surface that never presented in
 /// the extension), and only the pixels can say. Samples the screenshot inside
 /// the mic key's frame and counts pixels that differ from the frame's own
-/// corner, which is the host's material: the grille's dots, lit or at rest,
-/// cover well over a tenth of the box; an empty key covers none.
+/// corner, which is the keyboard's background: the cap and its glyph cover
+/// well over a tenth of the box; an empty cell covers none.
 /// Main-actor: everything it reads — screenshots, element frames — is
 /// XCUIAutomation's, which is main-actor in Swift 6.
 @MainActor

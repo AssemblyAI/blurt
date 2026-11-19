@@ -9,12 +9,12 @@ import Testing
 /// the wire as `rewrite_mode`.
 @Suite("RewriteMode")
 struct RewriteModeTests {
-  @Test("defaults to fast when unset")
-  func defaultsToFast() {
-    // The shipped behavior: an install that never touched the picker keeps the
-    // model every request used before the setting existed.
-    #expect(RewriteModeStore(defaults: freshDefaults()).mode == .fast)
-    #expect(RewriteMode.fromPersisted("") == .fast)
+  @Test("defaults to smart when unset")
+  func defaultsToSmart() {
+    // An install that never touched the picker gets the larger rewrite model;
+    // one that explicitly chose Fast keeps it (see `roundTrips`).
+    #expect(RewriteModeStore(defaults: freshDefaults()).mode == .smart)
+    #expect(RewriteMode.fromPersisted("") == .smart)
   }
 
   @Test("persists and reads back a chosen mode")
@@ -26,13 +26,14 @@ struct RewriteModeTests {
     #expect(RewriteModeStore(defaults: defaults).mode == .fast)
   }
 
-  @Test("an unknown stored value falls back to fast")
+  @Test("an unknown stored value falls back to smart")
   func unknownFallsBack() {
     let defaults = freshDefaults()
     defaults.set("Turbo", forKey: RewriteModeStore.defaultsKey)
-    #expect(RewriteModeStore(defaults: defaults).mode == .fast)
-    // The wire spelling is not the persisted one, so it must not decode either.
-    #expect(RewriteMode.fromPersisted("smart") == .fast)
+    #expect(RewriteModeStore(defaults: defaults).mode == .smart)
+    // The wire spelling is not the persisted one, so it must not decode either:
+    // "fast" is unknown and reads as the default, not as Fast.
+    #expect(RewriteMode.fromPersisted("fast") == .smart)
   }
 
   @Test("every mode names itself distinctly")
@@ -41,7 +42,7 @@ struct RewriteModeTests {
     #expect(!RewriteMode.guidance.isEmpty)
   }
 
-  @Test("fast omits rewrite_mode, so the default request is unchanged")
+  @Test("fast omits rewrite_mode, so a Fast request is unchanged")
   func fastOmitsTheKey() throws {
     let object = try config(mode: .fast)
     #expect(object.keys.contains("rewrite_mode") == false)
