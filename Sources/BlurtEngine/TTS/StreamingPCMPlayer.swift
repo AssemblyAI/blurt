@@ -111,7 +111,9 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     stop()
   }
 
-  private static let drainSlack = Duration.seconds(2)
+  /// Internal, not private, so `StreamingPCMPlayerTests` can bound the drain by it
+  /// rather than restate it.
+  static let drainSlack = Duration.seconds(2)
 
   /// Seconds of audio queued ahead of what's playing, in listening time (the
   /// rate applied), or 0 once stopped — how far ahead of the listener the

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["dspy>=3.0"]
+# dependencies = ["dspy>=3.0,<3.5"]
 # ///
+# DSPy is capped below 3.5: 3.5.0 (2026-11-10) reworked its LM layer, and every
+# `openai/<model>` call through the LLM Gateway then fails with "Not found" — qwen and
+# gemma alike — while 3.4.1 works. Lift the cap only after re-checking a gateway call.
 """Find the best cleanup instruction for Blurt's dictation request.
 
 What this optimizes
@@ -28,9 +31,9 @@ source can and cannot measure.
 
 Usage
 -----
-    # The defaults are a full GEPA run: 500 train rows through a small model behind
-    # the AssemblyAI LLM Gateway, pruning candidates.PRIOR_WINNER under the character
-    # cap, with a frontier model doing the reflection. Nothing needs passing.
+    # The defaults are a full GEPA run over nyra plus the Voice Arena dictation set,
+    # through a small model behind the AssemblyAI LLM Gateway, evolving
+    # candidates.PRIOR_WINNER with a frontier model doing the reflection.
     export OPENAI_API_KEY=$ASSEMBLYAI_API_KEY
     uv run evals/dictation-prompt/optimize_cleanup_prompt.py
 
@@ -44,16 +47,13 @@ Usage
     ANTHROPIC_API_KEY=... uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
       --model anthropic/claude-opus-5 --api-base "" --reflection-model anthropic/claude-opus-5
 
-The length constraint
----------------------
-`config.llm_instruction` is capped at `candidates.INSTRUCTION_CHARACTER_CAP`
-characters and an instruction over it fails the whole request, so a winner that
-doesn't fit isn't a winner. Three places enforce that, because none is sufficient
-alone: the hand-written candidates are checked before any model call;
-`program.CappedInstructionProposer` states the budget in its preamble and then
-rejects and re-asks any proposal that misses it, which is what makes the cap a
-constraint on the *search* rather than a verdict on its output; and an over-cap
-result is refused at selection no matter how well it scored.
+What gates a winner
+-------------------
+No length limit: `config.llm_instruction` is no longer capped (re-probed 2026-11-18 in
+both rewrite modes; see `candidates.py`). What still disqualifies an instruction is
+what the score cannot see — a dropped safeguard, a DSPy field name, the reflector's own
+constraints block — and `program.GatedInstructionProposer` rejects and re-asks on those
+during the search, and the same check refuses a result at selection.
 
 `--dry-run` and the tests need no third-party packages: everything that touches
 DSPy lives in `program.py`, which is imported only after the dry-run returns.
@@ -64,6 +64,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -72,11 +73,10 @@ import corpus  # noqa: E402
 import metrics  # noqa: E402
 from candidates import (  # noqa: E402
     BASELINE,
+    BASELINES,
     CANDIDATES,
-    INSTRUCTION_CHARACTER_CAP,
     missing_safeguards,
     objections,
-    overage,
 )
 from progress import Progress  # noqa: E402
 
@@ -111,12 +111,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     data = parser.add_argument_group("corpus")
     data.add_argument(
         "--source",
-        default="nyra",
-        choices=(*corpus.SOURCES, "builtin"),
-        help="which corpus to score against (default: nyra, the same hand-annotated "
-        "Switchboard pairs with casing repaired, so the formatting axis is live and "
-        "--metric blend scores two axes instead of degrading to content). builtin is a "
-        "bundled sample made disfluent by the injector, for the offline path",
+        default=corpus.DEFAULT_SOURCES,
+        help=f"which corpus or corpora to score against, comma-separated (default: "
+        f"{corpus.DEFAULT_SOURCES}). nyra is hand-annotated Switchboard pairs with casing "
+        "repaired — the search's training material. voicearena is the public split of the "
+        "Voice Arena dictation benchmark, real dictation with recorded audio; its rows are "
+        "reserved for dev and test, so it decides and reports the winner. Registered: "
+        f"{', '.join(corpus.SOURCES)}. builtin is a bundled sample made disfluent by the "
+        "injector, for the offline path",
+    )
+    data.add_argument(
+        "--voicearena-input",
+        default="stt",
+        choices=("stt", "spoken"),
+        help="voicearena's input side (default: stt — the service's own transcript of each "
+        "recording, which is what the rewrite receives in the product; needs "
+        "ASSEMBLYAI_API_KEY the first time, one transcription per clip, then cached). "
+        "spoken uses the dataset's spoken_text, which still has numbers, emails and code "
+        "in spoken form the STT would already have written out",
     )
     data.add_argument(
         "--limit",
@@ -131,12 +143,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "limit, not the budget — set HF_TOKEN for a large load",
     )
     data.add_argument(
+        "--voicearena-in-search",
+        type=float,
+        nargs="?",
+        const=0.5,
+        default=0.0,
+        metavar="SHARE",
+        help="release this share of the held-out Voice Arena rows into the search (default "
+        "when given: 0.5), split evenly between GEPA's valset and its reflection set, so it "
+        "ranks and learns on dictation instead of only being judged on it. The rest stay in "
+        "dev and test. Off by default: every Voice Arena row is held out",
+    )
+    data.add_argument(
         "--split",
-        default="train",
-        help="dataset split to read (default: train). Each source's own default is its "
-        "held-out split, which is only ~250 rows — too few for the default --limit, and "
-        "too few to leave a large trainset after the dev/test slices. Pass --split test "
-        "to read a source's held-out rows instead",
+        default=None,
+        help="dataset split to read from every source (default: each source's own — "
+        "train for nyra, test for voicearena, which publishes nothing else). The harness "
+        "makes its own train/dev/test partition of whatever it loads",
     )
     data.add_argument("--jsonl", help="load pairs (or bare references) from a local .jsonl")
 
@@ -305,12 +328,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "only this makes there be more of them",
     )
     search.add_argument(
+        "--baseline",
+        default=BASELINE,
+        choices=BASELINES,
+        help="the shipped instruction a run must beat, falls back to, and (under the default "
+        "--start) evolves from: prior-winner (default) is Fast's, smart-winner is Smart's. "
+        "Match it to --model — a Smart search against Fast's instruction aims at the wrong bar",
+    )
+    search.add_argument(
+        "--seed-file",
+        default=None,
+        metavar="PATH",
+        help="start the search from the instruction in this file instead of --start (e.g. a "
+        "previous run's winner). It must state the safeguards like any candidate, and is "
+        "scored on dev next to BASELINE",
+    )
+    search.add_argument(
         "--start",
         default="prior-winner",
         choices=("prior-winner", "best-candidate"),
         help="which instruction the optimizer starts from (default: prior-winner, the "
-        "evolved instruction in candidates.py — it already scores well and only needs "
-        "pruning under the character cap; best-candidate starts from whichever "
+        "evolved instruction in candidates.py, the strongest we have; best-candidate "
+        "starts from whichever "
         "hand-written candidate topped dev instead)",
     )
 
@@ -321,10 +360,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=0,
         metavar="N",
         help="after picking a winner, run N held-out utterances through the REAL dictation "
-        "API — synthesized to audio with `say`, then POSTed with the winner as "
+        "API — as audio, then POSTed with the winner as "
         "config.llm_instruction. The only measurement here that uses the rewrite model "
         "the instruction actually ships to; everything else scores a stand-in. Needs "
-        "ASSEMBLYAI_API_KEY and a Mac. 0 disables",
+        "ASSEMBLYAI_API_KEY and a Mac. Rows that carry a recording (voicearena) are "
+        "played as recorded rather than synthesized, and come first. 0 disables",
+    )
+    live_group.add_argument(
+        "--rewrite-mode",
+        default="fast",
+        choices=("fast", "smart"),
+        help="which rewrite model --verify-live asks for, as the app's Fast/Smart setting "
+        "does (default: fast, which omits rewrite_mode; smart sends rewrite_mode: smart)",
     )
     live_group.add_argument(
         "--verify-baseline",
@@ -340,21 +387,39 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def describe_length(instruction: str) -> str:
-    """`2048 chars` plus how that sits against the cap — the line every report ends on."""
-    over = overage(instruction)
-    if over:
-        return f"{len(instruction)} chars — {over} OVER the {INSTRUCTION_CHARACTER_CAP} cap"
-    headroom = INSTRUCTION_CHARACTER_CAP - len(instruction)
-    return f"{len(instruction)} chars, {headroom} under the {INSTRUCTION_CHARACTER_CAP} cap"
+    """`1529 chars` — informational only; neither the API nor the app caps the field."""
+    return f"{len(instruction)} chars"
+
+
+#: The `CANDIDATES` key a `--seed-file` instruction is registered under.
+SEED_FILE = "seed-file"
+
+
+def load_seed_file(path: str | None) -> None:
+    """Register `--seed-file`'s instruction as a candidate, refusing an unshippable one.
+
+    Held to the same gate as a proposal (`objections`): a seed missing a safeguard would
+    hand the search an instruction it could never select, and one carrying the
+    constraints block would ship scaffolding. Field names are checked by the proposer
+    once DSPy is loaded; this runs before, so the dry-run path stays DSPy-free.
+    """
+    if not path:
+        return
+    text = Path(path).read_text(encoding="utf-8").strip()
+    if not text:
+        raise SystemExit(f"--seed-file {path} is empty")
+    if problems := objections(text, fields=()):
+        listed = "\n".join(f"  - {note.message}" for note in problems)
+        raise SystemExit(f"--seed-file {path} could not be shipped as written:\n{listed}")
+    CANDIDATES[SEED_FILE] = text
 
 
 def check_candidates() -> None:
     """Refuse to start if a hand-written candidate could never be shipped.
 
     Before any model call, because these are typo-class mistakes and paying for a full
-    sweep to discover one is pure waste. Nothing is exempt, `prior-winner` included:
-    it earned its place in the table by being compressed under the cap, and if a later
-    edit pushes it back over — or strips a safeguard — this is what says so.
+    sweep to discover one is pure waste: if a later edit strips a safeguard from
+    `BASELINE`, this is what says so.
 
     Only `BASELINE` is held to the safeguard requirement. The other candidates are
     deliberately terse one-liners whose job is to be *contrast* — `guessed-default` is
@@ -363,11 +428,9 @@ def check_candidates() -> None:
     """
     problems: list[str] = []
     for name, text in CANDIDATES.items():
-        if overage(text):
-            problems.append(f"  {name}: {describe_length(text)}")
-        if name == BASELINE and (absent := missing_safeguards(text)):
+        if name in BASELINES and (absent := missing_safeguards(text)):
             stems = ", ".join(stem for stem, _ in absent)
-            problems.append(f"  {name}: BASELINE is missing safeguard(s): {stems}")
+            problems.append(f"  {name}: a shipped instruction is missing safeguard(s): {stems}")
     if problems:
         raise SystemExit(
             "These candidates.py instructions could not be shipped as written:\n"
@@ -397,7 +460,10 @@ def resolve_candidates(args: argparse.Namespace) -> list[str]:
         or args.start == "best-candidate"
     ):
         return list(CANDIDATES)
-    return [BASELINE]
+    # A seed file is the seed, so it is scored too: the search's result is compared
+    # against the instruction it started from.
+    baseline = getattr(args, "baseline", BASELINE)
+    return [baseline, SEED_FILE] if SEED_FILE in CANDIDATES else [baseline]
 
 
 def run_live_verification(
@@ -434,22 +500,34 @@ def run_live_verification(
         # text-only candidate can stand in for.
         runs.append(("service default (no instruction)", None))
 
+    rewrite_mode = None if args.rewrite_mode == "fast" else args.rewrite_mode
     summaries: dict[str, dict[str, float]] = {}
     try:
-        # Synthesized once and replayed, so both runs hear byte-identical audio and the
-        # `say`/`afconvert` work is not repeated per candidate.
+        # Prepared once and replayed, so both runs hear byte-identical audio and the
+        # download/`say`/`afconvert` work is not repeated per candidate.
         spoken = live.synthesize_all(sample)
         with Progress(len(runs) * len(sample), "Verifying against the real endpoint") as meter:
             for name, instruction in runs:
                 results = live.verify(
-                    spoken, instruction, api_key, on_example=lambda n=name: meter.tick(n)
+                    spoken,
+                    instruction,
+                    api_key,
+                    on_example=lambda n=name: meter.tick(n),
+                    rewrite_mode=rewrite_mode,
                 )
                 summaries[name] = live.summarize(results)
-    except live.Unavailable as error:
-        print(f"\nSkipping --verify-live: {error}")
+    except Exception as error:  # noqa: BLE001 — see below
+        # Any failure here, not only `Unavailable`: this runs after hours of paid search,
+        # and an uncaught error from it (once, an expired audio URL's 403) killed the run
+        # before `--out` was written. The search's result outranks the live check.
+        print(f"\nSkipping --verify-live: {type(error).__name__}: {error}")
         return None
 
-    print(f"\nReal endpoint, {len(sample)} held-out utterances through synthesized audio")
+    recordings = sum(bool(u.audio_url) for u in sample)
+    print(
+        f"\nReal endpoint ({args.rewrite_mode}), {len(sample)} held-out utterances: "
+        f"{recordings} recorded, {len(sample) - recordings} synthesized with `say`"
+    )
     print(f"  {'instruction':<30} {'no-rewrite':>11} {'delivered':>11} {'gain':>8} {'llm_err':>8}")
     print(f"  {'-' * 30} {'-' * 11} {'-' * 11} {'-' * 8} {'-' * 8}")
     for name, summary in summaries.items():
@@ -457,10 +535,11 @@ def run_live_verification(
             f"  {name:<30} {summary['floor_content']:>11.4f} {summary['content']:>11.4f} "
             f"{summary['gain']:>+8.4f} {summary['llm_error_rate']:>8.0%}"
         )
-    print(
-        "  Synthesized speech is not dictated speech and the STT pass adds its own errors,\n"
-        "  so read the ranking, not the absolute scores. Same audio for every row."
-    )
+    if recordings < len(sample):
+        print(
+            "  Synthesized speech is not dictated speech and the STT pass adds its own "
+            "errors,\n  so read the ranking, not the absolute scores. Same audio for every row."
+        )
     return summaries
 
 
@@ -491,6 +570,7 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     check_candidates()
+    load_seed_file(args.seed_file)
 
     loaded = corpus.load(
         source=args.source,
@@ -500,12 +580,17 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         severity=args.severity,
         strip_formatting=args.strip_formatting,
+        voicearena_input=args.voicearena_input,
     )
     print(f"Loaded {len(loaded)} pairs from {loaded.source}: {loaded.detail}")
     print(f"{loaded.disfluent_fraction:.0%} of pairs differ from their target")
 
     train, dev, test = corpus.split(
-        list(loaded.utterances), args.seed, args.dev_fraction, args.test_fraction
+        list(loaded.utterances),
+        args.seed,
+        args.dev_fraction,
+        args.test_fraction,
+        search_share=args.voicearena_in_search,
     )
     # The optimizer's valset comes off train, not out of dev. Three sets, three jobs:
     # the search tracks candidates against `validation`, dev decides which instruction
@@ -518,6 +603,11 @@ def main(argv: list[str] | None = None) -> int:
         f"Split: {len(train)} train / {len(validation)} optimizer valset / "
         f"{len(dev)} dev / {len(test)} test"
     )
+    if len({u.source for u in loaded.utterances}) > 1:
+        slices = (("train", train), ("valset", validation), ("dev", dev), ("test", test))
+        for name, rows in slices:
+            mix = Counter(u.source for u in rows)
+            print(f"  {name:<6} " + ", ".join(f"{k} {v}" for k, v in sorted(mix.items())))
 
     if args.show_samples:
         print_samples(loaded, args.show_samples)
@@ -568,15 +658,16 @@ def main(argv: list[str] | None = None) -> int:
     winner_instruction = CANDIDATES[winner_name]
 
     if args.optimizer != "none":
-        # The seed is an ordinary candidate — it fits the cap, so it was scored in the
-        # sweep above and may legitimately win. Nothing to score separately, and no
-        # need to keep it out of the selection: unlike the over-cap instruction this
-        # replaced, shipping it is a real option.
-        seed_name = BASELINE if args.start == "prior-winner" else winner_name
+        # The seed is an ordinary candidate, scored in the sweep above, and may
+        # legitimately win. Nothing to score separately.
+        if args.seed_file:
+            seed_name = SEED_FILE
+        else:
+            seed_name = args.baseline if args.start == "prior-winner" else winner_name
         seed_instruction = CANDIDATES[seed_name]
         seed_scores = dict(dev_rows)[seed_name]
 
-        proposer = program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
+        proposer = program.GatedInstructionProposer()
 
         print(f"\nRunning {args.optimizer} from {seed_name} ({describe_length(seed_instruction)})…")
         optimized = program.optimize(
@@ -593,11 +684,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         optimized_instruction = optimized.signature.instructions
         if proposer.rejected:
-            # A search that spent itself fighting the cap should be visible, not
+            # A search that spent itself fighting the gate should be visible, not
             # inferred from a disappointing score.
             print(
-                f"\nThe proposer rejected {proposer.rejected} unshippable proposal(s): "
-                f"{proposer.trimmed} were rescued by trimming whole sections, "
+                f"\nThe proposer rejected {proposer.rejected} unshippable proposal(s); "
                 f"{proposer.abandoned} were abandoned and left unchanged after the retries. "
                 "A high abandoned count means the search spent its iterations re-scoring the "
                 "instruction it started from."
@@ -621,17 +711,14 @@ def main(argv: list[str] | None = None) -> int:
         # same `objections` the proposer re-asks on, applied once more at the end:
         # under GEPA they should already be satisfied, but the proposer gives up after
         # its retries and MIPROv2 has no proposal hook at all, so this is the guarantee.
-        # The proposer's own configuration, so the in-search gate and this one cannot
-        # disagree — it previously respelled the fields and omitted the cap entirely,
-        # falling back to the module default rather than the cap the search ran under.
-        final_objections = objections(optimized_instruction, proposer.fields, proposer.cap)
+        # The proposer's own fields, so the in-search gate and this one cannot disagree.
+        final_objections = objections(optimized_instruction, proposer.fields)
         if final_objections:
             listed = "\n".join(f"  - {note.message}" for note in final_objections)
             print(
                 f"\nRefusing to select it. Keeping {winner_name}.\n{listed}\n"
                 "The search is stochastic, so re-running is worth a try; --auto heavy buys "
-                "more of it, and --start best-candidate begins from a short instruction "
-                "instead of asking the reflector to cut a long one down."
+                "more of it."
             )
         elif optimized_scores[axis] > winner_scores[axis]:
             winner_name = optimized_name
@@ -644,8 +731,8 @@ def main(argv: list[str] | None = None) -> int:
     # Held-out test scores for the winner and for the shipped-default proxy, so the
     # reported improvement is measured on data no selection decision saw.
     scored_on_test = [(winner_name, winner_instruction)]
-    if winner_name != BASELINE:
-        scored_on_test.append((BASELINE, CANDIDATES[BASELINE]))
+    if winner_name != args.baseline:
+        scored_on_test.append((args.baseline, CANDIDATES[args.baseline]))
     test_rows = []
     with Progress(len(scored_on_test) * len(test), "Scoring on held-out test") as meter:
         for name, instruction in scored_on_test:
@@ -678,7 +765,6 @@ def main(argv: list[str] | None = None) -> int:
         results = {
             "config": vars(args),
             "selected_axis": axis,
-            "instruction_character_cap": INSTRUCTION_CHARACTER_CAP,
             "corpus": {
                 "source": loaded.source,
                 "detail": loaded.detail,

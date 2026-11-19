@@ -68,7 +68,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// dictation.
   public let keytermsPrompt: [String]
   /// The cleanup instruction the server-side rewrite should apply
-  /// (`CleanupInstruction.sendable`, style profile and all), or nil to leave
+  /// (`CleanupInstruction.sendable(appending:)`, style profile and all), or nil to leave
   /// the wording to the service. `encode(to:)` then drops the key.
   ///
   /// **Nil is not "no rewrite."** The route rewrites *by default*, which the

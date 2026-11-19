@@ -315,15 +315,15 @@ private struct StyleProfileEditorSheet: View {
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.styleProfileInstructions)
       .onChange(of: instructions) {
-        // The dictation API rejects the whole request over its instruction
-        // limit, so text past the cap must never be storable.
+        // Held to the per-profile limit the engine trims to as well, so what is
+        // stored is what is sent.
         if instructions.utf8.count > StyleProfileStore.characterLimit {
           instructions = instructions.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
         }
       }
-      // The API caps the instruction, so the room left is finite — show it
-      // rather than truncating silently at the limit. Counted in UTF-8 bytes,
-      // the unit the limit is enforced in.
+      // The room is finite (`StyleProfileStore.characterLimit`) — show it rather
+      // than truncating silently at the limit. Counted in UTF-8 bytes, the unit
+      // the limit is enforced in.
       Text("\(instructionUsage)% of limit used")
         .font(.caption)
         .monospacedDigit()

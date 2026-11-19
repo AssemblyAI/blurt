@@ -8,8 +8,8 @@ import Testing
 /// the encoded-value exception), so each case drives the setter rather than
 /// poking the slot, except where the point is what an untouched or pre-profiles
 /// install reads back as. The combination with the base cleanup instruction stays
-/// `CleanupInstructionTests`' job, and the budget these caps re-export is pinned
-/// there (`customStyleBudgetIsTheHeadroom`).
+/// `CleanupInstructionTests`' job, and the per-profile limit is pinned there
+/// (`styleLimitIsAnEditorBound`).
 @Suite("StyleProfileStore")
 struct StyleProfileStoreTests {
   /// The two-profile list most cases start from. A property, so each test (a fresh

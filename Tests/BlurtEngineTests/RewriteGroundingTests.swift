@@ -5,7 +5,7 @@ import Testing
 @Suite("RewriteGrounding")
 struct RewriteGroundingTests {
   let style = "No grammatical fixes ever. Just dictate what I say."
-  var instruction: String { CleanupInstruction.sendable(appending: style) ?? "" }
+  var instruction: String { CleanupInstruction.sendable(appending: style) }
 
   @Test("the instruction read back is not speech, however it is cased, punctuated or padded")
   func echoes() {

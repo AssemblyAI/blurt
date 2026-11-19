@@ -716,21 +716,26 @@ switch that cannot disagree with the response it was applied to — the bug that
 way round, when "enhanced transcripts: off" returned a default-cleaned transcript anyway because
 the config merely omitted the instruction.
 
-The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
-`evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
+The instruction is **chosen per rewrite mode** (`CleanupInstruction.sendable(appending:mode:)`):
+Smart gets `smartText`, Fast gets `text`, and with enhanced transcripts off (no `rewrite_mode`
+sent, so the service runs Fast) Fast's. `smartText` is `text` with two hand edits — keep
+greetings and meaningful framing, delete "kind of" only as filler — that scored ZER 90.1 / 88.1
+against 87.4 / 87.4 on the Voice Arena public set with that benchmark's own judge (Smart, two
+samples each), and **worse** on Fast, which is why the two are not one string. Fast's
+instruction is `CleanupInstruction.text`, the winner of a GEPA run of
+`evals/dictation-prompt/` (see its README), compressed to fit the 2048-character cap the field
+had at the time. Two later searches
 failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split. When the
 user has defined a **style profile** (`StyleProfileStore`, resolved at each press into
 `PressStyle` and carried to the transcriber as `TranscriptionContext.styleInstructions`),
-`CleanupInstruction.sendable(appending:)` appends that one profile's instructions after the base text with a bridging preamble, trimmed to the
-headroom the API's 2048
-instruction cap leaves (`customStyleBudget`, measured in UTF-8 bytes — the cap's own unit is
-unmeasured, and bytes are the conservative bound); no profile, or blank instructions, sends the base
-instruction unchanged. A styled request leads with `CleanupInstruction.styledText` instead of
+`CleanupInstruction.sendable(appending:)` appends that one profile's instructions after the base text with a bridging preamble, trimmed to
+the per-profile editor limit (`StyleProfileStore.characterLimit`, 4000 UTF-8 bytes); no profile, or
+blank instructions, sends the base instruction unchanged. A styled request leads with `CleanupInstruction.styledText` instead of
 `text`: the base with its "preserve the original punctuation, capitalization, and spacing" rule
-swapped for one that defers to the style (no longer than the original, so the budget never
-shrinks) — left as-is, that rule beat styles asking for no capitals or commas. **Only the active profile's text ever goes on the wire** — never a
-concatenation of all of them, which is the obvious-looking generalization and the one that fails
-every dictation, since over-cap is a 400 on the whole request.
+swapped for one that defers to the style — left as-is, that rule beat styles asking for no
+capitals or commas. **Only the active profile's text ever goes on the wire** — never a
+concatenation of all of them: the active profile is the style the user chose, and a join hands the
+model several contradictory ones.
 
 Note what that does and does not establish. It is the best instruction the harness has
 produced, measured against other _text_ candidates on a _stand-in_ model; it has never been
@@ -742,26 +747,21 @@ user in every language; pinning the _transcription_ prompt to English was revert
 already. A revert here is one line: return nil and the key comes off the wire again — which
 restores the service's own cleanup wording, not a verbatim transcript.
 
-That field is capped at **2048 characters** (`CleanupInstruction.characterCap`) — a different,
-smaller limit than the 4096 on `config.stt_prompt`
-(`STTPrompt.characterCap`, which the prompt builder fits the history and prior chunk into),
-and the instruction cap was measured against the live endpoint before the reference carried it
-(it now gives `llm_instruction` a `maxLength` of 2048, in characters, while the constant counts
-UTF-8 bytes — the conservative unit). There is a _third_ cap in the same request —
-`config.keyterms_prompt` accepts 2048 characters summed across all terms
-(`KeyTerms.characterCap`), the same figure as the instruction cap but a limit on a different
-field — and that field carries a _fourth_, which is a **count** and not a size:
+That field has **no length cap** any more. It was capped at 2048 characters, and over that the
+API 400'd the whole request before reading the audio — a 3057-character eval winner shipped that
+way once and broke all dictation. The reference now documents `llm_instruction` as a plain
+`string | null` with no `maxLength`, and a probe on 2026-11-18 confirmed it: 2049 to 49152
+characters accepted and applied, in Fast and in Smart. The one limit left is the service's on the
+whole `config` part (64 KiB, undocumented), which the instruction plus one style profile stays far
+below. The other fields still have caps of their own: 4096 on `config.stt_prompt`
+(`STTPrompt.characterCap`, which the prompt builder fits the history and prior chunk into), and
+on `config.keyterms_prompt` 2048 characters summed across all terms (`KeyTerms.characterCap`)
+plus a cap that is a **count** and not a size:
 at most 100 terms (`KeyTerms.termCap`, the reference's `maxItems`). The count is the one the
 byte budget does not imply, and it is reachable, since 150 short terms cost ~1500 bytes and clear
-the byte cap easily. Four caps, four constants: never reuse one field's figure for another, and
-never assume one cap on a field is the only cap on it.
-Over
-the cap the API 400s the whole request before reading the audio, so every dictation fails
-outright rather than degrading to the verbatim transcript. A 3057-character eval winner
-shipped this way once and broke all dictation; the test meant to catch it asserted the
-prompt's 4096. `CleanupInstructionTests` now asserts the right constant and pins the two
-apart, and the harness refuses to report an over-cap winner — see its README's "The
-2048-character cap".
+the byte cap easily. Never reuse one field's figure for another, and never assume one cap on a
+field is the only cap on it. Over any of them the API 400s the whole request before reading the
+audio, so every dictation fails outright rather than degrading to the verbatim transcript.
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
 The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at _press_ and
@@ -1364,9 +1364,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   "Custom", so the migration is a read-side fallback with no launch hook to order. The active
   profile's instructions are appended to the cleanup instruction via
   `CleanupInstruction.sendable(appending:)`, re-read at every request; no profile, or blank
-  instructions, sends the base instruction unchanged, and its `characterLimit` re-exports the
-  headroom — in UTF-8 bytes — the API's 2048 instruction cap leaves as the **per-profile** cap.
-  Only the active profile is ever sent, so that budget is not divided between them. One of the
+  instructions, sends the base instruction unchanged, and its `characterLimit` (4000 UTF-8 bytes)
+  is the **per-profile** limit the editors and the engine's trim share — an editor bound, since
+  `llm_instruction` is uncapped. Only the active profile is ever sent. One of the
   three stores with a setter, for the encoded-on-write reason below: the settings sheet and the
   main window's switcher write through it rather than binding the raw slots),
   **`MicDeviceStore`** (`BlurtMicDeviceUID`, the input device dictation is pinned to, as its

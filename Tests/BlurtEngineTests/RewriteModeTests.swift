@@ -94,6 +94,23 @@ struct RewriteModeTests {
     #expect(reads.withLock { $0 } == 1)
   }
 
+  /// Each mode is sent the instruction tuned on its own model: Smart's, measured on the
+  /// Voice Arena public set, scored worse than Fast's own when run on Fast.
+  @Test("each mode is sent its own cleanup instruction", arguments: RewriteMode.allCases)
+  func instructionFollowsTheMode(mode: RewriteMode) throws {
+    let object = try config(mode: mode)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.base(for: mode))
+  }
+
+  /// With enhanced transcripts off no `rewrite_mode` goes on the wire, so the service
+  /// runs Fast — and Fast's instruction must go with it, whatever the setting says.
+  @Test("with enhanced transcripts off, Fast's instruction is sent even when Smart is chosen")
+  func unenhancedSendsTheFastInstruction() throws {
+    let object = try config(mode: .smart, enhancedTranscripts: false)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
+    #expect(object["rewrite_mode"] == nil)
+  }
+
   // MARK: - helpers
 
   private func config(mode: RewriteMode, enhancedTranscripts: Bool = true) throws -> [String: Any] {

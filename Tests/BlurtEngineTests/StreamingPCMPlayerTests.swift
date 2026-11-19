@@ -33,7 +33,12 @@ struct StreamingPCMPlayerTests {
     player.enqueue(silence(seconds: 0.5))
     let start = ContinuousClock.now
     await player.drain()
-    #expect(ContinuousClock.now - start < .seconds(0.25 + 2 + 0.5))
+    // The drain's own deadline — the queued audio at 2× (0.25 s) plus its slack —
+    // plus room for the poll loop and the scheduler. With no output device the clock
+    // never moves, so the drain waits out its whole deadline, and a loaded CI runner
+    // overshot a 0.5 s margin by 0.1 s (2.85 s). What this guards is a drain that
+    // never ends, which no margin of seconds would let through.
+    #expect(ContinuousClock.now - start < .seconds(0.25) + StreamingPCMPlayer.drainSlack + .seconds(2))
     #expect(player.bufferedSeconds == 0)
   }
 

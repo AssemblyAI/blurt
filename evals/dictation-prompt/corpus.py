@@ -23,6 +23,15 @@ thought to write down.
   if the repackaging is ever suspected of costing accuracy, since it is the only
   way to check nyra against the unmodified pairs.
 
+- `voicearena` — `VoiceArena/Dictation_Dataset`, the 151-clip public split of the
+  Voice Arena dictation benchmark (voicearena.com/dictation-bench): US English
+  speakers dictating emails, chat, notes, code requests and AI prompts, each with
+  real audio and an `intended_text` reference. The one corpus here that is
+  *dictation* rather than conversation, and the one the product is publicly
+  ranked on. Its input side is the service's own STT transcript of the recording
+  (`voicearena.py` says why), and its rows are reserved for dev and test
+  (`Source.held_out`) so the set judges the search rather than teaching it.
+
 `google-research-datasets/disfl_qa` was registered here and has been removed. Its
 floor looked like headroom — 0.435 against Switchboard's 0.834 — but it is a QA
 *robustness* benchmark, not a cleanup corpus: annotators inserted a contextual
@@ -118,6 +127,20 @@ class Source:
     # the formatting axis would score noise.
     formatting_is_measurable: bool = True
     note: str = ""
+    # Reference-length ceiling in words, or None for none. `MAX_WORDS` keeps a
+    # conversational corpus to dictation-sized bursts; a dictation corpus's long-form
+    # clips are the real thing and stay in.
+    max_words: int | None = MAX_WORDS
+    # Rows go to dev and test before anything else, never to train while those need
+    # filling — see `split`.
+    held_out: bool = False
+    # The input side is the service's own transcript of the row's audio rather than
+    # `input_field` — see `voicearena.py`.
+    input_from_stt: bool = False
+    # Keep fetched pages on disk between runs (`_rows_cache_dir`). Off for a source
+    # whose rows carry signed audio URLs: those expire, and a cached one would fail
+    # `--verify-live` days later.
+    cache_rows: bool = True
 
     @property
     def is_paired(self) -> bool:
@@ -132,13 +155,32 @@ SOURCES: dict[str, Source] = {
     "nyra": Source(
         key="nyra",
         dataset="nyralabs/disfluency_speech_english",
-        split="test",
+        # `train`, not the 250-row held-out `test`: the harness makes its own
+        # train/dev/test partition, and a run large enough to separate close
+        # candidates needs the 4458 rows.
+        split="train",
         input_field="verbatim_transcript",
         target_field="intended_transcript",
         detag=_detag_nyra,
         note="the same corpus recased and repunctuated, at the cost of some fidelity",
     ),
+    "voicearena": Source(
+        key="voicearena",
+        dataset="VoiceArena/Dictation_Dataset",
+        split="test",
+        input_field="spoken_text",
+        target_field="intended_text",
+        note="real dictation audio; input is the service's STT transcript (CC BY-NC 4.0)",
+        max_words=None,
+        held_out=True,
+        input_from_stt=True,
+        cache_rows=False,
+    ),
 }
+
+#: What a bare run loads: the hand-annotated conversation corpus to search on, plus
+#: the dictation benchmark to select and report on.
+DEFAULT_SOURCES = "nyra,voicearena"
 
 # Stand-in corpus for `--source builtin`. Written for this repo (not drawn from any
 # dataset) so the offline path carries no third-party licensing.
@@ -166,6 +208,13 @@ class Utterance:
     disfluent: str
     # Injector operators, empty for a real paired corpus — nobody annotated those.
     operations: tuple[str, ...] = field(default=())
+    # The source key, for reporting slices by corpus.
+    source: str = ""
+    # A recording of the disfluent side, when the corpus ships one. `--verify-live`
+    # plays it instead of synthesizing speech with `say`.
+    audio_url: str | None = None
+    # Reserved for dev and test — `Source.held_out`.
+    held_out: bool = False
 
     @property
     def is_disfluent(self) -> bool:
@@ -209,11 +258,11 @@ def _tidy(text: object) -> str:
     return " ".join(text.split()) if isinstance(text, str) else ""
 
 
-def _usable_reference(text: str, *, for_injection: bool) -> bool:
+def _usable_reference(text: str, *, for_injection: bool, max_words: int | None = MAX_WORDS) -> bool:
     """Is this reference worth keeping as a target?"""
     words = len(text.split())
     floor = MIN_WORDS_FOR_INJECTION if for_injection else MIN_WORDS
-    if not floor <= words <= MAX_WORDS:
+    if words < floor or (max_words is not None and words > max_words):
         return False
     # A reference with no terminal punctuation is a truncated or normalized
     # transcript; injecting into it and then scoring punctuation restoration
@@ -221,24 +270,36 @@ def _usable_reference(text: str, *, for_injection: bool) -> bool:
     return not for_injection or text[-1] in ".?!"
 
 
-def _collect(pairs, limit: int, *, for_injection: bool) -> list[Utterance]:
+def _collect(
+    pairs,
+    limit: int,
+    *,
+    for_injection: bool,
+    max_words: int | None = MAX_WORDS,
+    template: Utterance | None = None,
+    seen: set[str] | None = None,
+) -> list[Utterance]:
     """Filter, de-duplicate by reference, and cap — the one copy of that policy.
 
     Consumes lazily, so a paging loader stops fetching as soon as `limit` usable
-    pairs have been found.
+    pairs have been found. A pair may carry a third element, the audio URL. `template`
+    supplies the per-source fields every kept utterance shares, and `seen` is shared
+    across sources so a reference two corpora both contain is scored once.
     """
-    seen: set[str] = set()
+    seen = set() if seen is None else seen
+    template = template or Utterance(reference="", disfluent="")
     kept: list[Utterance] = []
-    for disfluent, reference in pairs:
+    for disfluent, reference, *extra in pairs:
         reference, disfluent = _tidy(reference), _tidy(disfluent)
         if not reference or not disfluent:
             continue
-        if not _usable_reference(reference, for_injection=for_injection):
+        if not _usable_reference(reference, for_injection=for_injection, max_words=max_words):
             continue
         if reference in seen:
             continue
         seen.add(reference)
-        kept.append(Utterance(reference=reference, disfluent=disfluent))
+        audio = extra[0] if extra else None
+        kept.append(replace(template, reference=reference, disfluent=disfluent, audio_url=audio))
         if len(kept) >= limit:
             break
     return kept
@@ -297,8 +358,21 @@ _RATE_LIMIT_ATTEMPTS = 5
 _RATE_LIMIT_BACKOFF = 4.0
 
 
+def _rows_cache_dir(source: Source) -> pathlib.Path:
+    """Where a source's fetched pages persist, keyed by everything that selects them."""
+    root = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    name = f"{source.dataset}/{source.config or 'default'}/{source.split}".replace("/", "__")
+    return pathlib.Path(root) / "blurt-evals" / "hf-rows" / name
+
+
 def _rows_via_api(source: Source, limit: int):
-    """Page the datasets-server rows API, yielding raw row dicts."""
+    """Page the datasets-server rows API, yielding raw row dicts.
+
+    Pages are cached on disk (`_rows_cache_dir`) for sources that allow it. Every run
+    reads the same ~40 pages of nyra, and the rows API rate-limits by volume even with
+    a token: a few runs in an afternoon, or two at once, exhaust it before the first
+    model call. A dataset revision is picked up by deleting that directory.
+    """
     token = hf_token()
     headers = {"Accept": "application/json"}
     if token:
@@ -317,7 +391,16 @@ def _rows_via_api(source: Source, limit: int):
                 "length": page,
             }
         )
-        payload = _fetch_page(f"{ROWS_API}?{query}", headers, source, token)
+        cached = _rows_cache_dir(source) / f"{offset}-{page}.json" if source.cache_rows else None
+        if cached and cached.exists():
+            payload = json.loads(cached.read_text(encoding="utf-8"))
+        else:
+            payload = _fetch_page(f"{ROWS_API}?{query}", headers, source, token)
+            # Only pages with rows: an empty page ends the load, and caching a spurious
+            # one would truncate every later run.
+            if cached and payload.get("rows"):
+                cached.parent.mkdir(parents=True, exist_ok=True)
+                cached.write_text(json.dumps(payload), encoding="utf-8")
 
         rows = payload.get("rows", [])
         if not rows:
@@ -328,13 +411,15 @@ def _rows_via_api(source: Source, limit: int):
 
 
 def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> dict:
-    """One page of rows, waiting out a rate limit rather than failing the load.
+    """One page of rows, waiting out a rate limit or a server hiccup rather than failing.
 
-    Retries only 429. Every other HTTP status is a fact about the request or the
-    dataset that waiting will not change, and the 500s the server intermittently
-    returns are worth surfacing rather than papering over — a load that silently took
-    four minutes to work around a broken upstream is harder to diagnose than one that
-    said so.
+    Retries 429 and the 5xx gateway errors (500, 502, 503, 504). Those used to be
+    surfaced at once on the theory that a broken upstream should say so, but in
+    practice they are seconds-long blips — 502s and 500s hit three loads in one
+    afternoon, each fine on a manual rerun — and failing on one throws away a run
+    before its first model call. Each retry is logged, so a load that spent a while
+    working around the server still says so. Every other status (a 4xx) is a fact
+    about the request or the dataset that waiting will not change.
     """
     for attempt in range(1, _RATE_LIMIT_ATTEMPTS + 1):
         try:
@@ -344,9 +429,14 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
                 return json.load(response)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", "replace")[:400]
-            if error.code != 429:
+            if error.code not in (429, 500, 502, 503, 504):
                 raise RuntimeError(
                     f"datasets-server returned HTTP {error.code} for {source.dataset}: {body}"
+                ) from error
+            if attempt == _RATE_LIMIT_ATTEMPTS and error.code != 429:
+                raise RuntimeError(
+                    f"datasets-server returned HTTP {error.code} for {source.dataset} on all "
+                    f"{_RATE_LIMIT_ATTEMPTS} attempts: {body}"
                 ) from error
             if attempt == _RATE_LIMIT_ATTEMPTS:
                 advice = (
@@ -361,7 +451,8 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
                     f"{_RATE_LIMIT_ATTEMPTS} attempts. {advice}."
                 ) from error
             delay = _RATE_LIMIT_BACKOFF * 2 ** (attempt - 1)
-            print(f"  rate limited; retrying in {delay:.0f}s ({attempt}/{_RATE_LIMIT_ATTEMPTS})")
+            what = "rate limited" if error.code == 429 else f"datasets-server HTTP {error.code}"
+            print(f"  {what}; retrying in {delay:.0f}s ({attempt}/{_RATE_LIMIT_ATTEMPTS})")
             time.sleep(delay)
         except urllib.error.URLError as error:
             raise RuntimeError(
@@ -371,16 +462,25 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
     raise AssertionError("unreachable: the loop either returns or raises")
 
 
-def _pairs_from_rows(rows, source: Source, where: str):
-    """Project raw rows into (disfluent, reference), de-tagging where needed."""
+def _pairs_from_rows(rows, source: Source, where: str, stt: dict[str, str] | None = None):
+    """Project raw rows into (disfluent, reference, audio URL), de-tagging where needed.
+
+    `stt` maps `voicearena.cache_key(row)` to the service's transcript; when given, it
+    is the input side instead of `input_field`.
+    """
+    import voicearena  # noqa: PLC0415 — stdlib-only; deferred to keep imports acyclic
+
     detag = source.detag or (lambda text: text)
     for row in rows:
         reference = detag(_tidy(_field(row, source.target_field, where)))
-        if source.is_paired:
-            yield detag(_tidy(_field(row, source.input_field, where))), reference
+        audio = voicearena.local_or_url(row)
+        if stt is not None:
+            yield stt[voicearena.cache_key(row)], reference, audio
+        elif source.is_paired:
+            yield detag(_tidy(_field(row, source.input_field, where))), reference, audio
         else:
             # Reference-only: the injector fills the input side in `load`.
-            yield reference, reference
+            yield reference, reference, audio
 
 
 def _pairs_from_jsonl(path: str):
@@ -398,6 +498,50 @@ def _pairs_from_jsonl(path: str):
             yield row.get("disfluent") or reference, reference
 
 
+def _load_registered(
+    spec: Source,
+    *,
+    limit: int,
+    split: str | None,
+    seen: set[str],
+    voicearena_input: str,
+) -> tuple[list[Utterance], dict[str, object]]:
+    """One registered source's usable pairs, plus what to record about where they came from."""
+    if split:
+        spec = replace(spec, split=split)
+    where = f"{spec.dataset}/{spec.split}"
+    rows = _rows_via_api(spec, limit)
+    stt = None
+    input_side = spec.input_field
+    if spec.input_from_stt and voicearena_input == "stt":
+        import voicearena  # noqa: PLC0415 — see `_pairs_from_rows`
+
+        rows = list(rows)
+        stt = voicearena.transcripts(rows, os.environ.get("ASSEMBLYAI_API_KEY"))
+        voicearena.ensure_audio(rows)
+        input_side = "service STT transcript of the audio"
+    template = Utterance(reference="", disfluent="", source=spec.key, held_out=spec.held_out)
+    kept = _collect(
+        _pairs_from_rows(rows, spec, where, stt),
+        limit,
+        for_injection=False,
+        max_words=spec.max_words,
+        template=template,
+        seen=seen,
+    )
+    detail = {
+        "dataset": spec.dataset,
+        "config": spec.config,
+        "split": spec.split,
+        "input": input_side,
+        "target": spec.target_field,
+        "count": len(kept),
+        "held_out": spec.held_out,
+        "note": spec.note,
+    }
+    return kept, detail
+
+
 def load(
     *,
     source: str = "nyra",
@@ -407,44 +551,45 @@ def load(
     seed: int = 7,
     severity: float = 0.35,
     strip_formatting: bool = False,
+    voicearena_input: str = "stt",
 ) -> Corpus:
-    """Load up to `limit` pairs, injecting disfluencies for reference-only sources."""
+    """Load up to `limit` pairs per source, injecting disfluencies for reference-only ones.
+
+    `source` may name several registered sources joined by commas (`nyra,voicearena`);
+    their pairs are concatenated, de-duplicated by reference across all of them, and
+    `split` decides which of them stay out of train. `builtin` and `--jsonl` stand
+    alone.
+    """
+    keys = [key.strip() for key in source.split(",") if key.strip()]
     if jsonl:
         pairs = _pairs_from_jsonl(jsonl)
-        spec, detail, formatted = None, {"path": jsonl}, True
-    elif source == "builtin":
-        pairs = ((text, text) for text in BUILTIN_SAMPLE)
-        spec, formatted = None, True
+        utterances = _collect(pairs, limit, for_injection=False)
+        detail: dict[str, object] = {"path": jsonl}
+        formatted, reference_only, name = True, True, "jsonl"
+    elif keys == ["builtin"]:
+        utterances = _collect(((t, t) for t in BUILTIN_SAMPLE), limit, for_injection=True)
         detail = {"note": "bundled sample; no dataset was downloaded"}
-    elif source in SOURCES:
-        spec = SOURCES[source]
-        # Each source defaults to its held-out split, which is small (250 rows for
-        # nyra). A run large enough to separate close candidates has
-        # to reach into `train` — harmless here, since nothing is fine-tuned and
-        # the harness makes its own train/dev/test partition of whatever it loads.
-        if split:
-            spec = replace(spec, split=split)
-        where = f"{spec.dataset}/{spec.split}"
-        rows = _rows_via_api(spec, limit)
-        pairs = _pairs_from_rows(rows, spec, where)
-        formatted = spec.formatting_is_measurable
-        detail = {
-            "dataset": spec.dataset,
-            "config": spec.config,
-            "split": spec.split,
-            "fields": list(spec.fields),
-            "note": spec.note,
-        }
+        formatted, reference_only, name = True, True, "builtin"
+    elif keys and all(key in SOURCES for key in keys):
+        seen: set[str] = set()
+        utterances, detail = [], {}
+        for key in keys:
+            kept, detail[key] = _load_registered(
+                SOURCES[key],
+                limit=limit,
+                split=split,
+                seen=seen,
+                voicearena_input=voicearena_input,
+            )
+            utterances += kept
+        formatted = all(SOURCES[key].formatting_is_measurable for key in keys)
+        reference_only = not all(SOURCES[key].is_paired for key in keys)
+        name = "+".join(keys)
     else:
         raise ValueError(
-            f"unknown source {source!r}; expected builtin or one of {', '.join(SOURCES)}"
+            f"unknown source {source!r}; expected builtin, or one or more of "
+            f"{', '.join(SOURCES)} joined by commas"
         )
-
-    # A reference-only source needs the injector to produce an input side, and
-    # needs a reference long and well-punctuated enough to inject into. A jsonl
-    # file is the user's own text, so it is filtered leniently either way.
-    reference_only = spec is None or not spec.is_paired
-    utterances = _collect(pairs, limit, for_injection=reference_only and jsonl is None)
 
     if reference_only:
         injected: list[Utterance] = []
@@ -462,18 +607,16 @@ def load(
                 severity=severity,
                 strip_formatting=strip_formatting,
             )
-            injected.append(
-                Utterance(reference=utterance.reference, disfluent=disfluent, operations=operations)
-            )
+            injected.append(replace(utterance, disfluent=disfluent, operations=operations))
         utterances = injected
         detail |= {"injected": True, "severity": severity, "strip_formatting": strip_formatting}
 
     if not utterances:
-        raise RuntimeError(f"no usable pairs from {source!r} (needs {MIN_WORDS}-{MAX_WORDS} words)")
+        raise RuntimeError(f"no usable pairs from {source!r} (needs {MIN_WORDS}+ words)")
 
     return Corpus(
         utterances=tuple(utterances),
-        source="jsonl" if jsonl else source,
+        source=name,
         detail=detail,
         formatting_is_measurable=formatted,
     )
@@ -502,12 +645,28 @@ def carve_validation(train: list[Utterance], size: float) -> tuple[list, list]:
     Here rather than in the CLI so the tests exercise the carve the run performs
     instead of a copy of it — reversing the slice order in one and not the other would
     otherwise go unnoticed.
+
+    Benchmark rows that reached train (`split`'s `search_share`) are divided between
+    the two: half into the valset, where GEPA ranks candidates, half left in train,
+    where its reflection draws the failures it learns from. All of them in the valset
+    would let the search rank on dictation but never study it; all in train, the
+    reverse. With none in train this is the plain front-of-train slice.
     """
     count = slice_size(size, len(train))
-    return train[:count], train[count:]
+    held = [u for u in train if getattr(u, "held_out", False)]
+    others = [u for u in train if not getattr(u, "held_out", False)]
+    to_valset = held[: min(count, (len(held) + 1) // 2)]
+    validation = to_valset + others[: count - len(to_valset)]
+    return validation, held[len(to_valset) :] + others[count - len(to_valset) :]
 
 
-def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: float):
+def split(
+    utterances: list[Utterance],
+    seed: int,
+    dev_size: float,
+    test_size: float,
+    search_share: float = 0.0,
+):
     """Shuffle once with a fixed seed, then slice into train / dev / test.
 
     Shuffling matters because dataset splits are often ordered by speaker or
@@ -523,6 +682,21 @@ def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: fl
     end up empty, and deliberately so: `--optimizer none` needs only dev and test,
     while a search that genuinely has no trainset should fail loudly rather than run
     on a slice quietly borrowed from somewhere else.
+
+    Rows from a `held_out` source (`Utterance.held_out`) fill dev and test first, in
+    the same proportion as the two slices, and reach train only once both are full.
+    A benchmark set is there to judge the search: putting it in train would let the
+    reflector study the clips it is later scored on, which is precisely what the
+    benchmark's own private split exists to prevent. Within each slice the reserved
+    rows come first, so `--verify-live N` takes the recorded clips before anything it
+    would have to synthesize. With nothing reserved this is exactly the plain slicing.
+
+    `search_share` (`--voicearena-in-search`) is the deliberate exception: that share
+    of the held-out rows is released into train instead, so the search can rank and
+    learn on dictation rather than only be judged on it — `carve_validation` then
+    divides them between GEPA's valset and its reflection set. The rest stay reserved
+    for dev and test, which is what still catches a prompt that overfit the released
+    half. Zero, the default, releases nothing.
     """
     shuffled = list(utterances)
     random.Random(seed).shuffle(shuffled)
@@ -531,7 +705,18 @@ def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: fl
     if n_dev + n_test > total:
         scale = total / (n_dev + n_test)
         n_dev, n_test = int(n_dev * scale), int(n_test * scale)
-    return shuffled[n_test + n_dev :], shuffled[n_test : n_test + n_dev], shuffled[:n_test]
+
+    reserved = [u for u in shuffled if getattr(u, "held_out", False)]
+    rest = [u for u in shuffled if not getattr(u, "held_out", False)]
+    released = reserved[: round(len(reserved) * search_share)]
+    reserved = reserved[len(released) :]
+    used = min(len(reserved), n_dev + n_test)
+    r_test = round(used * n_test / (n_dev + n_test)) if used else 0
+    r_dev = used - r_test
+    test = reserved[:r_test] + rest[: n_test - r_test]
+    dev = reserved[r_test:used] + rest[n_test - r_test : n_test - r_test + n_dev - r_dev]
+    train = released + reserved[used:] + rest[n_test - r_test + n_dev - r_dev :]
+    return train, dev, test
 
 
 def false_start_fraction(utterances: list[Utterance]) -> float:

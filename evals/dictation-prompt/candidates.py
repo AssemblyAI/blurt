@@ -7,7 +7,8 @@ disfluency types are named, how hard the do-not-rewrite constraint is pushed, an
 whether formatting is called out.
 
 `prior-winner` (`PRIOR_WINNER`) is the one that isn't a hypothesis: it is an evolved
-instruction a previous run produced, compressed under `INSTRUCTION_CHARACTER_CAP`.
+instruction a previous run produced, compressed under the 2048-character cap the API
+had at the time.
 It is `BASELINE` — the bar a new search has to clear to be worth shipping — and the
 default seed GEPA evolves from.
 
@@ -19,8 +20,8 @@ a careful one; beating it is *not* evidence of beating what ships today. Establi
 that would take real audio through the real endpoint, which is a different
 measurement than this text-only harness performs.
 
-Every instruction here has to fit `INSTRUCTION_CHARACTER_CAP`, or the API rejects the
-whole request. That is checked before a run spends anything.
+`BASELINE` has to state the `REQUIRED_SAFEGUARDS`. That is checked before a run spends
+anything. Length is not checked: the API no longer caps the field (see below).
 
 Kept in its own module so a results notebook or a re-scoring script can import the
 instructions without pulling in argparse and DSPy.
@@ -30,33 +31,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-#: Hard cap the dictation API places on `config.llm_instruction`. Exceed it and the
-#: request fails outright — HTTP 400 `bad_request`, "llm_instruction: String should
-#: have at most 2048 characters" — before the audio is looked at. The failure is
-#: total, not a degraded rewrite: no transcript comes back at all, so on the Blurt
-#: side *every* dictation errors.
+#: There is no length cap on `config.llm_instruction` any more.
 #:
-#: Measured against the live endpoint on 2026-08-11, not read off a doc page — the
-#: dictation API reference does not state it. A 2048-character instruction was
-#: accepted and rewrote correctly. Re-probe before trusting it indefinitely.
-#:
-#: This is a *different, smaller* cap than the 4096 on `config.stt_prompt` (the same
-#: probe confirmed that one; it is `STTPrompt.characterCap` on the Swift
-#: side). Reusing the prompt's figure for this field is precisely how an evolved
-#: 3057-character instruction once reached a build and broke all dictation: the
-#: test that should have caught it asserted the wrong limit. Score against this
-#: constant, never against the prompt's.
-INSTRUCTION_CHARACTER_CAP = 2048
-
-
-def overage(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
-    """Characters `instruction` runs over the cap; 0 when it fits.
-
-    Counted in characters, matching the API's own error wording — the server-side
-    check is a character-length one, not a byte-length one, so an instruction full
-    of em dashes and arrows isn't charged for their UTF-8 width.
-    """
-    return max(0, len(instruction) - cap)
+#: It used to be 2048 characters — HTTP 400 "llm_instruction: String should have at most
+#: 2048 characters", measured 2026-08-11 — and this module spent most of its length
+#: steering the search under it: a soft target below the cap, budgets restated in words
+#: and sentences, a re-ask on every over-long proposal, and a section-dropping trim as a
+#: last resort. Re-probed 2026-11-18 against the live route in both rewrite modes (Fast,
+#: which omits `rewrite_mode`, and `"smart"`): instructions of 2049, 4096, 8192, 16384,
+#: 32768 and 49152 characters were all accepted and rewrote correctly. The only limit
+#: left is on the whole `config` JSON part — 64 KiB, answered with 400 "`config` part too
+#: large" — which no instruction a reflector writes comes near, so the search no longer
+#: carries any length machinery at all. The app dropped its matching cap
+#: (`CleanupInstruction`) too, so a longer winner ships as-is.
 
 
 #: Safeguards every shipped instruction must state, as `(stem, what it prevents)`.
@@ -65,8 +52,8 @@ def overage(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
 #: paid to remove them.** Every corpus in this harness is conversational English
 #: between two humans — Switchboard statements, not directives to an assistant — so an
 #: instruction that drops "do not answer the text" scores exactly the same, while
-#: freeing ~90 characters under a cap the reflector is actively told to cut toward.
-#: Deleting them is what a well-behaved optimizer *should* do given what it can see.
+#: and an instruction that drops a clause the score can't see loses nothing by it.
+#: Removing them is what a well-behaved optimizer *should* do given what it can see.
 #:
 #: What they prevent is not hypothetical: dictating "what time is it?" into a text
 #: field has to paste the question back, not an answer to it, and non-English speech
@@ -99,27 +86,23 @@ class Objection:
     Two audiences wanting different things. `revision_directive` and the CLI gate want
     `message`, which is written for the reflection model. The proposer wants something
     short for an operator log, and used to get it by splitting `message` on its first
-    period — which truncated every length objection at "…over the hard 2048-character
-    limit on config", because the prose names `config.llm_instruction`. A label the
-    producer chooses cannot be mangled that way, and adding a fifth check now means
-    adding a code rather than hoping its first sentence survives a split.
+    period, which mangled any message whose prose names a dotted field like
+    `config.llm_instruction`. A label the producer chooses cannot be mangled that way,
+    and adding a check means adding a code rather than hoping its first sentence
+    survives a split.
     """
 
     code: str
     message: str
 
 
-def objections(
-    proposal: str, fields: tuple[str, ...], cap: int = INSTRUCTION_CHARACTER_CAP
-) -> list[str]:
+def objections(proposal: str, fields: tuple[str, ...]) -> list[Objection]:
     """Why `proposal` can't ship as-is, phrased for the reflector. Empty means it can.
 
-    Four things disqualify an instruction, and all are invisible to the score:
-
-    **Length.** Over `cap` the API rejects the whole request — see that constant.
+    Three things disqualify an instruction, and all are invisible to the score:
 
     **Dropping a safeguard.** See `REQUIRED_SAFEGUARDS` for why the score cannot
-    defend these and the search is rewarded for cutting them.
+    defend these and the search has no reason to keep them.
 
     **Copying the constraints block** addressed to the reflector into the instruction
     it writes, which would ship scaffolding to users.
@@ -137,28 +120,6 @@ def objections(
     """
     found = [name for name in fields if name in proposal]
     notes: list[Objection] = []
-    if excess := overage(proposal, cap):
-        over_by_words = max(1, in_words(excess))
-        to_target = max(1, in_words(len(proposal) - target_length(cap)))
-        sentences_over = max(
-            1, round(len(proposal.split()) / WORDS_PER_SENTENCE) - sentence_budget(cap)
-        )
-        notes.append(
-            Objection(
-                "length",
-                f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
-                f"{excess} characters over the hard {cap}-character limit on "
-                "config.llm_instruction — the API would reject every request carrying it. "
-                f"You must delete at least {over_by_words} words to be legal, and "
-                f"{to_target} to reach the {word_budget(cap)}-word target you were given. "
-                "Aim for the target, not the limit: this draft is the latest of several that "
-                "overran, and every one was discarded unread. In a unit you can actually "
-                f"count, that is about {sentences_over} sentences too many against a target "
-                f"of {sentence_budget(cap)}. Delete whole sentences and whole examples — "
-                "trimming a word here and there will not close a gap this size. Keep every "
-                "rule that changes what the model does; everything else is expendable.",
-            )
-        )
     if found:
         notes.append(
             Objection(
@@ -198,127 +159,8 @@ def objections(
 #: rewrite would ship our scaffolding to users.
 CONSTRAINT_MARKER = "HARD CONSTRAINTS"
 
-#: Characters per word in an instruction of this kind, measured on `PRIOR_WINNER`
-#: (measured before it was trimmed for headroom: 1839 characters over 299 words). Used
-#: only to state the cap in words as well as
-#: characters, because a model asked for "at most 2048 characters" cannot check its own
-#: work: told to cut 638, one reflector came back 45 characters *longer*. Word counts
-#: it can approximately keep. Characters remain what is actually enforced.
-CHARS_PER_WORD = 6.15
 
-
-#: Fraction of the hard cap the reflector is *told* to write to.
-#:
-#: Measured, not guessed. Told "at most 2048 characters", one run's 49 rejected
-#: proposals had a median length of 2149 and a median overage of 101 — one missed by a
-#: single character. The reflector was not overshooting wildly; it was aiming at the
-#: number it was given and landing about 5% past it, which is what asking a model for
-#: "at most N" reliably produces.
-#:
-#: So the number it is given is no longer the number that is enforced. The cap itself
-#: does not move: `overage` still measures against the real limit, so a proposal
-#: between the target and the cap is accepted rather than rejected for missing an
-#: advisory figure.
-#:
-#: **0.85 was not enough, and the reason is worth recording.** Told 282 words, the
-#: reflector returned 329, 346, 353, 338 and 334 — about 120% of the ask. Told 333
-#: before that, it returned ~349. Moving the ask down by 51 words moved the output by
-#: 9: the length it writes is close to *invariant* under the number it is handed,
-#: settling near 340 words whatever it is told. That is why this ratio is low rather
-#: than merely lower — at 0.65 the ask is 216 words, and even a fifth over lands at
-#: ~260, comfortably inside the cap. It is also why `constraint_preamble` leads with
-#: the limit and repeats it, and why `program.CappedInstructionProposer`'s trim
-#: remains the actual guarantee: a number this weakly obeyed cannot be one.
-SOFT_TARGET_RATIO = 0.65
-
-
-def target_length(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
-    """The length the reflector is asked for — below `cap`, to absorb its overshoot."""
-    return int(cap * SOFT_TARGET_RATIO)
-
-
-def in_words(characters: float) -> int:
-    """Characters expressed in words, at this instruction's measured density.
-
-    One derivation rather than the same division written at each site: `objections`
-    computed its own and reached for `int(WORDS_PER_SENTENCE)` where `sentence_budget`
-    used 13.3, so the reflector was quoted two different sentence counts for the same
-    draft.
-    """
-    return int(characters / CHARS_PER_WORD)
-
-
-def word_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
-    """The stated target in words — the unit a reflector can actually aim at.
-
-    Words because characters are uncountable to a model, and the *target* rather than
-    the cap because it aims at whatever figure it is handed.
-    """
-    return in_words(target_length(cap))
-
-
-def hard_word_limit(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
-    """`cap` in words — quoted alongside the target so the buffer between them is visible.
-
-    A ceiling on its own gets treated as the destination. A target *and* a ceiling
-    leaves the overshoot somewhere to land.
-    """
-    return in_words(cap)
-
-
-#: Words per sentence in an instruction of this kind, measured on `PRIOR_WINNER`
-#: (199 words across ~15 sentences). Only used to restate the budget structurally.
-WORDS_PER_SENTENCE = 13.3
-
-
-def sentence_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
-    """The target expressed in sentences — a unit the model can actually count.
-
-    A model cannot count its own words while generating, which is most of why the word
-    budget is obeyed so weakly: told 282 it returned ~340, told 333 it returned ~349.
-    Sentences and sections it *can* count, because they are structural rather than
-    tallied. So the same budget is stated twice, once in words and once in a shape.
-    """
-    return round(word_budget(cap) / WORDS_PER_SENTENCE)
-
-
-def trim_to_fit(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str | None:
-    """Drop whole blocks until `instruction` fits, or None if that can't be done safely.
-
-    The last resort before abandoning a proposal. Reflectors overshoot this cap badly
-    and do not reliably converge when asked to cut, so a run can otherwise spend every
-    iteration re-scoring the instruction it started with.
-
-    Cuts at blank lines only — whole sections, never mid-sentence — and takes the
-    largest removable block first, since one section usually covers the whole overage.
-    The first and last blocks are protected: they are the task statement and the output
-    instruction, and an instruction that has lost either is not a shorter instruction,
-    it is a broken one. Returns None if the result would drop a safeguard.
-
-    Doing this inside the search is safe in a way hand-editing an instruction is not:
-    GEPA scores the trimmed candidate immediately, so a trim that cost quality loses on
-    merit in the same iteration. Nothing unscored reaches a winner this way.
-    """
-    blocks = [b for b in instruction.split("\n\n") if b.strip()]
-    if len(blocks) < 3:
-        return None
-    while len("\n\n".join(blocks)) > cap:
-        # Both protections are one predicate over candidate cuts: not the first or
-        # last block, and not a block the safeguards would leave with. Checking the
-        # safeguards only after the loop let the greedy pick take the safeguard block
-        # whenever it was the largest, and abandon a trim that was there to be made.
-        removable = [
-            b
-            for b in blocks[1:-1]
-            if not missing_safeguards("\n\n".join(x for x in blocks if x is not b))
-        ]
-        if not removable:
-            return None
-        blocks.remove(max(removable, key=len))
-    return "\n\n".join(blocks)
-
-
-def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str:
+def constraint_preamble(current: str) -> str:
     """The instruction to improve, plus the rules its replacement has to satisfy.
 
     Attached on the **first** attempt, not just after a rejection. Learned the hard
@@ -326,54 +168,29 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     rejected three times each and abandoned, so GEPA spent the iteration re-scoring an
     instruction identical to the one it started with.
 
-    The headroom is what makes it actionable. Almost every "improvement" a reflector
-    reaches for is an addition, so a bare "at most 2048 characters" reads as permission
-    when the remaining room may be nearly nothing. Stating the arithmetic turns it into
-    a budget it can plan in — and see `PRIOR_WINNER` for why the seed itself was cut
-    down to leave some.
+    No length rule. While `config.llm_instruction` was capped this block led with a
+    word and sentence budget, repeated it, and was mostly about that; the cap is gone
+    (see the note above `REQUIRED_SAFEGUARDS`), so what remains are the rules the score
+    still cannot see.
     """
-    budget, hard = word_budget(cap), hard_word_limit(cap)
-    sentences = sentence_budget(cap)
-    have = len(current.split())
     return (
-        f"BEFORE YOU BEGIN — the constraint attempts at this task fail on, far more often "
-        f"than any other: aim for {budget} WORDS, about {sentences} SENTENCES. The hard "
-        f"maximum is {hard} words; past that the API rejects the request and the attempt is "
-        "lost.\n\n"
         f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write. These are "
-        "requirements of the API and the product, not preferences. An instruction that "
-        "breaks any of them is discarded without being scored.\n"
-        f"1. LENGTH — target {budget} words, hard maximum {hard}. The instruction above is "
-        f"{have} words. Aim at the target and let the maximum be the margin you never "
-        "reach; attempts that aimed at the maximum averaged 340 words and every one of them "
-        "was thrown away unread.\n"
-        f"   Easier to hold than a word count: keep it to about {sentences} sentences across "
-        "at most 5 short sections. You cannot count your words while writing, but you can "
-        "count sentences and sections — use those.\n"
-        "   Shorter is strictly better. An instruction half this length that performs the "
-        "same is the better answer; brevity is never penalised here, and length is what "
-        "kills attempts. Add nothing without deleting something larger.\n"
-        f"   Before you reply, count the sentences in your draft. If it runs past "
-        f"{sentences}, delete whole sentences — not a word here and there — and count "
-        "again. Do not submit a draft you have not counted.\n"
-        "2. SAFEGUARDS. It must forbid answering the transcript and forbid translating it, "
+        "requirements of the product, not preferences. An instruction that breaks any of "
+        "them is discarded without being scored.\n"
+        "1. SAFEGUARDS. It must forbid answering the transcript and forbid translating it, "
         "in whatever words you like. The scoring corpus cannot see either failure, so "
         "nothing will penalise you for dropping them; they still reach real users.\n"
-        "3. NO FIELD NAMES. The model receives a bare transcript with no fields around it.\n"
-        "4. Write only the instruction itself. Never repeat these constraints in it.\n"
-        f"\nTo repeat, because it is the one that fails: aim for {budget} words, about "
-        f"{sentences} sentences. Hard maximum {hard} words."
+        "2. NO FIELD NAMES. The model receives a bare transcript with no fields around it.\n"
+        "3. Write only the instruction itself. Never repeat these constraints in it.\n"
     )
 
 
 def revision_directive(proposal: str, notes: list[Objection]) -> str:
     """Hand a rejected proposal back to the reflector as something to revise.
 
-    Used by `program.CappedInstructionProposer` as the next round's
-    `current_instruction_doc`: the rejected text plus what was wrong with it. Stating
-    the arithmetic rather than "too long" is the point — models count characters
-    badly, so a bare complaint tends to produce another over-long draft while
-    "cut at least N of these M" gives something checkable.
+    Used by `program.GatedInstructionProposer` as the next round's
+    `current_instruction_doc`: the rejected text plus what was wrong with it, so the
+    next round is a revision of that draft rather than a fresh attempt.
     """
     listed = "\n".join(f"- {note.message}" for note in notes)
     return (
@@ -424,8 +241,8 @@ CANDIDATES: dict[str, str] = {
 #: as-emitted is the string that was measured, and a hand-tidied copy is an unscored
 #: string that looks scored.
 #:
-#: 1529 characters against a 2048 cap, leaving 519 of headroom — enough that a
-#: reflector's natural expansion lands inside the limit rather than outside it.
+#: 1529 characters, written when the field was capped at 2048. It no longer is, so a
+#: successor is free to be longer.
 #:
 #: **What it beat.** +0.0134 on held-out test over the instruction before it (0.7988 ->
 #: 0.8123 on blend, 900 dev / 450 test rows), which is the first search gain here large
@@ -452,8 +269,8 @@ CANDIDATES: dict[str, str] = {
 #:
 #: **This is also what ships.** `CleanupInstruction.text` on the Swift side is the same
 #: string, byte for byte, so a new winner promoted here has to be copied there too —
-#: `CleanupInstructionTests` will not notice a divergence, only the cap and the
-#: safeguards.
+#: `CleanupInstructionTests` will not notice a divergence, only the Swift-side cap and
+#: the safeguards.
 #:
 #: Quirks the run produced, kept because editing them would make this an unscored
 #: string: it ends a clause with "only when stammer or filler", and it lists content
@@ -481,6 +298,31 @@ Never drop genuine content words such as "just", "still", "don't", "because", "k
 Return only the cleaned transcript."""
 
 CANDIDATES["prior-winner"] = PRIOR_WINNER
+
+#: Smart's instruction (`CleanupInstruction.smartText`), derived the same way: `PRIOR_WINNER` with two hand
+#: edits — keep greetings and meaningful framing, delete "kind of" only as filler —
+#: scored on the Voice Arena public set with its own judge on Smart, two samples each:
+#: ZER 90.1 / 88.1 against `PRIOR_WINNER`'s 87.4 / 87.4, AMEND 0.16 / 0.20 against
+#: 0.33 / 0.26. Worse on Fast (75.5 / 76.2 against 78.1 / 78.1), so the app sends it on
+#: Smart only. The bar for a Smart search: `--baseline smart-winner`.
+SMART_WINNER = PRIOR_WINNER.replace(
+    'Delete filler phrases: "you know", "I mean", "I guess", "kind of", and "like" only when it '
+    "is filler.",
+    'Delete filler phrases: "you know", "I mean", "I guess", "kind of" only when it is filler '
+    '(keep it when it changes the meaning, as in "kind of discouraged"), and "like" only when '
+    "it is filler.",
+).replace(
+    'Do not delete "however" or content words.',
+    'Do not delete "however" or content words. Never delete greetings, salutations, or '
+    'sign-offs ("Hey", "Hi", "Hey Marcus", "Thanks"), or framing phrases that carry meaning '
+    '("just letting you know", "following up", "I think").',
+)
+
+CANDIDATES["smart-winner"] = SMART_WINNER
+
+#: The instructions the app ships, one per rewrite mode. Each can be a run's
+#: `--baseline`, so each is held to the shipping bar (`REQUIRED_SAFEGUARDS`).
+BASELINES = ("prior-winner", "smart-winner")
 
 #: What a run must beat to be worth shipping: the best instruction we already have.
 #: Was `guessed-default` — a guess at the service's own wording — back when nothing
