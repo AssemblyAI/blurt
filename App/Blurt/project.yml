@@ -163,8 +163,8 @@ targets:
         # "Blurt Dev" wherever macOS names it and the release stays "Blurt".
         CFBundleName: $(BLURT_APP_NAME)
         CFBundleDisplayName: $(BLURT_APP_NAME)
-        CFBundleVersion: "69"
-        CFBundleShortVersionString: "0.1.70"
+        CFBundleVersion: "70"
+        CFBundleShortVersionString: "0.1.71"
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         # Audio and video files open in Blurt to be transcribed — dropped on
