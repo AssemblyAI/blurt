@@ -411,13 +411,15 @@ def _rows_via_api(source: Source, limit: int):
 
 
 def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> dict:
-    """One page of rows, waiting out a rate limit rather than failing the load.
+    """One page of rows, waiting out a rate limit or a server hiccup rather than failing.
 
-    Retries only 429. Every other HTTP status is a fact about the request or the
-    dataset that waiting will not change, and the 500s the server intermittently
-    returns are worth surfacing rather than papering over — a load that silently took
-    four minutes to work around a broken upstream is harder to diagnose than one that
-    said so.
+    Retries 429 and the 5xx gateway errors (500, 502, 503, 504). Those used to be
+    surfaced at once on the theory that a broken upstream should say so, but in
+    practice they are seconds-long blips — 502s and 500s hit three loads in one
+    afternoon, each fine on a manual rerun — and failing on one throws away a run
+    before its first model call. Each retry is logged, so a load that spent a while
+    working around the server still says so. Every other status (a 4xx) is a fact
+    about the request or the dataset that waiting will not change.
     """
     for attempt in range(1, _RATE_LIMIT_ATTEMPTS + 1):
         try:
@@ -427,9 +429,14 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
                 return json.load(response)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", "replace")[:400]
-            if error.code != 429:
+            if error.code not in (429, 500, 502, 503, 504):
                 raise RuntimeError(
                     f"datasets-server returned HTTP {error.code} for {source.dataset}: {body}"
+                ) from error
+            if attempt == _RATE_LIMIT_ATTEMPTS and error.code != 429:
+                raise RuntimeError(
+                    f"datasets-server returned HTTP {error.code} for {source.dataset} on all "
+                    f"{_RATE_LIMIT_ATTEMPTS} attempts: {body}"
                 ) from error
             if attempt == _RATE_LIMIT_ATTEMPTS:
                 advice = (
@@ -444,7 +451,8 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
                     f"{_RATE_LIMIT_ATTEMPTS} attempts. {advice}."
                 ) from error
             delay = _RATE_LIMIT_BACKOFF * 2 ** (attempt - 1)
-            print(f"  rate limited; retrying in {delay:.0f}s ({attempt}/{_RATE_LIMIT_ATTEMPTS})")
+            what = "rate limited" if error.code == 429 else f"datasets-server HTTP {error.code}"
+            print(f"  {what}; retrying in {delay:.0f}s ({attempt}/{_RATE_LIMIT_ATTEMPTS})")
             time.sleep(delay)
         except urllib.error.URLError as error:
             raise RuntimeError(

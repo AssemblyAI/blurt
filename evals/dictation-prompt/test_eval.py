@@ -1633,3 +1633,47 @@ def test_a_hostile_clip_id_cannot_escape_the_audio_cache(monkeypatch, tmp_path):
         path = voicearena.audio_path({"id": hostile, "spoken_text": "s"})
         assert path.parent == directory, hostile
     assert voicearena.audio_path(VA_ROWS[0]).name.startswith("dict_0000-")
+
+
+def _http_error(code):
+    import urllib.error
+
+    return urllib.error.HTTPError("https://x", code, "err", {}, io.BytesIO(b"body"))
+
+
+def test_a_gateway_hiccup_is_retried_not_fatal(monkeypatch):
+    """502s and 500s hit three loads in one afternoon; each was fine seconds later."""
+    import urllib.request
+
+    replies = [_http_error(502), _http_error(500)]
+
+    class Ok(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout=0):
+        if replies:
+            raise replies.pop(0)
+        return Ok(b'{"rows": []}')
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(corpus.time, "sleep", lambda s: None)
+    assert corpus._fetch_page("https://x", {}, corpus.SOURCES["nyra"], None) == {"rows": []}
+
+
+def test_a_client_error_still_fails_at_once(monkeypatch):
+    import urllib.request
+
+    attempts = []
+
+    def fake_urlopen(request, timeout=0):
+        attempts.append(1)
+        raise _http_error(404)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        corpus._fetch_page("https://x", {}, corpus.SOURCES["nyra"], None)
+    assert len(attempts) == 1
