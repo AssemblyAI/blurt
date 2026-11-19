@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtEngine
 import SwiftUI
 
@@ -21,6 +22,8 @@ struct KeyTermsStepView: View {
   @AppStorage(KeyTermsStore.defaultsKey) private var text = ""
 
   var body: some View {
+    let terms = KeyTerms.parse(text)
+    let sent = KeyTerms.fitted(terms).count
     Section {
       // A vertical-axis TextField gives a native placeholder (`prompt`) and grows
       // with content up to `lineLimit`, so there's no need to fake a placeholder by
@@ -41,7 +44,17 @@ struct KeyTermsStepView: View {
     } header: {
       Text("Key terms")
     } footer: {
-      Text("Separate names and specialist terms with commas to help Blurt spell them correctly.")
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Separate names and specialist terms with commas to help Blurt spell them correctly.")
+        if sent < terms.count {
+          Label {
+            Text("Only \(sent) of \(terms.count) terms will be sent. Put important terms first or shorten long terms.")
+          } icon: {
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.orange)
+          }
+        }
+      }
     }
   }
 }
