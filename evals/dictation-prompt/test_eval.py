@@ -1451,7 +1451,6 @@ def test_held_out_rows_overflow_into_train_only_when_dev_and_test_are_full():
 
 def test_stt_input_is_the_services_transcript_and_is_cached(monkeypatch, tmp_path):
     """The rewrite is handed the STT's text, which already writes numbers out."""
-    import live
     import voicearena
 
     calls = []
@@ -1493,8 +1492,6 @@ def test_a_changed_clip_is_not_served_a_stale_transcript():
 
 
 def test_live_verification_plays_the_recording_when_there_is_one(monkeypatch):
-    import live
-
     monkeypatch.setattr(live, "require_tools", lambda: None)
     monkeypatch.setattr(live, "recorded", lambda url, directory: b"recorded")
     monkeypatch.setattr(live, "synthesize", lambda text, directory, voice=None: b"say")
@@ -1505,8 +1502,6 @@ def test_live_verification_plays_the_recording_when_there_is_one(monkeypatch):
 
 
 def test_smart_rewrite_mode_reaches_the_request(monkeypatch):
-    import live
-
     sent = {}
 
     def fake_post(url, body, boundary, api_key):
