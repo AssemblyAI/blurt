@@ -27,7 +27,7 @@ struct AssemblyAITranscriberTranscriptTests {
   @Test("a rewrite that reads the instruction back, or says nothing, loses to the verbatim transcript")
   func chooseTranscriptOverAnEcho() throws {
     let style = "No grammatical fixes ever. Just dictate what I say."
-    let instruction = try #require(CleanupInstruction.sendable(appending: style))
+    let instruction = CleanupInstruction.sendable(appending: style)
     // Measured against the route on 2026-11-05: "Yeah." → the style text, "Um." → ".".
     #expect(
       AssemblyAITranscriber.chooseTranscript(
