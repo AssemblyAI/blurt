@@ -431,11 +431,10 @@ left is on the whole `config` JSON part, 64 KiB (400 _"`config` part too large"_
 reflector comes near. So all of the length machinery has been removed and the search may
 write as long an instruction as scores best.
 
-**The app has not followed.** `CleanupInstruction.characterCap` on the Swift side is still
-2048, and `CleanupInstruction.sendable` drops an instruction over it — silently falling back
-to the service default. The CLI prints a warning next to any winner over 2048 bytes; raise
-that constant in the same change that ships one. The style-profile headroom
-(`CleanupInstruction.sendable(appending:)`) is computed against the same constant.
+**The app followed.** `CleanupInstruction` on the Swift side has no cap either, so a longer
+winner ships as-is. A user's style profile is appended to it, trimmed to its own editor limit
+(`StyleProfileStore.characterLimit`, 4000 UTF-8 bytes), which keeps a full request far below the
+64 KiB `config` limit.
 
 ### The safeguards the corpus cannot defend
 

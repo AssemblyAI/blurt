@@ -298,26 +298,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     )
   }
 
-  /// The cleanup instruction this request asks the route to rewrite with, or nil
-  /// to leave the wording to the service — which is *not* the same as no
-  /// rewrite; see `DictationConfig.llmInstruction`.
+  /// The cleanup instruction this request asks the route to rewrite with. Returning
+  /// nil would leave the wording to the service — which is *not* the same as no
+  /// rewrite; see `DictationConfig.llmInstruction` — and is the one-line revert
+  /// should the shipped instruction ever need pulling.
   ///
   /// `customStyle` is the press's style (`TranscriptionContext.styleInstructions`).
   private func cleanupInstruction(appending customStyle: String?) -> String? {
-    guard let instruction = CleanupInstruction.sendable(appending: customStyle) else {
-      // Unreachable while the tests run: `CleanupInstructionTests` asserts the length.
-      // Logged rather than trusted because the failure it guards against is silent —
-      // the user would get the service's default cleanup instead of their style
-      // profile's, with a 200 and a plausible transcript to hide it.
-      Self.log.error(
-        """
-        cleanup instruction is \(CleanupInstruction.text.utf8.count, privacy: .public) UTF-8 bytes, \
-        over the \(CleanupInstruction.characterCap, privacy: .public) cap; \
-        falling back to the service default
-        """)
-      return nil
-    }
-    return instruction
+    CleanupInstruction.sendable(appending: customStyle)
   }
 
   // MARK: - Networking helpers

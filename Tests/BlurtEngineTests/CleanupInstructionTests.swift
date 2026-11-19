@@ -21,35 +21,13 @@ struct CleanupInstructionTests {
         == CleanupInstruction.text)
   }
 
-  /// The one that matters, and the one that was wrong before. `config.llm.instruction`
-  /// is capped at 2048 (counted here in UTF-8 bytes — the conservative unit, see
-  /// `characterCap`) and the API rejects the whole request above it — a 400 before
-  /// the audio is read, so every dictation fails outright rather than degrading to
-  /// the verbatim transcript. A 3057-character instruction shipped once and did
-  /// exactly that, past a version of this very test that asserted
-  /// `STTPrompt.characterCap` — the 4096 limit on the *other* field.
-  ///
-  /// So this asserts the instruction's own cap, and the next test pins the two apart.
-  @Test("the instruction fits the API's cap on config.llm.instruction")
-  func withinCap() {
-    #expect(CleanupInstruction.text.utf8.count <= CleanupInstruction.characterCap)
-  }
-
-  /// The cap is not only asserted here — `AssemblyAITranscriber` consults it on every
-  /// request and omits the instruction if it would not fit, so an over-cap edit
-  /// degrades to the service's own default cleanup instead of failing every
-  /// dictation. This pins the healthy state: it fits, so it is sent.
-  @Test("a fitting instruction is the one actually sent")
-  func sendableWhenItFits() {
-    #expect(CleanupInstruction.sendable == CleanupInstruction.text)
-  }
-
-  /// The mistake was reaching for a nearby constant that happened to be a length.
-  /// If these two ever converge, the test above stops distinguishing them.
-  @Test("the instruction's cap is not the conversation context's cap")
-  func capsAreDistinct() {
-    #expect(CleanupInstruction.characterCap == 2048)
-    #expect(CleanupInstruction.characterCap < STTPrompt.characterCap)
+  /// `config.llm_instruction` has no length cap any more (the reference dropped its
+  /// `maxLength`; 49152 characters was measured accepted in Fast and Smart), so an
+  /// unstyled request sends the shipped text whatever its length — there is no
+  /// "too long, fall back to the service default" branch left to take.
+  @Test("an unstyled request sends the shipped instruction as-is")
+  func unstyledSendsTheText() {
+    #expect(CleanupInstruction.sendable(appending: nil) == CleanupInstruction.text)
   }
 
   /// The product-critical clauses, as opposed to the cleanup quality the eval
@@ -59,10 +37,9 @@ struct CleanupInstructionTests {
   /// non-English speech has to survive as spoken.
   ///
   /// The eval cannot defend these. Every corpus behind the instruction is
-  /// conversational English between two humans, so an instruction that drops them
-  /// scores exactly the same while freeing characters under a cap the optimizer is
-  /// pushed to cut toward — which is why `evals/dictation-prompt` gates them too,
-  /// and why they are asserted here rather than trusted.
+  /// English, and none of it punishes an answer or a translation, so an instruction
+  /// that drops them scores exactly the same — which is why `evals/dictation-prompt`
+  /// gates them too, and why they are asserted here rather than trusted.
   ///
   /// Matched on stems, not whole phrases, because the instruction is *evolved* — the
   /// eval's own gate (`candidates.REQUIRED_SAFEGUARDS`) matches "answer" and "translat"
@@ -85,11 +62,10 @@ struct CleanupInstructionTests {
   /// The styled base leads (its safeguards keep protecting every request), the
   /// preamble bridges, and the user's text — trimmed of padding — closes.
   @Test("custom style instructions are appended after the styled base instruction")
-  func customStyleIsAppended() throws {
-    let combined = try #require(CleanupInstruction.sendable(appending: "  always write in lowercase \n"))
+  func customStyleIsAppended() {
+    let combined = CleanupInstruction.sendable(appending: "  always write in lowercase \n")
     #expect(combined.hasPrefix(CleanupInstruction.styledText + CleanupInstruction.customStylePreamble))
     #expect(combined.hasSuffix("always write in lowercase"))
-    #expect(combined.utf8.count <= CleanupInstruction.characterCap)
   }
 
   /// Empty must mean "identical to today", not an empty suffix — a trailing
@@ -98,49 +74,49 @@ struct CleanupInstructionTests {
     "nil and blank custom style leave the sent instruction exactly as shipped",
     arguments: [nil, "", "   \n "])
   func blankCustomStyleChangesNothing(custom: String?) {
-    #expect(CleanupInstruction.sendable(appending: custom) == CleanupInstruction.sendable)
+    #expect(CleanupInstruction.sendable(appending: custom) == CleanupInstruction.text)
   }
 
-  /// The Settings field enforces the budget, but nothing stops a longer string
-  /// reaching the defaults slot some other way — and over the cap the API rejects
-  /// the whole request, failing every dictation. So the engine trims too.
-  @Test("an over-budget custom style is trimmed so the request still fits the cap")
-  func overBudgetCustomStyleIsTrimmed() throws {
-    let oversized = String(repeating: "x", count: CleanupInstruction.customStyleBudget + 100)
-    let combined = try #require(CleanupInstruction.sendable(appending: oversized))
-    #expect(combined.utf8.count == CleanupInstruction.characterCap)
-    #expect(combined.hasPrefix(CleanupInstruction.styledText))
+  /// The style editors enforce `StyleProfileStore.characterLimit`, but nothing stops
+  /// a longer string reaching the defaults slot some other way, so the engine trims
+  /// to the same limit — what the editor would have stored is what is sent.
+  @Test("an over-limit custom style is trimmed to the per-profile limit")
+  func overLimitCustomStyleIsTrimmed() {
+    let oversized = String(repeating: "x", count: StyleProfileStore.characterLimit + 100)
+    let combined = CleanupInstruction.sendable(appending: oversized)
+    let lead = CleanupInstruction.styledText + CleanupInstruction.customStylePreamble
+    #expect(combined.hasPrefix(lead))
+    #expect(combined.utf8.count == lead.utf8.count + StyleProfileStore.characterLimit)
   }
 
   /// Emoji are the worst case the field's placeholder invites: one `Character`
-  /// can be many UTF-8 bytes, so a character-counted trim could pass every
-  /// client check while the encoded request still trips the server's cap. This
-  /// pins the byte-measured trim — and that it drops whole characters, so a
-  /// multi-scalar emoji is never split into an invalid fragment.
+  /// can be many UTF-8 bytes, so the limit is counted in bytes. This pins the
+  /// byte-measured trim — and that it drops whole characters, so a multi-scalar
+  /// emoji is never split into an invalid fragment.
   @Test("a multi-scalar emoji custom style is trimmed by bytes, on whole characters")
-  func emojiCustomStyleFitsTheCapInBytes() throws {
+  func emojiCustomStyleIsTrimmedInBytes() {
     let emoji = "👩🏽‍💻"  // four scalars, 15 UTF-8 bytes, one Character
-    let oversized = String(repeating: emoji, count: CleanupInstruction.customStyleBudget)
-    let combined = try #require(CleanupInstruction.sendable(appending: oversized))
-    #expect(combined.utf8.count <= CleanupInstruction.characterCap)
+    let oversized = String(repeating: emoji, count: StyleProfileStore.characterLimit)
+    let combined = CleanupInstruction.sendable(appending: oversized)
     let lead = CleanupInstruction.styledText + CleanupInstruction.customStylePreamble
     #expect(combined.hasPrefix(lead))
-    // Something survived the trim, and only whole emoji did.
     let appended = combined.dropFirst(lead.count)
+    #expect(appended.utf8.count <= StyleProfileStore.characterLimit)
+    // Something survived the trim, and only whole emoji did.
     #expect(appended.isEmpty == false)
     #expect(appended.allSatisfy { String($0) == emoji })
   }
 
-  /// The budget is derived, not restated — this pins the arithmetic that keeps a
-  /// full-length custom style at exactly the cap, and that there is meaningful
-  /// room at all (a re-optimized base instruction could quietly eat it).
-  @Test("the custom style budget is the real headroom under the cap")
-  func customStyleBudgetIsTheHeadroom() {
-    #expect(
-      CleanupInstruction.styledText.utf8.count + CleanupInstruction.customStylePreamble.utf8.count
-        + CleanupInstruction.customStyleBudget == CleanupInstruction.characterCap)
-    #expect(CleanupInstruction.customStyleBudget >= 200)
-    #expect(StyleProfileStore.characterLimit == CleanupInstruction.customStyleBudget)
+  /// The per-profile limit is an editor bound now, not the headroom under an API
+  /// cap: room for a long style, and with the base instruction still far inside the
+  /// one limit the service keeps — 64 KiB on the whole `config` part, which also
+  /// carries `stt_prompt` and the key terms.
+  @Test("the style limit is a generous editor bound well inside the config limit")
+  func styleLimitIsAnEditorBound() {
+    #expect(StyleProfileStore.characterLimit >= 2000)
+    let longest = CleanupInstruction.sendable(
+      appending: String(repeating: "x", count: StyleProfileStore.characterLimit))
+    #expect(longest.utf8.count < 16 * 1024)
   }
 
   /// The unedited rule ("Preserve the original punctuation, capitalization…") beat
@@ -152,8 +128,7 @@ struct CleanupInstructionTests {
     #expect(CleanupInstruction.text.contains(CleanupInstruction.preservationRule))
     #expect(CleanupInstruction.styledText.contains(CleanupInstruction.preservationRule) == false)
     #expect(CleanupInstruction.styledText.contains(CleanupInstruction.styledPreservationRule))
-    let combined = try #require(
-      CleanupInstruction.sendable(appending: "Remove the commas and the capital letters."))
+    let combined = CleanupInstruction.sendable(appending: "Remove the commas and the capital letters.")
     #expect(combined.contains(CleanupInstruction.preservationRule) == false)
     #expect(combined.contains(CleanupInstruction.styledPreservationRule))
     for stem in ["answer", "translat", "rephrase"] {
@@ -168,17 +143,6 @@ struct CleanupInstructionTests {
     let qualified = CleanupInstruction.styledPreservationRule
     let restored = CleanupInstruction.styledText.replacing(qualified, with: CleanupInstruction.preservationRule)
     #expect(restored == CleanupInstruction.text)
-  }
-
-  /// The budget is measured against the styled base. Were the qualified rule longer
-  /// than the one it replaces, every style profile's limit would quietly shrink
-  /// (and a style saved at the old limit would be trimmed on the wire).
-  @Test("the styled base is no longer than the shipped text, so the style budget never shrinks")
-  func styledTextDoesNotShrinkTheBudget() {
-    let shippedLength = CleanupInstruction.text.utf8.count
-    let preambleLength = CleanupInstruction.customStylePreamble.utf8.count
-    #expect(CleanupInstruction.styledText.utf8.count <= shippedLength)
-    #expect(CleanupInstruction.customStyleBudget >= CleanupInstruction.characterCap - shippedLength - preambleLength)
   }
 
   /// It travels as one JSON string. The instruction is full of quotes, backticks,

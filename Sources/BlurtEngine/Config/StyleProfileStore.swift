@@ -45,11 +45,12 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 /// afresh (`PressStyle`), so an edit — or a click on the main
 /// window's switcher — applies to the very next dictation.
 ///
-/// **Only the active profile is ever sent.** Concatenating them would be the
-/// obvious-looking generalization and is the one thing this must not do: the
-/// API's 2048-byte instruction cap rejects the *whole request* when exceeded, so
-/// a combined instruction fails every dictation rather than degrading. A
-/// 3057-character instruction shipped that way once (see `CleanupInstruction`).
+/// **Only the active profile is ever sent.** The active profile *is* the style
+/// the user chose for this press; concatenating the others would hand the model
+/// several, often contradictory, styles at once. (It also used to be what kept
+/// the request under the API's former 2048-character instruction cap, which over
+/// it rejected the whole request; the field is uncapped now — see
+/// `CleanupInstruction`.)
 ///
 /// Unlike the single-field store it replaces, this one has setters. That is the
 /// documented exception for a value that is *encoded* on write (as with
@@ -119,14 +120,18 @@ public struct StyleProfileStore {
   /// normalized to, on read and on write.
   public static var limit: Int { HostIdentity.current.styleProfileLimit }
 
-  /// The most UTF-8 bytes one profile's instructions may hold —
-  /// `CleanupInstruction.customStyleBudget`, the real headroom the dictation
-  /// API's 2048 instruction cap leaves after the base instruction (see
-  /// `CleanupInstruction.characterCap` for why the unit is bytes). Re-exported
-  /// here (the editor's counter and the engine's trim have to agree) rather than
-  /// restated, which is how the cap bug shipped once before. It is a *per
-  /// profile* budget because only one profile is ever sent.
-  public static let characterLimit = CleanupInstruction.customStyleBudget
+  /// The most UTF-8 bytes one profile's instructions may hold. The editors'
+  /// counters and the engine's trim (`CleanupInstruction.sendable(appending:)`)
+  /// all read this one constant, so they cannot disagree.
+  ///
+  /// No longer derived from an API limit: `config.llm_instruction` used to be
+  /// capped at 2048 characters, and this was the ~390 bytes of headroom that left
+  /// after the base instruction. The field is uncapped now (see
+  /// `CleanupInstruction`), so this is an editor bound — room for a long, detailed
+  /// style — set far below the one limit the service still has, 64 KiB on the
+  /// whole `config` part. Bytes rather than characters so that bound holds for
+  /// emoji and non-Latin text too.
+  public static let characterLimit = 4000
 
   /// The most `Character`s a profile name may hold. Counted in characters, not
   /// the UTF-8 bytes `characterLimit` uses, because this limit exists for a

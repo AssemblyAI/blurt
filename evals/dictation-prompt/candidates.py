@@ -42,11 +42,8 @@ from dataclasses import dataclass
 #: 32768 and 49152 characters were all accepted and rewrote correctly. The only limit
 #: left is on the whole `config` JSON part — 64 KiB, answered with 400 "`config` part too
 #: large" — which no instruction a reflector writes comes near, so the search no longer
-#: carries any length machinery at all.
-#:
-#: The Swift side has not followed: `CleanupInstruction.characterCap` is still 2048 and
-#: `CleanupInstruction.sendable` drops an instruction over it, so a longer winner has to
-#: raise that constant in the same change that ships it.
+#: carries any length machinery at all. The app dropped its matching cap
+#: (`CleanupInstruction`) too, so a longer winner ships as-is.
 
 
 #: Safeguards every shipped instruction must state, as `(stem, what it prevents)`.
