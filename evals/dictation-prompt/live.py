@@ -48,7 +48,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import metrics
@@ -222,8 +222,15 @@ def recorded(url: str, directory: Path) -> bytes:
     resamples it to 16 kHz mono, the same retargeting `synthesize` applies to `say`.
     """
     encoded, wav = directory / "clip.flac", directory / "clip.wav"
-    with urllib.request.urlopen(url, timeout=90) as response:  # noqa: S310 — dataset asset
-        encoded.write_bytes(response.read())
+    if not url.startswith(("http://", "https://")):
+        # A path: the clip was kept on disk at load (`voicearena.ensure_audio`).
+        encoded.write_bytes(Path(url).read_bytes())
+    else:
+        try:
+            with urllib.request.urlopen(url, timeout=90) as response:  # noqa: S310 — dataset asset
+                encoded.write_bytes(response.read())
+        except urllib.error.URLError as error:
+            raise Unavailable(f"could not download a recorded clip ({error})") from error
     subprocess.run(
         [
             "afconvert",
@@ -255,6 +262,25 @@ def synthesize_all(utterances: list[Utterance]) -> list[tuple[Utterance, bytes]]
     structurally true rather than true because `say` happens to be deterministic.
     """
     require_tools()
+    # Recordings are normally on disk by now (`voicearena.ensure_audio`). A clip that
+    # still points at a URL has a signed one, expiring within hours of the corpus
+    # load — and a search runs for hours: one run's every download came back 403. So
+    # re-read those, fresh, matched by reference; if the server is down too, keep the
+    # old URL and let the download say so rather than fail the whole check here.
+    if any(u.audio_url and u.audio_url.startswith("http") for u in utterances):
+        import voicearena  # noqa: PLC0415 — deferred: it imports corpus, which imports this
+
+        try:
+            fresh = voicearena.fresh_audio_urls()
+        except RuntimeError as error:
+            print(f"  could not refresh recording URLs ({error}); using the ones from load")
+            fresh = {}
+        utterances = [
+            replace(u, audio_url=fresh.get(u.reference, u.audio_url))
+            if u.audio_url and u.audio_url.startswith("http")
+            else u
+            for u in utterances
+        ]
     with tempfile.TemporaryDirectory(prefix="blurt-live-") as directory:
         return [
             (

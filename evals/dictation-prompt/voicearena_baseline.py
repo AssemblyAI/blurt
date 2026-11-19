@@ -156,7 +156,7 @@ def transcribe_all(
 
     def one(row: dict) -> tuple[str, dict]:
         with tempfile.TemporaryDirectory(prefix="blurt-va-") as directory:
-            pcm = live.recorded(voicearena.audio_url(row), Path(directory))
+            pcm = live.recorded(voicearena.local_or_url(row), Path(directory))
         url = f"https://{host}/v1/transcribe/live"
         response = live.transcribe(pcm, api_key, instruction, url, rewrite_mode=rewrite_mode)
         return voicearena.cache_key(row), {

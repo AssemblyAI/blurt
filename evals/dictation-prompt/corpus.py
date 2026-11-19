@@ -465,7 +465,7 @@ def _pairs_from_rows(rows, source: Source, where: str, stt: dict[str, str] | Non
     detag = source.detag or (lambda text: text)
     for row in rows:
         reference = detag(_tidy(_field(row, source.target_field, where)))
-        audio = voicearena.audio_url(row)
+        audio = voicearena.local_or_url(row)
         if stt is not None:
             yield stt[voicearena.cache_key(row)], reference, audio
         elif source.is_paired:
@@ -510,6 +510,7 @@ def _load_registered(
 
         rows = list(rows)
         stt = voicearena.transcripts(rows, os.environ.get("ASSEMBLYAI_API_KEY"))
+        voicearena.ensure_audio(rows)
         input_side = "service STT transcript of the audio"
     template = Utterance(reference="", disfluent="", source=spec.key, held_out=spec.held_out)
     kept = _collect(

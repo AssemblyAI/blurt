@@ -357,20 +357,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-#: What `CleanupInstruction.sendable` on the Swift side still accepts, in UTF-8 bytes.
-#: Not a constraint here — the API no longer caps the field — but the app drops an
-#: instruction over it and sends none, so a longer winner is reported with a warning.
-SWIFT_SENDABLE_BYTES = 2048
-
-
 def describe_length(instruction: str) -> str:
-    """`1529 chars`, plus a warning when the app as built would refuse to send it."""
-    size = len(instruction.encode("utf-8"))
-    if size > SWIFT_SENDABLE_BYTES:
-        return (
-            f"{len(instruction)} chars — over the app's {SWIFT_SENDABLE_BYTES}-byte "
-            "CleanupInstruction.characterCap; raise it before shipping this"
-        )
+    """`1529 chars` — informational only; neither the API nor the app caps the field."""
     return f"{len(instruction)} chars"
 
 
@@ -473,8 +461,11 @@ def run_live_verification(
                     rewrite_mode=rewrite_mode,
                 )
                 summaries[name] = live.summarize(results)
-    except live.Unavailable as error:
-        print(f"\nSkipping --verify-live: {error}")
+    except Exception as error:  # noqa: BLE001 — see below
+        # Any failure here, not only `Unavailable`: this runs after hours of paid search,
+        # and an uncaught error from it (once, an expired audio URL's 403) killed the run
+        # before `--out` was written. The search's result outranks the live check.
+        print(f"\nSkipping --verify-live: {type(error).__name__}: {error}")
         return None
 
     recordings = sum(bool(u.audio_url) for u in sample)

@@ -774,13 +774,9 @@ def test_candidate_check_passes_as_shipped():
     assert cli.check_candidates() is None
 
 
-def test_describe_length_warns_only_past_what_the_app_will_send():
-    """The API takes any length; `CleanupInstruction.sendable` still drops >2048 bytes."""
-    limit = cli.SWIFT_SENDABLE_BYTES
-    assert cli.describe_length("x" * limit) == f"{limit} chars"
-    assert "characterCap" in cli.describe_length("x" * (limit + 1))
-    # Bytes, as the Swift side counts: 1100 em dashes are 3300 bytes.
-    assert "characterCap" in cli.describe_length("\u2014" * 1100)
+def test_describe_length_reports_length_without_any_cap_warning():
+    """Neither the API nor the app caps the field, so a long winner draws no warning."""
+    assert cli.describe_length("x" * 2737) == "2737 chars"
 
 
 def test_the_feedback_reports_only_the_axis_being_selected_on():
@@ -1495,6 +1491,9 @@ def test_live_verification_plays_the_recording_when_there_is_one(monkeypatch):
     monkeypatch.setattr(live, "require_tools", lambda: None)
     monkeypatch.setattr(live, "recorded", lambda url, directory: b"recorded")
     monkeypatch.setattr(live, "synthesize", lambda text, directory, voice=None: b"say")
+    import voicearena
+
+    monkeypatch.setattr(voicearena, "fresh_audio_urls", dict)
     with_audio = corpus.Utterance(reference="a", disfluent="a", audio_url="https://x/a.flac")
     without = corpus.Utterance(reference="b", disfluent="b")
     prepared = live.synthesize_all([with_audio, without])
@@ -1568,3 +1567,57 @@ def test_signed_audio_rows_are_never_cached():
     """Voice Arena's audio URLs expire; a cached row would break --verify-live later."""
     assert corpus.SOURCES["voicearena"].cache_rows is False
     assert corpus.SOURCES["nyra"].cache_rows is True
+
+
+def test_live_verification_refreshes_expired_audio_urls(monkeypatch):
+    """Signed URLs expire mid-run; a 4-hour search once got 403 on every clip."""
+    import voicearena
+
+    seen = []
+    monkeypatch.setattr(live, "require_tools", lambda: None)
+    monkeypatch.setattr(live, "recorded", lambda url, directory: seen.append(url) or b"pcm")
+    monkeypatch.setattr(voicearena, "fresh_audio_urls", lambda: {"a": "https://x/fresh.flac"})
+    stale = corpus.Utterance(reference="a", disfluent="a", audio_url="https://x/stale.flac")
+    live.synthesize_all([stale])
+    assert seen == ["https://x/fresh.flac"]
+
+
+def test_a_failed_live_check_never_crashes_a_finished_run(monkeypatch):
+    """The search's result outranks the live check: report and move on."""
+    monkeypatch.setenv("ASSEMBLYAI_API_KEY", "key")
+
+    def boom(_):
+        raise ValueError("403 Forbidden")
+
+    monkeypatch.setattr(live, "synthesize_all", boom)
+    args = cli.parse_args(["--verify-live", "2"])
+    rows = [corpus.Utterance(reference="a", disfluent="a")]
+    assert cli.run_live_verification(args, "w", "instruction", rows) is None
+
+
+def test_recordings_kept_on_disk_are_played_without_the_network(monkeypatch, tmp_path):
+    """A local path skips both the expiring URL and the flaky datasets-server."""
+    import voicearena
+
+    monkeypatch.setattr(live, "require_tools", lambda: None)
+    seen = []
+    monkeypatch.setattr(live, "recorded", lambda url, directory: seen.append(url) or b"pcm")
+
+    def no_network():
+        raise AssertionError("fresh URLs must not be fetched for local recordings")
+
+    monkeypatch.setattr(voicearena, "fresh_audio_urls", no_network)
+    local = corpus.Utterance(reference="a", disfluent="a", audio_url=str(tmp_path / "a.flac"))
+    live.synthesize_all([local])
+    assert seen == [str(tmp_path / "a.flac")]
+
+
+def test_a_downloaded_recording_is_served_locally(monkeypatch, tmp_path):
+    import voicearena
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    row = VA_ROWS[0]
+    assert voicearena.local_or_url(row) == row["audio"][0]["src"]
+    voicearena.audio_path(row).parent.mkdir(parents=True)
+    voicearena.audio_path(row).write_bytes(b"flac")
+    assert voicearena.local_or_url(row) == str(voicearena.audio_path(row))

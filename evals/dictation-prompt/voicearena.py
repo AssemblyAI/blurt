@@ -49,6 +49,40 @@ def cache_key(row: dict) -> str:
     return f"{row.get('id')}:{digest[:16]}"
 
 
+def audio_path(row: dict) -> Path:
+    """Where a clip's recording is kept on disk, keyed like its transcript."""
+    return cache_path().parent / "voicearena-audio" / f"{cache_key(row).replace(':', '-')}.flac"
+
+
+def ensure_audio(rows: list[dict]) -> None:
+    """Download any recording not yet on disk, while the rows' signed URLs are fresh.
+
+    The datasets-server signs audio URLs with an expiry of a few hours, and a search
+    runs for hours between loading the corpus and `--verify-live` playing the clips:
+    one run's every download came back 403. Kept on disk (~100 MB, once), the clips
+    stop depending on either the URL or the server — which is also flaky enough
+    (502s, 500s, rate limits) not to want in the last step of a paid run.
+    """
+    import urllib.request  # noqa: PLC0415 — only a cache miss touches the network
+
+    missing = [row for row in rows if not audio_path(row).exists() and audio_url(row)]
+    if not missing:
+        return
+    print(
+        f"  downloading {len(missing)} Voice Arena recording(s) once; kept at {audio_path(missing[0]).parent}"
+    )
+    audio_path(missing[0]).parent.mkdir(parents=True, exist_ok=True)
+    for row in missing:
+        with urllib.request.urlopen(audio_url(row), timeout=90) as response:  # noqa: S310
+            audio_path(row).write_bytes(response.read())
+
+
+def local_or_url(row: dict) -> str | None:
+    """The clip's recording as a local path when downloaded, else its (expiring) URL."""
+    path = audio_path(row)
+    return str(path) if path.exists() else audio_url(row)
+
+
 def audio_url(row: dict) -> str | None:
     """The clip's audio URL from a datasets-server row, which serves audio as links."""
     audio = row.get("audio")
@@ -91,6 +125,8 @@ def transcripts(rows: list[dict], api_key: str | None, path: Path | None = None)
                 raise RuntimeError(f"Voice Arena row {row.get('id')!r} carries no audio URL")
             with urllib.request.urlopen(url, timeout=90) as response:  # noqa: S310
                 audio = response.read()
+            audio_path(row).parent.mkdir(parents=True, exist_ok=True)
+            audio_path(row).write_bytes(audio)
             result = live.transcribe_encoded(audio, api_key, "clip.flac", "audio/flac")
             cached[cache_key(row)] = result.get("text", "")
             # Written per clip, so an interrupted first run resumes where it stopped.
@@ -99,3 +135,18 @@ def transcripts(rows: list[dict], api_key: str | None, path: Path | None = None)
                 print(f"    {index}/{len(missing)}")
 
     return {cache_key(row): cached[cache_key(row)] for row in rows}
+
+
+def fresh_audio_urls() -> dict[str, str]:
+    """Freshly signed audio URLs for every clip, keyed by the clip's tidied reference.
+
+    The datasets-server signs audio URLs with an expiry of a few hours, and
+    Voice Arena's rows are deliberately never cached (`Source.cache_rows`), so this
+    re-reads them — two pages. Keyed by `intended_text` as the corpus tidies it,
+    which is exactly an `Utterance.reference`, so a caller holding only utterances
+    can look its clip up.
+    """
+    import corpus  # noqa: PLC0415 — corpus imports this module
+
+    rows = corpus._rows_via_api(corpus.SOURCES["voicearena"], 1000)
+    return {corpus._tidy(row.get("intended_text")): url for row in rows if (url := audio_url(row))}
