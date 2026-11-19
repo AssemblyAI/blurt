@@ -1677,3 +1677,67 @@ def test_a_client_error_still_fails_at_once(monkeypatch):
     with pytest.raises(RuntimeError, match="HTTP 404"):
         corpus._fetch_page("https://x", {}, corpus.SOURCES["nyra"], None)
     assert len(attempts) == 1
+
+
+# --------------------------------------------------------------------------
+# --voicearena-in-search and --seed-file
+# --------------------------------------------------------------------------
+
+
+def _mixed_corpus(n_rest=400, n_held=100):
+    rest = [
+        corpus.Utterance(reference=f"r{i}", disfluent=f"r{i}", source="nyra") for i in range(n_rest)
+    ]
+    held = [
+        corpus.Utterance(reference=f"v{i}", disfluent=f"v{i}", source="voicearena", held_out=True)
+        for i in range(n_held)
+    ]
+    return rest + held
+
+
+def test_by_default_no_benchmark_row_reaches_the_search():
+    train, dev, test = corpus.split(_mixed_corpus(), 7, dev_size=90, test_size=45)
+    validation, train = corpus.carve_validation(train, 50)
+    assert not any(u.held_out for u in train + validation)
+    assert sum(u.held_out for u in dev + test) == 100 or len(dev) + len(test) < 100
+
+
+def test_a_released_share_is_split_between_valset_and_reflection():
+    """Ranked on and learned from, while the rest still judges the result."""
+    train, dev, test = corpus.split(_mixed_corpus(), 7, dev_size=90, test_size=45, search_share=0.5)
+    validation, train = corpus.carve_validation(train, 50)
+    in_valset, in_train = sum(u.held_out for u in validation), sum(u.held_out for u in train)
+    assert in_valset + in_train == 50
+    assert in_valset == 25 and in_train == 25
+    assert len(validation) == 50
+    # The unreleased half stays held out for dev and test, nowhere else.
+    assert sum(u.held_out for u in dev + test) == 50
+    # No row is in two slices.
+    ids = [u.reference for u in train + validation + dev + test]
+    assert len(ids) == len(set(ids)) == 500
+
+
+def test_the_cli_releases_half_when_the_flag_is_bare():
+    assert cli.parse_args([]).voicearena_in_search == 0.0
+    assert cli.parse_args(["--voicearena-in-search"]).voicearena_in_search == 0.5
+    assert cli.parse_args(["--voicearena-in-search", "0.3"]).voicearena_in_search == 0.3
+
+
+def test_a_seed_file_is_registered_and_scored_next_to_the_baseline(monkeypatch, tmp_path):
+    monkeypatch.setattr(candidates, "CANDIDATES", dict(candidates.CANDIDATES))
+    monkeypatch.setattr(cli, "CANDIDATES", candidates.CANDIDATES)
+    seed = tmp_path / "seed.txt"
+    seed.write_text(f"  Delete disfluencies. {SAFE}\n", encoding="utf-8")
+    cli.load_seed_file(str(seed))
+    assert candidates.CANDIDATES[cli.SEED_FILE] == f"Delete disfluencies. {SAFE}"
+    assert cli.resolve_candidates(cli.parse_args(["--seed-file", str(seed)])) == [
+        candidates.BASELINE,
+        cli.SEED_FILE,
+    ]
+
+
+def test_an_unshippable_seed_file_stops_the_run(tmp_path):
+    seed = tmp_path / "seed.txt"
+    seed.write_text("Delete disfluencies only.", encoding="utf-8")
+    with pytest.raises(SystemExit, match="safeguard"):
+        cli.load_seed_file(str(seed))

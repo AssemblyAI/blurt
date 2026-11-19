@@ -645,12 +645,28 @@ def carve_validation(train: list[Utterance], size: float) -> tuple[list, list]:
     Here rather than in the CLI so the tests exercise the carve the run performs
     instead of a copy of it — reversing the slice order in one and not the other would
     otherwise go unnoticed.
+
+    Benchmark rows that reached train (`split`'s `search_share`) are divided between
+    the two: half into the valset, where GEPA ranks candidates, half left in train,
+    where its reflection draws the failures it learns from. All of them in the valset
+    would let the search rank on dictation but never study it; all in train, the
+    reverse. With none in train this is the plain front-of-train slice.
     """
     count = slice_size(size, len(train))
-    return train[:count], train[count:]
+    held = [u for u in train if getattr(u, "held_out", False)]
+    others = [u for u in train if not getattr(u, "held_out", False)]
+    to_valset = held[: min(count, (len(held) + 1) // 2)]
+    validation = to_valset + others[: count - len(to_valset)]
+    return validation, held[len(to_valset) :] + others[count - len(to_valset) :]
 
 
-def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: float):
+def split(
+    utterances: list[Utterance],
+    seed: int,
+    dev_size: float,
+    test_size: float,
+    search_share: float = 0.0,
+):
     """Shuffle once with a fixed seed, then slice into train / dev / test.
 
     Shuffling matters because dataset splits are often ordered by speaker or
@@ -674,6 +690,13 @@ def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: fl
     benchmark's own private split exists to prevent. Within each slice the reserved
     rows come first, so `--verify-live N` takes the recorded clips before anything it
     would have to synthesize. With nothing reserved this is exactly the plain slicing.
+
+    `search_share` (`--voicearena-in-search`) is the deliberate exception: that share
+    of the held-out rows is released into train instead, so the search can rank and
+    learn on dictation rather than only be judged on it — `carve_validation` then
+    divides them between GEPA's valset and its reflection set. The rest stay reserved
+    for dev and test, which is what still catches a prompt that overfit the released
+    half. Zero, the default, releases nothing.
     """
     shuffled = list(utterances)
     random.Random(seed).shuffle(shuffled)
@@ -685,12 +708,14 @@ def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: fl
 
     reserved = [u for u in shuffled if getattr(u, "held_out", False)]
     rest = [u for u in shuffled if not getattr(u, "held_out", False)]
+    released = reserved[: round(len(reserved) * search_share)]
+    reserved = reserved[len(released) :]
     used = min(len(reserved), n_dev + n_test)
     r_test = round(used * n_test / (n_dev + n_test)) if used else 0
     r_dev = used - r_test
     test = reserved[:r_test] + rest[: n_test - r_test]
     dev = reserved[r_test:used] + rest[n_test - r_test : n_test - r_test + n_dev - r_dev]
-    train = reserved[used:] + rest[n_test - r_test + n_dev - r_dev :]
+    train = released + reserved[used:] + rest[n_test - r_test + n_dev - r_dev :]
     return train, dev, test
 
 

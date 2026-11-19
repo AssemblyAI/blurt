@@ -142,6 +142,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "limit, not the budget — set HF_TOKEN for a large load",
     )
     data.add_argument(
+        "--voicearena-in-search",
+        type=float,
+        nargs="?",
+        const=0.5,
+        default=0.0,
+        metavar="SHARE",
+        help="release this share of the held-out Voice Arena rows into the search (default "
+        "when given: 0.5), split evenly between GEPA's valset and its reflection set, so it "
+        "ranks and learns on dictation instead of only being judged on it. The rest stay in "
+        "dev and test. Off by default: every Voice Arena row is held out",
+    )
+    data.add_argument(
         "--split",
         default=None,
         help="dataset split to read from every source (default: each source's own — "
@@ -315,6 +327,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "only this makes there be more of them",
     )
     search.add_argument(
+        "--seed-file",
+        default=None,
+        metavar="PATH",
+        help="start the search from the instruction in this file instead of --start (e.g. a "
+        "previous run's winner). It must state the safeguards like any candidate, and is "
+        "scored on dev next to BASELINE",
+    )
+    search.add_argument(
         "--start",
         default="prior-winner",
         choices=("prior-winner", "best-candidate"),
@@ -360,6 +380,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def describe_length(instruction: str) -> str:
     """`1529 chars` — informational only; neither the API nor the app caps the field."""
     return f"{len(instruction)} chars"
+
+
+#: The `CANDIDATES` key a `--seed-file` instruction is registered under.
+SEED_FILE = "seed-file"
+
+
+def load_seed_file(path: str | None) -> None:
+    """Register `--seed-file`'s instruction as a candidate, refusing an unshippable one.
+
+    Held to the same gate as a proposal (`objections`): a seed missing a safeguard would
+    hand the search an instruction it could never select, and one carrying the
+    constraints block would ship scaffolding. Field names are checked by the proposer
+    once DSPy is loaded; this runs before, so the dry-run path stays DSPy-free.
+    """
+    if not path:
+        return
+    text = Path(path).read_text(encoding="utf-8").strip()
+    if not text:
+        raise SystemExit(f"--seed-file {path} is empty")
+    if problems := objections(text, fields=()):
+        listed = "\n".join(f"  - {note.message}" for note in problems)
+        raise SystemExit(f"--seed-file {path} could not be shipped as written:\n{listed}")
+    CANDIDATES[SEED_FILE] = text
 
 
 def check_candidates() -> None:
@@ -408,7 +451,9 @@ def resolve_candidates(args: argparse.Namespace) -> list[str]:
         or args.start == "best-candidate"
     ):
         return list(CANDIDATES)
-    return [BASELINE]
+    # A seed file is the seed, so it is scored too: the search's result is compared
+    # against the instruction it started from.
+    return [BASELINE, SEED_FILE] if SEED_FILE in CANDIDATES else [BASELINE]
 
 
 def run_live_verification(
@@ -515,6 +560,7 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     check_candidates()
+    load_seed_file(args.seed_file)
 
     loaded = corpus.load(
         source=args.source,
@@ -530,7 +576,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{loaded.disfluent_fraction:.0%} of pairs differ from their target")
 
     train, dev, test = corpus.split(
-        list(loaded.utterances), args.seed, args.dev_fraction, args.test_fraction
+        list(loaded.utterances),
+        args.seed,
+        args.dev_fraction,
+        args.test_fraction,
+        search_share=args.voicearena_in_search,
     )
     # The optimizer's valset comes off train, not out of dev. Three sets, three jobs:
     # the search tracks candidates against `validation`, dev decides which instruction
@@ -544,9 +594,10 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(dev)} dev / {len(test)} test"
     )
     if len({u.source for u in loaded.utterances}) > 1:
-        for name, rows in (("train", train + validation), ("dev", dev), ("test", test)):
+        slices = (("train", train), ("valset", validation), ("dev", dev), ("test", test))
+        for name, rows in slices:
             mix = Counter(u.source for u in rows)
-            print(f"  {name:<5} " + ", ".join(f"{k} {v}" for k, v in sorted(mix.items())))
+            print(f"  {name:<6} " + ", ".join(f"{k} {v}" for k, v in sorted(mix.items())))
 
     if args.show_samples:
         print_samples(loaded, args.show_samples)
@@ -599,7 +650,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.optimizer != "none":
         # The seed is an ordinary candidate, scored in the sweep above, and may
         # legitimately win. Nothing to score separately.
-        seed_name = BASELINE if args.start == "prior-winner" else winner_name
+        if args.seed_file:
+            seed_name = SEED_FILE
+        else:
+            seed_name = BASELINE if args.start == "prior-winner" else winner_name
         seed_instruction = CANDIDATES[seed_name]
         seed_scores = dict(dev_rows)[seed_name]
 
