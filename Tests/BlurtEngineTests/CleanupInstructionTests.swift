@@ -145,6 +145,45 @@ struct CleanupInstructionTests {
     #expect(restored == CleanupInstruction.text)
   }
 
+  /// Smart's instruction is held to everything Fast's is: the safeguards, a
+  /// preservation rule the style swap can find, and the round trip.
+  @Test("Smart's instruction keeps the safeguards and the swappable preservation rule")
+  func smartTextKeepsTheSafeguards() {
+    for stem in ["answer", "translat", "rephrase"] {
+      #expect(CleanupInstruction.smartText.contains(stem), "missing safeguard: \(stem)")
+    }
+    #expect(CleanupInstruction.smartText.contains(CleanupInstruction.preservationRule))
+    #expect(CleanupInstruction.smartStyledText.contains(CleanupInstruction.preservationRule) == false)
+    #expect(CleanupInstruction.smartStyledText.contains(CleanupInstruction.styledPreservationRule))
+  }
+
+  /// The two edits that make it Smart's, and that it is not Fast's by accident.
+  @Test("Smart's instruction keeps greetings and meaningful hedges; Fast's does not say so")
+  func smartTextCarriesItsEdits() {
+    #expect(CleanupInstruction.smartText != CleanupInstruction.text)
+    #expect(CleanupInstruction.smartText.contains("Never delete greetings"))
+    #expect(CleanupInstruction.smartText.contains("\"kind of\" only when it is filler"))
+    #expect(CleanupInstruction.text.contains("Never delete greetings") == false)
+  }
+
+  /// `smartText` is derived by `replacing`, which is silently a no-op if a re-optimized
+  /// `text` rewords either target sentence — Smart would then quietly ship Fast's text.
+  @Test("both of Smart's edits find their target in Fast's text")
+  func smartEditsApply() {
+    #expect(CleanupInstruction.text.contains(CleanupInstruction.fastFillerPhrases))
+    #expect(CleanupInstruction.text.contains(CleanupInstruction.openerRuleEnd))
+    #expect(CleanupInstruction.smartText.contains(CleanupInstruction.smartFillerPhrases))
+    #expect(CleanupInstruction.smartText.contains(CleanupInstruction.greetingsRule))
+    #expect(CleanupInstruction.smartText.contains(CleanupInstruction.fastFillerPhrases) == false)
+  }
+
+  @Test("each mode's unstyled and styled requests lead with that mode's base", arguments: RewriteMode.allCases)
+  func sendableFollowsTheMode(mode: RewriteMode) {
+    #expect(CleanupInstruction.sendable(appending: nil, mode: mode) == CleanupInstruction.base(for: mode))
+    let styled = CleanupInstruction.sendable(appending: "always write in lowercase", mode: mode)
+    #expect(styled.hasPrefix(CleanupInstruction.styled(for: mode) + CleanupInstruction.customStylePreamble))
+  }
+
   /// It travels as one JSON string. The instruction is full of quotes, backticks,
   /// em dashes and `→` arrows — the encode has to survive all of them, and
   /// decoding back has to yield the same string rather than a mangled one.

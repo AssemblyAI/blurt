@@ -716,7 +716,13 @@ switch that cannot disagree with the response it was applied to — the bug that
 way round, when "enhanced transcripts: off" returned a default-cleaned transcript anyway because
 the config merely omitted the instruction.
 
-The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
+The instruction is **chosen per rewrite mode** (`CleanupInstruction.sendable(appending:mode:)`):
+Smart gets `smartText`, Fast gets `text`, and with enhanced transcripts off (no `rewrite_mode`
+sent, so the service runs Fast) Fast's. `smartText` is `text` with two hand edits — keep
+greetings and meaningful framing, delete "kind of" only as filler — that scored ZER 90.1 / 88.1
+against 87.4 / 87.4 on the Voice Arena public set with that benchmark's own judge (Smart, two
+samples each), and **worse** on Fast, which is why the two are not one string. Fast's
+instruction is `CleanupInstruction.text`, the winner of a GEPA run of
 `evals/dictation-prompt/` (see its README), compressed to fit the 2048-character cap the field
 had at the time. Two later searches
 failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split. When the

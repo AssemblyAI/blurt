@@ -29,7 +29,12 @@
 /// the instruction plus one style profile (`StyleProfileStore.characterLimit`) stays
 /// far below. So an evolved instruction may be as long as scores best.
 ///
-/// **Provenance.** The winner of a GEPA run of
+/// **Two instructions, one per rewrite mode.** `text`, documented below, is Fast's;
+/// `smartText` is Smart's, and `sendable(appending:mode:)` picks between them. Each was
+/// tuned on the model its mode runs, and a prompt tuned for one measured worse on the
+/// other, so they are not interchangeable.
+///
+/// **Provenance (`text`).** The winner of a GEPA run of
 /// `evals/dictation-prompt/optimize_cleanup_prompt.py`, scored on hand-annotated
 /// Switchboard disfluency pairs in the same one-instruction/one-transcript
 /// envelope the service applies it in. Stored verbatim, exactly as that run
@@ -90,9 +95,29 @@ enum CleanupInstruction {
   /// `StyleProfileStore.characterLimit` UTF-8 bytes: the style editor enforces the
   /// same limit, so the trim here is the belt to that brace, for a value that
   /// reached the defaults slot some other way.
-  static func sendable(appending custom: String?) -> String {
-    guard let custom = custom.trimmedNonEmpty() else { return text }
-    return styledText + customStylePreamble + custom.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
+  ///
+  /// `mode` picks the base: `smartText` for Smart, `text` for Fast — each tuned on, and
+  /// measured against, the model that mode runs (see `smartText`).
+  static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
+    guard let custom = custom.trimmedNonEmpty() else { return base(for: mode) }
+    return styled(for: mode) + customStylePreamble
+      + custom.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
+  }
+
+  /// The unstyled instruction for `mode`.
+  static func base(for mode: RewriteMode) -> String {
+    switch mode {
+    case .fast: return text
+    case .smart: return smartText
+    }
+  }
+
+  /// The styled base for `mode`: `base(for:)` with its preservation rule qualified.
+  static func styled(for mode: RewriteMode) -> String {
+    switch mode {
+    case .fast: return styledText
+    case .smart: return smartStyledText
+    }
   }
 
   /// The sentence in `text` that pins punctuation and capitalization. Left
@@ -113,6 +138,9 @@ enum CleanupInstruction {
   /// unedited rule was overriding that style. An unstyled request still sends
   /// `text` byte for byte.
   static let styledText = text.replacing(preservationRule, with: styledPreservationRule)
+
+  /// `styledText`'s counterpart for `smartText`.
+  static let smartStyledText = smartText.replacing(preservationRule, with: styledPreservationRule)
 
   /// Bridge between the base instruction and the user's custom style
   /// instructions. The precedence clause is load-bearing: the base text pins the
@@ -135,4 +163,42 @@ enum CleanupInstruction {
 
     Return only the cleaned transcript.
     """
+
+  /// The Smart instruction (`rewrite_mode: "smart"`, the default mode): `text` with two
+  /// edits, made by hand against the Voice Arena dictation benchmark's public set and
+  /// scored with its own judge (`evals/dictation-prompt/voicearena_baseline.py`):
+  ///
+  /// 1. **Greetings and meaningful framing are kept.** `text`'s aggressive opener
+  ///    deletion was taking "Hey," and "Hey, just letting you know" with it.
+  /// 2. **"kind of" is deleted only when it is filler.** `text` lists it
+  ///    unconditionally, which deleted it from "kind of discouraged".
+  ///
+  /// On the 151 public clips, Smart, two independent samples each: ZER 90.1 / 88.1
+  /// against `text`'s 87.4 / 87.4, and AMEND 0.16 / 0.20 against 0.33 / 0.26 — no clip
+  /// `text` passed in both samples failed in both of these. **Smart only**: on Fast
+  /// the same edits scored 75.5 / 76.2 against `text`'s 78.1 / 78.1 (the smaller model
+  /// reads "keep it when it carries meaning" as license to keep fillers), which is why
+  /// the instruction is chosen per mode (`sendable(appending:mode:)`). Mirrored as
+  /// `candidates.SMART_WINNER` in the eval; keep the two byte-identical.
+  static let smartText =
+    text
+    .replacing(fastFillerPhrases, with: smartFillerPhrases)
+    .replacing(openerRuleEnd, with: openerRuleEnd + greetingsRule)
+
+  /// The sentence of `text` that deletes "kind of" unconditionally.
+  static let fastFillerPhrases =
+    #"Delete filler phrases: "you know", "I mean", "I guess", "kind of", and "like" only when it is filler."#
+
+  /// `fastFillerPhrases` for Smart: "kind of" only as filler, kept when it carries meaning.
+  static let smartFillerPhrases =
+    #"Delete filler phrases: "you know", "I mean", "I guess", "kind of" only when it is filler "#
+    + #"(keep it when it changes the meaning, as in "kind of discouraged"), and "like" only when it is filler."#
+
+  /// The end of `text`'s opener rule, which Smart's greeting rule follows.
+  static let openerRuleEnd = #"Do not delete "however" or content words."#
+
+  /// Appended to the opener rule on Smart: the aggressive opener deletion stops short of greetings.
+  static let greetingsRule =
+    #" Never delete greetings, salutations, or sign-offs ("Hey", "Hi", "Hey Marcus", "Thanks"), "#
+    + #"or framing phrases that carry meaning ("just letting you know", "following up", "I think")."#
 }

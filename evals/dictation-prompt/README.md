@@ -405,6 +405,13 @@ On `nyra` the numbers mean what they say. On `builtin` the disfluencies are synt
 
 ## Applying a winner
 
+**The app ships one instruction per rewrite mode**, and each is a candidate here:
+`prior-winner` is Fast's (`CleanupInstruction.text`), `smart-winner` is Smart's
+(`CleanupInstruction.smartText`), and `test_eval.py` checks both against the Swift literals byte
+for byte. A run's `--baseline` should match its `--model`: `--model openai/gemma-4-31b
+--baseline smart-winner` for Smart, the defaults for Fast. A prompt tuned for one mode has
+measured worse on the other, so a winner replaces only its own mode's instruction.
+
 The winning string goes into the request's `config.llm_instruction`, next to the `prompt`
 field that steers transcription. The Swift side is
 `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where the field is an optional

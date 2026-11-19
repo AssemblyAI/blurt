@@ -720,10 +720,10 @@ def test_every_candidate_instruction_is_shippable():
     for name, instruction in candidates.CANDIDATES.items():
         assert instruction.strip(), name
         # The eval's own, tighter bound that is the eval's own: a hand-written candidate is a
-        # single readable instruction. `prior-winner` is exempt because it is not
-        # hand-written — it is an evolved instruction, and its length is the API's
-        # business, not a style rule's.
-        if name != "prior-winner":
+        # single readable instruction. `prior-winner` and `smart-winner` are exempt: not
+        # hand-written — they are the shipped instructions (`BASELINES`), and their
+        # length is the API's business, not a style rule's.
+        if name not in candidates.BASELINES:
             assert len(instruction) < 1000, name
 
 
@@ -1741,3 +1741,48 @@ def test_an_unshippable_seed_file_stops_the_run(tmp_path):
     seed.write_text("Delete disfluencies only.", encoding="utf-8")
     with pytest.raises(SystemExit, match="safeguard"):
         cli.load_seed_file(str(seed))
+
+
+def _swift_literal(name: str) -> str:
+    """A `static let <name> = \"\"\" … \"\"\"` literal from CleanupInstruction.swift, dedented."""
+    swift = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "Sources/BlurtEngine/STT/CleanupInstruction.swift"
+    ).read_text(encoding="utf-8")
+    match = re.search(rf'static let {name} = """\n(.*?)\n    """', swift, re.S)
+    assert match, name
+    return "\n".join(line[4:] for line in match.group(1).split("\n"))
+
+
+def _swift_raw_string(name: str) -> str:
+    """A `static let <name> = #"…"# + #"…"#` constant from CleanupInstruction.swift."""
+    swift = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "Sources/BlurtEngine/STT/CleanupInstruction.swift"
+    ).read_text(encoding="utf-8")
+    match = re.search(rf"static let {name} =(.*?)(?=\n\n|\n  ///|\n}})", swift, re.S)
+    assert match, name
+    return "".join(re.findall(r'#"(.*?)"#', match.group(1), re.S))
+
+
+def test_the_eval_s_shipped_instructions_match_the_app_s_byte_for_byte():
+    """Each mode's instruction lives twice; a scored string must be the shipped string.
+
+    Smart's is derived from Fast's by two edits on both sides, so it is checked by
+    applying the Swift side's own edit constants to the shared base.
+    """
+    assert _swift_literal("text") == candidates.PRIOR_WINNER
+    smart = candidates.PRIOR_WINNER.replace(
+        _swift_raw_string("fastFillerPhrases"), _swift_raw_string("smartFillerPhrases")
+    )
+    end = _swift_raw_string("openerRuleEnd")
+    smart = smart.replace(end, end + _swift_raw_string("greetingsRule"))
+    assert smart == candidates.SMART_WINNER
+    assert smart != candidates.PRIOR_WINNER
+
+
+def test_a_smart_search_can_hold_smart_s_instruction_as_its_bar():
+    args = cli.parse_args(["--baseline", "smart-winner"])
+    assert args.baseline == "smart-winner"
+    assert cli.resolve_candidates(args) == ["smart-winner"]
+    assert cli.parse_args([]).baseline == candidates.BASELINE == "prior-winner"

@@ -73,6 +73,7 @@ import corpus  # noqa: E402
 import metrics  # noqa: E402
 from candidates import (  # noqa: E402
     BASELINE,
+    BASELINES,
     CANDIDATES,
     missing_safeguards,
     objections,
@@ -327,6 +328,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "only this makes there be more of them",
     )
     search.add_argument(
+        "--baseline",
+        default=BASELINE,
+        choices=BASELINES,
+        help="the shipped instruction a run must beat, falls back to, and (under the default "
+        "--start) evolves from: prior-winner (default) is Fast's, smart-winner is Smart's. "
+        "Match it to --model — a Smart search against Fast's instruction aims at the wrong bar",
+    )
+    search.add_argument(
         "--seed-file",
         default=None,
         metavar="PATH",
@@ -419,9 +428,9 @@ def check_candidates() -> None:
     """
     problems: list[str] = []
     for name, text in CANDIDATES.items():
-        if name == BASELINE and (absent := missing_safeguards(text)):
+        if name in BASELINES and (absent := missing_safeguards(text)):
             stems = ", ".join(stem for stem, _ in absent)
-            problems.append(f"  {name}: BASELINE is missing safeguard(s): {stems}")
+            problems.append(f"  {name}: a shipped instruction is missing safeguard(s): {stems}")
     if problems:
         raise SystemExit(
             "These candidates.py instructions could not be shipped as written:\n"
@@ -453,7 +462,8 @@ def resolve_candidates(args: argparse.Namespace) -> list[str]:
         return list(CANDIDATES)
     # A seed file is the seed, so it is scored too: the search's result is compared
     # against the instruction it started from.
-    return [BASELINE, SEED_FILE] if SEED_FILE in CANDIDATES else [BASELINE]
+    baseline = getattr(args, "baseline", BASELINE)
+    return [baseline, SEED_FILE] if SEED_FILE in CANDIDATES else [baseline]
 
 
 def run_live_verification(
@@ -653,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.seed_file:
             seed_name = SEED_FILE
         else:
-            seed_name = BASELINE if args.start == "prior-winner" else winner_name
+            seed_name = args.baseline if args.start == "prior-winner" else winner_name
         seed_instruction = CANDIDATES[seed_name]
         seed_scores = dict(dev_rows)[seed_name]
 
@@ -721,8 +731,8 @@ def main(argv: list[str] | None = None) -> int:
     # Held-out test scores for the winner and for the shipped-default proxy, so the
     # reported improvement is measured on data no selection decision saw.
     scored_on_test = [(winner_name, winner_instruction)]
-    if winner_name != BASELINE:
-        scored_on_test.append((BASELINE, CANDIDATES[BASELINE]))
+    if winner_name != args.baseline:
+        scored_on_test.append((args.baseline, CANDIDATES[args.baseline]))
     test_rows = []
     with Progress(len(scored_on_test) * len(test), "Scoring on held-out test") as meter:
         for name, instruction in scored_on_test:

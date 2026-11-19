@@ -141,6 +141,7 @@ def transcribe_all(
     api_key: str,
     workers: int,
     host: str = "dictation.assemblyai.com",
+    sample: int = 0,
 ):
     """Every clip through `/live` on `host` with this instruction and mode, cached per clip."""
     import live  # noqa: PLC0415 — subprocess + urllib; only this path needs it
@@ -149,6 +150,11 @@ def transcribe_all(
     tag = f"{mode}-{_sha(instruction) if instruction else 'default'}"
     if host != "dictation.assemblyai.com":
         tag = f"{host.split('.')[1]}-{tag}"
+    if sample:
+        # A separate cache per sample: the rewrite is not deterministic, so comparing two
+        # instructions on one run each confuses their difference with its run-to-run
+        # spread (a single Smart prompt scored 84.1 and 87.4 on two runs).
+        tag = f"{tag}-s{sample}"
     path = _cache_dir() / f"voicearena-run-{tag}.json"
     cache = _load_json(path)
     missing = [r for r in rows if voicearena.cache_key(r) not in cache]
@@ -230,6 +236,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="dictation host (default: the US one; dictation.eu.assemblyai.com for the EU zone)",
     )
     parser.add_argument(
+        "--sample",
+        type=int,
+        default=0,
+        help="draw a fresh sample of the rewrite under this number (its own cache), to "
+        "measure run-to-run spread; 0 (default) reuses the main cache",
+    )
+    parser.add_argument(
         "--rewrite-mode",
         default="smart",
         choices=("fast", "smart"),
@@ -274,7 +287,9 @@ def main(argv: list[str] | None = None) -> int:
         instruction, label = PRIOR_WINNER, "shipped instruction"
     else:
         instruction, label = None, "service default (no instruction)"
-    runs = transcribe_all(rows, instruction, args.rewrite_mode, api_key, args.workers, args.host)
+    runs = transcribe_all(
+        rows, instruction, args.rewrite_mode, api_key, args.workers, args.host, args.sample
+    )
 
     drafts, stts = [], []
     for row in rows:

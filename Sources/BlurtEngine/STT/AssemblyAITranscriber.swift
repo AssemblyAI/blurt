@@ -127,12 +127,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // `STTPrompt` draws that line, so nothing is filtered here.
     // Read once, so a mid-recording flip can't split the request from the paste.
     let enhanced = enhancedTranscriptsEnabled()
+    // Read once too: the instruction is chosen per mode, and the paste checks the
+    // rewrite against the instruction that was actually sent.
+    let mode = instructionMode(enhanced: enhanced)
     let config = try makeConfigData(
       sampleRate: sampleRate,
       sttPrompt: STTPrompt.text(context: context),
       keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []),
       customStyle: context?.styleInstructions,
-      enhanced: enhanced)
+      enhanced: enhanced,
+      mode: mode)
     let request = makeRequest(path: Self.transcribePath, apiKey: apiKey, boundary: boundary)
 
     // The capture feed goes through `relay` on its way to the upload, which keeps
@@ -168,7 +172,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     Self.logServerMetrics(response)
     return transcript(
       from: response, enhanced: enhanced,
-      instruction: cleanupInstruction(appending: context?.styleInstructions))
+      instruction: cleanupInstruction(appending: context?.styleInstructions, mode: mode))
   }
 
   /// The multipart body, in the order the streaming route requires: the whole
@@ -251,17 +255,21 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// given request does and does not steer with is readable at the call site
   /// rather than inferred from which argument was left off.
   /// `enhanced` is the request's one reading of the setting, which the paste
-  /// uses too.
+  /// uses too. `mode` is the model the rewrite runs on (`instructionMode`), which
+  /// picks the instruction; nil reads it now, for callers with no paste to keep in
+  /// step.
   func makeConfigData(
-    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], customStyle: String?, enhanced: Bool
+    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], customStyle: String?, enhanced: Bool,
+    mode: RewriteMode? = nil
   ) throws -> Data {
-    try JSONEncoder().encode(
+    let mode = mode ?? instructionMode(enhanced: enhanced)
+    return try JSONEncoder().encode(
       DictationConfig(
         sampleRate: sampleRate,
         channels: 1,
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
-        llmInstruction: cleanupInstruction(appending: customStyle),
+        llmInstruction: cleanupInstruction(appending: customStyle, mode: mode),
         // Only while the rewrite is pasted: off, a slower model only adds latency.
         rewriteMode: enhanced ? rewriteMode().wireValue : nil
       )
@@ -273,9 +281,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// rewrite; see `DictationConfig.llmInstruction` — and is the one-line revert
   /// should the shipped instruction ever need pulling.
   ///
-  /// `customStyle` is the press's style (`TranscriptionContext.styleInstructions`).
-  private func cleanupInstruction(appending customStyle: String?) -> String? {
-    CleanupInstruction.sendable(appending: customStyle)
+  /// `customStyle` is the press's style (`TranscriptionContext.styleInstructions`);
+  /// `mode` picks the instruction tuned for the model that will apply it.
+  private func cleanupInstruction(appending customStyle: String?, mode: RewriteMode) -> String? {
+    CleanupInstruction.sendable(appending: customStyle, mode: mode)
+  }
+
+  /// The model the rewrite will actually run on, for choosing its instruction. With
+  /// enhanced transcripts off no `rewrite_mode` is sent, so the service runs Fast.
+  private func instructionMode(enhanced: Bool) -> RewriteMode {
+    enhanced ? rewriteMode() : .fast
   }
 
   // MARK: - Networking helpers

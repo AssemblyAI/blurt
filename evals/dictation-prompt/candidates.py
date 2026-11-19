@@ -299,6 +299,31 @@ Return only the cleaned transcript."""
 
 CANDIDATES["prior-winner"] = PRIOR_WINNER
 
+#: Smart's instruction (`CleanupInstruction.smartText`), derived the same way: `PRIOR_WINNER` with two hand
+#: edits — keep greetings and meaningful framing, delete "kind of" only as filler —
+#: scored on the Voice Arena public set with its own judge on Smart, two samples each:
+#: ZER 90.1 / 88.1 against `PRIOR_WINNER`'s 87.4 / 87.4, AMEND 0.16 / 0.20 against
+#: 0.33 / 0.26. Worse on Fast (75.5 / 76.2 against 78.1 / 78.1), so the app sends it on
+#: Smart only. The bar for a Smart search: `--baseline smart-winner`.
+SMART_WINNER = PRIOR_WINNER.replace(
+    'Delete filler phrases: "you know", "I mean", "I guess", "kind of", and "like" only when it '
+    "is filler.",
+    'Delete filler phrases: "you know", "I mean", "I guess", "kind of" only when it is filler '
+    '(keep it when it changes the meaning, as in "kind of discouraged"), and "like" only when '
+    "it is filler.",
+).replace(
+    'Do not delete "however" or content words.',
+    'Do not delete "however" or content words. Never delete greetings, salutations, or '
+    'sign-offs ("Hey", "Hi", "Hey Marcus", "Thanks"), or framing phrases that carry meaning '
+    '("just letting you know", "following up", "I think").',
+)
+
+CANDIDATES["smart-winner"] = SMART_WINNER
+
+#: The instructions the app ships, one per rewrite mode. Each can be a run's
+#: `--baseline`, so each is held to the shipping bar (`REQUIRED_SAFEGUARDS`).
+BASELINES = ("prior-winner", "smart-winner")
+
 #: What a run must beat to be worth shipping: the best instruction we already have.
 #: Was `guessed-default` — a guess at the service's own wording — back when nothing
 #: measured was available to compare against. That candidate is still in the table as
