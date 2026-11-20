@@ -1,6 +1,7 @@
 import AppKit
 import BlurtEngine
 import CoreServices
+import Darwin
 import Foundation
 import Synchronization
 import os
@@ -51,6 +52,7 @@ final class MediaPauseController {
   /// takes milliseconds; one that is wedged must not hold the queue — and with it
   /// every later pause and resume — for as long as it stays wedged.
   private nonisolated static let timeout = DispatchTimeInterval.seconds(5)
+  private nonisolated static let killGraceTimeout = DispatchTimeInterval.milliseconds(500)
 
   /// What quitting may spend resuming: per script, and in all. Enough for a
   /// resume of both players, because a pause still running when the app quits is
@@ -245,7 +247,13 @@ final class MediaPauseController {
     stderr.start()
     if exited.wait(timeout: .now() + timeout) == .timedOut {
       process.terminate()
-      exited.wait()
+      if exited.wait(timeout: .now() + killGraceTimeout) == .timedOut {
+        let pid = process.processIdentifier
+        if pid > 0 {
+          kill(pid, SIGKILL)
+        }
+        _ = exited.wait(timeout: .now() + killGraceTimeout)
+      }
       logger.error("osascript timed out and was killed")
       return nil
     }
