@@ -23,12 +23,12 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   package static let resignalAfter: TimeInterval = 1
   private static let log = HostIdentity.current.logger("Relay")
 
-  /// The keyboard the words are for: the one that sent the accepted stop, else
-  /// the one whose press started the dictation (`DictationCoordinator`), or
-  /// nil for whichever keyboard is up.
-  package var presser: @Sendable () -> String? = { nil }
+  /// The field the words are for: the one that sent the accepted stop, else
+  /// the one whose press started the dictation (`DictationCoordinator`). A nil
+  /// keyboard means whichever keyboard is up.
+  package var presser: @Sendable () -> ResultAddress = { ResultAddress() }
 
-  package init(presser: @escaping @Sendable () -> String? = { nil }) {
+  package init(presser: @escaping @Sendable () -> ResultAddress = { ResultAddress() }) {
     self.presser = presser
   }
 
@@ -39,12 +39,15 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.
     let onScreen = Self.onScreen
-    let recipient = presser() ?? onScreen
+    let address = presser()
+    let recipient = address.keyboard ?? onScreen
     guard let onScreen, recipient == onScreen else {
       Self.log.notice("result → copied: no keyboard on screen for \(recipient ?? "anyone", privacy: .public)")
       try await copyOut(text)
     }
-    let result = DictationResult(id: UUID(), text: text, deliveredAt: Date(), recipient: recipient)
+    let result = DictationResult(
+      id: UUID(), text: text, deliveredAt: Date(), recipient: recipient, controllerID: address.controllerID,
+      documentID: address.documentID)
     SharedStore.write(result, forKey: BlurtShared.Key.result)
     SharedStore.post(BlurtShared.Signal.result)
     let posted = Date()
