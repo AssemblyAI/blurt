@@ -157,11 +157,19 @@ struct DictationSessionContextTests {
       keyTerms: ["Kubernetes"], seams: seams)
 
     // Twice, so the second press has history to carry — `recentDictations` is
-    // actor state and this is how the sibling tests seed it.
-    for _ in 1...2 {
+    // actor state and this is how the sibling tests seed it. Both requests miss
+    // the budget, but the first read is let land before release: a read still
+    // blocked then fails closed as secure (`capturedContext`), and a dictation
+    // that might be a password is never remembered — so there would be no history.
+    for press in 1...2 {
       await session.press()
       await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
       clock.advance(by: DictationSession.contextWaitBudget)
+      if press == 1 {
+        while await transcriber.receivedContexts.isEmpty { await Task.yield() }
+        hung.signal()
+        while await session.pressContext?.isSettled != true { await Task.yield() }
+      }
       await session.release()
       await session.waitForIdle()
     }
@@ -288,6 +296,35 @@ struct DictationSessionContextTests {
     #expect(await injector.inserted == ["Spoken anyway."])
     #expect(await transcriber.receivedContexts == [nil])
     hung.signal()  // release the capture thread before the test ends
+  }
+
+  @Test("a read still blocked at release fails closed: treated as a secure field")
+  func unsettledReadFailsClosed() async throws {
+    // A target too slow to answer even by the time the transcript is back says
+    // nothing about whether the field is a password field. Reading that as "not
+    // secure" was the one way left to get a password remembered, left
+    // unconcealed on the clipboard, and logged — so it is read as secure.
+    let clock = TestClock()
+    let transcriber = StubTranscriber(mode: .transcript("hunter2"))
+    let injector = StubInjector()
+    let log = RecordedLog()
+    let (seams, hung) = hungFieldSeams(log: log)
+    let session = makeSession(
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
+
+    await session.press()
+    await session.release()
+    await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
+    clock.advance(by: DictationSession.contextWaitBudget)
+    await session.waitForIdle()
+
+    // Still delivered, as a secure dictation always is.
+    #expect(await injector.inserted == ["hunter2"])
+    // But flagged secure for the clipboard, not remembered, and not logged.
+    #expect(await injector.insertedSecure == [true])
+    #expect(await session.recentDictations.entries.isEmpty)
+    #expect(log.transcripts.map(\.context) == [DictationSession.unsettledContext])
+    hung.signal()
   }
 
   /// The one case that runs `Seams.production`, so the closures the app actually

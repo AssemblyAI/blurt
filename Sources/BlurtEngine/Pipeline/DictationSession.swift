@@ -90,7 +90,22 @@ public actor DictationSession {
   /// moment the upload opened. The request itself may hold something different
   /// (`PressContext.pressKnown`, when the budget was missed), which is
   /// deliberate — see `startUpload`.
-  var capturedContext: TranscriptionContext? { pressContext?.resolved }
+  ///
+  /// A read still blocked when the release path asks fails *closed*: it answers
+  /// `unsettledContext`, flagged secure, rather than nil, which every reader
+  /// takes as "not a password field". Otherwise a target slow enough to outlast
+  /// the whole recording and transcription would be the one way to get a
+  /// password remembered into Recent and `stt_prompt`, left unconcealed on the
+  /// clipboard, and written to the developer-mode log. Failing closed costs that
+  /// one dictation only those three — it is still transcribed and pasted.
+  var capturedContext: TranscriptionContext? {
+    guard let pressContext else { return nil }
+    return pressContext.isSettled ? pressContext.resolved : Self.unsettledContext
+  }
+
+  /// What `capturedContext` answers while the press's read is still blocked:
+  /// nothing known about the field, and so treated as a secure one.
+  static let unsettledContext = TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true)
 
   /// The user's recent dictations, in memory for this launch only — and the **one**
   /// copy of that history. Recorded in `runTranscribeInject` (`+Pipeline`) just
