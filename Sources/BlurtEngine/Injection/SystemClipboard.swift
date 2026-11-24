@@ -29,8 +29,11 @@
     /// materialized — distinct from the pasteboard having held no items at all,
     /// which is `items.isEmpty`.
     let items: [SendablePasteboardItem]
-    /// The pasteboard's plain-string flavor, kept separately as a restore floor for
-    /// when no item's representations could be materialized.
+    /// The pasteboard's plain-string flavor, kept separately as a restore floor:
+    /// `SystemClipboard.restorableItems` folds it into the first item whenever no
+    /// item kept a non-empty string of its own — even if other representations
+    /// (RTF, nspasteboard.org markers) did materialize — so a promised string
+    /// the owning app declined still comes back.
     let plainText: String?
   }
 
@@ -169,8 +172,8 @@
     /// Clears the concealed write once `concealedLifetime` has passed — unless
     /// anything wrote to the pasteboard since, the same guard the paste's restore
     /// uses: a newer copy by the user survives, and so does the restore itself
-    /// (which is why the paste path's 400 ms restore leaves this a no-op, and only
-    /// a secret left behind for the hand-paste is ever cleared).
+    /// (which is why the paste path's 400 ms restore leaves this a no-op). A
+    /// restore that puts a concealed clipboard back schedules its own clear.
     private func clearAfterLifetime(ifChangeCountIs expected: Int) {
       let lifetime = concealedLifetime
       Task { [self] in
@@ -230,18 +233,27 @@
         return pasteboardItem
       }
 
+      // A concealed clipboard (a password manager's copy, or a password Blurt
+      // left behind) goes back the way `setString` writes one: this Mac only, so
+      // Universal Clipboard — which ignores the nspasteboard.org markers —
+      // doesn't carry the secret to other devices, and cleared after
+      // `concealedLifetime`. The restore is itself a write, so it voids whatever
+      // clear was pending on the original (ours, or the manager's own timer);
+      // without a fresh one the secret would sit on the clipboard indefinitely.
+      let concealed = saved.items.contains { $0.dataMap[Self.concealedType] != nil }
+
       if !rebuilt.isEmpty {
-        // A concealed clipboard (a password manager's copy) goes back the way it
-        // came: this Mac only, so Universal Clipboard — which ignores the
-        // nspasteboard.org markers — doesn't carry the secret to other devices.
-        if rebuilt.contains(where: { $0.types.contains(Self.concealedType) }) {
+        if concealed {
           pasteboard.prepareForNewContents(with: .currentHostOnly)
         } else {
           pasteboard.clearContents()
         }
         // `writeObjects` can refuse the batch; fall through to the text floor
         // rather than leaving the pasteboard empty.
-        if pasteboard.writeObjects(rebuilt) { return }
+        if pasteboard.writeObjects(rebuilt) {
+          if concealed { clearAfterLifetime(ifChangeCountIs: pasteboard.changeCount) }
+          return
+        }
       }
 
       // The write above was refused (a text floor would otherwise have been folded
@@ -258,9 +270,7 @@
       // valid `NSPasteboardItem`s is a programming error, not a runtime condition,
       // and NSPasteboard offers no way to test a write before clearing.
       if let plainText = saved.plainText {
-        pasteboard.clearContents()
-        pasteboard.setString(plainText, forType: .string)
-        pasteboard.setData(Data(), forType: Self.transientType)
+        setString(plainText, transient: true, concealed: concealed)
       }
     }
   }
