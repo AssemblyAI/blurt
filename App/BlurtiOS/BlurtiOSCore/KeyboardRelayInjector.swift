@@ -34,7 +34,11 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
 
   package func setTarget(_ focus: CapturedFocus?) async {}
 
-  package func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+  // `targetIsSecure` is ignored: iOS never hands a secure text field to a
+  // third-party keyboard, so this relay is never the one typing a password.
+  package func insert(
+    _ text: String, after priorText: String?, windowTitle: String?, targetIsSecure: Bool = false
+  ) async throws {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.

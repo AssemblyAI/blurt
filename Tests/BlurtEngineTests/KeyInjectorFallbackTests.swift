@@ -65,6 +65,48 @@
       // What lands on the clipboard is the final text a paste would have typed —
       // separator included — so a manual ⌘V still joins the prior text correctly.
       #expect(clip.string == " Second.")
+      #expect(!clip.isConcealed)
+    }
+
+    @Test(
+      "a secure dictation's clipboard fallback is concealed on both quiet paths",
+      arguments: [BlurtError.targetAppLost, .noEditableTarget])
+    func secureFallbackIsConcealed(_ expected: BlurtError) async throws {
+      // Issue #348: the quiet "copied" leave-behind is the one write that stays
+      // on the clipboard, so a password dictated into a secure field must reach
+      // it marked — otherwise a clipboard manager archives the secret.
+      let clip = FakeClipboard(string: "user-clipboard")
+      let injector = KeyInjector(
+        pasteSettleDuration: .zero,
+        postPaste: { true },
+        activateTarget: { _ in expected != .targetAppLost },
+        hasEditableTarget: { expected != .noEditableTarget },
+        clipboard: clip)
+      await injector.setTarget(try liveTargetFocus())
+
+      await #expect(throws: expected) {
+        try await injector.insert("hunter2", targetIsSecure: true)
+      }
+      #expect(clip.string == "hunter2")
+      #expect(clip.isConcealed)
+    }
+
+    @Test("a secure dictation's paste writes the clipboard concealed")
+    func securePasteIsConcealed() async throws {
+      let clip = FakeClipboard(string: "user-clipboard")
+      let concealedAtPaste = ValueBox<Bool>(false)
+      let injector = KeyInjector(
+        pasteSettleDuration: .zero,
+        postPaste: {
+          concealedAtPaste.value = clip.isConcealed
+          return true
+        },
+        clipboard: clip)
+
+      try await injector.insert("hunter2", targetIsSecure: true)
+      await injector.pendingSettle?.value
+      #expect(concealedAtPaste.value)
+      #expect(clip.string == "user-clipboard")
     }
 
     @Test("a thrown insert releases the paste lock for the next dictation", .timeLimit(.minutes(1)))

@@ -166,7 +166,7 @@
   /// into", surfacing the recorded text for the test to assert on.
   nonisolated struct UITestInjector: InjectorProtocol {
     func setTarget(_ focus: CapturedFocus?) async {}
-    func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+    func insert(_ text: String, after priorText: String?, windowTitle: String?, targetIsSecure: Bool) async throws {
       await MainActor.run { UITestState.shared.recordPaste(text) }
     }
   }

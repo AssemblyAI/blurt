@@ -335,7 +335,7 @@ private actor GatedInjector: InjectorProtocol {
 
   func setTarget(_ focus: CapturedFocus?) async {}
 
-  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+  func insert(_ text: String, after priorText: String?, windowTitle: String?, targetIsSecure: Bool) async throws {
     await gate.enter()
     if honorsCancellation { try Task.checkCancellation() }
     onRecord()

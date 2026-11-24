@@ -42,13 +42,16 @@
   protocol ClipboardAccess: Sendable {
     /// Overwrite the clipboard with a single plain-string item, discarding the
     /// previous contents. The degraded paste paths call this to leave the
-    /// transcript on the clipboard for a manual paste.
-    func write(_ text: String)
+    /// transcript on the clipboard for a manual paste. `concealed` is set when
+    /// the words were dictated into a password field: they are still left for
+    /// the hand-paste, but marked so a clipboard manager never records them.
+    func write(_ text: String, concealed: Bool)
     /// Overwrite the clipboard with `text`, returning an action that restores the
     /// previous contents — but only if nothing else has written to the clipboard
     /// in the meantime (so a user copy during the paste-settle window survives).
-    /// Call the returned action once the paste has settled.
-    func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void
+    /// Call the returned action once the paste has settled. `concealed` as for
+    /// `write`.
+    func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void
   }
 
   /// `ClipboardAccess` backed by the real `NSPasteboard.general`. The change-count
@@ -56,12 +59,17 @@
   /// fake never re-implements it.
   struct SystemClipboard: ClipboardAccess {
     // Not transient: these words are meant to stay for a paste by hand, so a
-    // clipboard manager keeping them is a feature here.
-    func write(_ text: String) { setString(text) }
+    // clipboard manager keeping them is a feature here — unless they went into a
+    // password field (issue #348). Then they are concealed *and* transient: the
+    // hand-paste still works, but no manager archives the secret. Both markers,
+    // because some managers record a Concealed-only item and merely hide it.
+    func write(_ text: String, concealed: Bool) {
+      setString(text, transient: concealed, concealed: concealed)
+    }
 
-    func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void {
+    func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void {
       let saved = snapshot()
-      setString(text, transient: true)
+      setString(text, transient: true, concealed: concealed)
       // Snapshot the change count our own write produced. If anything else writes
       // to the pasteboard before the restore fires (e.g. the user copies
       // something), the count moves and the restore leaves their newer contents
@@ -126,12 +134,19 @@
     /// the type's presence is the whole signal.
     static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
 
-    func setString(_ text: String, transient: Bool = false) {
+    /// nspasteboard.org's marker for sensitive contents — what a password
+    /// manager sets on a copied password. Set on a transcript dictated into a
+    /// secure field, the same secret `FocusCapture` refuses to read and the
+    /// session refuses to remember. Empty data, like `transientType`.
+    static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+
+    func setString(_ text: String, transient: Bool = false, concealed: Bool = false) {
       noteOwnWrite()
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
       pasteboard.setString(text, forType: .string)
       if transient { pasteboard.setData(Data(), forType: Self.transientType) }
+      if concealed { pasteboard.setData(Data(), forType: Self.concealedType) }
     }
 
     func restore(_ saved: PasteboardSnapshot) {

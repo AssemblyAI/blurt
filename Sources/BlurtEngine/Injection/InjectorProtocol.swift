@@ -13,10 +13,14 @@ public protocol InjectorProtocol: Sendable {
   /// used to recognize a *continuing* dictation into the same window when
   /// `priorText` is unreadable (see `InsertionSeparator.basis`); nil when the
   /// window exposes no title.
-  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws
+  /// `targetIsSecure` is the press-time read's verdict that the target is a
+  /// password field: whatever the injector leaves on a shared clipboard for it
+  /// must be marked so clipboard managers don't keep the secret.
+  func insert(_ text: String, after priorText: String?, windowTitle: String?, targetIsSecure: Bool) async throws
   /// Insert text wherever focus is now, leaving the pinned target (`setTarget`)
   /// as it is: a voice command's typed step, after its earlier steps brought
-  /// another app forward. No separator, as `replaceSelection`'s paste has none.
+  /// another app forward. No separator, as `replaceSelection`'s paste has none,
+  /// and never secure: nothing read the field it lands in.
   func insertAtFocus(_ text: String) async throws
 }
 
@@ -24,6 +28,6 @@ extension InjectorProtocol {
   /// A host with no notion of a target app (the iPhone keyboard) has no other
   /// focus to insert at.
   public func insertAtFocus(_ text: String) async throws {
-    try await insert(text, after: nil, windowTitle: nil)
+    try await insert(text, after: nil, windowTitle: nil, targetIsSecure: false)
   }
 }

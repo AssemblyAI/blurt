@@ -191,18 +191,22 @@
       guard await waitForTargetActivation(target) else { throw BlurtError.targetAppLost }
     }
 
-    public func insert(_ text: String, after priorText: String? = nil, windowTitle: String? = nil) async throws {
-      try await enqueue(text, after: priorText, windowTitle: windowTitle, pinned: true)
+    public func insert(
+      _ text: String, after priorText: String? = nil, windowTitle: String? = nil, targetIsSecure: Bool = false
+    ) async throws {
+      try await enqueue(text, after: priorText, windowTitle: windowTitle, secure: targetIsSecure, pinned: true)
     }
 
     /// Pastes where focus is now rather than at the pinned target: the snapshot
     /// `performInsert` takes is nil for this one paste, and `targetApp` is
     /// untouched, so a press pinning its own target in the meantime keeps it.
     public func insertAtFocus(_ text: String) async throws {
-      try await enqueue(text, after: nil, windowTitle: nil, pinned: false)
+      try await enqueue(text, after: nil, windowTitle: nil, secure: false, pinned: false)
     }
 
-    private func enqueue(_ text: String, after priorText: String?, windowTitle: String?, pinned: Bool) async throws {
+    private func enqueue(
+      _ text: String, after priorText: String?, windowTitle: String?, secure: Bool, pinned: Bool
+    ) async throws {
       guard !text.isEmpty else { return }
       // Serialize the whole paste critical section by chaining behind the previous
       // insert's link (which includes its settle/restore — see `pendingSettle`).
@@ -214,7 +218,8 @@
       let timeout = pasteSettleDuration
       let paste = Task<(@Sendable () -> Void)?, any Error> {
         await previous?.value
-        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
+        return try await self.performInsert(
+          text, after: priorText, windowTitle: windowTitle, secure: secure, pinned: pinned)
       }
       // Strong `self` captures, deliberately: each link is bounded (one paste, one
       // settle sleep — no cycle), and a weak capture would let an injector torn
@@ -239,8 +244,13 @@
     /// The paste critical section: runs with the chain's guarantee that no other
     /// insert (or its settle) is mid-flight. Returns the deferred clipboard-restore
     /// action for the settle link to run once the paste has landed.
+    ///
+    /// `secure` (a password field) reaches every clipboard write below, so the
+    /// secret is marked concealed on the paste *and* on the quiet "copied"
+    /// leave-behind — the one write that otherwise stays for a clipboard
+    /// manager to archive (issue #348).
     private func performInsert(
-      _ text: String, after priorText: String?, windowTitle: String?, pinned: Bool
+      _ text: String, after priorText: String?, windowTitle: String?, secure: Bool, pinned: Bool
     ) async throws -> @Sendable () -> Void {
       try Task.checkCancellation()
       // Snapshot the target at entry and use only the local below: this method
@@ -265,7 +275,7 @@
         // Transcription already succeeded, so leave the words on the clipboard —
         // the pipeline degrades this to the quiet "copied" notice instead of a
         // hard failure that would lose the dictation.
-        clipboard.write(finalText)
+        clipboard.write(finalText, concealed: secure)
         throw error
       }
       // The app whose opacity is judged below: the target, or — when there is
@@ -288,7 +298,7 @@
       // cross-process calls — and the apps that check answers for (Chrome,
       // Slack, VS Code) are the ones whose focus read is slowest.
       guard isAXOpaqueApp(judged) || hasEditableTarget() else {
-        clipboard.write(finalText)
+        clipboard.write(finalText, concealed: secure)
         throw BlurtError.noEditableTarget
       }
       // Bail before touching the pasteboard if we can't actually paste: without
@@ -298,7 +308,7 @@
 
       // Put the transcript on the clipboard and keep the deferred restore that
       // brings the user's contents back once the paste settles.
-      let restore = clipboard.writeAndPrepareRestore(finalText)
+      let restore = clipboard.writeAndPrepareRestore(finalText, concealed: secure)
       // If the event subsystem won't synthesize the keystroke, the paste can't
       // happen. The transcript is already on the pasteboard — leave it there (the
       // user's words beat the stale pre-paste snapshot) so the failure degrades

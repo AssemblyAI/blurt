@@ -145,7 +145,7 @@
         pb.clearContents()
         pb.setString("original", forType: .string)
 
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
         // The transcript is on the clipboard for the target app's ⌘V to read.
         #expect(pb.string(forType: .string) == "transcript")
 
@@ -167,7 +167,7 @@
         pb.setString("original", forType: .string)
         #expect(pb.types?.contains(SystemClipboard.transientType) == false)
 
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
         #expect(pb.string(forType: .string) == "transcript")
         #expect(pb.types?.contains(SystemClipboard.transientType) == true)
 
@@ -204,7 +204,7 @@
 
         pb.clearContents()
         pb.setString("original", forType: .string)
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
 
         // Someone else copies inside the settle window.
         pb.clearContents()
@@ -226,11 +226,29 @@
         // The `ClipboardAccess` half the degraded paste paths use: no restore is
         // prepared, because the transcript is meant to *stay* on the clipboard for
         // the user to paste by hand. So the previous contents must be gone.
-        clip.write("transcript")
+        clip.write("transcript", concealed: false)
 
         #expect(pb.string(forType: .string) == "transcript")
         // Left for the user to keep, so a clipboard manager may record it.
         #expect(pb.types?.contains(SystemClipboard.transientType) == false)
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == false)
+      }
+    }
+
+    @Test("a concealed write is marked so clipboard managers skip it")
+    func concealedWriteIsMarked() {
+      // Issue #348: a password dictation's quiet "copied" leave-behind. Still on
+      // the clipboard for the hand-paste, but Concealed and Transient both, since
+      // some managers record a Concealed-only item and merely hide it.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        clip.write("hunter2", concealed: true)
+
+        #expect(pb.string(forType: .string) == "hunter2")
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
+        #expect(pb.types?.contains(SystemClipboard.transientType) == true)
       }
     }
 

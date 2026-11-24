@@ -42,6 +42,8 @@ struct DictationSessionContextTests {
     // The injector gets the two fields its separator decision runs on.
     #expect(await fixture.injector.insertedPrior == ["Hi Sam,"])
     #expect(await fixture.injector.insertedWindowTitles == ["Re: Q3 pricing"])
+    // An ordinary field: nothing to conceal on the clipboard.
+    #expect(await fixture.injector.insertedSecure == [false])
     // Logged once the paste ended, with how it did.
     #expect(
       fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected, outcome: .pasted)])
@@ -129,6 +131,9 @@ struct DictationSessionContextTests {
 
     // It still reached the user: transcribed and pasted, twice.
     #expect(await fixture.injector.inserted == ["hunter2", "hunter2"])
+    // Flagged as secure, so whatever the paste leaves on the clipboard is marked
+    // for clipboard managers to skip (issue #348).
+    #expect(await fixture.injector.insertedSecure == [true, true])
     // But nothing was remembered, so dictation #2 carried no history and the ring
     // the "Recent" list projects stays empty.
     #expect(await fixture.session.recentDictations.entries.isEmpty)
