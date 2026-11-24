@@ -177,13 +177,24 @@ struct SelectionSpeechRouterLifecycleTests {
 
   @Test("a held read starts once the key has been down for the hold delay")
   func heldReadStartsAfterTheDelay() async throws {
+    // On the test clock, not the wall: timing a real 300 ms timer against a
+    // 5 s poll failed on a loaded CI runner whose main actor stalled for
+    // seconds. The clock proves the same thing without the race — the timer
+    // waits the hold delay exactly, nothing starts before it fires, and the
+    // read starts once it does.
     let speaker = GatedSpeaker()
-    let rig = router(speaker)
+    let clock = TestClock()
+    let rig = router(speaker, clock: clock)
     let (router, events) = (rig.router, rig.events)
-    let pressed = ContinuousClock.now
+    let hold = SelectionSpeechRouting.holdDelay
     router.press(key: .leftOption)
+    await clock.waitUntilSleeping(for: hold)
+    #expect(clock.sleepingFor == [hold])
+    clock.advance(by: hold - .milliseconds(1))
+    await Task.yield()
+    #expect(events.started == 0, "the read started before the hold delay")
+    clock.advance(by: .milliseconds(1))
     try await waitUntil { events.started == 1 }
-    #expect(ContinuousClock.now - pressed >= .milliseconds(300))
   }
 
   @Test("a press's leftover timer can't mark the next press as a hold early")
