@@ -55,7 +55,9 @@ struct TranscriptPage: View {
     .onChange(of: model.state) { _, state in
       switch state {
       case .finished: AccessibilityNotification.Announcement("Transcript ready").post()
-      case .failed(_, let message, _): AccessibilityNotification.Announcement(message).post()
+      case .failed(_, let message, let recording):
+        let kept = recording == nil ? "" : " \(Self.keptRecordingNote)"
+        AccessibilityNotification.Announcement(message + kept).post()
       case .recording: AccessibilityNotification.Announcement("Recording").post()
       case .idle, .transcribing, .finishingRecording: break
       }
@@ -96,26 +98,36 @@ struct TranscriptPage: View {
     case .finished:
       facetContent
     case .failed(_, let message, let recording):
-      Label(message, systemImage: "exclamationmark.triangle")
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      if let recording, let entry = model.history.first(where: { $0.id == recording }) {
-        keptRecording(entry)
+      let kept = recording.flatMap { id in model.history.first { $0.id == id } }
+      // One message under one icon, read as one: the error, then — for a
+      // recording kept in the Library — that it wasn't lost.
+      Label {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(message)
+          if kept != nil { Text(Self.keptRecordingNote) }
+        }
+      } icon: {
+        Image(systemName: "exclamationmark.triangle")
       }
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+      if let kept { keptRecordingActions(kept) }
       Spacer()
     }
   }
 
-  /// A recording whose transcription failed is kept in the Library, not lost:
-  /// say so, and offer it again now or in Finder.
-  @ViewBuilder private func keptRecording(_ entry: SavedTranscript) -> some View {
-    Text("The recording is saved in your Library, to transcribe now or later.")
-      .foregroundStyle(.secondary)
-      .fixedSize(horizontal: false, vertical: true)
+  /// What a failure page adds for a recording kept in the Library.
+  private static let keptRecordingNote = "The recording is saved in your Library. You can transcribe it now or later."
+
+  /// A kept recording, offered again now or in Finder (disabled, as the
+  /// toolbar's is, once the file is gone).
+  private func keptRecordingActions(_ entry: SavedTranscript) -> some View {
     HStack {
       Button("Try Again") { model.retryRecording(entry.id) }
       if let url = entry.audioURL {
         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+          .disabled(!FileManager.default.fileExists(atPath: url.path))
+          .help("Show the recording in Finder")
       }
     }
   }

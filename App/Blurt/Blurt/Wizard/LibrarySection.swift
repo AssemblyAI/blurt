@@ -330,7 +330,7 @@ private struct HistoryRow: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(title), \(details), \(dayTitle) at \(time)")
-    .accessibilityHint("Opens the transcript")
+    .accessibilityHint(entry.isUntranscribed ? "Transcribes the recording" : "Opens the transcript")
     // The menu's actions, offered to VoiceOver on the row itself.
     .accessibilityActions { actions }
   }
