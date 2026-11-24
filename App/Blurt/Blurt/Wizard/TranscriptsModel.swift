@@ -350,11 +350,11 @@ final class TranscriptsModel {
 extension TranscriptsModel {
   /// Uploads and transcribes `url`, saving the result and opening it.
   ///
-  /// `kind` is `.recording` for a recording whose live transcript came back
-  /// empty: its audio is still worth the async pass, and if that finds nothing
-  /// either the file is deleted rather than left with no entry pointing at it.
-  /// If the pass fails, the file is kept, as an entry with no text yet: the
-  /// audio may hold the whole meeting. `entry` is that entry, retried.
+  /// `entry` is a recording saved without a transcript (`keepUntranscribed`)
+  /// — one whose live transcript came back empty, or whose pass failed: its
+  /// audio is still worth the async pass. The transcript fills it in; finding
+  /// nothing deletes it, file and all; failing keeps it for Try Again, since
+  /// the audio may hold the whole meeting.
   ///
   /// Never over a recording: a file dropped while one runs is refused, or the
   /// recording would be left capturing with no sheet to stop it.
@@ -381,17 +381,18 @@ extension TranscriptsModel {
       guard !Task.isCancelled, let self else { return }
       switch outcome {
       case .success(let result) where result.text.trimmedNonEmpty() == nil:
-        if kind == .recording { try? FileManager.default.removeItem(at: url) }
         if let entry { delete(entry) }
         state = .failed(fileName: fileName, message: "No speech was found in that file.")
       case .success(let result):
-        if let entry, fillIn(entry, with: result) { return }
-        add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
+        guard let entry else {
+          add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
+          return
+        }
+        if !fillIn(entry, with: result) { state = .idle }
       case .failure(let error):
-        // A failure isn't "no speech": the recording is kept, in the Library
-        // (`keepUntranscribed`), rather than lost over a network blip.
-        let pending = kind == .recording ? (entry ?? keepUntranscribed(url)) : nil
-        state = .failed(fileName: fileName, message: error.localizedDescription, retry: pending)
+        // A failure isn't "no speech": a recording's entry stays, untranscribed,
+        // rather than costing the user the audio over a network blip.
+        state = .failed(fileName: fileName, message: error.localizedDescription, retry: entry)
       }
     }
   }

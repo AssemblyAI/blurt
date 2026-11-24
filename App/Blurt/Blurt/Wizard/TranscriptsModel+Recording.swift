@@ -132,10 +132,11 @@ extension TranscriptsModel {
     let text = live.text
     guard text.trimmedNonEmpty() != nil else {
       // Nothing heard live — silence, or a live session that never got going.
-      // The audio may still hold speech: try the async pass on it, which
-      // saves it or, finding nothing, deletes the file.
+      // The audio may still hold speech: try the async pass on it. Saved
+      // first, so no way the pass ends — failed, or abandoned with Back —
+      // leaves the file with nothing pointing at it.
       state = .idle
-      transcribe(url, kind: .recording)
+      transcribe(url, kind: .recording, entry: keepUntranscribed(url))
       return
     }
     let entry = SavedTranscript(kind: .recording, date: .now, text: text, fileURL: url, plainText: live.plainText)
@@ -185,13 +186,13 @@ extension TranscriptsModel {
   /// Transcribes again a recording kept without a transcript — Try Again on
   /// the failure page, or opening it from the Library.
   func retranscribe(_ entry: SavedTranscript) {
-    guard let url = entry.fileURL else { return }
+    guard history.contains(where: { $0.id == entry.id }), let url = entry.fileURL else { return }
     transcribe(url, kind: entry.kind, entry: entry)
   }
 
   /// Saves the recording at `url` with no transcript yet
-  /// (`needsTranscription`), so it is still in the Library — playable, in
-  /// Finder, and transcribed when opened — once its failure is dismissed.
+  /// (`needsTranscription`), so it is in the Library — playable, in Finder,
+  /// and transcribed when opened — however its transcription ends.
   func keepUntranscribed(_ url: URL) -> SavedTranscript {
     let entry = SavedTranscript(kind: .recording, date: .now, text: "", fileURL: url)
     history.insert(entry, at: 0)
