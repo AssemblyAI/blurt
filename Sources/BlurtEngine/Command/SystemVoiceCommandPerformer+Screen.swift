@@ -236,7 +236,7 @@
       let focused = app.flatMap { AXRead.element($0, kAXFocusedUIElementAttribute) }
       let window = app.flatMap { AXRead.element($0, kAXFocusedWindowAttribute) }
       return PressFingerprint(
-        focusedElement: focused.map { Int(CFHash($0)) },
+        focusedElement: focused.map { Int(bitPattern: CFHash($0)) },
         windowTitle: window.flatMap { AXRead.string($0, kAXTitleAttribute) },
         value: AXRead.string(node.element, kAXValueAttribute),
         onScreen: node.frame != nil, focusOnTarget: focused.map { isWithin($0, node.element) } ?? false,
