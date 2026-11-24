@@ -16,7 +16,7 @@
     @Test("restores the prior pasteboard contents after pasting")
     func restoresClipboard() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
-      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { true }, clipboard: clip)
+      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in true }, clipboard: clip)
       try await injector.insert("dictated text")
       // The restore is deferred to the background settle task; await it before
       // asserting the user's clipboard came back.
@@ -31,7 +31,7 @@
       // A 1s settle: long enough that the assertions below run well before the
       // background restore fires, so the "still pending" checks are deterministic.
       let injector = KeyInjector(
-        pasteSettleDuration: .seconds(1), postPaste: { true }, clipboard: clip)
+        pasteSettleDuration: .seconds(1), postPaste: { _ in true }, clipboard: clip)
 
       try await injector.insert("dictated text")
 
@@ -51,7 +51,7 @@
     func holdsLockThroughSettle() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(
-        pasteSettleDuration: .milliseconds(200), postPaste: { true }, clipboard: clip)
+        pasteSettleDuration: .milliseconds(200), postPaste: { _ in true }, clipboard: clip)
 
       try await injector.insert("dictated text")
       // `insert` is back with the transcript still on the clipboard. Another
@@ -66,7 +66,7 @@
     @Test("a failed paste gives the pasteboard's lock back")
     func failedPasteReleasesLock() async {
       let clip = FakeClipboard(string: "user-clipboard")
-      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: clip)
+      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in false }, clipboard: clip)
       await #expect(throws: BlurtError.targetAppLost) { try await injector.insert("dictated text") }
       let turn = await clip.lock.acquire()
       turn.end()
@@ -77,7 +77,7 @@
       let activated = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: { true },
+        postPaste: { _ in true },
         activateTarget: { _ in
           activated.value = true
           return true
@@ -121,7 +121,7 @@
     @Test("paste synthesis failure: throws .targetAppLost, transcript stays on the clipboard")
     func pasteSynthesisFailureThrows() async {
       let clip = FakeClipboard(string: "user-clipboard")
-      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: clip)
+      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in false }, clipboard: clip)
       await #expect(throws: BlurtError.targetAppLost) {
         try await injector.insert("text")
       }
@@ -280,7 +280,7 @@
       let firstParked = AsyncGate()
       let injector = KeyInjector(
         pasteSettleDuration: .milliseconds(100),
-        postPaste: {
+        postPaste: { _ in
           firstParked.open()
           return true
         },
@@ -306,7 +306,7 @@
       let pasted = AsyncGate()
       let injector = KeyInjector(
         pasteSettleDuration: .milliseconds(100),
-        postPaste: {
+        postPaste: { _ in
           pasted.open()
           return true
         },

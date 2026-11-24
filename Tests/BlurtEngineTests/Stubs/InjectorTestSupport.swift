@@ -42,7 +42,7 @@
     let pasted = StringListBox()
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
-      postPaste: {
+      postPaste: { _ in
         pasted.append(clip.string)
         return true
       },
@@ -130,8 +130,8 @@
   extension ValueBox where T == Bool {
     /// A `KeyInjector` `postPaste` double that records the ⌘V was posted and
     /// reports it landed — for a test that asserts on whether the paste happened.
-    var recordingPaste: @Sendable () -> Bool {
-      {
+    var recordingPaste: @Sendable (CGKeyCode) -> Bool {
+      { _ in
         self.value = true
         return true
       }

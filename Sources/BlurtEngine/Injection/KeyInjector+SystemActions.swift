@@ -115,15 +115,20 @@
       return (down, up)
     }
 
-    /// Posts Cmd-V on the key that types "v" under ⌘ on the user's layout
-    /// (`KeyboardLayout`): the US V key is ⌘K on Dvorak and ⌘C on Turkish-F, so a
-    /// hardcoded `kVK_ANSI_V` pasted nothing there and the restore then took the
-    /// words back off the clipboard. Returns `false` if the events couldn't be
-    /// built. The real side effect (a keystroke into the focused app) is why this
-    /// is the injectable seam tests replace.
-    static func postCmdV() async -> Bool {
-      let key = await KeyboardLayout.commandKeyCode(for: "v", ansiFallback: ansiV)
-      return post(cmdVEvents(virtualKey: key))
+    /// The key that types "v" under ⌘ on the user's layout (`KeyboardLayout`):
+    /// the US V key is ⌘K on Dvorak and ⌘C on Turkish-F, so a hardcoded
+    /// `kVK_ANSI_V` pasted nothing there and the restore then took the words
+    /// back off the clipboard. Falls back to the US key.
+    static func pasteKey() async -> CGKeyCode {
+      await KeyboardLayout.commandKeyCode(for: "v", ansiFallback: ansiV)
+    }
+
+    /// Posts Cmd-V on `key` (`pasteKey`, resolved before the paste's cancellation
+    /// gate). Returns `false` if the events couldn't be built. The real side
+    /// effect (a keystroke into the focused app) is why this is the injectable
+    /// seam tests replace.
+    static func postCmdV(_ key: CGKeyCode) -> Bool {
+      post(cmdVEvents(virtualKey: key))
     }
 
     /// Posts Cmd-C, the same way and for the same reasons as `postCmdV`. The

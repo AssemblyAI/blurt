@@ -12,10 +12,17 @@
     /// `insert`'s caller, so it no longer delays the pipeline re-arming.
     private let pasteSettleDuration: Duration
 
-    /// Synthesizes the paste keystroke. Returns `false` if the event subsystem
-    /// couldn't build the events. Injectable so tests exercise the clipboard
-    /// save/restore logic without posting a real Cmd-V into the focused app.
-    private let postPaste: @Sendable () async -> Bool
+    /// Synthesizes the paste keystroke on the given key. Returns `false` if the
+    /// event subsystem couldn't build the events. Injectable so tests exercise the
+    /// clipboard save/restore logic without posting a real Cmd-V into the focused
+    /// app. Synchronous on purpose: nothing may suspend between the final
+    /// cancellation gate and the keystroke.
+    private let postPaste: @Sendable (CGKeyCode) -> Bool
+
+    /// The key that pastes on the user's layout (`KeyInjector.pasteKey`). A
+    /// main-actor read, so it runs ahead of the cancellation gate, not inside
+    /// `postPaste`. Tests default to the US key.
+    private let resolvePasteKey: @Sendable () async -> CGKeyCode
 
     /// Identifies a window by its app's pid plus its title — a pid alone isn't
     /// enough (one browser process hosts many unrelated tabs/documents), and a
@@ -132,6 +139,7 @@
       self.init(
         pasteSettleDuration: pasteSettleDuration,
         postPaste: KeyInjector.postCmdV,
+        resolvePasteKey: KeyInjector.pasteKey,
         activateTarget: KeyInjector.activate,
         waitForTargetActivation: KeyInjector.waitUntilFrontmost,
         isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
@@ -143,7 +151,8 @@
 
     init(
       pasteSettleDuration: Duration,
-      postPaste: @escaping @Sendable () async -> Bool,
+      postPaste: @escaping @Sendable (CGKeyCode) -> Bool,
+      resolvePasteKey: @escaping @Sendable () async -> CGKeyCode = { KeyInjector.ansiV },
       activateTarget: @escaping @Sendable (NSRunningApplication) -> Bool = KeyInjector.activate,
       waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async -> Bool = { _ in true },
       isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
@@ -155,6 +164,7 @@
     ) {
       self.pasteSettleDuration = pasteSettleDuration
       self.postPaste = postPaste
+      self.resolvePasteKey = resolvePasteKey
       self.activateTarget = activateTarget
       self.waitForTargetActivation = waitForTargetActivation
       self.isAccessibilityTrusted = isAccessibilityTrusted
@@ -289,6 +299,9 @@
       // up ahead of the gate below, so its main-actor hop can't let a cancel
       // slip past it.
       let judged = if let target { target } else { await frontmostApp() }
+      // The ⌘V's key on the user's layout, also ahead of the gate for the same
+      // reason: it is a main-actor read too.
+      let pasteKey = await resolvePasteKey()
       // Final cancellation gate before the irreversible paste: a cancel() that
       // landed during activation must not type into the focused app.
       try Task.checkCancellation()
@@ -321,7 +334,7 @@
       // paste's transient one, so it is kept for the hand-paste exactly like the
       // two "copied" paths above — a clipboard manager records it, and a copy
       // made before the user pastes doesn't lose the dictation.
-      guard await postPaste() else {
+      guard postPaste(pasteKey) else {
         clipboard.write(finalText)
         throw BlurtError.targetAppLost
       }
