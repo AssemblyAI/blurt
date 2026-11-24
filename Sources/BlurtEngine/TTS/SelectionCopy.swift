@@ -22,7 +22,7 @@
   /// previous dictation's pipeline, and every read would open the mic.
   struct SelectionCopy: Sendable {
     private let pasteboard: any CopyPasteboard
-    private let postCopy: @Sendable () -> Bool
+    private let postCopy: @Sendable () async -> Bool
     /// How long to wait for the app to answer the ⌘C. Measured copies land in
     /// tens of milliseconds, and nothing landing means nothing was selected. Kept
     /// short because a dictation press pays all of it.
@@ -37,7 +37,7 @@
 
     init(
       pasteboard: any CopyPasteboard = SystemClipboard(),
-      postCopy: @escaping @Sendable () -> Bool = { KeyInjector.postCmdC() },
+      postCopy: @escaping @Sendable () async -> Bool = { await KeyInjector.postCmdC() },
       timeout: Duration = .milliseconds(100),
       lateCopyWindow: Duration = .seconds(1),
       clock: any Clock<Duration> = ContinuousClock()
@@ -68,6 +68,14 @@
       maxCharacters: Int, on clock: some Clock<Duration>
     ) async -> (text: String?, lateWatch: Task<Void, Never>?) {
       let pasteboard = pasteboard
+      // The whole snapshot → ⌘C → poll → restore is one turn on the pasteboard:
+      // a dictation's paste still settling (its transcript on the clipboard, its
+      // restore not yet run) would otherwise be snapshotted as the user's
+      // clipboard, or restore under the copy's poll. So the press waits out an
+      // in-flight paste first. The late-copy watch runs after the turn ends: it
+      // stands down on any Blurt write, so it never fights a paste.
+      let turn = await pasteboard.lock.acquire()
+      defer { turn.end() }
       // An unreadable pasteboard can't be restored, so don't disturb it. The
       // own-write count is read first: a Blurt write racing this read can then
       // only make the copy give up, never be taken for the app's answer.
@@ -75,7 +83,7 @@
         let ownWrites = pasteboard.ownWriteCount
         return (ownWrites, pasteboard.snapshot(), pasteboard.changeCount)
       }
-      guard let saved, postCopy() else { return (nil, nil) }
+      guard let saved, await postCopy() else { return (nil, nil) }
       let deadline = clock.now.advanced(by: timeout)
       // Wait for a string, not just a change: an app may clear the clipboard and
       // write it a moment later, and the clear alone moves the change count.
@@ -156,5 +164,8 @@
     func snapshot() -> PasteboardSnapshot?
     func currentString() -> String?
     func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int)
+    /// Serializes the copy against Blurt's paste on this pasteboard — see
+    /// `PasteboardLock`.
+    var lock: PasteboardLock { get }
   }
 #endif
