@@ -18,6 +18,7 @@
       var text: String?
       var count = 0
       var concealed = false
+      var keptForHandPaste = false
     }
     private let state: Mutex<State>
 
@@ -30,6 +31,7 @@
         $0.text = text
         $0.count += 1
         $0.concealed = concealed
+        $0.keptForHandPaste = true
       }
     }
 
@@ -39,6 +41,7 @@
         s.text = text
         s.count += 1
         s.concealed = concealed
+        s.keptForHandPaste = false
         return (previous, s.count)
       }
       return { [self] in
@@ -64,6 +67,14 @@
     /// Whether the current contents were written marked concealed.
     var isConcealed: Bool {
       state.withLock { $0.concealed }
+    }
+
+    /// Whether the current contents came from `write` — the degraded paths'
+    /// leave-behind, kept for a hand-paste — rather than the paste's transient
+    /// `writeAndPrepareRestore`. `SystemClipboard` maps the two onto an unmarked
+    /// item and a `TransientType` one.
+    var isKeptForHandPaste: Bool {
+      state.withLock { $0.keptForHandPaste }
     }
   }
 #endif

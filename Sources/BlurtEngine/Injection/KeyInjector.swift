@@ -310,10 +310,16 @@
       // brings the user's contents back once the paste settles.
       let restore = clipboard.writeAndPrepareRestore(finalText, concealed: secure)
       // If the event subsystem won't synthesize the keystroke, the paste can't
-      // happen. The transcript is already on the pasteboard — leave it there (the
-      // user's words beat the stale pre-paste snapshot) so the failure degrades
-      // to the "copied" notice, matching the lost-target path above.
-      guard postPaste() else { throw BlurtError.targetAppLost }
+      // happen, and the restore is dropped: the user's words beat the stale
+      // pre-paste snapshot, so the failure degrades to the "copied" notice. The
+      // transcript is rewritten with the plain `write` rather than left as the
+      // paste's transient one, so it is kept for the hand-paste exactly like the
+      // two "copied" paths above — a clipboard manager records it, and a copy
+      // made before the user pastes doesn't lose the dictation.
+      guard postPaste() else {
+        clipboard.write(finalText, concealed: secure)
+        throw BlurtError.targetAppLost
+      }
       // The paste is posted and the text is visible. Record what landed (including
       // any leading separator) and which window it landed in so a following
       // dictation into the same window can recover its spacing, then hand the

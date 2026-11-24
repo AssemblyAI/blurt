@@ -83,6 +83,17 @@ struct CancelRaceTests {
     #expect(await injector.inserted.isEmpty)
   }
 
+  @Test("transcriber throwing URLError.cancelled without task cancellation is ignored rather than failed")
+  func transcriberThrowingURLErrorCancelledIsIgnored() async throws {
+    let stt = GatedTranscriber(text: "Hello world.", throwsCancelled: true)
+    let (session, injector) = await parkedTranscribing(stt)
+    await stt.allowToFinish()
+    await session.awaitPipeline()
+
+    #expect(await session.phase != .failed(.sttFailed(underlying: URLError(.cancelled))))
+    #expect(await injector.inserted.isEmpty)
+  }
+
   @Test("cancel during injecting discards the transcript and ends .cancelled")
   func cancelDuringInjectingDiscards() async throws {
     // `expectedCount: 0`: the paste must never be recorded. This is event-driven
@@ -294,11 +305,13 @@ private actor GatedTranscriber: TranscriberProtocol {
   /// `URLError(.cancelled)` — mimicking the real URLSession-backed transcriber,
   /// whose in-flight request is torn down by task cancellation.
   private let throwsWhenCancelled: Bool
+  private let throwsCancelled: Bool
   private let gate = Gate()
 
-  init(text: String, throwsWhenCancelled: Bool = false) {
+  init(text: String, throwsWhenCancelled: Bool = false, throwsCancelled: Bool = false) {
     self.text = text
     self.throwsWhenCancelled = throwsWhenCancelled
+    self.throwsCancelled = throwsCancelled
   }
 
   func transcribe(
@@ -306,7 +319,7 @@ private actor GatedTranscriber: TranscriberProtocol {
   ) async throws -> String {
     try await drainUntilAbandoned(frames)
     await gate.enter()
-    if throwsWhenCancelled && Task.isCancelled { throw URLError(.cancelled) }
+    if throwsCancelled || (throwsWhenCancelled && Task.isCancelled) { throw URLError(.cancelled) }
     return text
   }
 

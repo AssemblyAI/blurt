@@ -103,6 +103,9 @@
       // The paste never happened, so the transcript is deliberately left on the
       // clipboard (not restored away) — the user's words beat the stale snapshot.
       #expect(clip.string == "text")
+      // Kept like the other "copied" leave-behinds, not as the paste's transient
+      // write a clipboard manager would skip.
+      #expect(clip.isKeptForHandPaste)
     }
 
     @Test("throws .accessibilityPermissionMissing and leaves the clipboard untouched")

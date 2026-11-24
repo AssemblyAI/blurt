@@ -107,6 +107,9 @@ struct DictationCoordinatorReturnTests {
     defer { suite.tearDown() }
     let bench = await hopped(expectsKeeper: true)
     #expect(bench.returns.hosts.isEmpty)
+    // The cap is a task: advance only once it has parked on the clock, or the
+    // advance lands first and the sleeper it meant to wake waits forever.
+    await bench.rig.clock.waitUntilSleeping(for: .seconds(BlurtShared.hopReturnCap))
     bench.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
     #expect(await until { bench.returns.hosts == [Self.messages] })
     #expect(bench.coordinator.returnHost == nil)

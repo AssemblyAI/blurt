@@ -91,6 +91,20 @@
       #expect(clip.isConcealed)
     }
 
+    @Test("a secure dictation whose ⌘V can't be built is left for hand-paste concealed")
+    func secureSynthesisFailureStaysConcealed() async {
+      // The third "copied" leave-behind (#351) rewrites the transcript with the
+      // plain `write`; like the other two, a password must stay concealed.
+      let clip = FakeClipboard(string: "user-clipboard")
+      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: clip)
+      await #expect(throws: BlurtError.targetAppLost) {
+        try await injector.insert("hunter2", targetIsSecure: true)
+      }
+      #expect(clip.string == "hunter2")
+      #expect(clip.isKeptForHandPaste)
+      #expect(clip.isConcealed)
+    }
+
     @Test("a secure dictation's paste writes the clipboard concealed")
     func securePasteIsConcealed() async throws {
       let clip = FakeClipboard(string: "user-clipboard")

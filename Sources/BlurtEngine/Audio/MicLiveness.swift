@@ -111,7 +111,7 @@ enum MicLiveness {
     let route = "transport=\(transport) powerDB=\(powerDB)"
     guard let gap else {
       let cap = Int(timeout.milliseconds.rounded())
-      return "input liveness unconfirmed after \(cap) ms — proceeding, \(route)"
+      return "input liveness unconfirmed after \(cap) ms — failing closed, \(route)"
     }
     return "input live after \(Int(gap.milliseconds.rounded())) ms, \(route)"
   }
