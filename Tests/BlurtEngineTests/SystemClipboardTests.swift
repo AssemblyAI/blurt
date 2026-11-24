@@ -204,8 +204,8 @@
     }
 
     @Test("a real copy of a concealed password survives the paste-and-restore round trip")
-    func concealedCopyRoundTrips() throws {
-      try withClipboardRestored {
+    func concealedCopyRoundTrips() {
+      withClipboardRestored {
         let pb = NSPasteboard.general
         let clip = SystemClipboard()
 
