@@ -106,6 +106,36 @@ struct SpeechTransportTests {
     #expect(!ScriptedSpeechProtocol.started, "a cancelled read should never reach the service")
   }
 
+  @Test("a cancellation that lands before the wait arms is handed over, and the request is never started")
+  func delegateCancelledBeforeArm() async {
+    let (body, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+    let delegate = SpeechStreamDelegate(body: feed)
+    delegate.fail(CancellationError())
+    let started = ValueBox(true)
+    await #expect(throws: CancellationError.self) {
+      _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HTTPURLResponse, Error>) in
+        started.value = delegate.arm(continuation)
+      }
+    }
+    #expect(!started.value)
+    await #expect(throws: CancellationError.self) { for try await _ in body {} }
+  }
+
+  @Test("once the head is delivered, later outcomes don't resume the wait again")
+  func delegateSettlesOnce() async throws {
+    let (_, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+    let delegate = SpeechStreamDelegate(body: feed)
+    let url = AssemblyAISpeechSynthesizer.endpoint
+    let head = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+    let response: HTTPURLResponse = try await withCheckedThrowingContinuation { continuation in
+      #expect(delegate.arm(continuation))
+      delegate.settle(.success(head))
+      delegate.fail(CancellationError())
+      delegate.settle(.failure(URLError(.cancelled)))
+    }
+    #expect(response.statusCode == 200)
+  }
+
   @Test("URLSession: stopping a read cancels its request and reads as a cancellation, not a failure")
   func urlSessionCancellation() async throws {
     ScriptedSpeechProtocol.play(.respond(status: 200, chunks: [Data([1, 0])], finishes: false))

@@ -198,7 +198,7 @@ extension URLSession: SpeechTransport {
 /// The outcome and the wait meet in either order: one that settles before
 /// `arm` is kept and handed over when the wait arrives, so the continuation is
 /// resumed exactly once whatever races.
-private final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
+final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
   private enum Head {
     case pending
     case waiting(CheckedContinuation<HTTPURLResponse, Error>)
@@ -239,7 +239,7 @@ private final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Send
     body.finish(throwing: error)
   }
 
-  private func settle(_ outcome: Result<HTTPURLResponse, Error>) {
+  func settle(_ outcome: Result<HTTPURLResponse, Error>) {
     let waiting: CheckedContinuation<HTTPURLResponse, Error>? = head.withLock { head in
       switch head {
       case .pending:
