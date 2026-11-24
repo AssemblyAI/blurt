@@ -64,7 +64,7 @@ settings:
 packages:
   BlurtEngine:
     path: ../..
-  # The app's one remote package: the in-place updater (see AGENTS.md → Updates).
+  # The app's one remote package: the in-place updater (see ARCHITECTURE.md → Updates).
   # Pinned to an exact version so an update to the updater is a reviewed diff
   # here and in Package.resolved, never a silent float. The engine stays
   # dependency-free; check.sh allows this URL and nothing else.
