@@ -47,6 +47,31 @@
       #expect(clip.string == "user-clipboard")
     }
 
+    @Test("holds the pasteboard's lock until its restore has run (issue #341)")
+    func holdsLockThroughSettle() async throws {
+      let clip = FakeClipboard(string: "user-clipboard")
+      let injector = KeyInjector(
+        pasteSettleDuration: .milliseconds(200), postPaste: { true }, clipboard: clip)
+
+      try await injector.insert("dictated text")
+      // `insert` is back with the transcript still on the clipboard. Another
+      // clipboard user (`SelectionCopy`) asking for a turn now must not get one
+      // until the restore has put the user's contents back — or it snapshots
+      // the transcript as theirs.
+      let turn = await clip.lock.acquire()
+      defer { turn.end() }
+      #expect(clip.string == "user-clipboard")
+    }
+
+    @Test("a failed paste gives the pasteboard's lock back")
+    func failedPasteReleasesLock() async {
+      let clip = FakeClipboard(string: "user-clipboard")
+      let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: clip)
+      await #expect(throws: BlurtError.targetAppLost) { try await injector.insert("dictated text") }
+      let turn = await clip.lock.acquire()
+      turn.end()
+    }
+
     @Test("activates a live target app before pasting")
     func activatesTargetApp() async throws {
       let activated = ValueBox<Bool>(false)

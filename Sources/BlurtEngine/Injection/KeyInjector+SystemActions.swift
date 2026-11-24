@@ -78,21 +78,27 @@
         .min() ?? .infinity
     }
 
-    /// The Cmd-V key-down/key-up pair, or `nil` when CoreGraphics refuses to build
-    /// them. Split from `postCmdV` because only the *posting* is untestable: building
-    /// an event needs no Accessibility trust, while posting one sends a live
-    /// keystroke into whatever app has focus — not something `swift test` may do to
-    /// the machine it runs on. So the part carrying an actual invariant (the ⌘ flag
-    /// on both events and the `kVK_ANSI_V` keycode, which is what makes the paste a
-    /// paste) is asserted in `KeyInjectorSystemActionsTests`, and only the two
-    /// `.post` calls below stay covered by running the app.
-    static func cmdVEvents() -> (down: CGEvent, up: CGEvent)? {
-      keyEvents(virtualKey: 0x09, flags: .maskCommand)  // kVK_ANSI_V
+    /// The US-ANSI positions of V and C (`kVK_ANSI_V`, `kVK_ANSI_C`): only the
+    /// fallback for when the user's layout can't be read. Spelled as literals
+    /// because the Carbon constants aren't importable in the tests that pin them.
+    static let ansiV: CGKeyCode = 0x09
+    static let ansiC: CGKeyCode = 0x08
+
+    /// The Cmd-V key-down/key-up pair on `virtualKey`, or `nil` when CoreGraphics
+    /// refuses to build them. Split from `postCmdV` because only the *posting* is
+    /// untestable: building an event needs no Accessibility trust, while posting
+    /// one sends a live keystroke into whatever app has focus — not something
+    /// `swift test` may do to the machine it runs on. So the part carrying an
+    /// actual invariant (the ⌘ flag on both events and the key code, which is what
+    /// makes the paste a paste) is asserted in `KeyInjectorSystemActionsTests`, and
+    /// only the two `.post` calls below stay covered by running the app.
+    static func cmdVEvents(virtualKey: CGKeyCode = ansiV) -> (down: CGEvent, up: CGEvent)? {
+      keyEvents(virtualKey: virtualKey, flags: .maskCommand)
     }
 
     /// The Cmd-C pair, for the read-aloud press's copy fallback (`SelectionCopy`).
-    static func cmdCEvents() -> (down: CGEvent, up: CGEvent)? {
-      keyEvents(virtualKey: 0x08, flags: .maskCommand)  // kVK_ANSI_C
+    static func cmdCEvents(virtualKey: CGKeyCode = ansiC) -> (down: CGEvent, up: CGEvent)? {
+      keyEvents(virtualKey: virtualKey, flags: .maskCommand)
     }
 
     /// A key-down/key-up pair for `virtualKey` with `flags` on both — the
@@ -109,19 +115,26 @@
       return (down, up)
     }
 
-    /// Posts Cmd-V. Returns `false` if the events couldn't be built. The real side
-    /// effect (a keystroke into the focused app) is why this is the injectable seam
-    /// tests replace.
-    static func postCmdV() -> Bool {
-      post(cmdVEvents())
+    /// Posts Cmd-V on the key that types "v" under ⌘ on the user's layout
+    /// (`KeyboardLayout`): the US V key is ⌘K on Dvorak and ⌘C on Turkish-F, so a
+    /// hardcoded `kVK_ANSI_V` pasted nothing there and the restore then took the
+    /// words back off the clipboard. Returns `false` if the events couldn't be
+    /// built. The real side effect (a keystroke into the focused app) is why this
+    /// is the injectable seam tests replace.
+    static func postCmdV() async -> Bool {
+      let key = await KeyboardLayout.commandKeyCode(for: "v", ansiFallback: ansiV)
+      return post(cmdVEvents(virtualKey: key))
     }
 
     /// Posts Cmd-C, the same way and for the same reasons as `postCmdV`. The
     /// annotated session tap also sits *after* the trigger's own session tap, so
     /// `DictationKeyTap` never sees this keystroke. Otherwise its `keyDown` would
     /// read as a ⌘-combo and cancel the very press that asked for the copy.
-    static func postCmdC() -> Bool {
-      post(cmdCEvents())
+    /// The key is resolved on the user's layout for the same reason: on
+    /// Turkish-F the US C key types "v", and a ⌘C there pasted instead.
+    static func postCmdC() async -> Bool {
+      let key = await KeyboardLayout.commandKeyCode(for: "c", ansiFallback: ansiC)
+      return post(cmdCEvents(virtualKey: key))
     }
 
     static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {

@@ -15,7 +15,7 @@
     /// Synthesizes the paste keystroke. Returns `false` if the event subsystem
     /// couldn't build the events. Injectable so tests exercise the clipboard
     /// save/restore logic without posting a real Cmd-V into the focused app.
-    private let postPaste: @Sendable () -> Bool
+    private let postPaste: @Sendable () async -> Bool
 
     /// Identifies a window by its app's pid plus its title — a pid alone isn't
     /// enough (one browser process hosts many unrelated tabs/documents), and a
@@ -143,7 +143,7 @@
 
     init(
       pasteSettleDuration: Duration,
-      postPaste: @escaping @Sendable () -> Bool,
+      postPaste: @escaping @Sendable () async -> Bool,
       activateTarget: @escaping @Sendable (NSRunningApplication) -> Bool = KeyInjector.activate,
       waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async -> Bool = { _ in true },
       isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
@@ -210,11 +210,25 @@
       // unserialized second insert would snapshot the pasteboard while it still
       // holds this insert's transcript and later restore that instead of the
       // user's original clipboard.
+      //
+      // The chain orders this injector's pastes; the pasteboard's lock also holds
+      // off Blurt's other clipboard user, `SelectionCopy`, whose snapshot/⌘C/
+      // restore would otherwise interleave with this paste's settle window and
+      // keep the transcript as the user's clipboard. The turn is held from before
+      // the first clipboard write to after the restore, and ended on every path.
       let previous = pendingSettle
       let timeout = pasteSettleDuration
-      let paste = Task<(@Sendable () -> Void)?, any Error> {
+      let lock = clipboard.lock
+      let paste = Task<(restore: @Sendable () -> Void, turn: PasteboardLock.Turn), any Error> {
         await previous?.value
-        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
+        let turn = await lock.acquire()
+        do {
+          let restore = try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
+          return (restore, turn)
+        } catch {
+          turn.end()
+          throw error
+        }
       }
       // Strong `self` captures, deliberately: each link is bounded (one paste, one
       // settle sleep — no cycle), and a weak capture would let an injector torn
@@ -222,9 +236,10 @@
       // (not `self`), so the user's contents come back even if the injector is
       // gone by the time the settle fires.
       pendingSettle = Task {
-        guard let restore = try? await paste.value else { return }
+        guard let (restore, turn) = try? await paste.value else { return }
         try? await Task.sleep(for: timeout)
         restore()
+        turn.end()
       }
       // Forward the caller's cancellation into the chain link: the paste task is
       // unstructured, so `pipelineTask.cancel()` in the session wouldn't otherwise
@@ -306,7 +321,7 @@
       // paste's transient one, so it is kept for the hand-paste exactly like the
       // two "copied" paths above — a clipboard manager records it, and a copy
       // made before the user pastes doesn't lose the dictation.
-      guard postPaste() else {
+      guard await postPaste() else {
         clipboard.write(finalText)
         throw BlurtError.targetAppLost
       }
