@@ -58,11 +58,20 @@
   /// comparison that gates the deferred restore lives here, behind the seam, so a
   /// fake never re-implements it.
   struct SystemClipboard: ClipboardAccess {
+    /// How long a concealed write may sit on the clipboard before it is cleared:
+    /// 1Password's default ("clear copied information after 90 seconds"), so a
+    /// dictated password lasts exactly as long as one copied from a password
+    /// manager. Only Blurt's own write is cleared — see `setString`.
+    var concealedLifetime: Duration = .seconds(90)
+
     // Not transient: these words are meant to stay for a paste by hand, so a
     // clipboard manager keeping them is a feature here — unless they went into a
-    // password field (issue #348). Then they are concealed *and* transient: the
-    // hand-paste still works, but no manager archives the secret. Both markers,
-    // because some managers record a Concealed-only item and merely hide it.
+    // password field (issue #348). Then they are handled the way 1Password
+    // handles a copied password: concealed *and* transient, so no manager
+    // archives it (both markers, because some managers record a Concealed-only
+    // item and merely hide it); this Mac only, so Universal Clipboard doesn't
+    // carry it to the user's other devices; and cleared after
+    // `concealedLifetime`. The hand-paste still works in the meantime.
     func write(_ text: String, concealed: Bool) {
       setString(text, transient: concealed, concealed: concealed)
     }
@@ -143,10 +152,33 @@
     func setString(_ text: String, transient: Bool = false, concealed: Bool = false) {
       noteOwnWrite()
       let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
+      // Both clear the old contents; `.currentHostOnly` also keeps this write off
+      // Universal Clipboard, which ignores the nspasteboard.org markers.
+      if concealed {
+        pasteboard.prepareForNewContents(with: .currentHostOnly)
+      } else {
+        pasteboard.clearContents()
+      }
       pasteboard.setString(text, forType: .string)
       if transient { pasteboard.setData(Data(), forType: Self.transientType) }
-      if concealed { pasteboard.setData(Data(), forType: Self.concealedType) }
+      guard concealed else { return }
+      pasteboard.setData(Data(), forType: Self.concealedType)
+      clearAfterLifetime(ifChangeCountIs: pasteboard.changeCount)
+    }
+
+    /// Clears the concealed write once `concealedLifetime` has passed — unless
+    /// anything wrote to the pasteboard since, the same guard the paste's restore
+    /// uses: a newer copy by the user survives, and so does the restore itself
+    /// (which is why the paste path's 400 ms restore leaves this a no-op, and only
+    /// a secret left behind for the hand-paste is ever cleared).
+    private func clearAfterLifetime(ifChangeCountIs expected: Int) {
+      let lifetime = concealedLifetime
+      Task { [self] in
+        try? await Task.sleep(for: lifetime)
+        guard changeCount == expected else { return }
+        noteOwnWrite()
+        NSPasteboard.general.clearContents()
+      }
     }
 
     func restore(_ saved: PasteboardSnapshot) {

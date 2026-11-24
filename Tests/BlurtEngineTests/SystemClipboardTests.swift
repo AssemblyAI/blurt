@@ -252,6 +252,34 @@
       }
     }
 
+    @Test("a concealed write clears itself once its lifetime passes")
+    func concealedWriteExpires() async throws {
+      // 1Password's behavior for a copied password: gone after a short while
+      // (90 s in production; shortened here).
+      let clip = SystemClipboard(concealedLifetime: .milliseconds(50))
+      let saved = clip.snapshot()
+      defer { if let saved { clip.restore(saved) } }
+
+      clip.write("hunter2", concealed: true)
+      #expect(NSPasteboard.general.string(forType: .string) == "hunter2")
+      try await Task.sleep(for: .milliseconds(500))
+      #expect(NSPasteboard.general.string(forType: .string) == nil)
+    }
+
+    @Test("a copy made after a concealed write survives its expiry")
+    func concealedExpirySparesNewerCopy() async throws {
+      let clip = SystemClipboard(concealedLifetime: .milliseconds(50))
+      let saved = clip.snapshot()
+      defer { if let saved { clip.restore(saved) } }
+
+      clip.write("hunter2", concealed: true)
+      // The user copies something else before the clear fires.
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString("user copy", forType: .string)
+      try await Task.sleep(for: .milliseconds(500))
+      #expect(NSPasteboard.general.string(forType: .string) == "user copy")
+    }
+
     @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
     func restoreEmptyIsNoOp() throws {
       try withClipboardRestored {

@@ -242,6 +242,8 @@ extension DictationSession {
   /// session is at rest, and this is not a dictation. Throws only on cancellation.
   public func replaceSelection(with text: String) async throws -> PipelinePhase {
     do {
+      // Never secure: the text is a rewrite or a composition of the selection,
+      // and a secure field has no readable selection to have produced it.
       try await injector.insert(text, after: nil, windowTitle: nil, targetIsSecure: false)
       return .pasted
     } catch {
