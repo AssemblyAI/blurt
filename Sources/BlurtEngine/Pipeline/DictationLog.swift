@@ -283,6 +283,10 @@ public enum DictationLog {
   /// What an entry holds in place of a transcript dictated into a password field.
   static let withheldTranscript = "(withheld: dictated into a password field)"
 
+  /// What an entry holds in place of a transcript dictated into a field that
+  /// could not be checked for a password (`PressContext.TargetSecurity.unknown`).
+  static let unverifiedTranscript = "(withheld: the field could not be checked for a password)"
+
   /// The rewrite the settings ask for: the chosen mode while enhanced
   /// transcripts are on, nil while the verbatim text is pasted. The same two
   /// settings `AssemblyAITranscriber` reads for the request.

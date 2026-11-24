@@ -20,7 +20,8 @@ import Synchronization
 ///   ~1 s — must not be enough to open it. Nor may a *hung* one: `resolved` is
 ///   nil both for a read that settled on an empty snapshot and for one still in
 ///   flight, and only the first says anything about the field. So that decision
-///   reads `mayRemember`, which fails closed on a read that has not landed.
+///   reads `targetSecurity`, which reports a read that has not landed as
+///   `.unknown` rather than as an ordinary field.
 ///
 /// So `wait(within:clock:)` is the deadline-bound read the upload needs and
 /// `resolved` is the peek the release path needs, over one stored value. Holding
@@ -75,17 +76,33 @@ final class PressContext: Sendable {
   /// cannot do anything about either.
   var resolved: TranscriptionContext? { state.withLock { $0.resolved } }
 
-  /// Whether the dictation this press produces may be remembered as history —
-  /// recorded into `recentDictations`, and so replayed in `stt_prompt`.
-  ///
-  /// Fails closed: only a read that has *landed* and did not flag the target
-  /// as secure says yes. A read still in flight at release (a slow or
-  /// beachballing frontmost app) could yet turn out to be a password field, and
-  /// remembering on the strength of not knowing is exactly the leak
-  /// `targetIsSecure` exists to prevent. The cost is one unremembered dictation
-  /// into an app too slow to answer, which is the cheaper mistake.
-  var mayRemember: Bool {
-    state.withLock { $0.settled && $0.resolved?.targetIsSecure != true }
+  /// What the press-time read says about whether the target is a password field.
+  enum TargetSecurity: Equatable {
+    /// The read landed and the field is an ordinary one: remember the dictation
+    /// and replay it as later request context.
+    case ordinary
+    /// The read refused the field (`TranscriptionContext.targetIsSecure`): the
+    /// dictation is the secret, so it is not remembered at all.
+    case secure
+    /// Nothing is known — the read has not landed (a slow or beachballing
+    /// frontmost app), or it reached no focused element
+    /// (`TranscriptionContext.targetSecurityUnknown`). Remembered for the Recent
+    /// list, which stays on this Mac, but never replayed in `stt_prompt`, where
+    /// a password would leave it.
+    case unknown
+  }
+
+  /// The verdict the remember decision acts on. Fails closed: only a read that
+  /// has *landed* can say `.ordinary`; one still in flight could yet turn out
+  /// to be a password field, and replaying on the strength of not knowing is
+  /// exactly the leak `targetIsSecure` exists to prevent.
+  var targetSecurity: TargetSecurity {
+    state.withLock {
+      guard $0.settled else { return .unknown }
+      if $0.resolved?.targetIsSecure == true { return .secure }
+      if $0.resolved?.targetSecurityUnknown == true { return .unknown }
+      return .ordinary
+    }
   }
 
   /// Publishes the finished read. The value lands before the stream does, so

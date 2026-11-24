@@ -22,10 +22,10 @@
     /// process lacks Accessibility trust, or the app answers the focus query with
     /// nothing (Electron apps commonly do). Not `.empty`: that describes an
     /// ordinary field with nothing in it, and here there is no telling whether
-    /// the field is a password input, so the verdict fails closed the same way an
-    /// unreadable role does. Each field is independently best-effort. Requires the
-    /// same Accessibility permission the app already holds for paste injection, so
-    /// it adds no new prompt.
+    /// the field is a password input, so the dictation must not be replayed as
+    /// later request context (`FocusedFieldContext.securityUnknown`). Each field
+    /// is independently best-effort. Requires the same Accessibility permission
+    /// the app already holds for paste injection, so it adds no new prompt.
     ///
     /// Secure text fields (password inputs) are detected by role **or** subrole and
     /// never have their contents read. This guard is what keeps a typed password out

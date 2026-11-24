@@ -94,19 +94,26 @@ extension DictationSession {
     // *read* a secure field; remembering what was dictated *into* one would leak
     // the same secret the other way — replayed as a context turn on every later
     // dictation this launch, in unrelated apps. So a secure target is transcribed
-    // and pasted as normal, and simply not remembered. The same goes for a
-    // target whose security is still *unknown* — the read hasn't landed yet —
-    // which `mayRemember` treats as secure rather than as ordinary.
-    if pressContext?.mayRemember == true {
+    // and pasted as normal, and simply not remembered. A target whose security
+    // is *unknown* — the read hasn't landed, or reached no focused element —
+    // is remembered for the Recent list but never replayed (see
+    // `PressContext.TargetSecurity`).
+    let security = pressContext?.targetSecurity ?? .unknown
+    if security != .secure {
       recentDictations.record(
-        trimmed, spoken: spoken, style: pressStyle.name, at: Date())
+        trimmed, spoken: spoken, style: pressStyle.name, at: Date(),
+        replayable: security == .ordinary)
     }
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded)
-    seams.logTranscript(text, capturedContext, outcome)
+    // The developer-mode log withholds a known password field's transcript
+    // itself (from `targetIsSecure`); an unknown target's is withheld here, since
+    // a read that never landed leaves the log no context to decide from.
+    seams.logTranscript(
+      security == .unknown ? DictationLog.unverifiedTranscript : text, capturedContext, outcome)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
