@@ -1,7 +1,7 @@
 import BlurtEngine
 
 // Recording with meetings: a probe every few seconds asks Core Audio whether
-// a meeting app (or a browser) holds the microphone, and `MeetingAutoRecord`
+// a meeting app holds the microphone (or a browser holds it and plays audio), and `MeetingAutoRecord`
 // turns that into starting and stopping a recording. It probes while the
 // "Auto-record meetings" switch is on, and during any recording — so one
 // started by hand in a meeting ends with it, switch or no switch. Split from

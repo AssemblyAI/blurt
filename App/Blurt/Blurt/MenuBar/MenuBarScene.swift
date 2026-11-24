@@ -5,6 +5,9 @@ import SwiftUI
 /// The menu bar status item's icon. Reads the live dictation status off the
 /// coordinator (created after launch, so nil early on — idle until then) and
 /// re-renders as the pipeline moves, since `AppCoordinator` is `@Observable`.
+/// A Record-button recording — including one "Auto-record meetings" started
+/// with the window closed — shows here too (#345), so capturing the mic and
+/// Mac audio is never invisible.
 /// The status enum, its phase mapping, and the glyph/VoiceOver strings all live
 /// in BlurtEngine (`MenuBarStatus`), where `swift test` covers them — this view
 /// just draws what the engine resolves, mirroring how `OverlayView` renders
@@ -13,7 +16,10 @@ struct MenuBarLabel: View {
   let appDelegate: AppDelegate
 
   var body: some View {
-    let status = appDelegate.coordinator?.menuBarStatus ?? .idle
+    let coordinator = appDelegate.coordinator
+    let transcripts = coordinator?.transcripts
+    let status = (coordinator?.menuBarStatus ?? .idle)
+      .showing(recordingAudio: (transcripts?.isRecording ?? false) && !(transcripts?.isPaused ?? false))
     Image(systemName: status.symbolName)
       .accessibilityLabel(status.accessibilityLabel)
   }
@@ -36,6 +42,14 @@ struct MenuBarContent: View {
   private var activation: TriggerActivation { bindings.activation }
 
   var body: some View {
+    // A recording of the mic and Mac audio is on — possibly one a meeting
+    // started with the window closed: say so, and offer the way out here.
+    if let transcripts = appDelegate.coordinator?.transcripts, transcripts.isRecording {
+      Text(transcripts.isPaused ? "Recording paused" : "Recording mic and Mac audio")
+      Button("Stop Recording") { transcripts.stopRecording() }
+      Divider()
+    }
+
     // Disabled informational row: the dictation trigger is an invisible lone
     // modifier, so spell it out here as the menu bar's discoverability anchor.
     if let triggerKey {
