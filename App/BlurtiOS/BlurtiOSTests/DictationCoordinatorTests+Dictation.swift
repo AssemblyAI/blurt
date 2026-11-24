@@ -101,6 +101,21 @@ extension DictationCoordinatorTests {
     #expect(rig.idle.ended == 1 && rig.tasks.ended.contains(DictationCoordinator.releaseTask))
   }
 
+  @Test("a release accepted before the session claims the press keeps its recipient")
+  func releaseBeforeClaim() {
+    defer {
+      DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press() }
+      DictationCoordinator.claimedPress.withLock { $0 = DictationCoordinator.Press() }
+    }
+    DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press(keyboard: Self.keyboard) }
+    // The release lands first (`handleCommand`), then the session claims.
+    DictationCoordinator.claimedPress.withLock { $0.stopRecipient = "kb-2" }
+    #expect(DictationCoordinator.claimPress() == nil)
+    let claimed = DictationCoordinator.claimedPress.withLock { $0 }
+    #expect(claimed.keyboard == Self.keyboard)
+    #expect(claimed.stopRecipient == "kb-2")
+  }
+
   @Test("a release from a keyboard that neither owns the dictation nor is on screen is notOwner")
   func strangerRelease() async throws {
     let suite = ScratchSuite()

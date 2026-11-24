@@ -56,6 +56,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 from collections import Counter
@@ -116,6 +117,26 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def _host_tag(host: str) -> str:
+    """A short, filename-safe name for a non-default `/live` host, for its cache file.
+
+    `dictation.staging.assemblyai.com` stays `staging`, the tag its cache has always had;
+    any other host keeps everything that tells it apart, so two hosts never share a
+    cache and a dotless one (`localhost:8080`) is a tag rather than an `IndexError`.
+    """
+    name = host.removeprefix("dictation.").removesuffix(".assemblyai.com")
+    return re.sub(r"[^A-Za-z0-9.-]+", "-", name).strip("-.") or "host"
+
+
+def write_csv(path: str, table: list[dict]) -> None:
+    """The scored table as CSV: every column once, `bucket` last even when the first row has none."""
+    columns = list(dict.fromkeys([*(table[0].keys() if table else ()), "bucket"]))
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(table)
+
+
 def _save_json(path: Path, cache: dict) -> None:
     """Merge into what is on disk, then write — two runs share the judge cache.
 
@@ -149,7 +170,7 @@ def transcribe_all(
     live.require_tools()
     tag = f"{mode}-{_sha(instruction) if instruction else 'default'}"
     if host != "dictation.assemblyai.com":
-        tag = f"{host.split('.')[1]}-{tag}"
+        tag = f"{_host_tag(host)}-{tag}"
     if sample:
         # A separate cache per sample: the rewrite is not deterministic, so comparing two
         # instructions on one run each confuses their difference with its run-to-run
@@ -349,10 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"    {domain:<20} {rate:>6.1f}  ({len(items)} clips)")
 
     if args.out:
-        with open(args.out, "w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=[*table[0].keys(), "bucket"])
-            writer.writeheader()
-            writer.writerows(table)
+        write_csv(args.out, table)
         print(f"\nWrote {args.out}")
     return 0
 
