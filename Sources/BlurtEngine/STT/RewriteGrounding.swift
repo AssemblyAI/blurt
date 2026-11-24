@@ -17,7 +17,8 @@ import Foundation
 /// (`AssemblyAITranscriber.chooseTranscript`) — what was said, cleanup or not.
 /// A spoken phrase that happens to sit inside the instruction ("okay", "I don't
 /// know") trips the same test and costs that utterance its cleanup, nothing
-/// more.
+/// more. The match is on whole words: a reply whose letters merely sit inside
+/// an instruction word ("Done." in "abandoned") is speech.
 enum RewriteGrounding {
   /// An instruction sentence shorter than this, normalized, is something a
   /// person says ("No emojis") and is not held against a rewrite.
@@ -27,9 +28,10 @@ enum RewriteGrounding {
     let words = normalized(rewrite)
     guard !words.isEmpty else { return false }
     guard let instruction else { return true }
-    let rules = normalized(instruction)
-    if rules.contains(words) { return false }
-    return !sentences(of: instruction).contains { words.contains($0) }
+    // Both sides are single-spaced words, so padding them with a space makes
+    // `contains` match whole words only: "done" is not inside "abandoned".
+    if " \(normalized(instruction)) ".contains(" \(words) ") { return false }
+    return !sentences(of: instruction).contains { " \(words) ".contains(" \($0) ") }
   }
 
   /// Lowercased letters and digits, single-spaced. Case, punctuation and line
