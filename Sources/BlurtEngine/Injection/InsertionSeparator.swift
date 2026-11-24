@@ -41,7 +41,16 @@ public enum InsertionSeparator {
   /// Deliberately conservative — `/` and `-` are left out because
   /// `yes /` or `well -` can just as well want the space as not.
   private static let openers: Set<Character> = [
-    "(", "[", "{", "\u{201C}", "\u{2018}", "\u{00AB}", "\u{00BF}", "\u{00A1}", "@", "$",
+    "(",
+    "[",
+    "{",
+    "\u{201C}",
+    "\u{2018}",
+    "\u{00AB}",
+    "\u{00BF}",
+    "\u{00A1}",
+    "@",
+    "$",
   ]
 
   /// Characters that open only at the start of a word — the start of the text

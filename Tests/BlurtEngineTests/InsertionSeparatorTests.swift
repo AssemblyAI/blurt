@@ -57,8 +57,16 @@ struct InsertionSeparatorTests {
   @Test(
     "no separator after an opener (bracket, opening quote, @, $)",
     arguments: [
-      "Call me (", "a [", "a {", "She said \u{201C}", "She said \u{2018}", "Il a dit \u{00AB}",
-      "Dijo \u{00BF}", "Dijo \u{00A1}", "ping @", "price: $",
+      "Call me (",
+      "a [",
+      "a {",
+      "She said \u{201C}",
+      "She said \u{2018}",
+      "Il a dit \u{00AB}",
+      "Dijo \u{00BF}",
+      "Dijo \u{00A1}",
+      "ping @",
+      "price: $",
     ])
   func noSeparatorAfterOpener(prior: String) {
     #expect(InsertionSeparator.withLeadingSeparator("Maybe tomorrow.", after: prior) == "Maybe tomorrow.")
