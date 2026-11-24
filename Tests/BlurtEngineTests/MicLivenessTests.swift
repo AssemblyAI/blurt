@@ -182,12 +182,13 @@
 
       // A timeout reports the cap it waited out. An unreadable transport has to
       // stay distinguishable from `kAudioDeviceTransportTypeUnknown`, which is 0.
-      let failedOpen = MicLiveness.logSummary(
+      let timedOut = MicLiveness.logSummary(
         gap: nil, timeout: MicLiveness.unknownTransportTimeout, transportType: nil,
         powerDB: digitalSilencePowerDB)
-      #expect(failedOpen.contains("unconfirmed after 1000 ms"))
-      #expect(failedOpen.contains("transport=nil"))
-      #expect(failedOpen.contains("powerDB=-160.0"))
+      #expect(timedOut.contains("unconfirmed after 1000 ms"))
+      #expect(timedOut.contains("failing closed"))
+      #expect(timedOut.contains("transport=nil"))
+      #expect(timedOut.contains("powerDB=-160.0"))
     }
 
     @Test("a recorder that never delivers times out with nil — the not-live verdict")
