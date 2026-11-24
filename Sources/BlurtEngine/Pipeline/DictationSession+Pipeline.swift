@@ -205,7 +205,7 @@ extension DictationSession {
       // .cancelled; the transport then surfaces a cancellation-shaped error
       // (URLError(.cancelled) / CancellationError). Leave the claimed phase
       // alone rather than repainting the user's cancel as a red failure.
-      if Task.isCancelled || error is CancellationError { return nil }
+      if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return nil }
       // The producer refused to close a body below `SyncSTTLimits.minPCMBytes`.
       // `performRelease` normally catches that first and idles quietly; when the
       // producer gets there first instead, the outcome has to be the same
