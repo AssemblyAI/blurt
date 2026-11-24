@@ -377,15 +377,15 @@ private struct RetryRecording: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("The recording is kept in your Library. Try again once you're back online.")
+      Text("The recording is saved in your Library, so you can try again later.")
         .font(.callout)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
       HStack {
         Button("Try Again") { model.retranscribe(entry) }
-          .keyboardShortcut(.defaultAction)
         if let url = entry.audioURL {
           Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            .disabled(!FileManager.default.fileExists(atPath: url.path))
         }
       }
     }
