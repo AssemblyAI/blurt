@@ -93,6 +93,11 @@ public struct SavedTranscript: Codable, Identifiable, Equatable, Sendable {
   /// dictation or a reading: what gets an LLM title and speaker turns.
   public var isTranscript: Bool { kind == .file || kind == .recording }
 
+  /// A recording kept with no transcript yet: its transcription failed
+  /// (offline, a server error), so it is saved with its audio and no text,
+  /// for the Library to offer it again rather than lose it.
+  public var needsTranscription: Bool { kind == .recording && hasAudio && text.isEmpty }
+
   /// Replaces the transcript with a better one (a recording's diarized pass),
   /// keeping the plain text only where it differs, as `init` does.
   public mutating func replaceTranscript(_ text: String, plain: String) {

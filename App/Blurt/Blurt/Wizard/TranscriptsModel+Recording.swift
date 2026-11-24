@@ -173,6 +173,44 @@ extension TranscriptsModel {
     }
   }
 
+  /// A recording is running or finishing: the sheet is its, and nothing else
+  /// may take it.
+  var isRecordingBusy: Bool {
+    switch state {
+    case .recording, .finishingRecording: true
+    default: false
+    }
+  }
+
+  /// Transcribes again a recording kept without a transcript — Try Again on
+  /// the failure page, or opening it from the Library.
+  func retranscribe(_ entry: SavedTranscript) {
+    guard let url = entry.fileURL else { return }
+    transcribe(url, kind: entry.kind, entry: entry)
+  }
+
+  /// Saves the recording at `url` with no transcript yet
+  /// (`needsTranscription`), so it is still in the Library — playable, in
+  /// Finder, and transcribed when opened — once its failure is dismissed.
+  func keepUntranscribed(_ url: URL) -> SavedTranscript {
+    let entry = SavedTranscript(kind: .recording, date: .now, text: "", fileURL: url)
+    history.insert(entry, at: 0)
+    save()
+    return entry
+  }
+
+  /// Gives a recording kept without a transcript the one just made, and
+  /// opens it; false if it was deleted meanwhile.
+  func fillIn(_ entry: SavedTranscript, with result: FileTranscription) -> Bool {
+    guard let index = history.firstIndex(where: { $0.id == entry.id }) else { return false }
+    history[index].replaceTranscript(result.text, plain: result.plainText)
+    save()
+    let transcribed = history[index]
+    open(transcribed)
+    Task { [weak self] in await self?.applyTitle(to: transcribed) }
+    return true
+  }
+
   /// Stops capturing and ends the audio feed — every way a recording ends.
   /// `dropUnsent` also abandons audio not yet sent, for an ending that won't
   /// wait for the live transcript to finish.

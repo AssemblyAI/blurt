@@ -150,7 +150,8 @@ struct LibraryDay: Identifiable {
 
   /// "Dictation · Formal · 412 words", "Recording · 6,120 words", "Ask About
   /// Selection" — no count for a spoken entry, whose text is what was read
-  /// rather than what was said.
+  /// rather than what was said; "Recording · Not transcribed" for one whose
+  /// transcription failed.
   static func details(of entry: SavedTranscript) -> String {
     let kind = LibraryKind(entry)
     let words: String? =
@@ -159,7 +160,8 @@ struct LibraryDay: Identifiable {
       case (_, 1): "1 word"
       case (_, let count): "\(count.formatted()) words"
       }
-    return [kind.name, entry.style, words].compactMap { $0 }.joined(separator: " · ")
+    let status = entry.needsTranscription ? "Not transcribed" : words
+    return [kind.name, entry.style, status].compactMap { $0 }.joined(separator: " · ")
   }
 }
 
