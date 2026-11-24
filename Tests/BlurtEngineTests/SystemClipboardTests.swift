@@ -130,6 +130,89 @@
       }
     }
 
+    @Test("a marker-only snapshot still restores the text floor, still concealed")
+    func markerOnlySnapshotUsesTextFloor() {
+      // Issue #347: a password manager's copy whose string was promised snapshots
+      // as nothing but the empty ConcealedType marker. That item alone made
+      // `writeObjects` succeed with no string, and the plain-text floor was
+      // skipped — the user's password gone after a dictation.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        let markerOnly = PasteboardSnapshot(
+          items: [SendablePasteboardItem(dataMap: [SystemClipboard.concealedType: Data()])],
+          plainText: "hunter2")
+
+        clip.setString("transcript")
+        clip.restore(markerOnly)
+
+        #expect(pb.string(forType: .string) == "hunter2")
+        // Comes back marked as it was copied, so no clipboard manager archives it.
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
+        #expect(pb.types?.contains(SystemClipboard.transientType) == true)
+      }
+    }
+
+    @Test("a marker-only snapshot with no text floor leaves the clipboard alone")
+    func markerOnlySnapshotWithoutTextDoesNotDestroy() {
+      // Markers alone are not contents: writing them back would replace the
+      // transcript with an empty, unpasteable clipboard.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        let markerOnly = PasteboardSnapshot(
+          items: [SendablePasteboardItem(dataMap: [SystemClipboard.concealedType: Data()])],
+          plainText: nil)
+
+        clip.setString("transcript")
+        clip.restore(markerOnly)
+
+        #expect(pb.string(forType: .string) == "transcript")
+      }
+    }
+
+    @Test("a snapshot whose items lost their string gets the text floor folded back in")
+    func payloadWithoutStringGetsTextFloor() {
+      // The string flavor was promised and declined, but another flavor
+      // materialized: the item restores *and* keeps the user's text.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        let partial = PasteboardSnapshot(
+          items: [SendablePasteboardItem(dataMap: [.rtf: Data("{\\rtf1 styled}".utf8)])],
+          plainText: "styled")
+
+        clip.setString("transcript")
+        clip.restore(partial)
+
+        #expect(pb.string(forType: .string) == "styled")
+        #expect(pb.data(forType: .rtf) == Data("{\\rtf1 styled}".utf8))
+      }
+    }
+
+    @Test("a real concealed copy round-trips through writeAndPrepareRestore")
+    func concealedCopyRoundTrips() {
+      // The issue's reproduction end to end: string + ConcealedType, then a paste.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        pb.clearContents()
+        pb.setString("hunter2", forType: .string)
+        pb.setData(Data(), forType: SystemClipboard.concealedType)
+
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
+        #expect(pb.string(forType: .string) == "transcript")
+        restore()
+
+        #expect(pb.string(forType: .string) == "hunter2")
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
+      }
+    }
+
     @Test("writeAndPrepareRestore writes the text and its restore puts the saved contents back")
     func writeAndPrepareRestoreRoundTrips() {
       // The entry point `KeyInjector` actually pastes through, and the one primitive

@@ -181,6 +181,29 @@
       }
     }
 
+    /// The data maps `restore` writes back, one per item worth restoring.
+    ///
+    /// An item counts only if it carries *payload* — some non-empty data. The
+    /// nspasteboard.org markers are empty `Data()` by design, so a password
+    /// manager's copy whose string was promised (and declined) snapshots as a
+    /// marker-only item: writing that "succeeds" and puts back nothing but the
+    /// markers, the user's secret gone (issue #347).
+    ///
+    /// The `plainText` floor is folded into the first item whenever no item
+    /// kept a string of its own, rather than written separately: the restored
+    /// text then keeps that item's markers, so a concealed password comes back
+    /// concealed instead of as an ordinary string a clipboard manager archives.
+    static func restorableItems(
+      _ saved: PasteboardSnapshot
+    ) -> [[NSPasteboard.PasteboardType: Data]] {
+      var maps = saved.items.map(\.dataMap)
+      let keptString = maps.contains { !($0[.string]?.isEmpty ?? true) }
+      if let plainText = saved.plainText, !keptString, !maps.isEmpty {
+        maps[0][.string] = Data(plainText.utf8)
+      }
+      return maps.filter { map in map.values.contains { !$0.isEmpty } }
+    }
+
     func restore(_ saved: PasteboardSnapshot) {
       noteOwnWrite()
       let pasteboard = NSPasteboard.general
@@ -196,10 +219,9 @@
       // Build the items BEFORE clearing. Clearing first and then discovering there
       // is nothing to write is how the user's clipboard got destroyed whenever a
       // snapshot came back degraded.
-      let rebuilt = saved.items.compactMap { item -> NSPasteboardItem? in
-        guard !item.dataMap.isEmpty else { return nil }
+      let rebuilt = Self.restorableItems(saved).map { dataMap in
         let pasteboardItem = NSPasteboardItem()
-        for (type, data) in item.dataMap {
+        for (type, data) in dataMap {
           pasteboardItem.setData(data, forType: type)
         }
         // Putting the user's own contents back is not a new copy: without the
@@ -209,14 +231,22 @@
       }
 
       if !rebuilt.isEmpty {
-        pasteboard.clearContents()
+        // A concealed clipboard (a password manager's copy) goes back the way it
+        // came: this Mac only, so Universal Clipboard — which ignores the
+        // nspasteboard.org markers — doesn't carry the secret to other devices.
+        if rebuilt.contains(where: { $0.types.contains(Self.concealedType) }) {
+          pasteboard.prepareForNewContents(with: .currentHostOnly)
+        } else {
+          pasteboard.clearContents()
+        }
         // `writeObjects` can refuse the batch; fall through to the text floor
         // rather than leaving the pasteboard empty.
         if pasteboard.writeObjects(rebuilt) { return }
       }
 
-      // Either nothing was materializable, or the write above was refused. Put the
-      // text back if we have it.
+      // The write above was refused (a text floor would otherwise have been folded
+      // into `rebuilt`, so an unmaterializable snapshot with no text lands here
+      // and, `plainText` being nil, is left alone). Put the text back if we have it.
       //
       // Precise about the one case this does NOT recover: if items DID materialize,
       // `writeObjects` refused them, and there was no plain-string flavor, the
