@@ -93,6 +93,19 @@ struct SpeechTransportTests {
     #expect(audio.value == Data([1, 0]))
   }
 
+  @Test("URLSession: a request asked for by an already-cancelled task throws at once and is never sent")
+  func urlSessionCancelledBeforeStart() async throws {
+    ScriptedSpeechProtocol.play(.respond(status: 200, chunks: [Data([1, 0])], finishes: false))
+    let session = session()
+    let request = try AssemblyAISpeechSynthesizer.request(for: "Read this.", voiceID: "v", apiKey: "k")
+    let attempt = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      return try await session.stream(request)
+    }
+    await #expect(throws: CancellationError.self) { _ = try await attempt.value }
+    #expect(!ScriptedSpeechProtocol.started, "a cancelled read should never reach the service")
+  }
+
   @Test("URLSession: stopping a read cancels its request and reads as a cancellation, not a failure")
   func urlSessionCancellation() async throws {
     ScriptedSpeechProtocol.play(.respond(status: 200, chunks: [Data([1, 0])], finishes: false))

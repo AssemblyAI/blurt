@@ -26,6 +26,17 @@ struct PCMLevelTests {
     #expect(PCMLevel.levels(of: data, windowFrames: 0).isEmpty)
   }
 
+  @Test("samples that don't start on a 2-byte boundary read the same as aligned ones")
+  func unalignedSamples() {
+    let aligned = pcm(Array(repeating: 0, count: 50) + Array(repeating: .max, count: 50))
+    // One byte in, as a chunk with a carried byte prepended or a URLSession
+    // block can be: the slice's storage is off the `Int16` alignment.
+    var padded = Data([0xAA])
+    padded.append(aligned)
+    let unaligned = padded.dropFirst()
+    #expect(PCMLevel.levels(of: unaligned, windowFrames: 50) == [0, 1])
+  }
+
   @Test("a read wears its own pill state, steady and announced")
   func speakingPill() {
     #expect(OverlayUIState.speaking.accessibilityLabel == "Reading aloud.")

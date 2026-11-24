@@ -165,46 +165,104 @@ protocol SpeechTransport: Sendable {
 extension URLSession: SpeechTransport {
   /// Hands the body on in the blocks URLSession delivers (`SpeechStreamDelegate`)
   /// rather than a byte at a time: a long read is millions of bytes.
+  ///
+  /// The delegate is attached before anything can cancel the task, and a
+  /// cancellation settles the head itself rather than counting on URLSession
+  /// to report one: a task cancelled before it was resumed (the caller already
+  /// cancelled, so `onCancel` runs before the operation) may never call back,
+  /// and the wait for the head would never end.
   func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
+    try Task.checkCancellation()
     let (body, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+    let delegate = SpeechStreamDelegate(body: feed)
     let task = dataTask(with: request)
+    task.delegate = delegate
     feed.onTermination = { _ in task.cancel() }
     let response = try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HTTPURLResponse, Error>) in
-        task.delegate = SpeechStreamDelegate(response: continuation, body: feed)
-        task.resume()
+        // Already settled (cancelled first): the request is never sent.
+        if delegate.arm(continuation) { task.resume() }
       }
     } onCancel: {
       task.cancel()
+      delegate.fail(CancellationError())
     }
     return (response, body)
   }
 }
 
-/// One streamed request's delegate: resumes `response` with the head once it
-/// arrives (or the failure, if it never does), then feeds each block of the
-/// body to `body` and finishes it with the request.
+/// One streamed request's delegate: resumes the caller's wait for the head
+/// once it arrives (or the failure, if it never does), then feeds each block
+/// of the body to `body` and finishes it with the request.
+///
+/// The outcome and the wait meet in either order: one that settles before
+/// `arm` is kept and handed over when the wait arrives, so the continuation is
+/// resumed exactly once whatever races.
 private final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  private let pending: Mutex<CheckedContinuation<HTTPURLResponse, Error>?>
+  private enum Head {
+    case pending
+    case waiting(CheckedContinuation<HTTPURLResponse, Error>)
+    case settled(Result<HTTPURLResponse, Error>)
+    case delivered
+  }
+
+  private let head = Mutex(Head.pending)
   private let body: AsyncThrowingStream<Data, Error>.Continuation
 
-  init(response: CheckedContinuation<HTTPURLResponse, Error>, body: AsyncThrowingStream<Data, Error>.Continuation) {
-    self.pending = Mutex(response)
+  init(body: AsyncThrowingStream<Data, Error>.Continuation) {
     self.body = body
+  }
+
+  /// Waits on the head with `continuation`. False when the outcome was
+  /// already in — it's delivered now, and there is nothing left to start.
+  func arm(_ continuation: CheckedContinuation<HTTPURLResponse, Error>) -> Bool {
+    let early: Result<HTTPURLResponse, Error>? = head.withLock { head in
+      switch head {
+      case .pending:
+        head = .waiting(continuation)
+        return nil
+      case .settled(let outcome):
+        head = .delivered
+        return outcome
+      case .waiting, .delivered:
+        return .failure(CancellationError())
+      }
+    }
+    guard let early else { return true }
+    continuation.resume(with: early)
+    return false
+  }
+
+  /// Ends the request with `error`, before the head if it hasn't come yet.
+  func fail(_ error: any Error) {
+    settle(.failure(error))
+    body.finish(throwing: error)
+  }
+
+  private func settle(_ outcome: Result<HTTPURLResponse, Error>) {
+    let waiting: CheckedContinuation<HTTPURLResponse, Error>? = head.withLock { head in
+      switch head {
+      case .pending:
+        head = .settled(outcome)
+        return nil
+      case .waiting(let continuation):
+        head = .delivered
+        return continuation
+      case .settled, .delivered:
+        return nil
+      }
+    }
+    waiting?.resume(with: outcome)
   }
 
   func urlSession(
     _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse
   ) async -> URLSession.ResponseDisposition {
-    let continuation = pending.withLock { pending in
-      defer { pending = nil }
-      return pending
-    }
     if let http = response as? HTTPURLResponse {
-      continuation?.resume(returning: http)
+      settle(.success(http))
       return .allow
     }
-    continuation?.resume(throwing: URLError(.badServerResponse))
+    settle(.failure(URLError(.badServerResponse)))
     return .cancel
   }
 
@@ -213,11 +271,7 @@ private final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Send
   }
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    let continuation = pending.withLock { pending in
-      defer { pending = nil }
-      return pending
-    }
-    continuation?.resume(throwing: error ?? URLError(.badServerResponse))
+    settle(.failure(error ?? URLError(.badServerResponse)))
     if let error { body.finish(throwing: error) } else { body.finish() }
   }
 }
