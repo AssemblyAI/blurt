@@ -176,7 +176,9 @@ The request also carries context, so the transcript continues naturally from wha
 came before: your recent dictations from this session, and a short run of the text
 immediately before your cursor — never the contents of a password field, which
 Blurt refuses to read. Anything you dictate _into_ a password field is likewise
-never kept as context. Your key terms from Settings ride along too, to bias
+never kept as context — nor is a dictation into a field Blurt couldn't inspect
+(some apps hide their fields from macOS Accessibility), since it can't rule out
+a password field there either. Your key terms from Settings ride along too, to bias
 spelling, as do the instructions of the style you have selected, if any. Text
 shortcuts are expanded on your Mac after the response arrives and are never
 sent. Nothing else about your screen is sent: not the app you are in, not the

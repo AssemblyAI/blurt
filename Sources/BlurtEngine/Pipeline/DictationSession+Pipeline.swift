@@ -94,8 +94,10 @@ extension DictationSession {
     // *read* a secure field; remembering what was dictated *into* one would leak
     // the same secret the other way — replayed as a context turn on every later
     // dictation this launch, in unrelated apps. So a secure target is transcribed
-    // and pasted as normal, and simply not remembered.
-    if capturedContext?.targetIsSecure != true {
+    // and pasted as normal, and simply not remembered. The same goes for a
+    // target whose security is still *unknown* — the read hasn't landed yet —
+    // which `mayRemember` treats as secure rather than as ordinary.
+    if pressContext?.mayRemember == true {
       recentDictations.record(
         trimmed, spoken: spoken, style: pressStyle.name, at: Date())
     }

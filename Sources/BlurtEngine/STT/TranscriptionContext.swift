@@ -55,9 +55,10 @@ public struct TranscriptionContext: Sendable, Equatable {
   public let recentTranscripts: [String]
 
   /// Whether the capture **refused** to read the focused field — a password input,
-  /// or an element with an unreadable role (`FocusCapture.mustRedactContents` fails
-  /// closed). **Local only, not sent.** It exists to stop the *outgoing* half of
-  /// the same leak the read guard covers: a transcript dictated *into* a secure
+  /// an element with an unreadable role (`FocusCapture.mustRedactContents` fails
+  /// closed), or no reachable focused element at all
+  /// (`FocusedFieldContext.unreachable`). **Local only, not sent.** It exists to
+  /// stop the *outgoing* half of the same leak the read guard covers: a transcript dictated *into* a secure
   /// field is the secret, so `DictationSession` declines to remember it as history
   /// rather than replaying it as an `stt_prompt` line in every later
   /// dictation. Nil focus signals mean "we read nothing"; this means "we refused".

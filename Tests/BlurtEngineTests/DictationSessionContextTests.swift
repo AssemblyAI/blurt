@@ -152,11 +152,17 @@ struct DictationSessionContextTests {
       keyTerms: ["Kubernetes"], seams: seams)
 
     // Twice, so the second press has history to carry — `recentDictations` is
-    // actor state and this is how the sibling tests seed it.
-    for _ in 1...2 {
+    // actor state and this is how the sibling tests seed it. Each read is let
+    // through only once its request has gone out unprimed, and before release:
+    // a read still in flight at release is not remembered at all
+    // (`hungReadIsNotRemembered`), and the first press has to be.
+    for press in 1...2 {
       await session.press()
       await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
       clock.advance(by: DictationSession.contextWaitBudget)
+      while await transcriber.receivedContexts.count < press { await Task.yield() }
+      hung.signal()
+      while await session.pressContext?.mayRemember != true { await Task.yield() }
       await session.release()
       await session.waitForIdle()
     }
@@ -172,7 +178,48 @@ struct DictationSessionContextTests {
     // None of the focus signals, which are the part that genuinely timed out.
     #expect(second.priorText == nil)
     #expect(second.windowTitle == nil)
-    hung.signal()
+  }
+
+  @Test("a dictation released before the read lands is not remembered")
+  func hungReadIsNotRemembered() async throws {
+    // The other half of the late-secure case above: there the read lands before
+    // the decision, here it never does. Not knowing whether the target is a
+    // password field must not read as knowing it isn't — a nil `capturedContext`
+    // used to, so a beachballing password prompt leaked into `stt_prompt`.
+    let clock = TestClock()
+    let transcriber = StubTranscriber(mode: .transcript("hunter2"))
+    let injector = StubInjector()
+    let (seams, hung) = hungFieldSeams(field: Self.secureField)
+    let session = makeSession(
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
+
+    await session.press()
+    await session.release()
+    await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
+    clock.advance(by: DictationSession.contextWaitBudget)
+    await session.waitForIdle()
+
+    // Delivered as always; only remembering is withheld.
+    #expect(await injector.inserted == ["hunter2"])
+    #expect(await session.capturedContext == nil)
+    #expect(await session.recentDictations.entries.isEmpty)
+    hung.signal()  // release the capture thread before the test ends
+  }
+
+  @Test("a field Accessibility can't reach is treated as secure, not as empty")
+  func unreachableFieldIsNotRemembered() async throws {
+    // `FocusCapture` reports `.unreachable` when no focused element answers — an
+    // Electron app, whose login form is as invisible as its chat box. It must
+    // survive the empty collapse and suppress history like a known password field.
+    #expect(FocusedFieldContext.unreachable.isSecure)
+    #expect(!FocusedFieldContext.empty.isSecure)
+    let fixture = makeSession(mode: .transcript("hunter2"), field: .unreachable)
+
+    await fixture.session.dictate()
+
+    #expect(await fixture.injector.inserted == ["hunter2"])
+    #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
+    #expect(await fixture.session.recentDictations.entries.isEmpty)
   }
 
   @Test("a secure capture that lands after the upload's budget is still honored")
@@ -184,11 +231,11 @@ struct DictationSessionContextTests {
     // target (Electron, Java, Office — `FocusCapture` makes ~6 serial round
     // trips, each capped at ~1 s) therefore misses it routinely.
     //
-    // Missing it must not cost the `targetIsSecure` flag: a nil context reads as
-    // "not a password field", so the dictation would be written into
-    // `recentDictations` and replayed in `stt_prompt` on every later
-    // dictation this launch. `PressContext` is what keeps the read reachable
-    // after the deadline, and this is the test that says so.
+    // Missing it must not cost the `targetIsSecure` flag, or the dictation
+    // would be written into `recentDictations` and replayed in `stt_prompt` on
+    // every later dictation this launch. `PressContext` is what keeps the read
+    // reachable after the deadline, and this is the test that says so. (A read
+    // that never lands at all is `hungReadIsNotRemembered`.)
     let clock = TestClock()
     let transcriber = StubTranscriber(mode: .transcript("hunter2"))
     let injector = StubInjector()
