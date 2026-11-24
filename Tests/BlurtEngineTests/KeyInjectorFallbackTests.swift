@@ -12,21 +12,52 @@
   @Suite("KeyInjector.insert fallback & cancel")
   struct KeyInjectorFallbackTests {
 
-    @Test("a cancel landing during target activation aborts before the paste")
+    @Test("a cancel landing during target activation aborts before the paste", .timeLimit(.minutes(1)))
     func cancelDuringActivationSkipsPaste() async throws {
+      // Activation itself still succeeds, so only the post-activation
+      // cancellation gate stands between the cancel and the irreversible ⌘V.
+      try await expectCancelMidActivationLeavesClipboard(
+        activate: { cancel in
+          cancel()
+          return true
+        },
+        waitUntilFrontmost: { _ in true })
+    }
+
+    @Test(
+      "a cancel landing during the frontmost wait aborts without the copy fallback",
+      .timeLimit(.minutes(1)))
+    func cancelDuringFrontmostWaitLeavesClipboard() async throws {
+      // The production wait's shape: the cancel lands mid-poll, the sleep throws,
+      // and `poll` reports "not frontmost" — which on its own reads as
+      // `.targetAppLost` and would take the copy fallback (#334).
+      try await expectCancelMidActivationLeavesClipboard(
+        activate: { _ in true },
+        waitUntilFrontmost: { cancel in
+          cancel()
+          return await KeyInjector.poll(
+            for: .seconds(30), every: .milliseconds(10), clock: ContinuousClock(),
+            until: { false })
+        })
+    }
+
+    /// Runs one pinned insert whose activation step cancels the insert's own task
+    /// (each closure gets that cancel), then asserts the insert threw
+    /// `CancellationError`, no ⌘V was posted, and the user's clipboard was never
+    /// touched — the abort happened before both the paste and the copy fallback.
+    private func expectCancelMidActivationLeavesClipboard(
+      activate: @escaping @Sendable (_ cancel: @Sendable () -> Void) -> Bool,
+      waitUntilFrontmost: @escaping @Sendable (_ cancel: @Sendable () -> Void) async -> Bool
+    ) async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let posted = ValueBox<Bool>(false)
       let insertTask = ValueBox<Task<Void, any Error>?>(nil)
+      let cancel: @Sendable () -> Void = { insertTask.value?.cancel() }
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
         postPaste: posted.recordingPaste,
-        activateTarget: { _ in
-          // The cancel lands while activation is in flight; activation itself
-          // still succeeds, so only the post-activation cancellation gate stands
-          // between the cancel and the irreversible ⌘V.
-          insertTask.value?.cancel()
-          return true
-        },
+        activateTarget: { _ in activate(cancel) },
+        waitForTargetActivation: { _ in await waitUntilFrontmost(cancel) },
         clipboard: clip)
       await injector.setTarget(try liveTargetFocus())
 
@@ -43,8 +74,6 @@
       await #expect(throws: CancellationError.self) {
         try await task.value
       }
-      // No ⌘V was posted and the user's clipboard was never touched — the abort
-      // happened before the save/overwrite stage.
       #expect(posted.value == false)
       #expect(clip.string == "user-clipboard")
     }
