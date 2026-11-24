@@ -14,21 +14,11 @@ struct FileTranscriptionTests {
     (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
   }
 
-  /// A fresh directory holding one small file to "upload".
-  private func audioFile() throws -> URL {
-    let directory = FileManager.default.temporaryDirectory
-      .appending(path: "FileTranscriptionTests-\(UUID().uuidString)", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let url = directory.appending(path: "call.m4a")
-    try Data("audio bytes".utf8).write(to: url)
-    return url
-  }
-
   // MARK: - Async API
 
   @Test("uploads the raw file, submits it with speaker labels, polls until completed")
   func asyncFlow() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Mutex(0)
     let submitted = Mutex(Data())
@@ -73,7 +63,7 @@ struct FileTranscriptionTests {
 
   @Test("a failed status check is retried; the transcription carries on")
   func pollRetry() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Mutex(0)
     let transport = FakeHTTPTransport { request in
@@ -96,97 +86,9 @@ struct FileTranscriptionTests {
     #expect(polls.withLock { $0 } == 2)
   }
 
-  @Test("a cancelled request is never retried; only network blips, 5xx and 429 are")
-  func transientClassification() {
-    #expect(!AsyncTranscriptionClient.isTransient(URLError(.cancelled)))
-    #expect(!AsyncTranscriptionClient.isTransient(CancellationError()))
-    #expect(!AsyncTranscriptionClient.isTransient(URLError(.badURL)))
-    #expect(!AsyncTranscriptionClient.isTransient(AsyncTranscriptionError.http(status: 401, message: nil)))
-    #expect(AsyncTranscriptionClient.isTransient(URLError(.timedOut)))
-    #expect(AsyncTranscriptionClient.isTransient(URLError(.networkConnectionLost)))
-    #expect(AsyncTranscriptionClient.isTransient(AsyncTranscriptionError.http(status: 503, message: nil)))
-    #expect(AsyncTranscriptionClient.isTransient(AsyncTranscriptionError.http(status: 429, message: nil)))
-    // A submit is retried only when nothing can have been created.
-    #expect(AsyncTranscriptionClient.isUnsent(URLError(.cannotConnectToHost)))
-    #expect(AsyncTranscriptionClient.isUnsent(AsyncTranscriptionError.http(status: 429, message: nil)))
-    #expect(!AsyncTranscriptionClient.isUnsent(URLError(.timedOut)))
-    #expect(!AsyncTranscriptionClient.isUnsent(URLError(.cancelled)))
-    #expect(!AsyncTranscriptionClient.isUnsent(AsyncTranscriptionError.http(status: 503, message: nil)))
-  }
-
-  @Test("a cancelled status check surfaces at once, without burning the retries")
-  func cancelledPollNotRetried() async throws {
-    let url = try audioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let polls = Counter()
-    let transport = ScriptedTransport { request in
-      switch request.url?.path {
-      case "/v2/upload": return .success((200, self.json(["upload_url": "https://cdn.example/abc"])))
-      case "/v2/transcript": return .success((200, self.json(["id": "t1", "status": "queued"])))
-      default:
-        _ = polls.next()
-        return .failure(URLError(.cancelled))
-      }
-    }
-    await #expect(throws: URLError(.cancelled)) {
-      try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-        .transcribe(fileAt: url, apiKey: "key")
-    }
-    #expect(polls.value == 1)
-  }
-
-  @Test("a dropped upload is retried; the recording isn't lost to one blip")
-  func uploadRetry() async throws {
-    let url = try audioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let uploads = Counter()
-    let transport = ScriptedTransport { request in
-      switch request.url?.path {
-      case "/v2/upload":
-        return uploads.next() == 1
-          ? .failure(URLError(.networkConnectionLost))
-          : .success((200, self.json(["upload_url": "https://cdn.example/abc"])))
-      case "/v2/transcript": return .success((200, self.json(["id": "t1", "status": "queued"])))
-      default: return .success((200, self.json(["id": "t1", "status": "completed", "text": "Done."])))
-      }
-    }
-    let transcript = try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-      .transcribe(fileAt: url, apiKey: "key")
-    #expect(transcript.text == "Done.")
-    #expect(uploads.value == 2)
-  }
-
-  @Test("a submit is retried when it never reached the API, but not after a timeout")
-  func submitRetry() async throws {
-    let url = try audioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    for (failure, expectedSubmits) in [(URLError(.cannotConnectToHost), 2), (URLError(.timedOut), 1)] {
-      let submits = Counter()
-      let transport = ScriptedTransport { request in
-        switch request.url?.path {
-        case "/v2/upload": return .success((200, self.json(["upload_url": "https://cdn.example/abc"])))
-        case "/v2/transcript":
-          return submits.next() == 1
-            ? .failure(failure)
-            : .success((200, self.json(["id": "t1", "status": "completed", "text": "Done."])))
-        default:
-          Issue.record("unexpected poll")
-          return .success((500, Data()))
-        }
-      }
-      let client = AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-      if expectedSubmits == 1 {
-        await #expect(throws: failure) { try await client.transcribe(fileAt: url, apiKey: "key") }
-      } else {
-        #expect(try await client.transcribe(fileAt: url, apiKey: "key").text == "Done.")
-      }
-      #expect(submits.value == expectedSubmits)
-    }
-  }
-
   @Test("a transcript that ends in error throws its message")
   func asyncError() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { request in
       request.url?.path == "/v2/upload"
@@ -201,7 +103,7 @@ struct FileTranscriptionTests {
 
   @Test("an HTTP failure carries the API's error sentence")
   func asyncHTTPError() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { _ in (401, self.json(["error": "Invalid API key"])) }
     await #expect(throws: AsyncTranscriptionError.http(status: 401, message: "Invalid API key")) {
