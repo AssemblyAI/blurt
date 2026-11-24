@@ -1,6 +1,7 @@
 import Foundation
 
-/// Which input device dictation records from: the system's default input (the
+/// Which input device dictation and the Record button's recorder
+/// (`SystemAudioRecorder`) record from: the system's default input (the
 /// unset default, and Blurt's only behavior before microphone selection
 /// existed), or one specific device pinned by its persistent CoreAudio UID.
 ///
