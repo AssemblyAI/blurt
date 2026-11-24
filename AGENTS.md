@@ -882,11 +882,15 @@ Four perceived-latency choices to preserve:
 ### `KeyInjector` — `Sources/BlurtEngine/Injection/KeyInjector.swift`
 
 `insert` always injects via clipboard paste: it saves the current pasteboard contents, writes the
-transcript, then posts ⌘V (`CGEvent` to the `.cgAnnotatedSessionEventTap`, not the HID tap). It
-returns once the paste is posted; the wait for the target to read the clipboard
-(`pasteSettleDuration`, default 400 ms) and the restore of the prior contents run on a chained
-follow-up task (`pendingSettle`), which also serializes back-to-back inserts so a second paste can't
-snapshot the first one's clipboard.
+transcript, then posts ⌘V (`CGEvent` to the `.cgAnnotatedSessionEventTap`, not the HID tap). The
+⌘V — like the read-aloud copy fallback's ⌘C — is the key that types V with ⌘ held on the user's
+layout (`KeyboardLayout`), not `kVK_ANSI_V`: on Dvorak that key types K, and on Turkish-F V and C
+swap (#341). It returns once the paste is posted; the wait for the target to read the clipboard
+(`pasteSettleDuration`, default 400 ms) and the restore of the prior contents run inside the same
+pasteboard turn (`ClipboardTurns`, exposed to tests as `pendingSettle`). The turns serialize
+back-to-back inserts, so a second paste can't snapshot the first one's clipboard. `SelectionCopy`
+(snapshot, ⌘C, poll, restore) queues on the same turns, so a press inside a paste's settle can't
+take the transcript for the user's clipboard either.
 
 The restore is deliberately conservative: `SystemClipboard.snapshot()` returns `nil` when the
 pasteboard can't be read at all (distinct from it being _empty_), and `restore` builds the

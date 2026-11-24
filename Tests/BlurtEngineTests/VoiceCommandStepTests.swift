@@ -176,13 +176,24 @@ struct VoiceCommandStepTests {
   }
 
   #if os(macOS)
+    /// With ⌘ held too: what the paste's ⌘V and the copy fallback's ⌘C are
+    /// looked up on.
     @MainActor
-    @Test("the machine's own layout types every letter, each from its own key")
-    func currentLayout() {
-      let layout = KeyboardLayout.current()
+    @Test("the machine's own layout types every letter, each from its own key", arguments: [false, true])
+    func currentLayout(commandHeld: Bool) {
+      let layout = KeyboardLayout.current(commandHeld: commandHeld)
       let letters = "abcdefghijklmnopqrstuvwxyz".map { layout[$0] }
       #expect(!letters.contains(nil))
       #expect(Set(letters.compactMap { $0 }).count == 26)
+    }
+
+    @MainActor
+    @Test("⌘V and ⌘C come from the layout, and a key it lacks falls back to its US position")
+    func commandKeyCodes() {
+      let layout = KeyboardLayout.current(commandHeld: true)
+      #expect(KeyInjector.commandKeyCode(for: "v", ansi: KeyInjector.ansiV) == layout["v"])
+      #expect(KeyInjector.commandKeyCode(for: "c", ansi: KeyInjector.ansiC) == layout["c"])
+      #expect(KeyInjector.commandKeyCode(for: "🙂", ansi: KeyInjector.ansiV) == KeyInjector.ansiV)
     }
 
     @Test("a shortcut's events carry its key and every modifier, on the key-up too")

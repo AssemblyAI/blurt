@@ -15,7 +15,7 @@
     /// Synthesizes the paste keystroke. Returns `false` if the event subsystem
     /// couldn't build the events. Injectable so tests exercise the clipboard
     /// save/restore logic without posting a real Cmd-V into the focused app.
-    private let postPaste: @Sendable () -> Bool
+    private let postPaste: @Sendable () async -> Bool
 
     /// Identifies a window by its app's pid plus its title — a pid alone isn't
     /// enough (one browser process hosts many unrelated tabs/documents), and a
@@ -67,15 +67,15 @@
     /// host's real keyboard and mouse (defaults to "no input" there).
     private let secondsSinceUserInput: @Sendable () -> TimeInterval
 
-    /// Tail of the paste chain: each insert links behind the previous insert's
-    /// ENTIRE critical section — paste *plus* its backgrounded settle/restore — so
-    /// two pastes can never interleave on the global `NSPasteboard`. `insert`
-    /// itself returns as soon as its paste is posted (the settle trails inside the
-    /// chain link), so the pipeline re-arms immediately while the next paste still
-    /// waits out the restore window. Chaining replaces a hand-rolled continuation
-    /// mutex whose lock had to be handed off to the settle task. Exposed
-    /// (internal get) so tests can await the deferred restore before asserting
-    /// clipboard state; production never reads it.
+    /// The latest insert's whole clipboard turn — paste *plus* its backgrounded
+    /// settle/restore. Turns are taken on `turns`, so two pastes can never
+    /// interleave on the global `NSPasteboard`, and neither can a paste and the
+    /// read-aloud copy fallback (`SelectionCopy`, issue #341). `insert` itself
+    /// returns as soon as its paste is posted (the settle trails inside the
+    /// turn), so the pipeline re-arms immediately while the next borrower still
+    /// waits out the restore window. Exposed (internal get) so tests can await
+    /// the deferred restore before asserting clipboard state; production never
+    /// reads it.
     private(set) var pendingSettle: Task<Void, Never>?
 
     /// Brings the captured target app back to the foreground before pasting.
@@ -128,6 +128,11 @@
     /// otherwise flake.
     private let clipboard: any ClipboardAccess
 
+    /// Where this injector queues for the pasteboard. Production shares
+    /// `ClipboardTurns.shared` with `SelectionCopy`; a test injector gets its own
+    /// queue, so suites running in parallel don't wait on each other's settles.
+    private let turns: ClipboardTurns
+
     public init(pasteSettleDuration: Duration = .milliseconds(400)) {
       self.init(
         pasteSettleDuration: pasteSettleDuration,
@@ -138,12 +143,13 @@
         hasEditableTarget: FocusCapture.hasEditableFocusedElement,
         isAXOpaqueApp: FocusCapture.isAXOpaqueApp,
         frontmostApp: KeyInjector.frontmostApp,
-        secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput)
+        secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput,
+        turns: .shared)
     }
 
     init(
       pasteSettleDuration: Duration,
-      postPaste: @escaping @Sendable () -> Bool,
+      postPaste: @escaping @Sendable () async -> Bool,
       activateTarget: @escaping @Sendable (NSRunningApplication) -> Bool = KeyInjector.activate,
       waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async -> Bool = { _ in true },
       isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
@@ -151,7 +157,8 @@
       isAXOpaqueApp: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
       frontmostApp: @escaping @Sendable () async -> NSRunningApplication? = { nil },
       secondsSinceUserInput: @escaping @Sendable () -> TimeInterval = { .infinity },
-      clipboard: any ClipboardAccess = SystemClipboard()
+      clipboard: any ClipboardAccess = SystemClipboard(),
+      turns: ClipboardTurns = ClipboardTurns()
     ) {
       self.pasteSettleDuration = pasteSettleDuration
       self.postPaste = postPaste
@@ -163,6 +170,7 @@
       self.frontmostApp = frontmostApp
       self.secondsSinceUserInput = secondsSinceUserInput
       self.clipboard = clipboard
+      self.turns = turns
     }
 
     /// Pins the paste target: the app that was frontmost at press time, resolved
@@ -204,29 +212,28 @@
 
     private func enqueue(_ text: String, after priorText: String?, windowTitle: String?, pinned: Bool) async throws {
       guard !text.isEmpty else { return }
-      // Serialize the whole paste critical section by chaining behind the previous
-      // insert's link (which includes its settle/restore — see `pendingSettle`).
-      // The actor is reentrant across the `await`s in `performInsert`, so an
-      // unserialized second insert would snapshot the pasteboard while it still
-      // holds this insert's transcript and later restore that instead of the
-      // user's original clipboard.
-      let previous = pendingSettle
-      let timeout = pasteSettleDuration
-      let paste = Task<(@Sendable () -> Void)?, any Error> {
-        await previous?.value
-        return try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
-      }
-      // Strong `self` captures, deliberately: each link is bounded (one paste, one
+      // Serialize the whole paste critical section as one clipboard turn (which
+      // includes its settle/restore — see `pendingSettle`). The actor is
+      // reentrant across the `await`s in `performInsert`, so an unserialized
+      // second insert would snapshot the pasteboard while it still holds this
+      // insert's transcript and later restore that instead of the user's
+      // original clipboard — and a ⌘C copy taken inside the settle would do the
+      // same (issue #341).
+      //
+      // Strong `self` capture, deliberately: each turn is bounded (one paste, one
       // settle sleep — no cycle), and a weak capture would let an injector torn
       // down mid-window skip the paste. The restore closure captures the clipboard
       // (not `self`), so the user's contents come back even if the injector is
       // gone by the time the settle fires.
-      pendingSettle = Task {
-        guard let restore = try? await paste.value else { return }
+      let timeout = pasteSettleDuration
+      let (paste, turn) = await turns.enqueue {
+        try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
+      } thenHolding: { restore in
         try? await Task.sleep(for: timeout)
         restore()
       }
-      // Forward the caller's cancellation into the chain link: the paste task is
+      pendingSettle = turn
+      // Forward the caller's cancellation into the turn: the paste task is
       // unstructured, so `pipelineTask.cancel()` in the session wouldn't otherwise
       // reach `performInsert`'s cancellation gates.
       try await withTaskCancellationHandler {
@@ -236,9 +243,10 @@
       }
     }
 
-    /// The paste critical section: runs with the chain's guarantee that no other
-    /// insert (or its settle) is mid-flight. Returns the deferred clipboard-restore
-    /// action for the settle link to run once the paste has landed.
+    /// The paste critical section: runs with the turn's guarantee that no other
+    /// insert (or its settle), and no copy fallback, is mid-flight. Returns the
+    /// deferred clipboard-restore action for the turn to run once the paste has
+    /// landed.
     private func performInsert(
       _ text: String, after priorText: String?, windowTitle: String?, pinned: Bool
     ) async throws -> @Sendable () -> Void {
@@ -306,14 +314,14 @@
       // paste's transient one, so it is kept for the hand-paste exactly like the
       // two "copied" paths above — a clipboard manager records it, and a copy
       // made before the user pastes doesn't lose the dictation.
-      guard postPaste() else {
+      guard await postPaste() else {
         clipboard.write(finalText)
         throw BlurtError.targetAppLost
       }
       // The paste is posted and the text is visible. Record what landed (including
       // any leading separator) and which window it landed in so a following
       // dictation into the same window can recover its spacing, then hand the
-      // deferred restore back to the chain link (see `insert`). `insert` returns
+      // deferred restore back to the turn (see `enqueue`). `insert` returns
       // now — so the pipeline reaches `.idle` and re-arms without waiting out the
       // restore window — while the next paste still serializes behind the settle.
       lastInserted = (resolved, .now)

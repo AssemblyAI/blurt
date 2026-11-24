@@ -28,11 +28,21 @@
 
       #expect(events.down.type == .keyDown)
       #expect(events.up.type == .keyUp)
-      // 0x09 is kVK_ANSI_V. Asserted numerically because the Carbon constant isn't
-      // importable here, which is why the source spells it as a literal too — this
-      // is the check that keeps that literal honest.
+      // 0x09 is kVK_ANSI_V, the fallback when the user's layout can't be read.
+      // Asserted numerically because the Carbon constant isn't importable here,
+      // which is why the source spells it as a literal too — this is the check
+      // that keeps that literal honest.
       #expect(events.down.getIntegerValueField(.keyboardEventKeycode) == 0x09)
       #expect(events.up.getIntegerValueField(.keyboardEventKeycode) == 0x09)
+    }
+
+    @Test("cmdVEvents builds its pair on the key it's given")
+    func cmdVEventsOnLayoutKey() throws {
+      // Dvorak's V is kVK_ANSI_Period (0x2F): the key a Dvorak paste must press.
+      let events = try #require(KeyInjector.cmdVEvents(virtualKey: 0x2F))
+      #expect(events.down.getIntegerValueField(.keyboardEventKeycode) == 0x2F)
+      #expect(events.up.getIntegerValueField(.keyboardEventKeycode) == 0x2F)
+      #expect(events.down.flags.contains(.maskCommand))
     }
 
     @Test("cmdCEvents builds a ⌘C pair on kVK_ANSI_C")

@@ -9,11 +9,14 @@
     /// The virtual key code that presses `chord` on the user's layout. A
     /// character key is looked up on the current ASCII-capable layout (what
     /// macOS itself reads shortcuts against: a Russian keyboard's ⌘K is ABC's),
-    /// falling back to its US position; a named key is the same everywhere.
+    /// with ⌘ held when the chord holds it ("Dvorak – QWERTY ⌘" takes ⌘ chords
+    /// from QWERTY), falling back to its US position; a named key is the same
+    /// everywhere.
     @MainActor
     static func keyCode(for chord: KeyChord) -> UInt16 {
       guard case .character(let character) = chord.key else { return chord.ansiKeyCode }
-      return KeyboardLayout.current()[character] ?? chord.ansiKeyCode
+      let layout = KeyboardLayout.current(commandHeld: chord.modifiers.contains(.command))
+      return layout[character] ?? chord.ansiKeyCode
     }
 
     /// The chord's key-down/key-up pair on `keyCode`: `KeyInjector`'s, which
@@ -35,12 +38,15 @@
   /// The characters the user's keyboard layout types, by virtual key code
   /// (the approach of AXorcist's `Element+Keyboard.swift`, MIT).
   enum KeyboardLayout {
-    /// Each lowercase character the current ASCII-capable layout types with no
-    /// modifier, and the first key code that types it — the main row's digits
-    /// before the keypad's. Empty when the layout can't be read. Main-actor:
-    /// Text Input Sources must be asked from the main thread.
+    /// Each lowercase character the current ASCII-capable layout types — with
+    /// no modifier, or with only ⌘ when `commandHeld` — and the first key code
+    /// that types it: the main row's digits before the keypad's. Empty when the
+    /// layout can't be read. Main-actor: Text Input Sources must be asked from
+    /// the main thread.
     @MainActor
-    static func current() -> [Character: UInt16] {
+    static func current(commandHeld: Bool = false) -> [Character: UInt16] {
+      // `UCKeyTranslate` takes the Carbon modifier mask shifted down a byte.
+      let modifiers = commandHeld ? UInt32((cmdKey >> 8) & 0xFF) : 0
       guard let source = TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue(),
         let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
       else { return [:] }
@@ -49,19 +55,22 @@
         guard let layout = buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return [:] }
         var map: [Character: UInt16] = [:]
         for code in UInt16(0)..<128 {
-          guard let character = character(typedBy: code, on: layout), map[character] == nil else { continue }
+          guard let character = character(typedBy: code, modifiers: modifiers, on: layout), map[character] == nil
+          else { continue }
           map[character] = code
         }
         return map
       }
     }
 
-    private static func character(typedBy code: UInt16, on layout: UnsafePointer<UCKeyboardLayout>) -> Character? {
+    private static func character(
+      typedBy code: UInt16, modifiers: UInt32, on layout: UnsafePointer<UCKeyboardLayout>
+    ) -> Character? {
       var deadKeys: UInt32 = 0
       var length = 0
       var characters = [UniChar](repeating: 0, count: 4)
       let status = UCKeyTranslate(
-        layout, code, UInt16(kUCKeyActionDown), 0, UInt32(LMGetKbdType()),
+        layout, code, UInt16(kUCKeyActionDown), modifiers, UInt32(LMGetKbdType()),
         OptionBits(kUCKeyTranslateNoDeadKeysBit), &deadKeys, characters.count, &length, &characters)
       guard status == noErr, length == 1, let scalar = Unicode.Scalar(characters[0]) else { return nil }
       return Character(String(scalar).lowercased())

@@ -20,9 +20,16 @@
   /// nothing selected starts up to `timeout` late. Starting the recording first
   /// and cancelling it on a hit was tried and rejected: the cancel can land on the
   /// previous dictation's pipeline, and every read would open the mic.
+  ///
+  /// The copy takes a turn on the pasteboard (`ClipboardTurns`) from snapshot to
+  /// restore, the same queue a paste holds through its settle — so a press
+  /// right after a dictation's paste also waits out what is left of that
+  /// paste's 400 ms, rather than snapshotting its transcript as the user's
+  /// clipboard (issue #341). The late-copy watch runs outside the turn: the
+  /// dictation this press starts must not wait a second to paste.
   struct SelectionCopy: Sendable {
     private let pasteboard: any CopyPasteboard
-    private let postCopy: @Sendable () -> Bool
+    private let postCopy: @Sendable () async -> Bool
     /// How long to wait for the app to answer the ⌘C. Measured copies land in
     /// tens of milliseconds, and nothing landing means nothing was selected. Kept
     /// short because a dictation press pays all of it.
@@ -34,19 +41,24 @@
     private let lateCopyWindow: Duration
     /// What both waits poll on; a test's `TestClock` steps them.
     private let clock: any Clock<Duration>
+    /// Where the copy queues for the pasteboard, shared with `KeyInjector`'s
+    /// pastes in production.
+    private let turns: ClipboardTurns
 
     init(
       pasteboard: any CopyPasteboard = SystemClipboard(),
-      postCopy: @escaping @Sendable () -> Bool = { KeyInjector.postCmdC() },
+      postCopy: @escaping @Sendable () async -> Bool = { await KeyInjector.postCmdC() },
       timeout: Duration = .milliseconds(100),
       lateCopyWindow: Duration = .seconds(1),
-      clock: any Clock<Duration> = ContinuousClock()
+      clock: any Clock<Duration> = ContinuousClock(),
+      turns: ClipboardTurns = .shared
     ) {
       self.pasteboard = pasteboard
       self.postCopy = postCopy
       self.timeout = timeout
       self.lateCopyWindow = lateCopyWindow
       self.clock = clock
+      self.turns = turns
     }
 
     /// The copied text, up to `maxCharacters`, or nil when the copy produced
@@ -67,6 +79,13 @@
     private func copySelection(
       maxCharacters: Int, on clock: some Clock<Duration>
     ) async -> (text: String?, lateWatch: Task<Void, Never>?) {
+      await turns.run { await self.copyInTurn(maxCharacters: maxCharacters, on: clock) }
+    }
+
+    /// The copy itself, from snapshot to restore, run inside its pasteboard turn.
+    private func copyInTurn(
+      maxCharacters: Int, on clock: some Clock<Duration>
+    ) async -> (text: String?, lateWatch: Task<Void, Never>?) {
       let pasteboard = pasteboard
       // An unreadable pasteboard can't be restored, so don't disturb it. The
       // own-write count is read first: a Blurt write racing this read can then
@@ -75,7 +94,7 @@
         let ownWrites = pasteboard.ownWriteCount
         return (ownWrites, pasteboard.snapshot(), pasteboard.changeCount)
       }
-      guard let saved, postCopy() else { return (nil, nil) }
+      guard let saved, await postCopy() else { return (nil, nil) }
       let deadline = clock.now.advanced(by: timeout)
       // Wait for a string, not just a change: an app may clear the clipboard and
       // write it a moment later, and the clear alone moves the change count.
