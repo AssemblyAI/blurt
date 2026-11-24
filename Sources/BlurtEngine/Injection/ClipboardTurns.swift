@@ -1,4 +1,6 @@
 #if os(macOS)
+  import Synchronization
+
   /// Takes turns on `NSPasteboard.general` between Blurt's two borrowers of it:
   /// the paste (`KeyInjector`: write the transcript, ⌘V, settle, restore) and the
   /// read-aloud copy fallback (`SelectionCopy`: snapshot, ⌘C, poll, restore).
@@ -16,14 +18,20 @@
   /// The queue is a chain of tasks rather than a lock, the shape `KeyInjector`'s
   /// paste chain already had: each turn waits on the one before, and a turn that
   /// fails or is cancelled still ends, so the next one runs.
-  actor ClipboardTurns {
+  ///
+  /// A class over a `Mutex`, not an actor, so queueing is synchronous: a
+  /// borrower takes its place in call order and installs its cancellation
+  /// handler without suspending first. Through an actor hop, a paste whose
+  /// caller was already cancelled could start (on an unstructured task that
+  /// doesn't inherit the cancel) and post ⌘V before the cancel was forwarded.
+  final class ClipboardTurns: Sendable {
     /// The one queue production shares: both borrowers touch the same global
-    /// pasteboard, so they must wait on the same turns. Tests that need no
-    /// cross-borrower ordering make their own.
+    /// pasteboard, so they must wait on the same turns. Tests make their own,
+    /// so suites running in parallel don't wait on each other.
     static let shared = ClipboardTurns()
 
     /// The last turn queued; the next one waits for it.
-    private var tail: Task<Void, Never>?
+    private let tail = Mutex<Task<Void, Never>?>(nil)
 
     /// Queues `work`, then keeps the turn held through `settle` (handed `work`'s
     /// result) so a borrower can return to its caller while its clipboard is
@@ -35,28 +43,38 @@
       _ work: @escaping @Sendable () async throws -> Value,
       thenHolding settle: @escaping @Sendable (Value) async -> Void
     ) -> (result: Task<Value, any Error>, turn: Task<Void, Never>) {
-      let previous = tail
-      let result = Task {
-        await previous?.value
-        return try await work()
+      tail.withLock { last in
+        let previous = last
+        let result = Task {
+          await previous?.value
+          return try await work()
+        }
+        let turn = Task {
+          guard let value = try? await result.value else { return }
+          await settle(value)
+        }
+        last = turn
+        return (result, turn)
       }
-      let turn = Task {
-        guard let value = try? await result.value else { return }
-        await settle(value)
-      }
-      tail = turn
-      return (result, turn)
     }
 
-    /// Runs `work` in its own turn, which ends when `work` returns.
+    /// Runs `work` in its own turn, which ends when `work` returns. The
+    /// caller's cancellation reaches `work`, as it would were `work` inline.
     func run<Value: Sendable>(_ work: @escaping @Sendable () async -> Value) async -> Value {
-      let previous = tail
-      let result = Task {
-        await previous?.value
-        return await work()
+      let result = tail.withLock { last in
+        let previous = last
+        let task = Task {
+          await previous?.value
+          return await work()
+        }
+        last = Task { _ = await task.value }
+        return task
       }
-      tail = Task { _ = await result.value }
-      return await result.value
+      return await withTaskCancellationHandler {
+        await result.value
+      } onCancel: {
+        result.cancel()
+      }
     }
   }
 #endif

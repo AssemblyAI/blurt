@@ -65,7 +65,7 @@
     /// (`SelectionCopy`).
     static func focusedSelection() async -> String? {
       let read = await BlockingIPC.run { FocusCapture.captureSelectedText(maxChars: maxCharacters) }
-      return await resolve(read, copy: SelectionCopy())
+      return await resolve(read, copy: SelectionCopy(turns: .shared))
     }
 
     /// Split from `focusedSelection` so the fallback rule is testable without AX.

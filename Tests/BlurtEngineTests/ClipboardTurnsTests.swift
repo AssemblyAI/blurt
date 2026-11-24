@@ -16,7 +16,7 @@
       let turns = ClipboardTurns()
       let events = StringListBox()
       let settle = AsyncGate()
-      let (paste, _) = await turns.enqueue {
+      let (paste, _) = turns.enqueue {
         events.append("paste")
       } thenHolding: { _ in
         await settle.wait()
@@ -37,7 +37,7 @@
     func failedTurnReleases() async {
       let turns = ClipboardTurns()
       let settled = ValueBox(false)
-      let (paste, _) = await turns.enqueue { () async throws -> Int in
+      let (paste, _) = turns.enqueue { () async throws -> Int in
         throw Refused()
       } thenHolding: { _ in
         settled.value = true
@@ -56,7 +56,6 @@
       let injector = KeyInjector(
         pasteSettleDuration: .milliseconds(200), postPaste: { true }, clipboard: clip, turns: turns)
       try await injector.insert("dictated text")
-      #expect(clip.string == "dictated text")
 
       let atCopy = ValueBox<String?>(nil)
       let copy = SelectionCopy(

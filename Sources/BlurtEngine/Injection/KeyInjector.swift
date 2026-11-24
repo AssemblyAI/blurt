@@ -226,7 +226,7 @@
       // (not `self`), so the user's contents come back even if the injector is
       // gone by the time the settle fires.
       let timeout = pasteSettleDuration
-      let (paste, turn) = await turns.enqueue {
+      let (paste, turn) = turns.enqueue {
         try await self.performInsert(text, after: priorText, windowTitle: windowTitle, pinned: pinned)
       } thenHolding: { restore in
         try? await Task.sleep(for: timeout)

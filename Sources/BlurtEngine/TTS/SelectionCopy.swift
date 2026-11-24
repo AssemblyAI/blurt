@@ -41,8 +41,8 @@
     private let lateCopyWindow: Duration
     /// What both waits poll on; a test's `TestClock` steps them.
     private let clock: any Clock<Duration>
-    /// Where the copy queues for the pasteboard, shared with `KeyInjector`'s
-    /// pastes in production.
+    /// Where the copy queues for the pasteboard: `ClipboardTurns.shared`, which
+    /// `KeyInjector`'s pastes queue on, in production; its own in tests.
     private let turns: ClipboardTurns
 
     init(
@@ -51,7 +51,7 @@
       timeout: Duration = .milliseconds(100),
       lateCopyWindow: Duration = .seconds(1),
       clock: any Clock<Duration> = ContinuousClock(),
-      turns: ClipboardTurns = .shared
+      turns: ClipboardTurns = ClipboardTurns()
     ) {
       self.pasteboard = pasteboard
       self.postCopy = postCopy
