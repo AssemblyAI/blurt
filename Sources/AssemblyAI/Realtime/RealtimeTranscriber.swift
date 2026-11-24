@@ -98,10 +98,10 @@ public actor RealtimeTranscriber {
   /// recorder's 100 ms hand-offs go out without being re-sliced.
   /// Audio that arrives before `start` has opened the socket waits here, so a
   /// recording's opening words aren't dropped while the connection comes up.
-  /// Once the session has closed, audio is dropped rather than queued for a
-  /// socket that will never take it.
+  /// Once the session is finishing or closed, audio is dropped rather than
+  /// sent after `Terminate` or queued for a socket that will never take it.
   public func send(_ pcm: Data) async {
-    guard phase != .closed else { return }
+    guard phase != .closed, !isFinishing else { return }
     pending.append(pcm)
     guard phase == .open else { return }
     await drainPending(final: false)
