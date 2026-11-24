@@ -53,10 +53,14 @@ extension KeyboardModel {
   /// Finger up. The gate is told, so it stays in step; the handshake gets
   /// how long the finger was down: a hold's lift is the stop, sent at once;
   /// a tap's lift sends nothing; a refused press hops.
-  package func micUp() {
-    let lift = elapsed
-    let held = touchDown.map { lift - $0 } ?? .zero
-    _ = gate.modifierUp(at: lift)
+  package func micUp() { lift(isTap: false) }
+
+  /// The lift itself. `isTap` lifts at the touch's own stamp, held for no
+  /// time at all: a tap is a tap however long `micDown` took to run.
+  private func lift(isTap: Bool) {
+    let liftAt = isTap ? touchDown ?? elapsed : elapsed
+    let held = touchDown.map { liftAt - $0 } ?? .zero
+    _ = gate.modifierUp(at: liftAt)
     touchDown = nil
     perform(handshake.handle(.micUp(heldFor: held / .seconds(1)), now: now()))
   }
@@ -83,9 +87,14 @@ extension KeyboardModel {
   /// A tap: finger down and up at once. Hands-free presses this way, and so
   /// does a tap on the status line — the line says what the tap does, and
   /// `micDown` routes it exactly as it would a tap on the mic.
+  ///
+  /// The lift is not timed from the clock: finger down writes the press, and
+  /// on a busy device (or under a sanitizer) that alone can outlast
+  /// `holdThreshold`, which would turn the tap into a hold whose lift stops
+  /// the dictation it just started.
   package func tapMic() {
     micDown()
-    micUp()
+    lift(isTap: true)
   }
 
   /// The term field takes the mic's row, so a dictation in flight is closed

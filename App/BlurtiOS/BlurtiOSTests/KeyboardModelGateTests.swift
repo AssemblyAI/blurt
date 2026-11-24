@@ -254,4 +254,33 @@ struct KeyboardModelGateTests {
     model.disappeared()
     #expect(commands.sent.map(\.kind) == [.press, .release])
   }
+
+  @Test("a tap stays a tap when writing the press outlasts the hold threshold")
+  func slowTapIsStillATap() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let rig = KeyboardRig()
+    let model = rig.model
+    let commands = rig.commands
+    // The clock jumps past the hold threshold while the press is written, as
+    // a busy device or a sanitizer build can make it; well inside the deadline.
+    let clock = SteppedClock(Date())
+    model.now = { clock.now }
+    model.transport = { command in
+      commands.sent.append(command)
+      clock.now += PressHandshake.defaultHoldThreshold + 0.2
+    }
+    model.tapMic()
+    let dictation = UUID()
+    rig.answer(.started(dictation))
+    // A hold's lift would have queued the stop, and the answer sent it.
+    #expect(model.handshake.isOwned && model.handshake.dictationID == dictation)
+    #expect(commands.sent.map(\.kind) == [.press])
+  }
+
+  /// A settable clock for `KeyboardModel.now`.
+  private final class SteppedClock {
+    var now: Date
+    init(_ now: Date) { self.now = now }
+  }
 }
