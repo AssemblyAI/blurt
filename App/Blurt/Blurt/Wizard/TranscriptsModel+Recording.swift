@@ -173,6 +173,42 @@ extension TranscriptsModel {
     }
   }
 
+  /// The app is quitting (`applicationWillTerminate`, a Sparkle relaunch
+  /// included): no `deinit` runs and no task resumes after this, so whatever
+  /// is in flight is finished here, synchronously. A recording's file is
+  /// closed — left open, the `.m4a` never gets its index and won't play — and
+  /// what the live transcription heard is saved with it; then the history is
+  /// written. The diarized pass a normal stop starts can't run now; the entry
+  /// keeps the live transcript and the audio. A recording that heard nothing
+  /// live keeps its file in the Recordings folder, with no entry.
+  func prepareForExit() {
+    recorder.stop()
+    if let recording {
+      self.recording = nil
+      let text = live.text
+      if text.trimmedNonEmpty() != nil {
+        history.insert(
+          SavedTranscript(kind: .recording, date: .now, text: text, fileURL: recording.url, plainText: live.plainText),
+          at: 0)
+      }
+    }
+    flushHistory()
+  }
+
+  /// Writes the history now, in place of the pending debounced save, queued
+  /// behind any write already under way so this one lands last. If the saved
+  /// file hasn't been read in yet, it is read and merged first rather than
+  /// overwritten with only this session's entries.
+  private func flushHistory() {
+    pendingSave?.cancel()
+    var entries = history
+    if !isLoaded {
+      let added = Set(entries.map(\.id))
+      entries += store.load().filter { !added.contains($0.id) }
+    }
+    saveQueue.sync { [store, entries] in try? store.save(entries) }
+  }
+
   /// Stops capturing and ends the audio feed — every way a recording ends.
   /// `dropUnsent` also abandons audio not yet sent, for an ending that won't
   /// wait for the live transcript to finish.
