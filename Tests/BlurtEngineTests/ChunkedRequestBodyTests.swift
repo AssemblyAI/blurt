@@ -114,6 +114,29 @@ struct ChunkedRequestBodyTests {
     #expect(!data.isEmpty)
   }
 
+  @Test(
+    "a producer failure outranks whatever the transport makes of its truncated body",
+    arguments: [false, true])
+  func producerFailureWinsOverTheOutcome(answers: Bool) async throws {
+    // The too-short-clip floor ends the body mid-part. What the transport then
+    // makes of the truncated request — a dropped connection, or even a 2xx —
+    // must not replace or swallow the producer's error, which its caller turns
+    // into a quiet no-op.
+    await #expect(throws: ProducerFailure.self) {
+      _ = try await ChunkedRequestBody.send(
+        URLRequest(url: URL(staticString: "https://example.invalid")),
+        body: .chunks(Data("partial".utf8), failingWith: ProducerFailure()),
+        delegate: nil
+      ) { request, _ in
+        _ = readToEnd(request.httpBodyStream)
+        guard answers else { throw URLError(.networkConnectionLost) }
+        let url = try #require(request.url)
+        let ok = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+        return (Data("{}".utf8), ok)
+      }
+    }
+  }
+
   @Test("URLSession is refused a second copy of the body, never handed an empty one")
   func replayIsRefused() async {
     // One of the three no-fallback guarantees. URLSession asks for a fresh body
@@ -174,6 +197,22 @@ extension ChunkedRequestBodyTests {
       return received
     }
   }
+}
+
+/// Reads a request's body stream until the writer closes it — the transport
+/// taking the whole body before it answers.
+private func readToEnd(_ stream: InputStream?) -> Data {
+  guard let stream else { return Data() }
+  stream.open()
+  defer { stream.close() }
+  var received = Data()
+  var buffer = [UInt8](repeating: 0, count: 64)
+  while true {
+    let read = stream.read(&buffer, maxLength: buffer.count)
+    if read <= 0 { break }
+    received.append(contentsOf: buffer[0..<read])
+  }
+  return received
 }
 
 /// Stands in for whatever the body producer might fail with — an unencodable

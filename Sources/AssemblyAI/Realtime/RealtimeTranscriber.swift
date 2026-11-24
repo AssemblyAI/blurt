@@ -22,8 +22,8 @@ public actor RealtimeTranscriber {
   /// The smallest message `send` makes: 100 ms of 16-bit mono, inside the
   /// documented 50–1000 ms window. The recorder hands audio on in this size.
   public static let chunkBytes = sampleRate / 10 * 2
-  /// The documented ceiling for one message — 1000 ms — which only the
-  /// backlog queued before the socket opened can exceed.
+  /// The documented ceiling for one message — 1000 ms. The backlog queued
+  /// before the socket opened can be longer, so it is sliced to this.
   static let maximumChunkBytes = sampleRate * 2
   /// The documented floor for one message, which a final flush is padded to.
   static let minimumChunkBytes = sampleRate / 20 * 2
@@ -34,10 +34,22 @@ public actor RealtimeTranscriber {
   nonisolated let request: URLRequest
   private let session: URLSession
   private var task: URLSessionWebSocketTask?
+  /// Where the session is in its one pass through life. `closed` is final:
+  /// the `URLSession` is invalidated by then, and asking it for a socket
+  /// raises — so a `start` that loses a race with `cancel` (the recording's
+  /// tasks are unstructured) must find it here and open nothing.
+  private var phase = Phase.idle
   private var pending = Data()
   private var continuation: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation?
-  private var terminated: CheckedContinuation<Void, Never>?
+  /// Every `finish` waiting for `Termination` — a list, not one slot, so a
+  /// second caller can't overwrite (and so strand) the first.
+  private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
+  private var isFinishing = false
   private var didTerminate = false
+
+  private enum Phase {
+    case idle, open, closed
+  }
   /// One decoder for every message: a partial arrives several times a second.
   private let decoder = JSONDecoder()
 
@@ -56,11 +68,23 @@ public actor RealtimeTranscriber {
     self.session = URLSession(configuration: .default)
   }
 
+  /// A transcriber dropped without `finish` or `cancel` — the recorder failed
+  /// to start, say — still releases its session, which would otherwise leak.
+  deinit {
+    session.invalidateAndCancel()
+  }
+
   /// Opens the socket and returns every turn update as it arrives — a turn's
   /// partials, then its final. The stream ends after `Termination`, or throws
-  /// if the connection fails.
+  /// if the connection fails. Once the session has closed — `cancel` or
+  /// `finish` got here first — the stream is already over and nothing opens.
   public func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
     let (stream, continuation) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+    guard phase == .idle else {
+      continuation.finish()
+      return stream
+    }
+    phase = .open
     self.continuation = continuation
     let task = session.webSocketTask(with: request)
     self.task = task
@@ -74,33 +98,30 @@ public actor RealtimeTranscriber {
   /// recorder's 100 ms hand-offs go out without being re-sliced.
   /// Audio that arrives before `start` has opened the socket waits here, so a
   /// recording's opening words aren't dropped while the connection comes up.
+  /// Once the session has closed, audio is dropped rather than queued for a
+  /// socket that will never take it.
   public func send(_ pcm: Data) async {
+    guard phase != .closed else { return }
     pending.append(pcm)
-    guard task != nil else { return }
-    while pending.count >= Self.chunkBytes {
-      let chunk: Data
-      if pending.count <= Self.maximumChunkBytes {
-        chunk = pending
-        pending = Data()
-      } else {
-        chunk = Data(pending.prefix(Self.maximumChunkBytes))
-        pending.removeFirst(Self.maximumChunkBytes)
-      }
-      await transmit(.data(chunk))
-    }
+    guard phase == .open else { return }
+    await drainPending(final: false)
   }
 
   /// Sends what's left, asks the service to end the session, and waits for
   /// `Termination` — which arrives after the last turn's final — then closes.
+  /// A session that never opened just closes; a second caller waits on the
+  /// first's `Termination` rather than asking again.
   public func finish() async {
-    if !pending.isEmpty {
-      var tail = pending
-      if tail.count < Self.minimumChunkBytes {
-        tail.append(Data(count: Self.minimumChunkBytes - tail.count))
-      }
-      pending.removeAll()
-      await transmit(.data(tail))
+    guard phase == .open else {
+      close(error: nil)
+      return
     }
+    guard !isFinishing else {
+      await waitForTermination()
+      return
+    }
+    isFinishing = true
+    await drainPending(final: true)
     await transmit(.string(#"{"type":"Terminate"}"#))
     // Bounded: a service that never answers must not leave the recording
     // stuck finishing. The timeout releases the wait itself.
@@ -118,6 +139,30 @@ public actor RealtimeTranscriber {
     close(error: nil)
   }
 
+  /// Sends the queue in messages of at most `maximumChunkBytes`: whole while
+  /// it fits, as any size in the documented window is valid, so the
+  /// recorder's 100 ms hand-offs go out without being re-sliced. Below
+  /// `chunkBytes` the rest waits for more — unless `final`, when it goes too,
+  /// padded with silence to the 50 ms floor and to a whole sample.
+  private func drainPending(final: Bool) async {
+    while pending.count >= Self.chunkBytes || (final && !pending.isEmpty) {
+      var chunk: Data
+      if pending.count <= Self.maximumChunkBytes {
+        chunk = pending
+        pending = Data()
+      } else {
+        chunk = Data(pending.prefix(Self.maximumChunkBytes))
+        pending.removeFirst(Self.maximumChunkBytes)
+      }
+      if chunk.count < Self.minimumChunkBytes {
+        chunk.append(Data(count: Self.minimumChunkBytes - chunk.count))
+      } else if final, pending.isEmpty, !chunk.count.isMultiple(of: 2) {
+        chunk.append(0)
+      }
+      await transmit(.data(chunk))
+    }
+  }
+
   /// Sends one message, dropping a send error: a broken socket surfaces
   /// through `receive()`, which closes the session with the reason.
   /// The completion handler, not the async `send(_:)`, for the same
@@ -130,15 +175,16 @@ public actor RealtimeTranscriber {
   }
 
   private func releaseTerminationWait() {
-    terminated?.resume()
-    terminated = nil
+    let waiters = terminationWaiters
+    terminationWaiters.removeAll()
+    for waiter in waiters { waiter.resume() }
   }
 
   private func waitForTermination() async {
     // Already closed (the socket failed, or `cancel`): no `Termination` is
     // coming, so don't sit out the timeout for one.
     guard !didTerminate, task != nil else { return }
-    await withCheckedContinuation { terminated = $0 }
+    await withCheckedContinuation { terminationWaiters.append($0) }
   }
 
   private func receive() async {
@@ -180,6 +226,8 @@ public actor RealtimeTranscriber {
   }
 
   private func close(error: (any Error)?) {
+    phase = .closed
+    pending = Data()
     task?.cancel(with: .normalClosure, reason: nil)
     task = nil
     // The session is this transcriber's alone; left valid, it leaks with it.

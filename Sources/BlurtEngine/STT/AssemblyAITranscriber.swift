@@ -149,13 +149,19 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let (liveFrames, liveFeed) = AsyncStream.makeStream(of: Data.self)
     async let recording = Self.relay(frames, to: liveFeed, keepingAtMost: bufferedAudioByteCap)
     let progress = UploadProgress()
-    let body = streamedBody(
-      frames: liveFrames, config: config, boundary: boundary, progress: progress)
     let data: Data
     do {
+      // Scoped to the streaming request: nothing after it may keep the body alive.
+      let body = streamedBody(
+        frames: liveFrames, config: config, boundary: boundary, progress: progress)
       data = try await send(
         request, streaming: body, sampleRate: sampleRate, progress: progress)
     } catch is LiveCapExceeded {
+      // The streaming request is over, so end its view of the audio now. Left
+      // open, `relay` would go on feeding the body's producer, which would
+      // copy every frame for the rest of the recording into a body nobody
+      // reads — a second unbounded copy beside the fallback's own.
+      liveFeed.finish()
       // The one trigger. Everything else propagates exactly as before.
       Self.log.notice(
         """
@@ -271,7 +277,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         keytermsPrompt: keytermsPrompt,
         llmInstruction: cleanupInstruction(appending: customStyle, mode: mode),
         // Only while the rewrite is pasted: off, a slower model only adds latency.
-        rewriteMode: enhanced ? rewriteMode().wireValue : nil
+        rewriteMode: enhanced ? mode.wireValue : nil
       )
     )
   }
