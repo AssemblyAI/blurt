@@ -29,8 +29,11 @@
     /// materialized — distinct from the pasteboard having held no items at all,
     /// which is `items.isEmpty`.
     let items: [SendablePasteboardItem]
-    /// The pasteboard's plain-string flavor, kept separately as a restore floor for
-    /// when no item's representations could be materialized.
+    /// The pasteboard's plain-string flavor, kept separately as a restore floor:
+    /// `SystemClipboard.restorableItems` folds it into the first item whenever no
+    /// item kept a non-empty string of its own — even if other representations
+    /// (RTF, nspasteboard.org markers) did materialize — so a promised string
+    /// the owning app declined still comes back.
     let plainText: String?
   }
 
@@ -169,8 +172,8 @@
     /// Clears the concealed write once `concealedLifetime` has passed — unless
     /// anything wrote to the pasteboard since, the same guard the paste's restore
     /// uses: a newer copy by the user survives, and so does the restore itself
-    /// (which is why the paste path's 400 ms restore leaves this a no-op, and only
-    /// a secret left behind for the hand-paste is ever cleared).
+    /// (which is why the paste path's 400 ms restore leaves this a no-op). A
+    /// restore that puts a concealed clipboard back schedules its own clear.
     private func clearAfterLifetime(ifChangeCountIs expected: Int) {
       let lifetime = concealedLifetime
       Task { [self] in
@@ -179,6 +182,29 @@
         noteOwnWrite()
         NSPasteboard.general.clearContents()
       }
+    }
+
+    /// The data maps `restore` writes back, one per item worth restoring.
+    ///
+    /// An item counts only if it carries *payload* — some non-empty data. The
+    /// nspasteboard.org markers are empty `Data()` by design, so a password
+    /// manager's copy whose string was promised (and declined) snapshots as a
+    /// marker-only item: writing that "succeeds" and puts back nothing but the
+    /// markers, the user's secret gone (issue #347).
+    ///
+    /// The `plainText` floor is folded into the first item whenever no item
+    /// kept a string of its own, rather than written separately: the restored
+    /// text then keeps that item's markers, so a concealed password comes back
+    /// concealed instead of as an ordinary string a clipboard manager archives.
+    static func restorableItems(
+      _ saved: PasteboardSnapshot
+    ) -> [[NSPasteboard.PasteboardType: Data]] {
+      var maps = saved.items.map(\.dataMap)
+      let keptString = maps.contains { !($0[.string]?.isEmpty ?? true) }
+      if let plainText = saved.plainText, !keptString, !maps.isEmpty {
+        maps[0][.string] = Data(plainText.utf8)
+      }
+      return maps.filter { map in map.values.contains { !$0.isEmpty } }
     }
 
     func restore(_ saved: PasteboardSnapshot) {
@@ -196,10 +222,9 @@
       // Build the items BEFORE clearing. Clearing first and then discovering there
       // is nothing to write is how the user's clipboard got destroyed whenever a
       // snapshot came back degraded.
-      let rebuilt = saved.items.compactMap { item -> NSPasteboardItem? in
-        guard !item.dataMap.isEmpty else { return nil }
+      let rebuilt = Self.restorableItems(saved).map { dataMap in
         let pasteboardItem = NSPasteboardItem()
-        for (type, data) in item.dataMap {
+        for (type, data) in dataMap {
           pasteboardItem.setData(data, forType: type)
         }
         // Putting the user's own contents back is not a new copy: without the
@@ -208,15 +233,32 @@
         return pasteboardItem
       }
 
+      // A concealed clipboard (a password manager's copy, or a password Blurt
+      // left behind) goes back the way `setString` writes one: this Mac only, so
+      // Universal Clipboard — which ignores the nspasteboard.org markers —
+      // doesn't carry the secret to other devices, and cleared after
+      // `concealedLifetime`. The restore is itself a write, so it voids whatever
+      // clear was pending on the original (ours, or the manager's own timer);
+      // without a fresh one the secret would sit on the clipboard indefinitely.
+      let concealed = saved.items.contains { $0.dataMap[Self.concealedType] != nil }
+
       if !rebuilt.isEmpty {
-        pasteboard.clearContents()
+        if concealed {
+          pasteboard.prepareForNewContents(with: .currentHostOnly)
+        } else {
+          pasteboard.clearContents()
+        }
         // `writeObjects` can refuse the batch; fall through to the text floor
         // rather than leaving the pasteboard empty.
-        if pasteboard.writeObjects(rebuilt) { return }
+        if pasteboard.writeObjects(rebuilt) {
+          if concealed { clearAfterLifetime(ifChangeCountIs: pasteboard.changeCount) }
+          return
+        }
       }
 
-      // Either nothing was materializable, or the write above was refused. Put the
-      // text back if we have it.
+      // The write above was refused (a text floor would otherwise have been folded
+      // into `rebuilt`, so an unmaterializable snapshot with no text lands here
+      // and, `plainText` being nil, is left alone). Put the text back if we have it.
       //
       // Precise about the one case this does NOT recover: if items DID materialize,
       // `writeObjects` refused them, and there was no plain-string flavor, the
@@ -228,9 +270,7 @@
       // valid `NSPasteboardItem`s is a programming error, not a runtime condition,
       // and NSPasteboard offers no way to test a write before clearing.
       if let plainText = saved.plainText {
-        pasteboard.clearContents()
-        pasteboard.setString(plainText, forType: .string)
-        pasteboard.setData(Data(), forType: Self.transientType)
+        setString(plainText, transient: true, concealed: concealed)
       }
     }
   }
