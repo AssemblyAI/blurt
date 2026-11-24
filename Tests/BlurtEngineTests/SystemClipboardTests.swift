@@ -145,7 +145,7 @@
         pb.clearContents()
         pb.setString("original", forType: .string)
 
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
         // The transcript is on the clipboard for the target app's ⌘V to read.
         #expect(pb.string(forType: .string) == "transcript")
 
@@ -167,7 +167,7 @@
         pb.setString("original", forType: .string)
         #expect(pb.types?.contains(SystemClipboard.transientType) == false)
 
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
         #expect(pb.string(forType: .string) == "transcript")
         #expect(pb.types?.contains(SystemClipboard.transientType) == true)
 
@@ -204,7 +204,7 @@
 
         pb.clearContents()
         pb.setString("original", forType: .string)
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
 
         // Someone else copies inside the settle window.
         pb.clearContents()
@@ -226,11 +226,67 @@
         // The `ClipboardAccess` half the degraded paste paths use: no restore is
         // prepared, because the transcript is meant to *stay* on the clipboard for
         // the user to paste by hand. So the previous contents must be gone.
-        clip.write("transcript")
+        clip.write("transcript", concealed: false)
 
         #expect(pb.string(forType: .string) == "transcript")
         // Left for the user to keep, so a clipboard manager may record it.
         #expect(pb.types?.contains(SystemClipboard.transientType) == false)
+      }
+    }
+
+    /// #348: a password field's words left for a paste by hand carry the two
+    /// markers clipboard managers skip, so they never become history.
+    @Test("a concealed write is marked concealed and transient")
+    func concealedWriteIsMarked() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        clip.write("hunter2", concealed: true)
+
+        #expect(pb.string(forType: .string) == "hunter2")
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
+        #expect(pb.types?.contains(SystemClipboard.transientType) == true)
+      }
+    }
+
+    @Test("a concealed paste is marked, and the restore after it puts back the user's own contents unconcealed")
+    func concealedPasteRestoresPlainly() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        pb.clearContents()
+        pb.setString("original", forType: .string)
+
+        let restore = clip.writeAndPrepareRestore("hunter2", concealed: true)
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
+        restore()
+
+        #expect(pb.string(forType: .string) == "original")
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == false)
+      }
+    }
+
+    @Test("a concealed leave-behind expires, but never over a newer copy")
+    func concealedExpiryRespectsNewerCopies() {
+      // The timer `write(_:concealed:)` schedules lands here after
+      // `concealedLifetime`; driven directly so the test doesn't wait it out.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        clip.write("hunter2", concealed: true)
+        let ours = clip.changeCount
+        clip.clear(ifChangeCountIs: ours)
+        #expect(pb.string(forType: .string) == nil)
+
+        clip.write("hunter2", concealed: true)
+        let stale = clip.changeCount
+        pb.clearContents()
+        pb.setString("user copied this", forType: .string)
+        clip.clear(ifChangeCountIs: stale)
+        #expect(pb.string(forType: .string) == "user copied this")
       }
     }
 

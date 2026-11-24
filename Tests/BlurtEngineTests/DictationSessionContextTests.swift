@@ -42,6 +42,8 @@ struct DictationSessionContextTests {
     // The injector gets the two fields its separator decision runs on.
     #expect(await fixture.injector.insertedPrior == ["Hi Sam,"])
     #expect(await fixture.injector.insertedWindowTitles == ["Re: Q3 pricing"])
+    // An ordinary field's words may stay on the clipboard as they are.
+    #expect(await fixture.injector.insertedSecure == [false])
     // Logged once the paste ended, with how it did.
     #expect(
       fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected, outcome: .pasted)])
@@ -216,6 +218,9 @@ struct DictationSessionContextTests {
 
     // Pasted, as always — the flag suppresses remembering, never delivery.
     #expect(await injector.inserted == ["hunter2"])
+    // …and the paste knows it is a secret, so a "Copied" leave-behind is
+    // concealed rather than kept by a clipboard manager (#348).
+    #expect(await injector.insertedSecure == [true])
     // The request itself did go out unprimed; that is the cost of the deadline.
     #expect(await transcriber.receivedContexts == [nil])
     // But the late read was picked up in time for the decision that matters.
@@ -237,6 +242,7 @@ struct DictationSessionContextTests {
 
     #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
     #expect(await fixture.session.recentDictations.entries.isEmpty)
+    #expect(await fixture.injector.insertedSecure == [true])
   }
 
   @Test("history alone keeps the context worth carrying when the capture is empty")

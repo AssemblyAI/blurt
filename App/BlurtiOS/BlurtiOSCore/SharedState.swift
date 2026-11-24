@@ -93,10 +93,17 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   package let dictationID: UUID?
   /// The `ListeningState.sequence` the keyboard decided on, for the log.
   package let stateSequence: UInt64?
+  /// For a press: the field is a password field (`UITextDocumentProxy.isPasswordField`).
+  /// Its text never rides the command, and the app hands the flag to the
+  /// engine (`FocusedFieldContext.isSecure`), so what is dictated into it is
+  /// never remembered as context for a later dictation — the Mac's rule.
+  /// Nil from a keyboard build that never learned it.
+  package let isSecure: Bool?
 
   package init(
     id: UUID, kind: Kind, priorText: String?, selectedText: String?, sentAt: Date, keyboard: String?,
-    seq: UInt64? = nil, controllerID: String? = nil, dictationID: UUID? = nil, stateSequence: UInt64? = nil
+    seq: UInt64? = nil, controllerID: String? = nil, dictationID: UUID? = nil, stateSequence: UInt64? = nil,
+    isSecure: Bool? = nil
   ) {
     self.id = id
     self.kind = kind
@@ -108,6 +115,7 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
     self.controllerID = controllerID
     self.dictationID = dictationID
     self.stateSequence = stateSequence
+    self.isSecure = isSecure
   }
 
   /// Young enough for the app to act on. A notification held while the app

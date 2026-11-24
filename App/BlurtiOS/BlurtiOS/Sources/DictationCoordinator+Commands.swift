@@ -37,8 +37,11 @@ extension DictationCoordinator {
       Self.pendingPress.withLock {
         $0 = Press(
           keyboard: command.keyboard,
+          // A password field's flag is what keeps its words out of Recent
+          // and every later request's `stt_prompt`, as on the Mac.
           context: FocusedFieldContext(
-            priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil))
+            priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil,
+            isSecure: command.isSecure == true))
       }
       inFlight = DictationRef(id: newDictation, ownerProcessID: owner)
       answers = command.id

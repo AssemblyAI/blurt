@@ -1,6 +1,7 @@
 import BlurtEngine
 import Foundation
 import UIKit
+import UniformTypeIdentifiers
 
 /// The engine's paste seam on iPhone. Nothing here can type into another app;
 /// only the keyboard can, so "insert" means hand the words to the keyboard
@@ -34,7 +35,11 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
 
   package func setTarget(_ focus: CapturedFocus?) async {}
 
-  package func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+  /// How long a password field's words stay on the clipboard when no keyboard
+  /// took them: the Mac's `SystemClipboard.concealedLifetime`, as an iOS expiry.
+  package static let secureClipboardLifetime: TimeInterval = 90
+
+  package func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) async throws {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.
@@ -42,7 +47,7 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     let recipient = presser() ?? onScreen
     guard let onScreen, recipient == onScreen else {
       Self.log.notice("result → copied: no keyboard on screen for \(recipient ?? "anyone", privacy: .public)")
-      try await copyOut(text)
+      try await copyOut(text, secure: secure)
     }
     let result = DictationResult(id: UUID(), text: text, deliveredAt: Date(), recipient: recipient)
     SharedStore.write(result, forKey: BlurtShared.Key.result)
@@ -65,7 +70,7 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     }
     SharedStore.remove(forKey: BlurtShared.Key.result)
     Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(onScreen, privacy: .public)")
-    try await copyOut(text)
+    try await copyOut(text, secure: secure)
   }
 
   /// The keyboard process on screen: the presence record's, or — for a
@@ -75,9 +80,19 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     return SharedStore.isKeyboardPresent ? SharedStore.keyboardInstance : nil
   }
 
-  /// The words to the clipboard, and the quiet "Copied" outcome.
-  private func copyOut(_ text: String) async throws -> Never {
-    await MainActor.run { UIPasteboard.general.string = text }
+  /// The words to the clipboard, and the quiet "Copied" outcome. A password
+  /// field's words are kept to this phone (off Universal Clipboard) and expire,
+  /// so the secret doesn't sit there for whatever reads the clipboard next.
+  private func copyOut(_ text: String, secure: Bool) async throws -> Never {
+    await MainActor.run {
+      if secure {
+        UIPasteboard.general.setItems(
+          [[UTType.utf8PlainText.identifier: text]],
+          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Self.secureClipboardLifetime)])
+      } else {
+        UIPasteboard.general.string = text
+      }
+    }
     throw BlurtError.noEditableTarget
   }
 }

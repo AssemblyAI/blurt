@@ -12,6 +12,8 @@ final class FakeProxy: NSObject, UITextDocumentProxy {
   var autocapitalizationType: UITextAutocapitalizationType = .sentences
   var keyboardType: UIKeyboardType = .default
   var returnKeyType: UIReturnKeyType = .default
+  var isSecureTextEntry = false
+  var textContentType: UITextContentType!
 
   var documentContextBeforeInput: String? { before }
   var documentContextAfterInput: String? { after }

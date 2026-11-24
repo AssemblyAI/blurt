@@ -79,15 +79,18 @@ extension KeyboardModel {
 
   /// Writes one command to the app. Only a press primes the request with the
   /// field's text; a release or a cancel carries none of it across, and
-  /// names the dictation it ends so an ending can't land on a later one.
+  /// names the dictation it ends so an ending can't land on a later one. A
+  /// press into a password field carries none of it either, and says so.
   @discardableResult
   private func send(_ kind: KeyboardCommand.Kind, dictation: UUID?) -> KeyboardCommand {
     let isPress = kind == .press
+    let isSecure = isPress && proxy?.isPasswordField == true
+    let readsField = isPress && !isSecure
     let command = KeyboardCommand(
-      id: UUID(), kind: kind, priorText: isPress ? proxy?.documentContextBeforeInput : nil,
-      selectedText: isPress ? proxy?.selectedText : nil, sentAt: now(), keyboard: KeyboardProcess.id,
+      id: UUID(), kind: kind, priorText: readsField ? proxy?.documentContextBeforeInput : nil,
+      selectedText: readsField ? proxy?.selectedText : nil, sentAt: now(), keyboard: KeyboardProcess.id,
       seq: KeyboardProcess.nextSequence(), controllerID: controllerID, dictationID: dictation,
-      stateSequence: listeningState?.sequence)
+      stateSequence: listeningState?.sequence, isSecure: isPress ? isSecure : nil)
     lastCommand = command
     transport(command)
     KeyboardLog.wrote(command, resend: false)

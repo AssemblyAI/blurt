@@ -70,10 +70,26 @@ struct ProtocolTests {
     UIPasteboard.general.string = ""
     let injector = KeyboardRelayInjector()
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("hello there", after: nil, windowTitle: nil)
+      try await injector.insert("hello there", after: nil, windowTitle: nil, secure: false)
     }
     #expect(UIPasteboard.general.string == "hello there")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+  }
+
+  /// #348/#349: a password field's words with no keyboard to take them are
+  /// still there to paste by hand — kept to this phone and expiring (options
+  /// UIKit doesn't read back), never lost.
+  @Test("a password field's words with no keyboard up are still copied for the paste by hand")
+  func secureRelayStillCopies() async {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.keyboardSeenAt = nil
+    UIPasteboard.general.string = ""
+    let injector = KeyboardRelayInjector()
+    await #expect(throws: BlurtError.noEditableTarget) {
+      try await injector.insert("hunter2", after: nil, windowTitle: nil, secure: true)
+    }
+    #expect(UIPasteboard.general.string == "hunter2")
   }
 
   @Test("a result the keyboard never takes is copied out after the delivery timeout")
@@ -86,7 +102,7 @@ struct ProtocolTests {
     let injector = KeyboardRelayInjector()
     let started = Date()
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("late words", after: nil, windowTitle: nil)
+      try await injector.insert("late words", after: nil, windowTitle: nil, secure: false)
     }
     #expect(Date().timeIntervalSince(started) >= KeyboardRelayInjector.deliveryTimeout - 0.5)
     #expect(UIPasteboard.general.string == "late words")
@@ -102,13 +118,13 @@ struct ProtocolTests {
     UIPasteboard.general.string = ""
     let elsewhere = KeyboardRelayInjector(presser: { "kb-1" })
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil)
+      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil, secure: false)
     }
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
     let same = KeyboardRelayInjector(presser: { "kb-2" })
     let taker = takeResultShortly()
-    try await same.insert("right app", after: nil, windowTitle: nil)
+    try await same.insert("right app", after: nil, windowTitle: nil, secure: false)
     #expect(await taker.value?.recipient == "kb-2")
   }
 
@@ -120,7 +136,7 @@ struct ProtocolTests {
     SharedStore.keyboardInstance = "kb-1"
     let injector = KeyboardRelayInjector()
     let taker = takeResultShortly()
-    try await injector.insert("on time", after: nil, windowTitle: nil)
+    try await injector.insert("on time", after: nil, windowTitle: nil, secure: false)
     let taken = await taker.value
     #expect(taken?.text == "on time")
     #expect(taken?.recipient == "kb-1")
