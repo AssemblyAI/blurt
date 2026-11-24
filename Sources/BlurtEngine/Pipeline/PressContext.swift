@@ -79,6 +79,22 @@ final class PressContext: Sendable {
   /// nothing about whether the field is a password field.
   var isSettled: Bool { state.withLock { $0.settled } }
 
+  /// The read as the release path sees it, failing *closed*: while the read is
+  /// still blocked it answers `unsettled`, flagged secure, rather than nil,
+  /// which every reader takes as "not a password field". Otherwise a target slow
+  /// enough to outlast the whole recording and transcription would be the one
+  /// way to get a password remembered into Recent and `stt_prompt`, left
+  /// unconcealed on the clipboard, and written to the developer-mode log.
+  /// Failing closed costs that one dictation only those — it is still
+  /// transcribed and pasted. Two reads are safe: `store(resolved:)` sets both
+  /// under one lock and `settled` never goes back, so once settled, `resolved`
+  /// is final.
+  var releaseContext: TranscriptionContext? { isSettled ? resolved : Self.unsettled }
+
+  /// What `releaseContext` answers while the read is still blocked: nothing
+  /// known about the field, and so treated as a secure one.
+  static let unsettled = TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true)
+
   /// Publishes the finished read. The value lands before the stream does, so
   /// `wait` cannot outrun `resolved`.
   func store(resolved context: TranscriptionContext?) {
