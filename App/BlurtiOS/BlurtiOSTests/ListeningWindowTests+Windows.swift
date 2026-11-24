@@ -21,13 +21,16 @@ extension ListeningWindowTests {
     await rig.closed()
     await rig.opened()
     #expect(rig.idle.generation == 2)
+    #expect(rig.state?.window == .open && rig.state?.idle == .held && rig.state?.micLive == true)
+    let sequence = rig.state?.sequence ?? 0
     rig.idle.report?(.sourceDied(.needsForeground), 1)
     rig.idle.report?(.idleChanged(.pip), 1)
-    try? await Task.sleep(for: .milliseconds(100))
-    #expect(rig.state?.window == .open && rig.state?.idle == .held && rig.state?.micLive == true)
     rig.idle.report?(.idleChanged(.pip), 2)
+    // Reports reach the window's loop in order: once the current one has
+    // landed, a stale one let through would have too, and left its record.
     #expect(await until { rig.state?.idle == .pip })
-    #expect(rig.state?.window == .open)
+    #expect(rig.state?.sequence == sequence + 1, "the stale reports changed nothing")
+    #expect(rig.state?.window == .open && rig.state?.micLive == true)
   }
 
   @Test("a Stop during a call leaves no interruption on the next window's books: the source's own is news again")

@@ -46,8 +46,9 @@ extension KeyboardModel {
     dismissedNoticeAt = nil
     if let seconds = current.noticeDwellSeconds {
       let at = current.at
+      let clock = clock
       noticeDwell = Task { [weak self] in
-        try? await Task.sleep(for: .seconds(seconds))
+        try? await clock.sleep(for: .seconds(seconds))
         guard !Task.isCancelled, let self else { return }
         dismissedNoticeAt = at
         snapshot = .idle

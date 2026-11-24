@@ -126,13 +126,16 @@ extension DictationCoordinatorTests {
     // Older than the watchdog, and older than the presence window too, so no
     // keyboard is fresh enough to take the words: they go to the clipboard.
     onScreen(Self.keyboard, age: SharedStore.presenceWindow + 1)
+    // The watchdog is a task: advance only once it has parked on the clock.
+    await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
     rig.clock.advance(by: DictationCoordinator.watchdogTick)
     #expect(await until { coordinator.watchdogReleased == dictation })
     #expect(rig.tasks.begun.filter { $0 == DictationCoordinator.releaseTask }.count == 1)
     #expect(await until { coordinator.phase == .noTarget })
     #expect(coordinator.inFlight == nil && coordinator.watchdog == nil)
+    // Stood down, its tick is off the clock: nothing is left to release twice.
+    #expect(!rig.clock.sleepingFor.contains(DictationCoordinator.watchdogTick))
     rig.clock.advance(by: DictationCoordinator.watchdogTick)
-    try? await Task.sleep(for: .milliseconds(50))
     #expect(rig.tasks.begun.filter { $0 == DictationCoordinator.releaseTask }.count == 1, "released once")
   }
 
@@ -147,8 +150,11 @@ extension DictationCoordinatorTests {
     // Stale for the watchdog, still fresh enough to take the words.
     onScreen(Self.keyboard, age: BlurtShared.ownerWatchdog + 1)
     coordinator.tickWatchdog()
+    #expect(coordinator.watchdogReleased == nil)
+    // Its own tick too: once it has parked for the next, this one has run.
+    await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
     rig.clock.advance(by: DictationCoordinator.watchdogTick)
-    try? await Task.sleep(for: .milliseconds(50))
+    await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
     #expect(coordinator.watchdogReleased == nil)
     #expect(!rig.tasks.begun.contains(DictationCoordinator.releaseTask))
     let result = await takeResult()

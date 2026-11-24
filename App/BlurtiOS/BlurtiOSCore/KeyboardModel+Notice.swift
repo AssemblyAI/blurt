@@ -37,17 +37,17 @@ extension KeyboardModel {
       let countdownFrom = since.addingTimeInterval(SyncSTTLimits.autoReleaseSeconds - VoiceNotice.countdownWindow)
       noticeClock = Task { [weak self] in
         guard let self else { return }
-        try? await Task.sleep(for: .seconds(max(0, countdownFrom.timeIntervalSince(now()))))
+        try? await clock.sleep(for: .seconds(max(0, countdownFrom.timeIntervalSince(now()))))
         while !Task.isCancelled, snapshot.state == .recording {
           noticeTick += 1
-          try? await Task.sleep(for: .seconds(1))
+          try? await clock.sleep(for: .seconds(1))
         }
       }
     case .processing:
       let patience = current.at.addingTimeInterval(VoiceNotice.transcribingPatience)
       noticeClock = Task { [weak self] in
         guard let self else { return }
-        try? await Task.sleep(for: .seconds(max(0, patience.timeIntervalSince(now()))))
+        try? await clock.sleep(for: .seconds(max(0, patience.timeIntervalSince(now()))))
         guard !Task.isCancelled else { return }
         noticeTick += 1
       }

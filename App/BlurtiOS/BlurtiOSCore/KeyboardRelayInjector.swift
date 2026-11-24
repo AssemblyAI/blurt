@@ -28,8 +28,15 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// nil for whichever keyboard is up.
   package var presser: @Sendable () -> String? = { nil }
 
-  package init(presser: @escaping @Sendable () -> String? = { nil }) {
+  /// The clock the delivery waits on: real time, or a test's, so the timeout
+  /// and the re-signal are stepped through rather than waited out.
+  package let clock: any Clock<Duration> & Sendable
+
+  package init(
+    presser: @escaping @Sendable () -> String? = { nil }, clock: any Clock<Duration> & Sendable = ContinuousClock()
+  ) {
     self.presser = presser
+    self.clock = clock
   }
 
   package func setTarget(_ focus: CapturedFocus?) async {}
@@ -47,25 +54,33 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     let result = DictationResult(id: UUID(), text: text, deliveredAt: Date(), recipient: recipient)
     SharedStore.write(result, forKey: BlurtShared.Key.result)
     SharedStore.post(BlurtShared.Signal.result)
-    let posted = Date()
-    let deadline = posted.addingTimeInterval(Self.deliveryTimeout)
-    var resignalled = false
-    while Date() < deadline {
-      try await Task.sleep(for: Self.deliveryPoll)
-      guard let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
-        pending.id == result.id
-      else {
-        Self.log.notice("result \(result.id, privacy: .public) → inserted by \(onScreen, privacy: .public)")
-        return
-      }
-      if !resignalled, Date().timeIntervalSince(posted) >= Self.resignalAfter {
-        resignalled = true
-        SharedStore.post(BlurtShared.Signal.result)
-      }
+    let clock: any Clock<Duration> = clock
+    if try await taken(result.id, on: clock) {
+      Self.log.notice("result \(result.id, privacy: .public) → inserted by \(onScreen, privacy: .public)")
+      return
     }
     SharedStore.remove(forKey: BlurtShared.Key.result)
     Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(onScreen, privacy: .public)")
     try await copyOut(text)
+  }
+
+  /// Polls the store until the keyboard has taken result `id` out of it
+  /// (true) or the delivery timeout has passed (false), signalling once more
+  /// on the way. Generic so the injected clock's instants can be compared.
+  private func taken<C: Clock<Duration>>(_ id: UUID, on clock: C) async throws -> Bool {
+    let posted = clock.now
+    let deadline = posted.advanced(by: .seconds(Self.deliveryTimeout))
+    var resignalled = false
+    while clock.now < deadline {
+      try await clock.sleep(for: Self.deliveryPoll)
+      guard let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result), pending.id == id
+      else { return true }
+      if !resignalled, posted.duration(to: clock.now) >= .seconds(Self.resignalAfter) {
+        resignalled = true
+        SharedStore.post(BlurtShared.Signal.result)
+      }
+    }
+    return false
   }
 
   /// The keyboard process on screen: the presence record's, or — for a
