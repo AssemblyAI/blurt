@@ -43,7 +43,8 @@ struct RewriteGroundingTests {
       #expect(RewriteGrounding.isSpeech(reply, instruction: base))
       #expect(
         AssemblyAITranscriber.chooseTranscript(
-          verbatim: "Um, \(reply.lowercased())", rewrite: reply, enhanced: true, instruction: base) == reply)
+          verbatim: "Um, \(reply.lowercased())", rewrite: reply, enhanced: true, instruction: base)
+          == reply)
     }
     // A phrase the instruction does list, as whole words, is still held against it.
     #expect(!RewriteGrounding.isSpeech("Okay.", instruction: base))
@@ -53,8 +54,8 @@ struct RewriteGroundingTests {
   func styleWordBoundaries() {
     let caps = CleanupInstruction.sendable(appending: "Write everything in ALL CAPS.", mode: .fast)
     #expect(
-      AssemblyAITranscriber.chooseTranscript(
-        verbatim: "hi", rewrite: "HI.", enhanced: true, instruction: caps) == "HI.")
+      AssemblyAITranscriber.chooseTranscript(verbatim: "hi", rewrite: "HI.", enhanced: true, instruction: caps)
+        == "HI.")
     // A whole style sentence embedded in a longer echo is still caught.
     #expect(!RewriteGrounding.isSpeech("Sure: write everything in all caps. Done", instruction: caps))
   }
