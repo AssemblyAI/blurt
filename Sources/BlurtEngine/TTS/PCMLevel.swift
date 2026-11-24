@@ -5,17 +5,19 @@ import Foundation
 /// the way it reads one being recorded.
 enum PCMLevel {
   /// One level per `windowFrames`-frame window of `pcm`, the last window
-  /// possibly short. An odd trailing byte is ignored.
+  /// possibly short. An odd trailing byte is ignored. Samples are loaded
+  /// unaligned: URLSession's blocks, and a chunk with a carried byte prepended,
+  /// needn't start on an `Int16` boundary.
   static func levels(of pcm: Data, windowFrames: Int) -> [Float] {
     let frames = pcm.count / 2
     guard frames > 0, windowFrames > 0 else { return [] }
     return pcm.withUnsafeBytes { raw in
-      let samples = raw.bindMemory(to: Int16.self)
-      return stride(from: 0, to: frames, by: windowFrames).map { start in
+      stride(from: 0, to: frames, by: windowFrames).map { start in
         let end = min(start + windowFrames, frames)
         var sum: Double = 0
         for index in start..<end {
-          let sample = Double(Int16(littleEndian: samples[index])) / Double(Int16.max)
+          let bits = raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self)
+          let sample = Double(Int16(littleEndian: bits)) / Double(Int16.max)
           sum += sample * sample
         }
         let rms = (sum / Double(end - start)).squareRoot()
