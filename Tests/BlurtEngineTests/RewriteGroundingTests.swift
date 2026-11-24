@@ -33,6 +33,32 @@ struct RewriteGroundingTests {
     #expect(RewriteGrounding.isSpeech("2 pm", instruction: instruction))
   }
 
+  @Test(
+    "a short reply whose letters sit inside an instruction word is still speech",
+    arguments: [RewriteMode.fast, .smart])
+  func wordBoundaries(mode: RewriteMode) {
+    let base = CleanupInstruction.sendable(appending: nil, mode: mode)
+    // "abandoned", "content", "sentence" are in the base instruction.
+    for reply in ["Done.", "Ten.", "Sent."] {
+      #expect(RewriteGrounding.isSpeech(reply, instruction: base))
+      #expect(
+        AssemblyAITranscriber.chooseTranscript(
+          verbatim: "Um, \(reply.lowercased())", rewrite: reply, enhanced: true, instruction: base) == reply)
+    }
+    // A phrase the instruction does list, as whole words, is still held against it.
+    #expect(!RewriteGrounding.isSpeech("Okay.", instruction: base))
+  }
+
+  @Test("a custom style applies to a reply whose letters sit inside the style text")
+  func styleWordBoundaries() {
+    let caps = CleanupInstruction.sendable(appending: "Write everything in ALL CAPS.", mode: .fast)
+    #expect(
+      AssemblyAITranscriber.chooseTranscript(
+        verbatim: "hi", rewrite: "HI.", enhanced: true, instruction: caps) == "HI.")
+    // A whole style sentence embedded in a longer echo is still caught.
+    #expect(!RewriteGrounding.isSpeech("Sure: write everything in all caps. Done", instruction: caps))
+  }
+
   @Test("normalization keeps letters and digits, single-spaced and lowercased")
   func normalization() {
     #expect(RewriteGrounding.normalized("  No, grammatical — FIXES!\n2x ") == "no grammatical fixes 2x")
