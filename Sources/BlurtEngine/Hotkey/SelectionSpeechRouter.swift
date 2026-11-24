@@ -275,11 +275,7 @@ import Foundation
           try Task.checkCancellation()
           outcome = try await session.replaceSelection(with: text).overlayState
         } catch {
-          // A cancelled request answers `URLError.cancelled`: abandoned, not
-          // failed. Only when this job was cancelled, though: the same error on a
-          // task nobody cancelled is a request the system dropped (a network
-          // switch, sleep), and skipping the cleanup below would wedge the pill
-          // and the router's `.working` for good (#342).
+          // Abandoned only if cancelled; otherwise a dropped request, a failure.
           if Self.isCancellation(error) && Task.isCancelled { return }
           Self.logger.error("\(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
           outcome = Self.failure(error)
