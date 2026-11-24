@@ -1,16 +1,21 @@
-/// Polls `condition` every few milliseconds until it holds, or throws after
-/// `timeout` — for state a test can't await directly (a router's callbacks, a
-/// background task's effects).
+/// Polls `condition` every few milliseconds until it holds, or throws once
+/// `timeout`'s worth of polls has gone by without it — for state a test can't
+/// await directly (a router's callbacks, a background task's effects).
 ///
-/// The budget only bounds a genuine hang, so it is generous: on CI the whole
-/// suite starts at once and the main actor — which this poll and the work it
-/// waits on share — can be contended for several seconds, long enough that a
-/// 5 s budget expired before the router's queued tasks ever ran.
+/// The budget is counted in polls, not wall-clock time. The poll and the work
+/// it waits on share the main actor, and on CI — the whole suite starting at
+/// once — that actor can be contended for seconds at a stretch. A wall-clock
+/// deadline spent that stall with neither side running, then woke past it and
+/// failed before the work queued ahead of it had run (`SelectionSpeechRouter`'s
+/// tap-read test did). A stall delays a poll as much as the work, so it costs
+/// no polls; a genuine hang still fails after at least `timeout`.
 @MainActor
-func waitUntil(timeout: Duration = .seconds(30), _ condition: () -> Bool) async throws {
-  let deadline = ContinuousClock.now + timeout
+func waitUntil(timeout: Duration = .seconds(5), _ condition: () -> Bool) async throws {
+  let interval = Duration.milliseconds(5)
+  var pollsLeft = Int(timeout / interval)
   while !condition() {
-    guard ContinuousClock.now < deadline else { throw CancellationError() }
-    try await Task.sleep(for: .milliseconds(5))
+    guard pollsLeft > 0 else { throw CancellationError() }
+    pollsLeft -= 1
+    try await Task.sleep(for: interval)
   }
 }
