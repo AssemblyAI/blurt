@@ -48,6 +48,10 @@ final class PressContext: Sendable {
     /// be re-iterated once a cancelled `firstValue` group has dropped it, which
     /// is exactly why `resolved` exists alongside it.
     var stream: AsyncStream<TranscriptionContext?>?
+    /// Whether `store(resolved:)` has run. Separate from `resolved`, which is
+    /// nil both before the read lands and after one that found nothing worth
+    /// carrying — and only the second of those says the field isn't secure.
+    var settled = false
   }
 
   /// What the actor already knew at press. The config's fallback when the read
@@ -62,7 +66,7 @@ final class PressContext: Sendable {
     let (stream, feed) = AsyncStream.makeStream(
       of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
     self.feed = feed
-    self.state = Mutex(State(resolved: nil, stream: stream))
+    self.state = Mutex(State(resolved: nil, stream: stream, settled: false))
   }
 
   /// The read, once the capture queue has it. Nil until then — and nil forever
@@ -70,10 +74,18 @@ final class PressContext: Sendable {
   /// cannot do anything about either.
   var resolved: TranscriptionContext? { state.withLock { $0.resolved } }
 
+  /// Whether the read has landed — as found, or as nothing worth carrying.
+  /// False while it is still blocked, which is when `resolved`'s nil says
+  /// nothing about whether the field is a password field.
+  var isSettled: Bool { state.withLock { $0.settled } }
+
   /// Publishes the finished read. The value lands before the stream does, so
   /// `wait` cannot outrun `resolved`.
   func store(resolved context: TranscriptionContext?) {
-    state.withLock { $0.resolved = context }
+    state.withLock {
+      $0.resolved = context
+      $0.settled = true
+    }
     feed.yield(context)
     feed.finish()
   }
