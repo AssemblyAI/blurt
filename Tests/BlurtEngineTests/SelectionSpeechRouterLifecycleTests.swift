@@ -5,9 +5,10 @@ import Testing
 @testable import BlurtEngine
 
 /// The router around a read that's stopped, replaced or styled — with a speaker
-/// that plays until stopped — and its real hold timer.
+/// that plays until stopped — and its timers, stepped on a test clock by every
+/// test that depends on one.
 @MainActor
-@Suite("SelectionSpeechRouter lifecycle")
+@Suite("SelectionSpeechRouter lifecycle", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterLifecycleTests {
   private let defaults = freshDefaults()
 
@@ -130,15 +131,19 @@ struct SelectionSpeechRouterLifecycleTests {
   @Test("an answer reads with the style set when it's asked")
   func styleReachesTheAnswer() async throws {
     let speaker = GatedSpeaker()
-    let rig = router(speaker)
+    // Both of the press's timers — the hold that makes it an ask, and the beat
+    // before the answer's start — are stepped, not waited out: each was a real
+    // timer behind a bounded poll.
+    let clock = TestClock()
+    let rig = router(speaker, clock: clock)
     let (router, fixture) = (rig.router, rig.fixture)
     TriggerKeyStyleStore(defaults: defaults).setChoice(.ask, for: .leftControl)
     defaults.set(1.5, forKey: ReadAloudStyleStore.speedDefaultsKey)
-    let phases = Task {
-      for await phase in await fixture.session.phaseStream() { router.sessionPhaseChanged(phase) }
-    }
+    let phases = await wirePhases(of: fixture, to: router)
     defer { phases.cancel() }
     router.press(key: .leftControl)
+    await clock.waitUntilSleeping(for: SelectionSpeechRouting.holdDelay)
+    clock.advance(by: SelectionSpeechRouting.holdDelay)
     try await waitForMicStart(fixture)
     router.submit(.release)
     try await waitUntil { speaker.calls.count == 1 }
@@ -146,7 +151,12 @@ struct SelectionSpeechRouterLifecycleTests {
     #expect(speaker.calls[0].style.rate == 1.5)
     // The answer's start (pill and chime) waits a beat after the ask's end, so
     // the two chimes don't run together; then it comes.
-    #expect(rig.events.started == 0)
+    let gap = SelectionSpeechRouter.answerCueGap
+    await clock.waitUntilSleeping(for: gap)
+    clock.advance(by: gap - .milliseconds(1))
+    await Task.yield()
+    #expect(rig.events.started == 0, "the answer started before the beat")
+    clock.advance(by: .milliseconds(1))
     try await waitUntil { rig.events.started == 1 }
   }
 
@@ -173,7 +183,7 @@ struct SelectionSpeechRouterLifecycleTests {
     try await waitUntil { events.failures == 1 }
   }
 
-  // MARK: - E5: the real hold timer
+  // MARK: - E5: the hold timer
 
   @Test("a held read starts once the key has been down for the hold delay")
   func heldReadStartsAfterTheDelay() async throws {
