@@ -30,7 +30,8 @@
     /// which is `items.isEmpty`.
     let items: [SendablePasteboardItem]
     /// The pasteboard's plain-string flavor, kept separately as a restore floor for
-    /// when no item's representations could be materialized.
+    /// when no item's string representation could be materialized — whether
+    /// nothing materialized at all or only types that aren't the text did.
     let plainText: String?
   }
 
@@ -159,6 +160,18 @@
         // marker a clipboard manager records it again, on every dictation.
         pasteboardItem.setData(Data(), forType: Self.transientType)
         return pasteboardItem
+      }
+
+      // The text floor rides the rebuilt items too, not only the fallback below.
+      // An item can be non-empty without its text: a marker type such as
+      // nspasteboard.org's `ConcealedType` (a password manager's copy) is
+      // *meant* to be empty `Data`, so it is kept, while the string beside it
+      // was a promise that declined. That batch writes fine, and returning on
+      // it put back the marker and dropped the password the snapshot still held.
+      if let plainText = saved.plainText, let first = rebuilt.first,
+        !saved.items.contains(where: { $0.dataMap[.string] != nil })
+      {
+        first.setString(plainText, forType: .string)
       }
 
       if !rebuilt.isEmpty {
