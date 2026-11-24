@@ -145,7 +145,7 @@ struct LibrarySection<Header: View>: View {
       if let entry = entry(id: ids.first) { model.open(entry) }
     }
     .onCopyCommand {
-      guard let entry = entry(id: selection) else { return [] }
+      guard let entry = entry(id: selection), !entry.isUntranscribed else { return [] }
       AccessibilityNotification.Announcement("Copied").post()
       return [NSItemProvider(object: entry.text as NSString)]
     }
@@ -259,11 +259,15 @@ private struct EntryActions: View {
   let delete: () -> Void
 
   var body: some View {
-    Button("Open") { model.open(entry) }
+    // An untranscribed recording opens by transcribing (`TranscriptsModel.open`),
+    // and has no text to copy.
+    Button(entry.isUntranscribed ? "Transcribe" : "Open") { model.open(entry) }
     if entry.hasAudio {
       Button(model.isPlaying(entry) ? "Stop" : "Play") { model.togglePlayback(entry) }
     }
-    Button("Copy") { NSPasteboard.copyAnnounced(entry.text) }
+    if !entry.isUntranscribed {
+      Button("Copy") { NSPasteboard.copyAnnounced(entry.text) }
+    }
     // Gated on `hasAudio` and resolved on click: `audioURL` resolves a file's
     // bookmark, file-system work this menu is built too often to repeat.
     if entry.hasAudio {

@@ -23,7 +23,9 @@ final class TranscriptsModel {
     case finishingRecording
     /// A saved entry is open (`openEntry`).
     case finished
-    case failed(fileName: String, message: String)
+    /// `recording` is the Library entry keeping a recording whose async pass
+    /// failed, for the page's Try Again and Show in Finder.
+    case failed(fileName: String, message: String, recording: SavedTranscript.ID? = nil)
   }
 
   /// What one facet's text area shows.
@@ -83,8 +85,9 @@ final class TranscriptsModel {
   @ObservationIgnored private var savedDictationIDs: Set<UUID> = []
   /// Which `transcribe` run is current, so a late phase update from an
   /// abandoned one can't land on its successor (both may be "Recording …").
-  @ObservationIgnored private var currentRun = UUID()
-  @ObservationIgnored private var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
+  @ObservationIgnored var currentRun = UUID()
+  /// Set here and by the transcribing extension (`TranscriptsModel+Files.swift`).
+  @ObservationIgnored var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
   @ObservationIgnored private var pendingSave: Task<Void, Never>?
   /// Whether the saved history has been read in. Until it has, nothing is
   /// written: a save then would replace the file with only this session's
@@ -119,14 +122,14 @@ final class TranscriptsModel {
   /// — never a burst of requests that can't succeed.
   private func titleUntitled() async {
     guard apiKey()?.isEmpty == false else { return }
-    for entry in history where entry.generatedTitle == nil && entry.isTranscript {
+    for entry in history where entry.generatedTitle == nil && entry.isTranscript && !entry.isUntranscribed {
       await applyTitle(to: entry)
     }
   }
 
   /// Asks the LLM for `entry`'s title and saves it on the entry. Best-effort:
   /// until it comes — or if it fails — the entry keeps its file name.
-  private func applyTitle(to entry: SavedTranscript) async {
+  func applyTitle(to entry: SavedTranscript) async {
     guard let title = try? await llm.title(for: entry.text),
       let index = history.firstIndex(where: { $0.id == entry.id })
     else { return }
@@ -166,8 +169,13 @@ final class TranscriptsModel {
   }
 
   /// Opens a saved transcript in the sheet, with every transform already
-  /// fetched for it.
+  /// fetched for it. A recording saved untranscribed has nothing to show
+  /// yet: opening it transcribes it.
   func open(_ entry: SavedTranscript) {
+    if entry.isUntranscribed {
+      transcribe(entry)
+      return
+    }
     reset()
     openEntry = entry
     customRequest = entry.customRequest ?? ""
@@ -340,53 +348,7 @@ final class TranscriptsModel {
   }
 }
 
-// MARK: - Transcribing
-
 extension TranscriptsModel {
-  /// Uploads and transcribes `url`, saving the result and opening it.
-  ///
-  /// `kind` is `.recording` for a recording whose live transcript came back
-  /// empty: its audio is still worth the async pass, and if that finds nothing
-  /// either the file is deleted rather than left with no entry pointing at it.
-  /// If the pass fails, the file is kept: the audio may hold the whole meeting.
-  ///
-  /// Never over a recording: a file dropped while one runs is refused, or the
-  /// recording would be left capturing with no sheet to stop it.
-  func transcribe(_ url: URL, kind: SavedTranscript.Kind = .file) {
-    guard !isRecordingBusy else { return }
-    reset()
-    let fileName = url.lastPathComponent
-    let run = UUID()
-    currentRun = run
-    state = .transcribing(fileName: fileName, phase: .uploading)
-    tasks[.full] = Task { [weak self, transcriber] in
-      let outcome: Result<FileTranscription, any Error>
-      do {
-        outcome = .success(
-          try await transcriber.transcribe(fileAt: url) { phase in
-            Task { @MainActor in
-              guard let self, self.currentRun == run, case .transcribing = self.state else { return }
-              self.state = .transcribing(fileName: fileName, phase: phase)
-            }
-          })
-      } catch {
-        outcome = .failure(error)
-      }
-      guard !Task.isCancelled, let self else { return }
-      switch outcome {
-      case .success(let result) where result.text.trimmedNonEmpty() == nil:
-        if kind == .recording { try? FileManager.default.removeItem(at: url) }
-        state = .failed(fileName: fileName, message: "No speech was found in that file.")
-      case .success(let result):
-        add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
-      case .failure(let error):
-        // A failure isn't "no speech": the recording stays in its folder
-        // rather than costing the user the audio over a network blip.
-        state = .failed(fileName: fileName, message: error.localizedDescription)
-      }
-    }
-  }
-
   /// A recording is running or finishing: the sheet is its, and nothing else
   /// may take it.
   var isRecordingBusy: Bool {

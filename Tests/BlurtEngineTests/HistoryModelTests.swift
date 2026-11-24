@@ -27,6 +27,16 @@ struct HistoryModelTests {
     #expect(!dictation.isTranscript && !read.isTranscript && file.isTranscript && recording.isTranscript)
   }
 
+  @Test("only a recording with no text is untranscribed")
+  func untranscribed() {
+    let audio = URL(filePath: "/tmp/a.m4a")
+    #expect(SavedTranscript(kind: .recording, date: .now, text: "", fileURL: audio).isUntranscribed)
+    #expect(SavedTranscript(kind: .recording, date: .now, text: " \n", fileURL: audio).isUntranscribed)
+    #expect(!SavedTranscript(kind: .recording, date: .now, text: "Hi.", fileURL: audio).isUntranscribed)
+    #expect(!SavedTranscript(kind: .file, date: .now, text: "", fileURL: audio).isUntranscribed)
+    #expect(!SavedTranscript(kind: .dictation, date: .now, text: "").isUntranscribed)
+  }
+
   @Test("plain text is kept only where it differs, on creation and on replacement")
   func plainTextRule() {
     var entry = SavedTranscript(kind: .recording, date: .now, text: "Same.", plainText: "Same.")

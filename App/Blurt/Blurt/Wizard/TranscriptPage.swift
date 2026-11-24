@@ -55,7 +55,7 @@ struct TranscriptPage: View {
     .onChange(of: model.state) { _, state in
       switch state {
       case .finished: AccessibilityNotification.Announcement("Transcript ready").post()
-      case .failed(_, let message): AccessibilityNotification.Announcement(message).post()
+      case .failed(_, let message, _): AccessibilityNotification.Announcement(message).post()
       case .recording: AccessibilityNotification.Announcement("Recording").post()
       case .idle, .transcribing, .finishingRecording: break
       }
@@ -95,11 +95,28 @@ struct TranscriptPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     case .finished:
       facetContent
-    case .failed(_, let message):
+    case .failed(_, let message, let recording):
       Label(message, systemImage: "exclamationmark.triangle")
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
+      if let recording, let entry = model.history.first(where: { $0.id == recording }) {
+        keptRecording(entry)
+      }
       Spacer()
+    }
+  }
+
+  /// A recording whose transcription failed is kept in the Library, not lost:
+  /// say so, and offer it again now or in Finder.
+  @ViewBuilder private func keptRecording(_ entry: SavedTranscript) -> some View {
+    Text("The recording is saved in your Library, to transcribe now or later.")
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+    HStack {
+      Button("Try Again") { model.retryRecording(entry.id) }
+      if let url = entry.audioURL {
+        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+      }
     }
   }
 
@@ -120,7 +137,7 @@ struct TranscriptPage: View {
   private var title: String {
     switch model.state {
     case .finished: model.openEntry?.title ?? ""
-    case .transcribing(let fileName, _), .failed(let fileName, _): fileName
+    case .transcribing(let fileName, _), .failed(let fileName, _, _): fileName
     case .recording, .finishingRecording: "Recording"
     case .idle: ""
     }

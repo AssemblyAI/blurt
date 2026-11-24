@@ -150,9 +150,11 @@ struct LibraryDay: Identifiable {
 
   /// "Dictation · Formal · 412 words", "Recording · 6,120 words", "Ask About
   /// Selection" — no count for a spoken entry, whose text is what was read
-  /// rather than what was said.
+  /// rather than what was said. A recording saved untranscribed says so:
+  /// "Recording · Not transcribed".
   static func details(of entry: SavedTranscript) -> String {
     let kind = LibraryKind(entry)
+    guard !entry.isUntranscribed else { return "\(kind.name) · Not transcribed" }
     let words: String? =
       switch (kind, entry.wordCount) {
       case (.readAloud, _), (.ask, _), (_, 0): nil
