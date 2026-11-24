@@ -898,7 +898,8 @@ It first activates the captured target app; if that app has terminated or won't 
 the transcript on the clipboard and throws `.targetAppLost`, which the pipeline degrades to the quiet
 "copied" notice (`.noTarget`) rather than a red failure. Consecutive dictations are joined with a
 leading separator space via `InsertionSeparator.withLeadingSeparator` (its own platform-free type,
-because a host that inserts text itself faces the same decision); when the prior text is unreadable,
+because a host that inserts text itself faces the same decision) — never after an opener such as
+`(`, an opening quote, `@` or `$`, nor after a straight quote or `#` that starts a word; when the prior text is unreadable,
 the separator basis falls back to what was last pasted — but only when the target app **and** window title both
 match the last successful insert, so the fallback tracks "the same window", not just "the same
 process" (a browser hosts many unrelated tabs under one PID).

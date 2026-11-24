@@ -53,6 +53,30 @@ struct InsertionSeparatorTests {
     #expect(InsertionSeparator.withLeadingSeparator("\tSecond.", after: "First.") == "\tSecond.")
     #expect(InsertionSeparator.withLeadingSeparator("\u{00A0}Second.", after: "First.") == "\u{00A0}Second.")
   }
+
+  @Test(
+    "no separator after an opener (bracket, opening quote, @, $)",
+    arguments: [
+      "Call me (", "a [", "a {", "She said \u{201C}", "She said \u{2018}", "Il a dit \u{00AB}",
+      "Dijo \u{00BF}", "Dijo \u{00A1}", "ping @", "price: $",
+    ])
+  func noSeparatorAfterOpener(prior: String) {
+    #expect(InsertionSeparator.withLeadingSeparator("Maybe tomorrow.", after: prior) == "Maybe tomorrow.")
+  }
+
+  @Test(
+    "a straight quote or # opens after whitespace or at the start",
+    arguments: ["She said \"", "She said '", "\"", "'", "Line one.\n\"", "post in #", "#"])
+  func noSeparatorAfterWordStartOpener(prior: String) {
+    #expect(InsertionSeparator.withLeadingSeparator("Maybe.", after: prior) == "Maybe.")
+  }
+
+  @Test(
+    "a closing quote, a closing bracket or a # suffix keeps the separator",
+    arguments: ["She said \"hi\"", "the 'word'", "Call me (maybe)", "a [b]", "I write C#"])
+  func separatorAfterCloser(prior: String) {
+    #expect(InsertionSeparator.withLeadingSeparator("Then.", after: prior) == " Then.")
+  }
 }
 
 @Suite("InsertionSeparator.basis")
