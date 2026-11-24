@@ -62,34 +62,22 @@ struct ProtocolTests {
     #expect(SharedStore.keyTerms == ["Rizz"])
   }
 
-  @Test("with no keyboard on screen the words go to the clipboard and the phase is the quiet one")
-  func relayFallsBackToClipboard() async {
+  /// A password field's words (#348/#349) are copied too — kept to this phone
+  /// and expiring, options UIKit doesn't read back — never lost.
+  @Test(
+    "with no keyboard on screen the words go to the clipboard and the phase is the quiet one",
+    arguments: [false, true])
+  func relayFallsBackToClipboard(secure: Bool) async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = nil
     UIPasteboard.general.string = ""
     let injector = KeyboardRelayInjector()
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("hello there", after: nil, windowTitle: nil, secure: false)
+      try await injector.insert("hello there", after: nil, windowTitle: nil, secure: secure)
     }
     #expect(UIPasteboard.general.string == "hello there")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
-  }
-
-  /// #348/#349: a password field's words with no keyboard to take them are
-  /// still there to paste by hand — kept to this phone and expiring (options
-  /// UIKit doesn't read back), never lost.
-  @Test("a password field's words with no keyboard up are still copied for the paste by hand")
-  func secureRelayStillCopies() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    SharedStore.keyboardSeenAt = nil
-    UIPasteboard.general.string = ""
-    let injector = KeyboardRelayInjector()
-    await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("hunter2", after: nil, windowTitle: nil, secure: true)
-    }
-    #expect(UIPasteboard.general.string == "hunter2")
   }
 
   @Test("a result the keyboard never takes is copied out after the delivery timeout")

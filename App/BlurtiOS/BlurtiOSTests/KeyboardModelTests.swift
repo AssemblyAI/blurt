@@ -13,7 +13,7 @@ final class FakeProxy: NSObject, UITextDocumentProxy {
   var keyboardType: UIKeyboardType = .default
   var returnKeyType: UIReturnKeyType = .default
   var isSecureTextEntry = false
-  var textContentType: UITextContentType!
+  var textContentType: UITextContentType?
 
   var documentContextBeforeInput: String? { before }
   var documentContextAfterInput: String? { after }

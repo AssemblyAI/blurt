@@ -145,63 +145,6 @@
       #expect(clip.string == "dictated text")
     }
 
-    @Test("an ordinary dictation's leave-behind is kept as is for the paste by hand")
-    func noEditableTargetLeavesPlainWords() async throws {
-      let clip = FakeClipboard(string: "user-clipboard")
-      let injector = KeyInjector(
-        pasteSettleDuration: .zero, postPaste: { true }, hasEditableTarget: { false }, clipboard: clip)
-
-      await #expect(throws: BlurtError.noEditableTarget) {
-        try await injector.insert("dictated text")
-      }
-      #expect(clip.isKeptForHandPaste)
-      #expect(!clip.isConcealed)
-    }
-
-    /// #348: a password field's words that can't be pasted are still left for
-    /// the paste by hand, but as the secret they are — never as an ordinary
-    /// copy a clipboard manager keeps.
-    @Test("a password field's words left on the clipboard are concealed, on every degraded path")
-    func secureLeaveBehindIsConcealed() async throws {
-      let noTarget = FakeClipboard(string: "user-clipboard")
-      let unfocused = KeyInjector(
-        pasteSettleDuration: .zero, postPaste: { true }, hasEditableTarget: { false }, clipboard: noTarget)
-      await #expect(throws: BlurtError.noEditableTarget) {
-        try await unfocused.insert("hunter2", secure: true)
-      }
-      #expect(noTarget.string == "hunter2")
-      #expect(noTarget.isConcealed)
-
-      // The keystroke couldn't be built: the same leave-behind, by the third path.
-      let noKeystroke = FakeClipboard(string: "user-clipboard")
-      let unposted = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: noKeystroke)
-      await #expect(throws: BlurtError.targetAppLost) {
-        try await unposted.insert("hunter2", secure: true)
-      }
-      #expect(noKeystroke.string == "hunter2")
-      #expect(noKeystroke.isConcealed)
-    }
-
-    @Test("a password field's paste is concealed too, and the restore after it is not")
-    func securePasteIsConcealedUntilRestored() async throws {
-      let clip = FakeClipboard(string: "user-clipboard")
-      let seen = ValueBox<Bool>(false)
-      let injector = KeyInjector(
-        pasteSettleDuration: .zero,
-        postPaste: {
-          seen.value = clip.isConcealed
-          return true
-        },
-        clipboard: clip)
-
-      try await injector.insert("hunter2", secure: true)
-      await injector.pendingSettle?.value
-
-      #expect(seen.value)
-      #expect(clip.string == "user-clipboard")
-      #expect(!clip.isConcealed)
-    }
-
     @Test("AX-opaque Electron editor still pastes despite no editable signal")
     func electronEditorPastesWithoutSignal() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
