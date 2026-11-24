@@ -129,6 +129,32 @@ package nonisolated struct DictationResult: Codable, Sendable {
   /// app last saw — so a second live keyboard in another app doesn't also
   /// insert them. Nil means whoever is up.
   package let recipient: String?
+  /// The controller within that process — one host field — that sent the
+  /// accepted stop, else the press: a dictation still processing when the
+  /// user taps into another field must not land there, even though the same
+  /// process (a new controller in it) is the one on screen. Nil means any
+  /// controller in `recipient`, as for a keyboard build that sends none.
+  package let controllerID: String?
+
+  package init(id: UUID, text: String, deliveredAt: Date, recipient: String?, controllerID: String? = nil) {
+    self.id = id
+    self.text = text
+    self.deliveredAt = deliveredAt
+    self.recipient = recipient
+    self.controllerID = controllerID
+  }
+}
+
+/// Where a dictation's words go: a keyboard process (`KeyboardProcess.id`)
+/// and, within it, the controller — one host field — when known.
+package nonisolated struct KeyboardAddress: Sendable, Equatable {
+  package let process: String
+  package let controller: String?
+
+  package init(process: String, controller: String? = nil) {
+    self.process = process
+    self.controller = controller
+  }
 }
 
 /// What the keyboard shows while the app works: the pipeline's phase, flattened

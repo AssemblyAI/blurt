@@ -101,6 +101,22 @@ extension DictationCoordinatorTests {
     #expect(rig.idle.ended == 1 && rig.tasks.ended.contains(DictationCoordinator.releaseTask))
   }
 
+  @Test("the words are addressed to the field that sent the stop")
+  func releaseAddressesField() async throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (coordinator, _) = await listening()
+    let dictation = try await recording(coordinator)
+    send(command(.release, controllerID: "field"), to: coordinator)
+    #expect(SharedStore.commandAck?.outcome == .stopped(dictation))
+    let address = DictationCoordinator.claimedPress.withLock { $0.resultAddress }
+    #expect(address == KeyboardAddress(process: Self.keyboard, controller: "field"))
+    let result = await takeResult()
+    #expect(result?.recipient == Self.keyboard && result?.controllerID == "field")
+    #expect(await until { coordinator.phase == .pasted })
+    #expect(DictationCoordinator.claimedPress.withLock { $0.stopController } == nil)
+  }
+
   @Test("a release from a keyboard that neither owns the dictation nor is on screen is notOwner")
   func strangerRelease() async throws {
     let suite = ScratchSuite()

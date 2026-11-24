@@ -97,6 +97,9 @@ package nonisolated enum CommandRouter {
     /// (`KeyboardCommand.keyboard`), so the coordinator addresses the result
     /// without reading the command again. Nil for every other decision.
     package let recipient: String?
+    /// The controller within `recipient` that sent it
+    /// (`KeyboardCommand.controllerID`): the field the words go back to.
+    package let recipientController: String?
   }
 
   package static func route(_ input: Input) -> Decision {
@@ -151,7 +154,9 @@ package nonisolated enum CommandRouter {
   ) -> Decision {
     guard !isTerminal(input.phase), let current = input.inFlight else { return answer(input, .nothingInFlight) }
     guard mayEnd(input.command, current, onScreen: input.onScreen) else { return answer(input, .notOwner) }
-    return answer(input, outcome(current.id), submit: submit, recipient: input.command.keyboard)
+    return answer(
+      input, outcome(current.id), submit: submit, recipient: input.command.keyboard,
+      recipientController: input.command.controllerID)
   }
 
   /// Whether this command may end the dictation in flight: it names that
@@ -178,9 +183,10 @@ package nonisolated enum CommandRouter {
 
   private static func answer(
     _ input: Input, _ outcome: CommandAck.Outcome, submit: Submit? = nil, remember: Bool = true,
-    recipient: String? = nil
+    recipient: String? = nil, recipientController: String? = nil
   ) -> Decision {
     let ack = CommandAck(commandID: input.command.id, launchID: input.launchID, outcome: outcome, at: input.now)
-    return Decision(ack: ack, submit: submit, remember: remember, recipient: recipient)
+    return Decision(
+      ack: ack, submit: submit, remember: remember, recipient: recipient, recipientController: recipientController)
   }
 }

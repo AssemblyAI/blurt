@@ -117,10 +117,21 @@ final class DictationCoordinator {
   /// a dictation is still in flight — must not take over that dictation's words.
   nonisolated struct Press: Sendable {
     var keyboard: String?
+    /// The controller — the host field — within `keyboard` that pressed.
+    var controller: String?
     var context = FocusedFieldContext.empty
     /// The keyboard whose accepted stop ended the dictation, which is where
     /// the words go. The dictation itself and its owner are `inFlight`.
     var stopRecipient: String?
+    /// The controller within `stopRecipient` that sent the stop.
+    var stopController: String?
+
+    /// Where the words go: the field that sent the accepted stop, else the
+    /// one whose press started the dictation; nil for whichever is up.
+    var resultAddress: KeyboardAddress? {
+      if let stopRecipient { return KeyboardAddress(process: stopRecipient, controller: stopController) }
+      return keyboard.map { KeyboardAddress(process: $0, controller: controller) }
+    }
   }
   nonisolated static let pendingPress = Mutex(Press())
   /// The press that started the dictation in flight: its keyboard, for the
@@ -165,9 +176,9 @@ final class DictationCoordinator {
     session = DictationSession(
       mic: window.source,
       transcriber: transcriber,
-      // The words go to the keyboard that sent the accepted stop, else to
-      // the one whose press started the dictation.
-      injector: KeyboardRelayInjector(presser: { Self.claimedPress.withLock { $0.stopRecipient ?? $0.keyboard } }),
+      // The words go to the field that sent the accepted stop, else to the
+      // one whose press started the dictation.
+      injector: KeyboardRelayInjector(presser: { Self.claimedPress.withLock { $0.resultAddress } }),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { text, ring in

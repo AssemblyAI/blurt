@@ -46,6 +46,17 @@ extension CommandRouterTests {
     #expect(decision.recipient == owner)
   }
 
+  @Test("an accepted ending names the field that sent it, so the words go back there")
+  func endingNamesController() {
+    for kind in [KeyboardCommand.Kind.release, .cancel] {
+      let ending = command(kind, controllerID: "field-a", dictationID: current.id)
+      let decision = route(ending, phase: .processing, inFlight: current)
+      #expect(decision.recipient == owner && decision.recipientController == "field-a", "\(kind)")
+      let refused = route(command(kind, controllerID: "field-a"), phase: .idle, inFlight: nil)
+      #expect(refused.recipientController == nil, "\(kind)")
+    }
+  }
+
   @Test("the owner's cancel cancels it, addressed to the owner, whether or not it names the dictation")
   func ownerCancel() {
     for dictationID in [current.id, nil] {

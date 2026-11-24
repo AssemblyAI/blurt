@@ -23,28 +23,32 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   package static let resignalAfter: TimeInterval = 1
   private static let log = HostIdentity.current.logger("Relay")
 
-  /// The keyboard the words are for: the one that sent the accepted stop, else
-  /// the one whose press started the dictation (`DictationCoordinator`), or
-  /// nil for whichever keyboard is up.
-  package var presser: @Sendable () -> String? = { nil }
+  /// The field the words are for: the keyboard process and controller that
+  /// sent the accepted stop, else the press that started the dictation
+  /// (`DictationCoordinator`), or nil for whichever keyboard is up.
+  package var presser: @Sendable () -> KeyboardAddress? = { nil }
 
-  package init(presser: @escaping @Sendable () -> String? = { nil }) {
+  package init(presser: @escaping @Sendable () -> KeyboardAddress? = { nil }) {
     self.presser = presser
   }
 
   package func setTarget(_ focus: CapturedFocus?) async {}
 
   package func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
-    // The words go to the keyboard that asked for them. If the user has
-    // moved on — another app's keyboard is the one on screen now — they go
-    // to the clipboard rather than into a field nobody dictated into.
+    // The words go to the field that asked for them. If the user has moved
+    // on — another app's keyboard is the one on screen now, or another
+    // field's controller in the same one — they go to the clipboard rather
+    // than into a field nobody dictated into.
+    let target = presser()
     let onScreen = Self.onScreen
-    let recipient = presser() ?? onScreen
-    guard let onScreen, recipient == onScreen else {
-      Self.log.notice("result → copied: no keyboard on screen for \(recipient ?? "anyone", privacy: .public)")
+    let recipient = target?.process ?? onScreen?.process
+    guard let onScreen, recipient == onScreen.process, Self.sameField(target?.controller, onScreen.controller) else {
+      let why = onScreen?.process == recipient && recipient != nil ? "another field up in" : "no keyboard on screen for"
+      Self.log.notice("result → copied: \(why, privacy: .public) \(recipient ?? "anyone", privacy: .public)")
       try await copyOut(text)
     }
-    let result = DictationResult(id: UUID(), text: text, deliveredAt: Date(), recipient: recipient)
+    let result = DictationResult(
+      id: UUID(), text: text, deliveredAt: Date(), recipient: recipient, controllerID: target?.controller)
     SharedStore.write(result, forKey: BlurtShared.Key.result)
     SharedStore.post(BlurtShared.Signal.result)
     let posted = Date()
@@ -55,7 +59,8 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
       guard let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
         pending.id == result.id
       else {
-        Self.log.notice("result \(result.id, privacy: .public) → inserted by \(onScreen, privacy: .public)")
+        Self.log.notice(
+          "result \(result.id, privacy: .public) → inserted by \(onScreen.process, privacy: .public)")
         return
       }
       if !resignalled, Date().timeIntervalSince(posted) >= Self.resignalAfter {
@@ -64,15 +69,28 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
       }
     }
     SharedStore.remove(forKey: BlurtShared.Key.result)
-    Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(onScreen, privacy: .public)")
+    Self.log.notice(
+      "result \(result.id, privacy: .public) → copied: not taken by \(onScreen.process, privacy: .public)")
     try await copyOut(text)
   }
 
-  /// The keyboard process on screen: the presence record's, or — for a
-  /// keyboard build that writes none yet — the older heartbeat keys'.
-  private static var onScreen: String? {
-    if let record = SharedStore.keyboardOnScreen() { return record.processID }
-    return SharedStore.isKeyboardPresent ? SharedStore.keyboardInstance : nil
+  /// The keyboard on screen: the presence record's process and controller,
+  /// or — for a keyboard build that writes no record yet — the older
+  /// heartbeat keys' process, with no controller known.
+  private static var onScreen: KeyboardAddress? {
+    if let record = SharedStore.keyboardOnScreen() {
+      return KeyboardAddress(process: record.processID, controller: record.controllerID)
+    }
+    guard SharedStore.isKeyboardPresent, let process = SharedStore.keyboardInstance else { return nil }
+    return KeyboardAddress(process: process)
+  }
+
+  /// Whether the field on screen is the one the words are for. Only a known
+  /// controller on both sides can differ: either side unnamed (an older
+  /// keyboard build, the heartbeat keys) is taken as the same field.
+  private static func sameField(_ target: String?, _ onScreen: String?) -> Bool {
+    guard let target, let onScreen else { return true }
+    return target == onScreen
   }
 
   /// The words to the clipboard, and the quiet "Copied" outcome.

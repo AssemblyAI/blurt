@@ -71,6 +71,14 @@ extension KeyboardModel {
       KeyboardLog.result(result.id, inserted: false, why: "for \(result.recipient ?? "")")
       return
     }
+    // The right process is not enough: the user may have tapped into another
+    // field while the words were processing, and that field's controller is
+    // a new one in this same process. The words are left for the field that
+    // asked for them — or, once the app stops waiting, the clipboard.
+    guard result.controllerID == nil || result.controllerID == controllerID else {
+      KeyboardLog.result(result.id, inserted: false, why: "for another field")
+      return
+    }
     lastResultID = result.id
     // Taken out of the store once inserted, so no other keyboard process —
     // each host app runs its own — can insert the same words again; the app

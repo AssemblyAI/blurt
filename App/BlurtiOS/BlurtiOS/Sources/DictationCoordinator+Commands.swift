@@ -36,7 +36,7 @@ extension DictationCoordinator {
     case .press(let newDictation, let owner):
       Self.pendingPress.withLock {
         $0 = Press(
-          keyboard: command.keyboard,
+          keyboard: command.keyboard, controller: command.controllerID,
           context: FocusedFieldContext(
             priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil))
       }
@@ -48,11 +48,17 @@ extension DictationCoordinator {
       session.submit(.press())
     case .release:
       stopAccepted = inFlight?.id
-      Self.claimedPress.withLock { $0.stopRecipient = decision.recipient }
+      Self.claimedPress.withLock {
+        $0.stopRecipient = decision.recipient
+        $0.stopController = decision.recipientController
+      }
       session.submit(.release)
     case .cancel:
       stopAccepted = inFlight?.id
-      Self.claimedPress.withLock { $0.stopRecipient = decision.recipient }
+      Self.claimedPress.withLock {
+        $0.stopRecipient = decision.recipient
+        $0.stopController = decision.recipientController
+      }
       session.submit(.cancel)
     }
   }
@@ -149,7 +155,10 @@ extension DictationCoordinator {
     inFlight = nil
     answers = nil
     stopAccepted = nil
-    Self.claimedPress.withLock { $0.stopRecipient = nil }
+    Self.claimedPress.withLock {
+      $0.stopRecipient = nil
+      $0.stopController = nil
+    }
   }
 
   // MARK: The press the session takes

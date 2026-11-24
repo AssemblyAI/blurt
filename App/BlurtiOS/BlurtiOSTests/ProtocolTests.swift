@@ -100,16 +100,36 @@ struct ProtocolTests {
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-2"
     UIPasteboard.general.string = ""
-    let elsewhere = KeyboardRelayInjector(presser: { "kb-1" })
+    let elsewhere = KeyboardRelayInjector(presser: { KeyboardAddress(process: "kb-1") })
     await #expect(throws: BlurtError.noEditableTarget) {
       try await elsewhere.insert("wrong app", after: nil, windowTitle: nil)
     }
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
-    let same = KeyboardRelayInjector(presser: { "kb-2" })
+    let same = KeyboardRelayInjector(presser: { KeyboardAddress(process: "kb-2") })
     let taker = takeResultShortly()
     try await same.insert("right app", after: nil, windowTitle: nil)
     #expect(await taker.value?.recipient == "kb-2")
+  }
+
+  @Test("the same keyboard up in another field means the clipboard; the pressing field gets its controller")
+  func relayToPressingField() async throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.writeKeyboardPresence(
+      KeyboardPresenceRecord(processID: "kb-1", controllerID: "field-b", pid: 1, onScreen: true))
+    UIPasteboard.general.string = ""
+    let moved = KeyboardRelayInjector(presser: { KeyboardAddress(process: "kb-1", controller: "field-a") })
+    await #expect(throws: BlurtError.noEditableTarget) {
+      try await moved.insert("field a words", after: nil, windowTitle: nil)
+    }
+    #expect(UIPasteboard.general.string == "field a words")
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+    let same = KeyboardRelayInjector(presser: { KeyboardAddress(process: "kb-1", controller: "field-b") })
+    let taker = takeResultShortly()
+    try await same.insert("field b words", after: nil, windowTitle: nil)
+    let taken = await taker.value
+    #expect(taken?.recipient == "kb-1" && taken?.controllerID == "field-b")
   }
 
   @Test("a result taken by the keyboard counts as delivered")
@@ -236,6 +256,19 @@ struct KeyboardModelProtocolTests {
     deliver("four", to: KeyboardProcess.id)
     model.resultArrived()
     #expect(proxy.before == "Hi one four")
+    // The right process, another field: left for its owner.
+    let elsewhere = DictationResult(
+      id: UUID(), text: "five", deliveredAt: Date(), recipient: KeyboardProcess.id, controllerID: "another-field")
+    SharedStore.write(elsewhere, forKey: BlurtShared.Key.result)
+    model.resultArrived()
+    #expect(proxy.before == "Hi one four")
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.id == elsewhere.id)
+    SharedStore.write(
+      DictationResult(
+        id: UUID(), text: "six", deliveredAt: Date(), recipient: KeyboardProcess.id, controllerID: model.controllerID),
+      forKey: BlurtShared.Key.result)
+    model.resultArrived()
+    #expect(proxy.before == "Hi one four six")
   }
 
   @Test("the term field never claims a cursor move or a selection")

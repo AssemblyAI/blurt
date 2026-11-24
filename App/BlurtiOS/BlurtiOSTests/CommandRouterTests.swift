@@ -19,12 +19,12 @@ struct CommandRouterTests {
   let current = DictationRef(id: UUID(), ownerProcessID: "keyboard-owner")
 
   func command(
-    _ kind: KeyboardCommand.Kind, keyboard: String? = "keyboard-owner", dictationID: UUID? = nil,
-    age: TimeInterval = 0
+    _ kind: KeyboardCommand.Kind, keyboard: String? = "keyboard-owner", controllerID: String? = nil,
+    dictationID: UUID? = nil, age: TimeInterval = 0
   ) -> KeyboardCommand {
     KeyboardCommand(
       id: UUID(), kind: kind, priorText: nil, selectedText: nil, sentAt: Self.now.addingTimeInterval(-age),
-      keyboard: keyboard, dictationID: dictationID)
+      keyboard: keyboard, controllerID: controllerID, dictationID: dictationID)
   }
 
   func record(
