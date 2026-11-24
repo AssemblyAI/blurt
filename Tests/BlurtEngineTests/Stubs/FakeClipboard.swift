@@ -17,6 +17,7 @@
     private struct State {
       var text: String?
       var count = 0
+      var keptForHandPaste = false
     }
     private let state: Mutex<State>
 
@@ -28,6 +29,7 @@
       state.withLock {
         $0.text = text
         $0.count += 1
+        $0.keptForHandPaste = true
       }
     }
 
@@ -36,6 +38,7 @@
         let previous = s.text
         s.text = text
         s.count += 1
+        s.keptForHandPaste = false
         return (previous, s.count)
       }
       return { [self] in
@@ -55,6 +58,14 @@
     /// Current plain-string content, for assertions.
     var string: String? {
       state.withLock { $0.text }
+    }
+
+    /// Whether the current contents came from `write` — the degraded paths'
+    /// leave-behind, kept for a hand-paste — rather than the paste's transient
+    /// `writeAndPrepareRestore`. `SystemClipboard` maps the two onto an unmarked
+    /// item and a `TransientType` one.
+    var isKeptForHandPaste: Bool {
+      state.withLock { $0.keptForHandPaste }
     }
   }
 #endif
