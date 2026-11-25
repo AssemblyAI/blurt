@@ -154,9 +154,15 @@ never rests. `levels`, `warmUp()` and `cancelCapture()` are part of `MicCaptureP
 empty-stream / no-op / stop-and-discard defaults, so stubs conform with just `start()`/`stop()` while
 hosts still read the meter through the seam they inject.
 
-### `AssemblyAITranscriber` — `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`
+### `AssemblyAITranscriber` — `Sources/BlurtAssemblyAI/AssemblyAITranscriber.swift`
 
-Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
+The engine names no provider: `DictationSession` transcribes through `TranscriberProtocol`, and the
+host hands it a conformer. Blurt's is `AssemblyAITranscriber`, in the `BlurtAssemblyAI` provider
+package, which builds each request's `config` (Blurt's policy: prompt, key terms, cleanup
+instruction, rewrite mode) and picks the transcript to paste, and sends it through the SDK's
+`DictationClient` (`Sources/AssemblyAI/Dictation/`), which owns the wire: the streamed body, the
+over-cap fallback, the warm-up and the latency logging. Together they implement `TranscriberProtocol`
+against AssemblyAI's **dictation** API: a single
 `POST https://dictation.assemblyai.com/v1/transcribe/live` with a JSON `config` part
 (`sample_rate`, `channels`, and the rewrite request) followed by the captured audio as a raw S16LE PCM
 blob in the `audio` part. No model header — the service pins the STT model server-side. Every
@@ -269,7 +275,7 @@ route accepts up to **20 minutes** / 256 MB. Blurt records for up to the buffere
 
 #### The over-cap fallback
 
-`AssemblyAITranscriber+LiveCapFallback.swift`. The streaming route answers a recording that runs past
+The SDK's `DictationClient+LiveCapFallback.swift`. The streaming route answers a recording that runs past
 its 120 s cap with `413 {"error_code": "audio_too_large"}` — mid-upload, as soon as the cap is passed,
 while the user may still be talking. Before this fallback, that 413 surfaced at release as
 "Transcription failed: AssemblyAI error 413: audio exceeds 120000 ms" and everything said was lost —
@@ -286,7 +292,7 @@ on every dictation over two minutes once #251 raised the recording cap. Now:
    (`audio.pcm`, `audio/pcm`) and the normal idle timeout, and its response takes the same path as a
    streamed one: rewrite or `text`, paste, history. The pill reads "Transcribing…" throughout. If it
    fails, its own error is what surfaces.
-5. The copy is bounded by `SyncSTTLimits.maxBufferedAudioBytes` (the route's 256 MB); past it the
+5. The copy is bounded by `DictationClient.maxBufferedAudioBytes` (the route's 256 MB); past it the
    copy is dropped and the fallback fails cleanly (`AssemblyAIError.recordingTooLarge`). At the
    capture geometry a 20-minute recording is ~38 MB, so this is a guard.
 6. A cancel drops the copy and sends nothing.
@@ -556,9 +562,12 @@ the pill goes back to a steady state still under way and never replays a dictati
 (`CueReprimeSchedule`): dictation's at the next press or terminal phase, read-aloud's at once unless a
 capture is running. `SelectionSpeechRouter` takes any `ReadAloudSpeaker` (`SelectionSpeaker` in
 production), which is how the UI tests run read and ask offline; a stopped read's cancelled request
-reads as a cancellation, never a failure. The TTS is AssemblyAI's documented Streaming TTS API
-(`AssemblyAISpeechSynthesizer`: `POST https://tts.us.assemblyai.com/v1/speech`, `voice_id`, the
-audio read as the response streams). A selection is read in pieces (`ListeningChunks`: a short first
+reads as a cancellation, never a failure. The voice comes through the engine's
+`SpeechSynthesizing` seam (`SpeechServices.synthesizer`), and Blurt's is AssemblyAI's documented
+Streaming TTS API (`BlurtAssemblyAI`'s `AssemblyAISpeechSynthesizer` over the SDK's `SpeechClient`:
+`POST https://tts.us.assemblyai.com/v1/speech`, `voice_id`, the audio read as the response streams).
+Every LLM client below sends through the engine's `GatewayConnection` (a `ChatCompleting` the host
+supplies: AssemblyAI's LLM Gateway, through the SDK's `GatewayChatClient`). A selection is read in pieces (`ListeningChunks`: a short first
 piece, so reading starts after a paragraph, then about 1,500 characters each, at paragraph or
 sentence ends), one request each, rewritten first when skip-jargon is on; the next piece is asked
 for only once less than 30 s of audio is queued (`SelectionSpeaker.bufferTarget`), so a long
@@ -1060,7 +1069,7 @@ characters and, below `minimumLengthToMask`, none at all (a bare `suffix(4)` in 
 a short key whole).
 
 Sign in with AssemblyAI: the other way to fill that same key item. **`AssemblyAIAccount`**
-(`@MainActor @Observable`, in `Sources/BlurtEngine/Account/`) runs the authorization-code + PKCE flow
+(`@MainActor @Observable`, in `Sources/BlurtAssemblyAI/Account/`) runs the authorization-code + PKCE flow
 against a public Connected App: the shell's `AccountSignIn` opens the consent page in an
 `ASWebAuthenticationSession` (redirect `com.assemblyai.blurt://oauth/callback`, caught by the session, so no URL
 handler is registered), and the engine trades the code for tokens and the access token for the

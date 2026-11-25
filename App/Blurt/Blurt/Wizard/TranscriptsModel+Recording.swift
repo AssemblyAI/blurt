@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtAssemblyAI
 import BlurtEngine
 import Foundation
 

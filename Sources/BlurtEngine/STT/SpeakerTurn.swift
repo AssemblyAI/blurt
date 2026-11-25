@@ -36,12 +36,12 @@ public struct SpeakerTurn: Sendable, Equatable {
   /// Whether more than one speaker was told apart among `labels` — the rule
   /// for labelling a transcript's turns at all, live or async: a monologue
   /// reads better without a label on every paragraph.
-  static func isMultiSpeaker(_ labels: [String?]) -> Bool {
+  package static func isMultiSpeaker(_ labels: [String?]) -> Bool {
     Set(labels.compactMap(\.self)).count > 1
   }
 
   /// Turns written back as the labelled transcript: a paragraph each.
-  static func labelled(_ turns: [Self]) -> String {
+  package static func labelled(_ turns: [Self]) -> String {
     turns.map { "Speaker \($0.speaker ?? "?"): \($0.text)" }.joined(separator: "\n\n")
   }
 }

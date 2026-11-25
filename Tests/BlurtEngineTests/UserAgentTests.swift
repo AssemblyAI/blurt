@@ -1,7 +1,8 @@
+import BlurtEngine
 import Foundation
 import Testing
 
-@testable import BlurtEngine
+@testable import BlurtAssemblyAI
 
 @Suite("UserAgent")
 struct UserAgentTests {
@@ -83,12 +84,5 @@ struct UserAgentTests {
     #if DEBUG
       #expect(UserAgent.current.hasSuffix("; dev)"))
     #endif
-  }
-
-  @Test("setUserAgent stamps the User-Agent header on a request")
-  func stampsTheHeader() {
-    var request = URLRequest(url: URL(staticString: "https://dictation.assemblyai.com/v1/transcribe/live"))
-    request.setUserAgent()
-    #expect(request.value(forHTTPHeaderField: "User-Agent") == UserAgent.current)
   }
 }

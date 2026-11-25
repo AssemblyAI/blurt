@@ -11,7 +11,7 @@ package nonisolated enum WordsEdit {
   /// case-insensitively, and the list stops at the request's term cap, so a
   /// term that couldn't be sent isn't kept either.
   package static func addingKeyTerms(_ draft: String, to terms: [String]) -> [String] {
-    Array(KeyTerms.normalized(terms + KeyTerms.parse(draft)).prefix(KeyTerms.termCap))
+    Array(KeyTermList.normalized(terms + KeyTermList.parse(draft)).prefix(KeyTerms.termCap))
   }
 
   /// Whether a shortcut from these fields could be saved: a phrase with a

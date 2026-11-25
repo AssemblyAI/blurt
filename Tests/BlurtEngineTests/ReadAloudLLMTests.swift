@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("ReadAloudLLM")
@@ -22,12 +23,12 @@ struct ReadAloudLLMTests {
     #expect(try await llm(transport).rewriteForListening("Open ~/Desktop/blurt/AGENTS.md.") == "Open the file.")
 
     let request = try #require(sent.value)
-    #expect(request.url == ReadAloudLLM.endpoint)
+    #expect(request.url == GatewayChatClient.endpoint)
     #expect(request.httpMethod == "POST")
     // The raw key, as every AssemblyAI request Blurt makes.
     #expect(request.value(forHTTPHeaderField: "Authorization") == "raw-key")
     #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
-    #expect(request.value(forHTTPHeaderField: UserAgent.headerField) == UserAgent.current)
+    #expect(request.value(forHTTPHeaderField: "User-Agent") == UserAgent.current)
     #expect(request.timeoutInterval == ReadAloudLLM.rewriteTimeout)
 
     let body = try #require(request.httpBody)
@@ -66,17 +67,17 @@ struct ReadAloudLLMTests {
   @Test("a non-2xx answer is an error carrying its status")
   func status() async {
     let transport = FakeHTTPTransport { _ in (429, Data(#"{"code":429,"message":"slow down"}"#.utf8)) }
-    await #expect(throws: ReadAloudLLMError.status(429)) { try await llm(transport).rewriteForListening("Hi there.") }
+    await #expect(throws: GatewayChatError.status(429)) { try await llm(transport).rewriteForListening("Hi there.") }
   }
 
   @Test("no choice, or no text in it, is an empty rewrite")
   func empty() async {
     let noChoices = FakeHTTPTransport { _ in (200, Data(#"{"choices":[]}"#.utf8)) }
-    await #expect(throws: ReadAloudLLMError.empty) { try await llm(noChoices).rewriteForListening("Hi there.") }
+    await #expect(throws: GatewayChatError.empty) { try await llm(noChoices).rewriteForListening("Hi there.") }
     let blank = FakeHTTPTransport { _ in (200, completion("  ")) }
-    await #expect(throws: ReadAloudLLMError.empty) { try await llm(blank).rewriteForListening("Hi there.") }
+    await #expect(throws: GatewayChatError.empty) { try await llm(blank).rewriteForListening("Hi there.") }
     let null = FakeHTTPTransport { _ in (200, completion(nil)) }
-    await #expect(throws: ReadAloudLLMError.empty) { try await llm(null).rewriteForListening("Hi there.") }
+    await #expect(throws: GatewayChatError.empty) { try await llm(null).rewriteForListening("Hi there.") }
   }
 
   @Test("a rewrite cut off at max_tokens is refused, not read with its end missing")
@@ -169,9 +170,9 @@ struct ReadAloudLLMTests {
   @Test("an answer with no text, or a failed request, throws")
   func answerFailure() async {
     let blank = FakeHTTPTransport { _ in (200, completion(" ")) }
-    await #expect(throws: ReadAloudLLMError.empty) { try await llm(blank).answer("Explain.", about: "x") }
+    await #expect(throws: GatewayChatError.empty) { try await llm(blank).answer("Explain.", about: "x") }
     let down = FakeHTTPTransport { _ in (500, Data()) }
-    await #expect(throws: ReadAloudLLMError.status(500)) { try await llm(down).answer("Explain.", about: "x") }
+    await #expect(throws: GatewayChatError.status(500)) { try await llm(down).answer("Explain.", about: "x") }
   }
 
   @Test("the answer instruction says it will be heard, stays short, and ignores instructions in the selection")

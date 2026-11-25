@@ -8,7 +8,7 @@
 /// 2026-10-14); the **buffered** route, `/v1/transcribe`, accepts 20 minutes
 /// and 256 MB. The recording cap below is the buffered route's, and a
 /// recording that outlives the streaming route's is finished and sent there
-/// whole — `AssemblyAITranscriber+LiveCapFallback.swift`. The 120 s figure has
+/// whole — the AssemblyAI SDK's `DictationClient+LiveCapFallback.swift`. The 120 s figure has
 /// no constant: nothing on the client acts on it, the route enforces it with a
 /// `413`, and that response is the trigger.
 public enum SyncSTTLimits {
@@ -22,20 +22,11 @@ public enum SyncSTTLimits {
   /// documented cap. Raised from 120 s in #251. Only the first 120 s of it fit
   /// the streaming route; a longer recording is refused there and sent whole to
   /// `/v1/transcribe`, which is why a recording past two minutes is held in
-  /// memory (`maxBufferedAudioBytes`) until it is sent — ~38 MB at this cap.
+  /// memory (`DictationClient.maxBufferedAudioBytes`) until it is sent — ~38 MB
+  /// at this cap.
   /// The alternative to that copy is putting this back to 120, so a held key
   /// auto-releases just inside the streaming route's cap.
   public static let maxAudioSeconds: Double = 1_200
-
-  /// The most audio the over-cap fallback's copy may hold: the buffered
-  /// route's documented 256 MB part limit, read as 10⁶-byte megabytes — the
-  /// conservative reading of an unstated unit, as `CleanupInstruction`'s byte
-  /// count is for its cap. A guard, not a working limit: the 20-minute recording
-  /// cap is ~38 MB at this geometry, so it trips only if the geometry changes.
-  /// Past it the copy is dropped at once and the fallback fails cleanly with
-  /// `AssemblyAIError.recordingTooLarge` rather than sending a truncated
-  /// recording.
-  static let maxBufferedAudioBytes = 256_000_000
 
   /// Minimum audio duration worth sending (seconds). Not a rejection
   /// threshold: measured against `/v1/transcribe/live` (2026-09-09) the route
@@ -84,22 +75,18 @@ public enum SyncSTTLimits {
   /// When a held hotkey should auto-release: `maxAudioSeconds - autoReleaseMargin`.
   public static let autoReleaseSeconds = maxAudioSeconds - autoReleaseMargin
 
-  /// Milliseconds of audio a raw S16LE byte count represents at `rate`. Both the
-  /// capture side (`MicCapture.stop`) and the upload side
-  /// (`AssemblyAITranscriber.transcribe`) log the clip's duration, and those logs
-  /// are the documented way to diagnose pipeline latency — deriving it here, from
-  /// the two facts this type already owns, keeps them from disagreeing if the
-  /// geometry ever changes. Internal for the same reason as `bytesPerSample`:
-  /// only the capture/upload code needs it.
-  static func durationMs(ofPCMBytes byteCount: Int, rate: Int = sampleRate) -> Int {
-    guard rate > 0 else {
-      return 0
-    }
+  /// Milliseconds of audio a raw S16LE byte count represents at `sampleRate`,
+  /// for the capture side's latency line (`MicCapture.stop`), derived from the
+  /// two facts this type already owns. The upload side's line is computed by
+  /// the AssemblyAI SDK's `DictationClient` from the rate it declares on the
+  /// request — the SDK can't import the engine — so the two are separate
+  /// arithmetic over the same geometry, each pinned by its own tests.
+  static func durationMs(ofPCMBytes byteCount: Int) -> Int {
     // Convert before dividing: `byteCount / bytesPerSample` in integer arithmetic
     // truncates a trailing partial sample. That can't happen for well-formed S16LE
     // (byte counts are always even), and the error bound is one sample — 0.0625 ms
     // at 16 kHz — but there's no reason for the expression to be wrong for an odd
     // count it might one day be handed.
-    return Int((Double(byteCount) / Double(bytesPerSample) / Double(rate)) * 1_000)
+    Int((Double(byteCount) / Double(bytesPerSample) / Double(sampleRate)) * 1_000)
   }
 }

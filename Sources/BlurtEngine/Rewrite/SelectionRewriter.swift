@@ -7,7 +7,7 @@
 /// (`.handedBack`), and what it rewrites is text the user highlighted. Dictation
 /// cleanup stays the dictation API's server-side rewrite (AGENTS.md's settled
 /// decisions).
-public struct SelectionRewriter: SelectionRewriting, GatewayClient {
+struct SelectionRewriter: SelectionRewriting, GatewayClient {
   /// The file transcripts' model (`TranscriptLLM.model`), the owner's pick
   /// for this too (2026-11-03): a rewrite is writing, where the larger model
   /// earns its latency over read-aloud's small one.
@@ -43,11 +43,11 @@ public struct SelectionRewriter: SelectionRewriting, GatewayClient {
   /// The gateway call, key and transport bound in.
   private let gateway: GatewayConnection
 
-  public init(gateway: GatewayConnection) {
+  init(gateway: GatewayConnection) {
     self.gateway = gateway
   }
 
-  public func rewrite(_ selection: String, as request: String) async throws -> String {
+  func rewrite(_ selection: String, as request: String) async throws -> String {
     guard selection.count <= Self.maxCharacters else { throw SelectionRewriteError.tooLong }
     // The paste replaces the whole highlight, so only the words are rewritten
     // and the whitespace around them goes back where it was.

@@ -1,9 +1,8 @@
-// The dictation API's JSON contract: the `config` part `AssemblyAITranscriber`
-// encodes, and the success/error bodies it decodes. Split from
-// `AssemblyAITranscriber.swift` to stay within the lint file-length budget —
-// that file is the transport (multipart framing, timeouts, metrics), this one is
-// the wire shape. Top-level and public: the
-// transcriber that sends them lives in BlurtEngine, a separate module.
+// The dictation API's JSON contract: the `config` part `DictationClient`
+// encodes, and the success/error bodies it decodes. `DictationClient.swift` is
+// the transport (multipart framing, timeouts, metrics); these files are the wire
+// shape. Top-level and public: callers outside the SDK build the config and
+// read the response.
 //
 // Every field name here was swept against the live route on 2026-09-10, because
 // the route validates its config **strictly**: an unrecognized key earns

@@ -53,7 +53,7 @@
 /// and a 400.
 ///
 /// Exercised by `Tests/BlurtEngineTests/STTPromptTests.swift`.
-enum STTPrompt {
+package enum STTPrompt {
   /// Hard cap the API places on `config.stt_prompt`: 4096, and over it the
   /// request fails outright — `400 stt_prompt: String should have at most 4096
   /// characters`, before the audio is read. Unlike the budget it replaces (ours,
@@ -122,7 +122,7 @@ enum STTPrompt {
   /// Every caller that reports or transmits the context goes through here — the
   /// transcriber and the developer-mode log both — so the log records exactly
   /// what went on the wire, including the trimming.
-  static func text(context: TranscriptionContext?) -> String {
+  package static func text(context: TranscriptionContext?) -> String {
     guard let context else {
       return ""
     }

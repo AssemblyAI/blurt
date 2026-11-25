@@ -10,7 +10,7 @@ import os
 // beside `awaitUpload` — the thing that finishes it — beats splitting one
 // lifecycle across the press/release line to match the file names.
 /// Failures the release pipeline itself raises, as opposed to the transport's
-/// (`ChunkedUploadError`) or the service's (`AssemblyAIError`). Declared here
+/// (`ChunkedUploadError`) or the transcriber's (`TranscriberError`). Declared here
 /// because this is where it is raised: filed under the transport's body-stream
 /// errors it read as one, and a transport test reached for it as a stand-in.
 enum DictationPipelineError: Error, LocalizedError {
@@ -266,7 +266,7 @@ extension DictationSession {
       // producer gets there first instead, the outcome has to be the same
       // nothing rather than a red pill reading "too short to transcribe" — the
       // floor is one policy with two enforcement points, not two behaviours.
-      if case AssemblyAIError.audioTooShort = error {
+      if case TranscriberError.audioTooShort = error {
         setPhase(.idle)
         return nil
       }

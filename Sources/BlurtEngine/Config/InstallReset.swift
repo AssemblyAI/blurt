@@ -71,9 +71,10 @@ public struct InstallReset {
   /// **running** one (`Bundle.main.bundleIdentifier`) for the reason spelled out
   /// on `PermissionsReset` — a dev build must never clear the released Blurt's
   /// grants.
-  /// `signInStore` likewise: the account's own storage, so the session item goes
-  /// with the key (locally only — a reset is not a sign-out).
-  public init(bundleID: String, keyStore: any APIKeyGateway, signInStore: SignInStore) {
+  /// `clearAccount` likewise clears whatever the provider keeps beside the key —
+  /// a sign-in session (`BlurtAssemblyAI`'s `SignInStore`), locally only, since
+  /// a reset is not a sign-out — and says whether it went.
+  public init(bundleID: String, keyStore: any APIKeyGateway, clearAccount: @escaping () -> Bool) {
     self.init(
       clearSettings: {
         PersistedSettings.resetAll()
@@ -85,7 +86,7 @@ public struct InstallReset {
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
       },
       // Both always run: a failed key delete mustn't leave the session behind.
-      clearAPIKey: { [keyStore.save(nil), signInStore.save(nil)].allSatisfy(\.self) },
+      clearAPIKey: { [keyStore.save(nil), clearAccount()].allSatisfy(\.self) },
       resetPermissions: {
         #if os(macOS)
           return PermissionsReset.resetAll(bundleID: bundleID)

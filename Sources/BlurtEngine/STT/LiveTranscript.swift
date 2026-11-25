@@ -1,8 +1,6 @@
-public import AssemblyAI
-
 /// A recording's transcript as it streams in: the turns the realtime API has
 /// settled, and the one still being spoken. A value type — the app folds each
-/// `RealtimeTurn` in and renders the result — so the bookkeeping is testable
+/// `LiveTurn` in and renders the result — so the bookkeeping is testable
 /// without a socket.
 ///
 /// Append-only: turns arrive in order, so a final either replaces the last
@@ -10,9 +8,9 @@ public import AssemblyAI
 /// held apart. Nothing is re-sorted per update, however long the meeting.
 public struct LiveTranscript: Equatable, Sendable {
   /// The settled turns, in order.
-  public private(set) var finals: [RealtimeTurn] = []
+  public private(set) var finals: [LiveTurn] = []
   /// The turn being spoken now.
-  private var current: RealtimeTurn?
+  private var current: LiveTurn?
 
   /// What is being said right now, if anything.
   public var partial: String? { current?.transcript.trimmedNonEmpty() }
@@ -26,7 +24,7 @@ public struct LiveTranscript: Equatable, Sendable {
 
   /// The settled turns that said something. An empty final's speaker label
   /// counts for nothing, here and in `text`, so the two never disagree.
-  private var spokenFinals: [RealtimeTurn] { finals.filter { $0.transcript.trimmedNonEmpty() != nil } }
+  private var spokenFinals: [LiveTurn] { finals.filter { $0.transcript.trimmedNonEmpty() != nil } }
 
   /// The settled text as it is saved: `Speaker A: …` paragraphs with more
   /// than one speaker — the async transcripts' shape, so the transforms read
@@ -45,7 +43,7 @@ public struct LiveTranscript: Equatable, Sendable {
     // Nothing to set up: a fresh transcript has heard no turns.
   }
 
-  private static func speakerTurns(of spoken: [RealtimeTurn]) -> [SpeakerTurn] {
+  private static func speakerTurns(of spoken: [LiveTurn]) -> [SpeakerTurn] {
     guard SpeakerTurn.isMultiSpeaker(spoken.map(\.speaker)) else {
       return spoken.map { SpeakerTurn(speaker: nil, text: $0.transcript) }
     }
@@ -60,8 +58,8 @@ public struct LiveTranscript: Equatable, Sendable {
     return turns
   }
 
-  /// Folds in one update from the realtime API.
-  public mutating func apply(_ turn: RealtimeTurn) {
+  /// Folds in one update from the live session.
+  public mutating func apply(_ turn: LiveTurn) {
     guard turn.isFinal else {
       current = turn
       return
@@ -73,12 +71,5 @@ public struct LiveTranscript: Equatable, Sendable {
       finals.append(turn)
     }
     speakerTurns = Self.speakerTurns(of: spokenFinals)
-  }
-}
-
-extension RealtimeTranscriber {
-  /// A session as Blurt opens one: the user's key and Blurt's User-Agent.
-  public static func blurt(apiKey: String) -> RealtimeTranscriber {
-    RealtimeTranscriber(apiKey: apiKey, userAgent: UserAgent.current)
   }
 }

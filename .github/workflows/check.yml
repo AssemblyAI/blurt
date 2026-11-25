@@ -347,9 +347,9 @@ jobs:
   # resolves the package
   # straight from the checkout, no project needed. `generic/platform=iOS
   # Simulator` builds against the runner's default (latest installed) simulator
-  # SDK without naming a device or pinning an iOS version. The scheme is the
-  # package's own `BlurtEngine` product scheme, so only the library builds; the
-  # test target stays a macOS (`swift test`) concern.
+  # SDK without naming a device or pinning an iOS version. The schemes are the
+  # package's own `BlurtEngine` and `BlurtAssemblyAI` product schemes, so only
+  # the libraries build; the test target stays a macOS (`swift test`) concern.
   ios-build:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
@@ -372,6 +372,16 @@ jobs:
         working-directory: blurt
         run: |
           xcodebuild -scheme BlurtEngine \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
+            build
+
+      # The provider package (and the AssemblyAI SDK it imports), which the
+      # BlurtEngine scheme above no longer builds: the engine imports neither.
+      - name: Build BlurtAssemblyAI for iOS
+        working-directory: blurt
+        run: |
+          xcodebuild -scheme BlurtAssemblyAI \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
             build
