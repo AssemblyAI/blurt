@@ -266,11 +266,22 @@ final class DictationCoordinator {
   private func observePhases() -> Task<Void, Never> {
     let pipeline = session
     return Task { [weak self] in
+      // The stream opens on the session's phase as it stands: for a fresh
+      // session, the `.idle` this coordinator already shows. Rendered, that
+      // `.idle` is terminal, so when the first press is accepted before the
+      // subscription's opening phase is rendered, it ended the new dictation
+      // before it began — the release then found nothing in flight, and the
+      // session recorded on (an address-sanitizer run of the owner-release
+      // test). An opening phase that is what's already shown is no news; any
+      // other — a press the session took first, or its end — still renders.
+      var opening = true
       for await nextPhase in await pipeline.phaseStream() {
         guard let self else {
           return
         }
-        render(nextPhase)
+        let replayed = opening && nextPhase == phase
+        opening = false
+        if !replayed { render(nextPhase) }
       }
     }
   }
