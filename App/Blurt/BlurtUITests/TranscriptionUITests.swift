@@ -237,12 +237,13 @@ final class TranscriptionUITests: BlurtUITestCase {
       .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
   }
 
-  /// A turn on the live page whose words or speaker contain `text`: a
-  /// `TurnBlock` is one combined element, a group. A typed query on the main
-  /// window: `windowText`'s app-wide `.any` match timed out
-  /// ("Timed out while evaluating UI query") under the live page's ticking clock.
+  /// A turn on the live page whose words or speaker contain `text`, scoped
+  /// to the main window. Not `.groups`: a `TurnBlock` matched none on CI. Not
+  /// app-wide like `windowText`: that timed out ("Timed out while evaluating
+  /// UI query") under the live page's ticking clock, while the window-scoped
+  /// match passed every run.
   private func liveTurn(containing text: String) -> XCUIElement {
-    app.windows[UITestIdentifiers.mainWindowTitle].groups
+    app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any)
       .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
   }
 
