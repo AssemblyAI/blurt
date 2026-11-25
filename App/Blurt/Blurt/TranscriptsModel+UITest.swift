@@ -45,6 +45,10 @@
       /// `start`), released as soon as it does: a press is never lost to that
       /// race.
       private var owed = 0
+      /// Finished or cancelled: like `RealtimeTranscriber`, a session closed
+      /// before `start` opens nothing, so a Stop that comes first can't wait
+      /// on a stream that never ends.
+      private var isClosed = false
 
       private init(script: [RealtimeTurn]) {
         self.script = script
@@ -64,6 +68,10 @@
 
       func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+        guard !isClosed else {
+          continuation.finish()
+          return stream
+        }
         self.continuation = continuation
         for _ in 0..<owed { next() }
         owed = 0
@@ -101,6 +109,7 @@
       }
 
       private func end(throwing error: (any Error)?) {
+        isClosed = true
         continuation?.finish(throwing: error)
         continuation = nil
       }
