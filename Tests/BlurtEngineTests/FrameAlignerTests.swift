@@ -44,7 +44,7 @@ struct FrameAlignerTests {
     feed.yield(Data([4, 5, 6, 7, 8]))
     feed.yield(Data([9]))
     feed.finish()
-    let copy = await AssemblyAITranscriber.relay(frames, to: sink, keepingAtMost: 1_000)
+    let copy = await DictationClient.relay(frames, to: sink, keepingAtMost: 1_000)
     var sent = Data()
     for await chunk in live {
       #expect(chunk.count.isMultiple(of: 2))

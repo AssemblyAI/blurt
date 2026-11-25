@@ -1,6 +1,5 @@
 #if os(macOS)
   public import AVFoundation
-  import AssemblyAI
   import CoreAudio
   public import Foundation
   import os
@@ -33,7 +32,7 @@
   /// `@safe`: the IOProc ID it stores is a raw Core Audio handle, but it is
   /// created, run and destroyed entirely inside this class, never handed out.
   @safe
-  public final class SystemAudioRecorder {
+  public final class SystemAudioRecorder: RecordingCapture {
     public enum RecorderError: Error, LocalizedError {
       case coreAudio(String, OSStatus)
 
@@ -45,8 +44,9 @@
       }
     }
 
-    /// The rate everything leaves at: the realtime API's, and plenty for speech.
-    public static let outputSampleRate = Double(RealtimeTranscriber.sampleRate)
+    /// The rate everything leaves at: dictation's 16 kHz, which is what a live
+    /// session takes too (AssemblyAI's realtime API), and plenty for speech.
+    public static let outputSampleRate = Double(SyncSTTLimits.sampleRate)
     static let log = HostIdentity.current.logger("Recorder")
 
     private var tapID = AudioObjectID(kAudioObjectUnknown)

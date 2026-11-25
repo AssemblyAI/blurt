@@ -20,8 +20,8 @@
 /// aliases are mutually exclusive on this route, so a request carrying two names
 /// 400s before the audio is read. Send exactly one.
 ///
-/// Two steps, both here: `parse` turns what a person types (a comma-separated
-/// list) into clean terms, and `fitted` keeps a list within the field's two
+/// What a person types is cleaned into terms before it reaches here (the
+/// engine's `KeyTermList`); `fitted` keeps a clean list within the field's two
 /// caps, which the user's list is the one unbounded input able to breach.
 public enum KeyTerms {
   /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
@@ -42,44 +42,11 @@ public enum KeyTerms {
   /// whole request, before the audio is read.
   ///
   /// Reachable, which is why it is here: terms comma-split from one free-text
-  /// field (`parse`) are uncounted, so 150 short ones cost ~1500 bytes and sail under
+  /// field are uncounted, so 150 short ones cost ~1500 bytes and sail under
   /// `characterCap` while being half again over this. That shape failed *every*
   /// dictation until the user shortened the list — the same outage a 3057-character
   /// cleanup instruction caused once, by the same mechanism.
   public static let termCap = 100
-
-  /// A comma-separated list as clean terms: split on commas (only commas, so
-  /// "San Francisco" stays one term), trimmed, blanks dropped, and duplicates
-  /// removed case-insensitively, keeping the first spelling and the user's
-  /// order. `fitted` assumes terms arrive this way.
-  public static func parse(_ text: String?) -> [String] {
-    guard let text else {
-      return []
-    }
-    return normalized(text.split(separator: ",").map(String.init))
-  }
-
-  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
-  /// Terms already apart as clean terms, by `parse`'s rules: trimmed, blanks
-  /// dropped, duplicates removed case-insensitively keeping the first spelling.
-  /// For lists that can't go through the comma form, such as a contact called
-  /// "Smith, John".
-  public static func normalized(_ terms: [String]) -> [String] {
-    var seen = Set<String>()
-    var result: [String] = []
-    for piece in terms {
-      guard let term = piece.trimmedNonEmpty() else { continue }
-      guard seen.insert(term.lowercased()).inserted else { continue }
-      result.append(term)
-    }
-    return result
-  }
-
-  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
-  /// Terms as the comma-separated text `parse` reads back unchanged.
-  public static func join(_ terms: [String]) -> String {
-    terms.joined(separator: ", ")
-  }
 
   /// The terms to send for `terms` — empty when there are none to send, which
   /// the encoders read as "omit the field", so the request asks for no boosting

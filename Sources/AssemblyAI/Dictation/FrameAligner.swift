@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 /// Keeps a stream of 16-bit PCM chunks on whole samples, whatever sizes the
 /// chunks arrive in.
@@ -11,27 +11,27 @@ public import Foundation
 /// grid and the whole recording is lost. This carries an odd buffer's last byte
 /// over to the front of the next one, so what's uploaded is always whole
 /// samples, and only the very last byte of a recording that ends odd is dropped.
-public struct FrameAligner: Sendable {
+struct FrameAligner: Sendable {
   /// Bytes in one sample: 16-bit mono.
-  public static let bytesPerFrame = 2
+  static let bytesPerFrame = 2
 
   /// The byte held back from the last chunk, waiting for its pair.
   private var carry = Data()
   /// Whether any chunk so far was off the grid: worth one log line, since it
   /// names an input device that isn't honouring the capture's format.
-  public private(set) var sawMisalignedChunk = false
+  private(set) var sawMisalignedChunk = false
 
   /// Whether a byte is still held back when the recording ends: half a sample,
   /// which is dropped rather than sent.
-  public var hasDanglingByte: Bool { !carry.isEmpty }
+  var hasDanglingByte: Bool { !carry.isEmpty }
 
-  public init() {
+  init() {
     // Nothing to set up: an aligner starts with no byte held back.
   }
 
   /// `chunk` with the held-back byte in front of it, trimmed to whole samples;
   /// what doesn't fit is held back for the next one.
-  public mutating func align(_ chunk: Data) -> Data {
+  mutating func align(_ chunk: Data) -> Data {
     if !chunk.count.isMultiple(of: Self.bytesPerFrame) { sawMisalignedChunk = true }
     let joined = carry + chunk
     let whole = joined.count - joined.count % Self.bytesPerFrame

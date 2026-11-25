@@ -37,7 +37,7 @@ final class ScriptedSpeechProtocol: URLProtocol, @unchecked Sendable {
       state.started = true
       return state.script
     }
-    let url = request.url ?? AssemblyAISpeechSynthesizer.endpoint
+    let url = request.url ?? SpeechClient.endpoint
     switch script {
     case let .respond(status, chunks, finishes):
       respond(status: status, url: url)

@@ -15,9 +15,9 @@ import Synchronization
 /// - the remember-this-dictation decision, which is the one that matters. A
 ///   dictation into a secure field that got recorded into `recentDictations`
 ///   would be replayed in `stt_prompt` on every later dictation this launch.
-///   That is precisely the leak `targetIsSecure` exists to prevent, and a merely
-///   slow target — `FocusCapture` makes ~6 serial AX round trips, each capped at
-///   ~1 s — must not be enough to open it. Nor may a *hung* one: `resolved` is
+///   That is precisely the leak a `.secure` `TranscriptionContext.targetSecurity`
+///   exists to prevent, and a merely slow target — `FocusCapture` makes ~6
+///   serial AX round trips, each capped at ~1 s — must not be enough to open it. Nor may a *hung* one: `resolved` is
 ///   nil both for a read that settled on an empty snapshot and for one still in
 ///   flight, and only the first says anything about the field. So that decision
 ///   reads `targetSecurity`, which reports a read that has not landed as
@@ -71,19 +71,15 @@ final class PressContext: Sendable {
   /// The verdict the remember decision acts on. Fails closed: only a read that
   /// has *landed* can say `.ordinary`; one still in flight could yet turn out
   /// to be a password field, and replaying on the strength of not knowing is
-  /// exactly the leak `targetIsSecure` exists to prevent.
+  /// exactly the leak `TranscriptionContext.targetSecurity` exists to prevent.
   var targetSecurity: TargetSecurity {
     state.withLock { locked in
       guard locked.settled else {
         return .unknown
       }
-      if locked.resolved?.targetIsSecure == true {
-        return .secure
-      }
-      if locked.resolved?.targetSecurityUnknown == true {
-        return .unknown
-      }
-      return .ordinary
+      // An empty snapshot is stored as nil, and `isEmpty` keeps any verdict
+      // other than `.ordinary`, so a settled nil is an ordinary field.
+      return locked.resolved?.targetSecurity ?? .ordinary
     }
   }
 

@@ -188,6 +188,20 @@ enum UITestIdentifiers {
   static let cannedTaskResult = "Canned task result for the transcript."
   static let recentList = "recent.list"
   static let transcribeRecordButton = "transcribe.record"
+  /// The live recording page's controls (`LiveRecordingView`).
+  static let liveRecordingStop = "liveRecording.stop"
+  static let liveRecordingPause = "liveRecording.pause"
+  static let liveRecordingDiscard = "liveRecording.discard"
+  /// The harness's live-session controls (`UITestLiveSession`): release the
+  /// scripted session's next turn, or fail the session.
+  static let harnessLiveNextTurn = "harness.live.nextTurn"
+  static let harnessLiveFail = "harness.live.fail"
+  /// The scripted live session's turns, in the order Next Turn releases them:
+  /// speaker A's partial, then its final; then speaker B's.
+  static let livePartialA = "Hello"
+  static let liveFinalA = "Hello everyone, thanks for coming."
+  static let livePartialB = "Happy"
+  static let liveFinalB = "Happy to be here."
   static let transcribeBrowseButton = "transcribe.browse"
   static let autoRecordToggle = "settings.autoRecordMeetings"
   /// A transcript sheet chip: this prefix, then the facet's raw value.

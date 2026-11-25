@@ -1,15 +1,13 @@
-public import AssemblyAI
-
 /// The validate-then-save flow behind the setup/settings screen's Save/Update
 /// button. Owned in the engine — rather than in the app coordinator — so its
 /// central invariant is unit-tested: **an unverified key never persists.** A key
-/// is written only after AssemblyAI actively accepts it (`.valid`); a rejected
+/// is written only after the provider actively accepts it (`.valid`); a rejected
 /// key (`.invalid`) or an unreachable server (`.unreachable`) leaves the stored
 /// key untouched, and a write that doesn't survive a read-back is surfaced as
 /// `.saveFailed` instead of silently claiming success.
 public struct APIKeySubmission: Sendable {
   /// Outcome of a submission attempt. `.invalid`/`.unreachable` mirror
-  /// `APIKeyValidator.Result` (nothing was saved); `.saveFailed` means the key
+  /// `KeyValidation` (nothing was saved); `.saveFailed` means the key
   /// validated but couldn't be written to (or read back from) storage.
   public enum Outcome: Sendable, Equatable {
     case valid
@@ -35,20 +33,20 @@ public struct APIKeySubmission: Sendable {
   }
 
   /// AssemblyAI didn't answer — a pasted key's check, or a sign-in's exchange.
-  static let unreachableMessage = "Couldn’t reach AssemblyAI. Check your connection and try again."
+  package static let unreachableMessage = "Couldn’t reach AssemblyAI. Check your connection and try again."
 
   private let keyStore: any APIKeyGateway
-  private let validate: @Sendable (String) async -> APIKeyValidator.Result
+  private let validate: @Sendable (String) async -> KeyValidation
 
   /// The validation outcome is injected as a closure: production passes
-  /// `APIKeyValidator`'s real AssemblyAI check (see `APIKeyModel`'s default),
+  /// the provider's real key check (`BlurtAssemblyAI`'s `APIKeyValidator.blurt()`),
   /// UI testing passes an offline stub (so the settings flow runs without a
   /// network), and tests inject outcomes directly to cover the mapping and the
   /// never-save-unverified invariant — all through the one real submit path.
   @preconcurrency
   public init(
     keyStore: any APIKeyGateway,
-    validate: @escaping @Sendable (String) async -> APIKeyValidator.Result
+    validate: @escaping @Sendable (String) async -> KeyValidation
   ) {
     self.keyStore = keyStore
     self.validate = validate

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// How the transcriber turns a failed response into an error: the documented
@@ -36,12 +37,12 @@ extension HTTPClientTests {
   @Test("HTTP error falls back to the raw body when the shape is unknown")
   func errorMessageFallsBackToRawBody() {
     let body = Data(#"{"unexpected":"shape"}"#.utf8)
-    #expect(AssemblyAITranscriber.errorMessage(from: body) == #"{"unexpected":"shape"}"#)
+    #expect(DictationClient.errorMessage(from: body) == #"{"unexpected":"shape"}"#)
   }
 
   @Test("HTTP error message is read from the `detail` field too")
   func errorMessageFromDetailField() {
-    #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "audio required"])) == "audio required")
+    #expect(DictationClient.errorMessage(from: json(["detail": "audio required"])) == "audio required")
   }
 
   @Test("HTTP error message field precedence is error > detail, and nothing else")
@@ -51,14 +52,14 @@ extension HTTPClientTests {
     // transcription service (invalid key, unsupported format). They shouldn't
     // co-occur, but pin the order so a reorder can't silently change which
     // reaches the user.
-    #expect(AssemblyAITranscriber.errorMessage(from: json(["error": "a"])) == "a")
-    #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "c"])) == "c")
-    #expect(AssemblyAITranscriber.errorMessage(from: json(["error": "a", "detail": "c"])) == "a")
+    #expect(DictationClient.errorMessage(from: json(["error": "a"])) == "a")
+    #expect(DictationClient.errorMessage(from: json(["detail": "c"])) == "c")
+    #expect(DictationClient.errorMessage(from: json(["error": "a", "detail": "c"])) == "a")
     // `error` is the field the *common* failures carry, 400 among them — so a
     // config-validation message reaches the user as a sentence instead of as
     // the raw JSON body. It went unread until 2026-09-11.
     #expect(
-      AssemblyAITranscriber.errorMessage(
+      DictationClient.errorMessage(
         from: json(["error": "invalid config part: llm: Extra inputs are not permitted"])
       )
         == "invalid config part: llm: Extra inputs are not permitted")
@@ -67,7 +68,7 @@ extension HTTPClientTests {
     // yielding the value. Same rule that keeps `llm: null` off the request:
     // only the documented contract, in both directions. (Asserting the
     // behavior, not the serialized bytes.)
-    let messageShaped = AssemblyAITranscriber.errorMessage(from: json(["message": "b"]))
+    let messageShaped = DictationClient.errorMessage(from: json(["message": "b"]))
     #expect(messageShaped != "b")
     #expect(messageShaped?.contains("message") == true)
   }
@@ -95,20 +96,20 @@ extension HTTPClientTests {
     // FastAPI-style validation errors carry `detail` as an array; that must not
     // decode as the message — the raw body is still more useful than nothing.
     let body = #"{"detail":[{"loc":["config"],"msg":"field required"}]}"#
-    #expect(AssemblyAITranscriber.errorMessage(from: Data(body.utf8)) == body)
+    #expect(DictationClient.errorMessage(from: Data(body.utf8)) == body)
   }
 
   @Test("a raw-body error message is capped at 500 characters")
   func errorMessageRawBodyCapped() {
     // An HTML error page must not flood the overlay/error description.
     let long = String(repeating: "x", count: 600)
-    #expect(AssemblyAITranscriber.errorMessage(from: Data(long.utf8))?.count == 500)
+    #expect(DictationClient.errorMessage(from: Data(long.utf8))?.count == 500)
   }
 
   @Test("HTTP error message is nil only for an empty body")
   func errorMessageNilForEmptyBody() {
-    #expect(AssemblyAITranscriber.errorMessage(from: Data()) == nil)
-    #expect(AssemblyAITranscriber.errorMessage(from: Data("   \n".utf8)) == nil)
+    #expect(DictationClient.errorMessage(from: Data()) == nil)
+    #expect(DictationClient.errorMessage(from: Data("   \n".utf8)) == nil)
   }
 
   @Test("AssemblyAIError descriptions are non-empty and include the status")

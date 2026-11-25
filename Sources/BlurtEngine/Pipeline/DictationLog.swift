@@ -1,4 +1,3 @@
-import AssemblyAI
 public import Foundation
 import os
 
@@ -51,7 +50,7 @@ public enum DictationLog {
     /// Selected text (the dictation replaced it), when any. Local to this file:
     /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
-    /// The `config.stt_prompt` string sent to AssemblyAI for this utterance:
+    /// The `config.stt_prompt` string sent for this utterance (`STTPrompt`):
     /// the user's recent dictations oldest-first, then `prior`, newline-joined.
     /// Built here from `context` (rather than threaded through from the
     /// transcriber) so the log always reflects what was actually sent, even for
@@ -61,12 +60,14 @@ public enum DictationLog {
     /// because this string is trimmed where `prior` is raw (see it). Empty when
     /// no prompt was sent, and `encode(to:)` then omits the key.
     let sttPrompt: String
-    /// The `config.keyterms_prompt` list sent for this utterance —
-    /// the request's other steering field, so the log accounts for both. Built
-    /// through the same `KeyTerms.fitted` the request uses, so an
-    /// over-long list is recorded as the terms that actually went out. Empty
-    /// when none were sent, and `encode(to:)` then omits the key, matching how
-    /// every absent field above is left out rather than written as `null`.
+    /// The key terms handed to the transcriber for this utterance —
+    /// the request's other steering field, so the log accounts for both.
+    /// Cleaned the way the engine cleans every list (`KeyTermList.normalized`);
+    /// a provider with caps of its own fits it further on the way out
+    /// (AssemblyAI's `KeyTerms.fitted`, which only trims past 100 terms or
+    /// 2048 bytes). Empty when none were sent, and `encode(to:)` then omits
+    /// the key, matching how every absent field above is left out rather than
+    /// written as `null`.
     let keyterms: [String]
     /// Which rewrite model the dictation asked for (`RewriteMode`: "fast" or
     /// "smart"), so the corpus can be split by mode: Smart takes a different
@@ -264,7 +265,7 @@ public enum DictationLog {
     outcome: PipelinePhase? = nil
   ) -> Entry {
     Entry(
-      transcript: context?.targetIsSecure == true ? withheldTranscript : transcript,
+      transcript: context?.targetSecurity == .secure ? withheldTranscript : transcript,
       ts: now.formatted(timestampFormat),
       app: context?.appName,
       window: context?.windowTitle,
@@ -272,7 +273,7 @@ public enum DictationLog {
       prior: context?.priorText,
       selected: context?.selectedText,
       sttPrompt: STTPrompt.text(context: context),
-      keyterms: KeyTerms.fitted(context?.keyTerms ?? []),
+      keyterms: KeyTermList.normalized(context?.keyTerms ?? []),
       rewriteMode: rewriteMode.map { $0.rawValue.lowercased() },
       outcome: outcome.map(outcomeName)
     )
@@ -307,7 +308,7 @@ public enum DictationLog {
 
   /// The rewrite the settings ask for: the chosen mode while enhanced
   /// transcripts are on, nil while the verbatim text is pasted. The same two
-  /// settings `AssemblyAITranscriber` reads for the request.
+  /// settings the transcriber reads for the request (`AssemblyAITranscriber`).
   static func requestedRewriteMode() -> RewriteMode? {
     EnhancedTranscriptsStore().isEnabled ? RewriteModeStore().mode : nil
   }

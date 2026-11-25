@@ -1,5 +1,6 @@
 import AssemblyAI
 import BlurtDesign
+import BlurtEngine
 import BlurtiOSCore
 import SwiftUI
 
@@ -14,7 +15,7 @@ struct KeyTermsCard: View {
 
   var body: some View {
     // Parsed once per redraw, which every keystroke in the field causes.
-    let terms = KeyTerms.parse(raw)
+    let terms = KeyTermList.parse(raw)
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
       Eyebrow("Key terms")
       if !terms.isEmpty {
@@ -34,7 +35,7 @@ struct KeyTermsCard: View {
         Button("Add") { add(to: terms) }
           .buttonStyle(BrandButtonStyle())
           .fixedSize()
-          .disabled(KeyTerms.parse(draft).isEmpty || terms.count >= KeyTerms.termCap)
+          .disabled(KeyTermList.parse(draft).isEmpty || terms.count >= KeyTerms.termCap)
       }
       Text(
         "Spelled exactly as written in every dictation. Separate several with commas, or add one from the "

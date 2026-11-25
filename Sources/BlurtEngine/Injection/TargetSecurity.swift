@@ -8,12 +8,12 @@ public enum TargetSecurity: Sendable, Equatable {
   /// The read landed and the field is an ordinary one: remember the dictation
   /// and replay it as later request context.
   case ordinary
-  /// The read refused the field (`TranscriptionContext.targetIsSecure`): the
+  /// The read refused the field (`FocusCapture.mustRedactContents`): the
   /// dictation is the secret, so it is not remembered at all.
   case secure
   /// Nothing is known — the read has not landed (a slow or beachballing
   /// frontmost app), or it reached no focused element
-  /// (`TranscriptionContext.targetSecurityUnknown`). Remembered for the Recent
+  /// (`FocusedFieldContext.unreachable`). Remembered for the Recent
   /// list, which stays on this Mac, but never replayed in `stt_prompt`, where
   /// a password would leave it.
   case unknown

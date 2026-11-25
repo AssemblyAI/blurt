@@ -28,14 +28,14 @@
       try body()
     }
 
-    @Test("setString writes the string and advances changeCount")
-    func setStringWrites() {
+    @Test("write puts the string down and advances changeCount")
+    func writeAdvancesChangeCount() {
       withClipboardRestored {
         let pb = NSPasteboard.general
         let clip = SystemClipboard()
 
         let before = clip.changeCount
-        clip.setString("written")
+        clip.write("written", concealed: false)
 
         #expect(pb.string(forType: .string) == "written")
         #expect(clip.changeCount > before)
@@ -52,7 +52,7 @@
         pb.setString("original", forType: .string)
         let snapshot = try #require(clip.snapshot())
 
-        clip.setString("overwritten")
+        clip.write("overwritten", concealed: false)
         #expect(pb.string(forType: .string) == "overwritten")
 
         clip.restore(snapshot)
@@ -79,7 +79,7 @@
         pb.writeObjects([styled, plain])
         let snapshot = try #require(clip.snapshot())
 
-        clip.setString("overwritten")
+        clip.write("overwritten", concealed: false)
         clip.restore(snapshot)
 
         let restored = pb.pasteboardItems ?? []
@@ -105,7 +105,7 @@
           items: [SendablePasteboardItem(dataMap: [:])], plainText: nil
         )
 
-        clip.setString("transcript")
+        clip.write("transcript", concealed: false)
         clip.restore(degraded)
 
         // Left alone rather than emptied — the transcript is still recoverable.
@@ -123,7 +123,7 @@
           items: [SendablePasteboardItem(dataMap: [:])], plainText: "original text"
         )
 
-        clip.setString("transcript")
+        clip.write("transcript", concealed: false)
         clip.restore(degraded)
 
         // Not byte-faithful (the richer flavors are unrecoverable), but the user's
@@ -192,7 +192,7 @@
           items: [SendablePasteboardItem(dataMap: [SystemClipboard.concealedType: Data()])], plainText: "hunter2"
         )
 
-        clip.setString("transcript")
+        clip.write("transcript", concealed: false)
         clip.restore(concealed)
 
         #expect(pb.string(forType: .string) == "hunter2")
@@ -254,7 +254,7 @@
         pb.writeObjects([image, text])
         let snapshot = try #require(clip.snapshot())
 
-        clip.setString("transcript")
+        clip.write("transcript", concealed: false)
         clip.restore(snapshot)
 
         // The text stays on the item it came from; the image item gains none.
@@ -271,7 +271,7 @@
         let pb = NSPasteboard.general
         let clip = SystemClipboard()
 
-        clip.setString("transcript")
+        clip.write("transcript", concealed: false)
         clip.restore(PasteboardSnapshot(items: [SendablePasteboardItem(dataMap: [:])], plainText: "original text"))
 
         #expect(pb.string(forType: .string) == "original text")
@@ -330,7 +330,7 @@
 
         pb.clearContents()  // an empty pasteboard has no items to snapshot
         let empty = try #require(clip.snapshot())
-        clip.setString("temp")
+        clip.write("temp", concealed: false)
         clip.restore(empty)
 
         #expect(pb.string(forType: .string) == nil)

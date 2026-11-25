@@ -4,6 +4,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// An in-memory key store whose writes can be refused, standing in for a

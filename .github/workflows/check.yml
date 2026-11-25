@@ -534,11 +534,12 @@ jobs:
   # macOS: `swift test` builds for the host, and every job above runs on one.
   # A macOS-only symbol that escapes its `#if os(macOS)` fence therefore passes
   # `macos` and breaks the iOS app, which is why this job exists and why the
-  # required `check` job asserts it. The iPhone app links the `BlurtEngine`
-  # product (App/BlurtiOS/project.yml), so the test step's simulator build
-  # compiles the engine for iOS and fails on such a symbol the same way; a
-  # separate library-only build ahead of it compiled the engine a second time,
-  # for every simulator architecture, into DerivedData nothing reused.
+  # required `check` job asserts it. The iPhone app links both library
+  # products, `BlurtEngine` and `BlurtAssemblyAI` (App/BlurtiOS/project.yml), so
+  # the test step's simulator build compiles them (and the AssemblyAI SDK) for
+  # iOS and fails on such a symbol the same way; separate library-only builds
+  # ahead of it compiled them a second time, for every simulator architecture,
+  # into DerivedData nothing reused.
   ios-build:
     needs: changes
     if: needs.changes.outputs.swift == 'true'

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("VoiceCommandPlanner")
@@ -23,7 +24,7 @@ struct VoiceCommandPlannerTests {
     #expect(steps == [.shortcut(KeyChord(modifiers: .command, key: .character("t")))])
 
     let request = try #require(sent.value)
-    #expect(request.url == ReadAloudLLM.endpoint)
+    #expect(request.url == GatewayChatClient.endpoint)
     #expect(request.timeoutInterval == VoiceCommandPlanner.timeout)
     let body = try #require(request.httpBody)
     let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -126,7 +127,7 @@ struct VoiceCommandPlannerTests {
       (200, completion(#"{"steps": [{"action": "open_url", "url": "https://slack.com"}]}"#))
     }
     let planner = VoiceCommandPlanner(
-      gateway: GatewayConnection(apiKeyProvider: { "raw-key" }, transport: transport)
+      gateway: GatewayConnection.assemblyAI(apiKeyProvider: { "raw-key" }, transport: transport)
     ) { $0.lowercased() == "slack" ? "Slack" : nil }
     let chrome = ScreenContext(appName: "Google Chrome")
     #expect(try await planner.plan("Switch to Slack", context: chrome, trace: PlanTrace()) == [.openApp("Slack")])

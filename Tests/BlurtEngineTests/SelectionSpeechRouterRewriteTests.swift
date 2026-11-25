@@ -38,6 +38,8 @@ struct SelectionSpeechRouterRewriteTests {
       session: fixture.session,
       speaker: GatedSpeaker(),
       rewriter: rewriter,
+      composer: MessageComposer(gateway: .unused),
+      planner: VoiceCommandPlanner(gateway: .unused),
       readSelection: { "hey all" },
       defaults: defaults,
       clock: clock

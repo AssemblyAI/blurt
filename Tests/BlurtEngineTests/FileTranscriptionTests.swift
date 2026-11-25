@@ -4,6 +4,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// File transcription: the async API's upload → submit → poll flow, how
@@ -159,7 +160,7 @@ struct FileTranscriptionTests {
   func transformRequest() async throws {
     let captured = Mutex(Data())
     let transport = FakeHTTPTransport { request in
-      #expect(request.url == ReadAloudLLM.endpoint)
+      #expect(request.url == GatewayChatClient.endpoint)
       captured.withLock { $0 = request.httpBody ?? Data() }
       return (200, json(["choices": [["message": ["content": "- Point one"], "finish_reason": "stop"]]]))
     }

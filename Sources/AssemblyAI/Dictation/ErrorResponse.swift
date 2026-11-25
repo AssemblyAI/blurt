@@ -26,22 +26,22 @@
 /// it is read for exactly one decision: `413` with `audio_too_large` is the
 /// streaming route refusing a recording past its 120 s cap, which Blurt answers
 /// by sending the whole recording to `/v1/transcribe` instead
-/// (`AssemblyAITranscriber`'s over-cap fallback). A status alone can't make that
+/// (`DictationClient`'s over-cap fallback). A status alone can't make that
 /// call — the route documents `413` for its size cap too, under the same code,
 /// and any other `413` must surface as it always has.
-public struct ErrorResponse: Decodable, Sendable {
+struct ErrorResponse: Decodable, Sendable {
   enum CodingKeys: String, CodingKey {
     case error, detail
     case errorCode = "error_code"
   }
 
-  public let message: String?
+  let message: String?
   /// The documented machine-readable code (`bad_request`, `audio_too_large`,
   /// `capacity_exceeded`, `upstream_error`, `upstream_timeout`), or nil for the
   /// `{status, title, detail}` shape, which carries none.
-  public let errorCode: String?
+  let errorCode: String?
 
-  public init(from decoder: any Decoder) throws {
+  init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     // `try? decode` already yields `String?` for a key that is missing, null,
     // or the wrong type — `decodeIfPresent` would return `String??` here and
