@@ -346,8 +346,10 @@ protocols are: called as statics, the captured context's _value_ was whatever ap
 frontmost during a test run (so only its arrival could be asserted), every press paid a real AX
 round trip, and the log wrote to the user's real `~/Library/Logs/Blurt`. STT errors that are already
 `BlurtError` surface verbatim; others
-are wrapped in `.sttFailed`. The pipeline is just transcribe → inject, and an empty transcript
-returns to `.idle` without injecting.
+are wrapped in `.sttFailed` — a `URLError.cancelled` included, unless the pipeline itself was
+cancelled: a request the system dropped fails rather than leaving the phase on `.transcribing`, where
+no press can start. The pipeline is just transcribe → inject, and an empty transcript returns to
+`.idle` without injecting.
 
 Four perceived-latency choices to preserve:
 
@@ -572,7 +574,8 @@ the pill goes back to a steady state still under way and never replays a dictati
 (`CueReprimeSchedule`): dictation's at the next press or terminal phase, read-aloud's at once unless a
 capture is running. `SelectionSpeechRouter` takes any `ReadAloudSpeaker` (`SelectionSpeaker` in
 production), which is how the UI tests run read and ask offline; a stopped read's cancelled request
-reads as a cancellation, never a failure. The voice comes through the engine's
+reads as a cancellation, never a failure (and a request the system dropped, which nobody stopped,
+as a failure). The voice comes through the engine's
 `SpeechSynthesizing` seam (`SpeechServices.synthesizer`), and Blurt's is AssemblyAI's documented
 Streaming TTS API (`BlurtAssemblyAI`'s `AssemblyAISpeechSynthesizer` over the SDK's `SpeechClient`:
 `POST https://tts.us.assemblyai.com/v1/speech`, `voice_id`, the audio read as the response streams).
@@ -1054,7 +1057,9 @@ that stopped the rest (`StepRecord`, from `VoiceCommandPerforming.perform`'s not
 error's stable name and full text; and the total time. A failed command also goes to `errors.jsonl`
 as `command.<name>`, so one file holds every failure. A command a press abandoned is logged with the
 outcome `abandoned` and the steps that ran before it stopped, never as a failure — a request a cancel
-reached first answers `URLError.cancelled`, which is treated as the cancellation it is. **Saying a complaint to the key** ("that last command didn't work", "that's wrong" —
+reached first answers `URLError.cancelled`, which is treated as the cancellation it is — but only
+when the job was cancelled (`Error.isAbandonment`): the same error on a job nobody cancelled is a
+request the system dropped, and fails like any other. **Saying a complaint to the key** ("that last command didn't work", "that's wrong" —
 `CommandFeedback`, short utterances only) isn't planned: it's logged as a feedback entry naming the
 last command's id, and as `command.userReported` in `errors.jsonl`, and the pill says "Noted". The
 reset sweep (`removeStoredLogs`, `scripts/reset-lib.sh`) removes all three files.

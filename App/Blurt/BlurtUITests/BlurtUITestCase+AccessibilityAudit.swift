@@ -46,25 +46,55 @@ extension BlurtUITestCase {
     return "\(element.elementType) '\(element.identifier)' '\(element.label)' '\(element.title)' at \(element.frame)"
   }
 
+  /// Whether `audit` should run a pass again: XCTest gave up reading the
+  /// app's accessibility hierarchy (`Code=-56`, "Audit failed to complete in
+  /// time") — no finding, only a reading that never came — and it hasn't
+  /// already been run again twice. The iPhone audits hit this on a busy CI
+  /// simulator (`AccessibilityAuditTests+Timeout.swift`); a window the audit
+  /// can never read still fails on the third.
+  private static func rerunsTimedOutAudit(after error: any Error, reruns: inout Int) -> Bool {
+    let failure = error as NSError
+    let timedOut = failure.domain == "com.apple.xcode.xctest.accessibilityAudit" && failure.code == -56
+    guard timedOut, reruns < 2 else {
+      return false
+    }
+    reruns += 1
+    Thread.sleep(forTimeInterval: 2)  // wall-clock-ok: a UI test: the app under test runs on real time
+    return true
+  }
+
   /// Audits the whole app as it stands — every window, the menu bar's menu
   /// and the overlay pill included — collecting each issue into `found` under
   /// `screen` rather than failing on the first, so one run names every issue
   /// on every screen a test visits. Issues raised by the UI-test harness's own
   /// window are skipped: it is test scaffolding, never shipped.
+  ///
+  /// A pass XCTest times out on reports nothing, so it runs again, afresh
+  /// (`rerunsTimedOutAudit`).
   func audit(_ screen: String, into found: inout [String]) throws {
     let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     let harnessFrame = harness.exists ? harness.frame : .null
-    var issues: [String] = []
-    try app.performAccessibilityAudit(for: auditedTypes) { issue in
-      if let element = issue.element, element.exists, harnessFrame.contains(element.frame) {
-        return true
+    var reruns = 0
+    while true {
+      var issues: [String] = []
+      do {
+        try app.performAccessibilityAudit(for: auditedTypes) { issue in
+          if let element = issue.element, element.exists, harnessFrame.contains(element.frame) {
+            return true
+          }
+          issues.append(
+            "[\(screen)] \(issue.compactDescription): \(issue.detailedDescription) — \(Self.name(issue.element))"
+          )
+          return true
+        }
+        found += issues
+        return
+      } catch {
+        guard Self.rerunsTimedOutAudit(after: error, reruns: &reruns) else {
+          throw error
+        }
       }
-      issues.append(
-        "[\(screen)] \(issue.compactDescription): \(issue.detailedDescription) — \(Self.name(issue.element))"
-      )
-      return true
     }
-    found += issues
   }
 
   /// Fails once per issue `found` holds, each on its own line, so a CI log

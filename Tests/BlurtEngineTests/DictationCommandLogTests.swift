@@ -133,11 +133,8 @@ struct DictationCommandLogTests {
   }
 
   #if os(macOS)
-    @Test("a request the cancel reached first is a cancellation, and a network failure is named by its code")
-    func cancellations() {
-      #expect(SelectionSpeechRouter.isCancellation(URLError(.cancelled)))
-      #expect(SelectionSpeechRouter.isCancellation(CancellationError()))
-      #expect(!SelectionSpeechRouter.isCancellation(URLError(.timedOut)))
+    @Test("a network failure is named by its code")
+    func networkFailureName() {
       #expect(SelectionSpeechRouter.logName(of: URLError(.timedOut)) == "URLError(-1001)")
     }
   #endif

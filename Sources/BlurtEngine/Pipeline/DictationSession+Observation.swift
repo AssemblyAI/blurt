@@ -50,7 +50,23 @@ extension DictationSession {
     continuations[id] = nil
   }
 
+  /// Sets the phase on behalf of the press in progress: a failure is logged
+  /// against `pressContext`. Right for everything on the press side — the
+  /// command queue holds the actor for that press, so no other press can have
+  /// installed its own — and never used by the post-release pipeline, which
+  /// names its press with `setPhase(_:for:)`.
   func setPhase(_ newPhase: PipelinePhase) {
+    setPhase(newPhase, for: pressContext)
+  }
+
+  /// Sets the phase, logging a failure against `press`'s field context.
+  ///
+  /// `press` is the dictation the phase belongs to, decided by the caller
+  /// rather than read here: the pipeline task outlives its press's turn on the
+  /// actor, and a cancel ends the phase without waiting for it, so by the time a
+  /// late failure lands `pressContext` may be a newer press's. The pipeline
+  /// passes the `PressContext` it was spawned with.
+  func setPhase(_ newPhase: PipelinePhase, for press: PressContext?) {
     // Every failure route funnels through here — the press-time readiness
     // refusal, both `mic` failures, the transcribe catch, and the injector's
     // typed and untyped errors — so the developer-mode error log is written from
@@ -64,7 +80,7 @@ extension DictationSession {
     // which also dispatches the file I/O off this actor — the log must not make a
     // failure slower to show.
     if case .failed(let error) = newPhase {
-      seams.logFailure(error, capturedContext)
+      seams.logFailure(error, press?.resolved)
     }
     // The same construction argument, for the same reason: a dictation that
     // reaches a terminal phase without a transcript must not leave a request

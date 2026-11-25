@@ -82,15 +82,22 @@ struct CancelRaceTests {
     #expect(await injector.inserted.isEmpty)
   }
 
-  @Test("transcriber throwing URLError.cancelled without task cancellation is ignored rather than failed")
-  func transcriberThrowingURLErrorCancelledIsIgnored() async {
+  @Test("a request the system dropped fails the dictation rather than leaving it on .transcribing")
+  func systemDroppedRequestFails() async {
+    // `URLError(.cancelled)` with nobody cancelling: a network switch or a
+    // sleep dropped the request. Taken for a cancel, it left the phase on
+    // `.transcribing`, which no press starts from — the key went dead.
     let stt = GatedTranscriber(text: "Hello world.", throwsCancelled: true)
     let (session, injector) = await parkedTranscribing(stt)
     await stt.allowToFinish()
     await session.awaitPipeline()
 
-    #expect(await session.phase != .failed(.sttFailed(underlying: URLError(.cancelled))))
+    #expect(await session.phase == .failed(.sttFailed(underlying: URLError(.cancelled))))
     #expect(await injector.inserted.isEmpty)
+    // Terminal, so the next press is honoured.
+    await session.press()
+    #expect(await session.phase == .recording)
+    await session.cancel()
   }
 
   @Test("cancel during injecting discards the transcript and ends .cancelled")

@@ -124,10 +124,14 @@ public struct SpeechClient: Sendable {
       }
     } catch let error as URLError where error.code == .timedOut {
       throw SpeechSynthesisError.timedOut
-    } catch let error as URLError where error.code == .cancelled {
+    } catch let error as URLError where error.code == .cancelled && Task.isCancelled {
       // A stopped read cancels its request, which URLSession reports as an
       // error. It's a cancellation, and must read as one: a caller tells a
-      // failure from a stop by it.
+      // failure from a stop by it. Only when this task was cancelled, though
+      // (`speech(for:)`'s `onTermination` cancels it when the read is
+      // stopped): the same `URLError.cancelled` on a request nobody stopped is
+      // one the system dropped, and a read cut short that way is a failure,
+      // said as one.
       throw CancellationError()
     }
   }

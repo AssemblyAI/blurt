@@ -26,9 +26,9 @@
       app.activate()
     }
 
-    static func waitUntilFrontmost(_ app: NSRunningApplication) async -> Bool {
+    static func waitUntilFrontmost(_ app: NSRunningApplication) async throws -> Bool {
       let pid = app.processIdentifier
-      return await poll(
+      return try await poll(
         for: frontmostWaitBudget,
         every: frontmostPollInterval,
         clock: ContinuousClock()
@@ -40,24 +40,37 @@
     /// `interval` between. Separate so the bound is tested on a `TestClock` — on
     /// the real one the test measured the machine (a main-actor hop on a loaded
     /// CI box took seconds), not the loop.
+    ///
+    /// Throws `CancellationError` when cancelled before `check` held, so a
+    /// cancel and a timeout are told apart by construction: `false` only ever
+    /// means the budget ran out. (It used to answer `false` to both, and every caller had
+    /// to re-check for a cancel to keep it from reading as "never came
+    /// frontmost".)
     static func poll(
       for budget: Duration,
       every interval: Duration,
       clock: some Clock<Duration>,
       until check: @Sendable () async -> Bool
-    ) async -> Bool {
+    ) async throws -> Bool {
       let deadline = clock.now.advanced(by: budget)
       while clock.now < deadline {
         if await check() {
           return true
         }
-        // Cancelled, the sleep returns at once: without this the loop would
-        // spin on `check` (a main-actor hop) for the rest of the budget.
-        do { try await clock.sleep(for: interval) } catch { return false }
+        // Cancelled, the sleep throws at once and so does the wait: without
+        // that the loop would spin on `check` (a main-actor hop) for the rest
+        // of the budget.
+        try await clock.sleep(for: interval)
       }
       // One last read: the final sleep may have carried us past the deadline just
-      // before the activation landed.
-      return await check()
+      // before the activation landed. A cancel that arrived during it (or with
+      // a zero budget, before it) still ends the wait as a cancel, so `false`
+      // never stands for one.
+      if await check() {
+        return true
+      }
+      try Task.checkCancellation()
+      return false
     }
 
     /// Whether `pid` owns the frontmost application right now. Named rather than

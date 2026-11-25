@@ -118,6 +118,8 @@ public final class AssemblyAIAccount {
       if case .signedIn = status { generation += 1 }
 
     case .unavailable:
+      // Returns before the key refresh below, so a caller that needs the key
+      // current whatever the session item does refreshes it itself.
       return
     }
     // The key sits in the same Keychain, so a session item that reads again

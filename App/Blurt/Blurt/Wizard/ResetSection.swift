@@ -138,7 +138,9 @@ struct ResetSection: View {
     coordinator.account.refreshStatus()
     // `hasAPIKey` is a mirror of the store, not a read-through, so it has to be
     // re-read for the wizard to see the key go — which matters on the failure
-    // path, where the app stays running.
+    // path, where the app stays running. The account's refresh above re-reads
+    // the key too, but not when the session item can't be read, so this one
+    // isn't redundant.
     coordinator.apiKey.refreshStatus()
     // Nothing to report means the install is clean, and the fresh copy opening
     // on the setup wizard is the whole confirmation — a success alert would only

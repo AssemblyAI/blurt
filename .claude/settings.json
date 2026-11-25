@@ -31,6 +31,7 @@
       "Bash(bash scripts/check-release-notes.sh)",
       "Bash(bash scripts/check-swift-size.sh*)",
       "Bash(bash scripts/check-test-clock.sh*)",
+      "Bash(bash scripts/check-swift-lint-lite.sh*)",
       "Bash(bash scripts/design-sync.sh --check)",
       "Bash(bash scripts/mutate.sh --list)",
       "Bash(zizmor *)",
@@ -73,6 +74,16 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-pbxproj.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/push-gate.sh",
+            "timeout": 180
           }
         ]
       }
