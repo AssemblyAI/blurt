@@ -280,12 +280,25 @@ private struct PresetChip: View {
   let preset: StylePreset
   let isChosen: Bool
   let choose: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
+    // The icon beside the name; over it at an accessibility text size, where
+    // a one-word name ("Professional") needs the chip's whole width.
+    let content =
+      dynamicTypeSize.isAccessibilitySize
+      ? AnyLayout(VStackLayout(spacing: DesignTokens.Metrics.appLineGap))
+      : AnyLayout(HStackLayout(spacing: DesignTokens.Metrics.appLineGap))
     Button(action: choose) {
-      HStack(spacing: DesignTokens.Metrics.appLineGap) {
+      content {
         Image(systemName: preset.symbol)
-        Text(preset.name).lineLimit(1)
+        // One line across a third of the row; at an accessibility text size,
+        // where each chip has the row to itself, as many as the name needs.
+        Text(preset.name).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)  // literal-ok: one line
+          .fixedSize(horizontal: false, vertical: true)
+          // A one-word name can't wrap: past the chip's width it narrows a
+          // little rather than losing its last letters.
+          .minimumScaleFactor(0.8)  // literal-ok: a fifth smaller at most
       }
       .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
       .padding(.vertical, DesignTokens.Metrics.appChipPadY)
