@@ -76,6 +76,18 @@ struct SelectionSpeechRouterRewriteTests {
     #expect(try await rig.outcomes() == [.idle])
   }
 
+  /// A request the system dropped (a network switch, sleep) answers
+  /// `URLError.cancelled` though nobody cancelled the rewrite. Taking that for an
+  /// abandoned press left the pill on Rewriting and the router owning it (#342).
+  @Test("a cancelled-looking error on a rewrite nobody cancelled fails it, rather than leaving the pill on Rewriting")
+  func strayCancellation() async throws {
+    let dropped = URLError(.cancelled)
+    let rig = try await rewrite(StubRewriter(error: dropped))
+    #expect(try await rig.outcomes() == [.error(message: dropped.localizedDescription)])
+    #expect(await rig.injector.inserted.isEmpty)
+    #expect(!rig.router.ownsPill, "the router let the pill go, so the next press can dictate")
+  }
+
   @Test("a press while the model is still writing abandons the rewrite: nothing pasted, one end, no late one")
   func pressAbandons() async throws {
     let rig = try await rewrite(StubRewriter(hangs: true))

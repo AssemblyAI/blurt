@@ -155,6 +155,28 @@ struct FocusCaptureTests {
     #expect(FocusCapture.selectionText(nil, maxChars: 100) == nil)
   }
 
+  // MARK: selectionRead
+
+  @Test("a selection read with visible text is that text, edges kept")
+  func selectionReadText() {
+    #expect(FocusCapture.selectionRead("First line.\n", maxChars: 100) == .text("First line.\n"))
+    #expect(FocusCapture.selectionRead("abcdefgh", maxChars: 3) == .text("abc"))
+  }
+
+  @Test("a selection read holding nothing visible is a definite no selection")
+  func selectionReadEmpty() {
+    #expect(FocusCapture.selectionRead("", maxChars: 100) == FocusCapture.SelectionRead.none)
+    #expect(FocusCapture.selectionRead(" \n\u{200B}", maxChars: 100) == FocusCapture.SelectionRead.none)
+  }
+
+  /// An Electron web area (once `AXManualAccessibility` is on), Sublime Text and
+  /// Zed answer neither a range nor `kAXSelectedText`. Calling that "no
+  /// selection" kept the copy fallback from ever running there (#342).
+  @Test("an element that answers no selected text at all is unreadable, so the copy fallback runs")
+  func selectionReadUnanswered() {
+    #expect(FocusCapture.selectionRead(nil, maxChars: 100) == .unreadable)
+  }
+
   // MARK: visibleTextOrNil
 
   @Test("visibleTextOrNil collapses an all-invisible AX read to nil")

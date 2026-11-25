@@ -118,6 +118,29 @@ struct ChunkedRequestBodyTests {
     #expect(!data.isEmpty)
   }
 
+  @Test(
+    "a producer failure outranks whatever the transport makes of its truncated body",
+    arguments: [false, true])
+  func producerFailureWinsOverTheOutcome(answers: Bool) async throws {
+    // The too-short-clip floor ends the body mid-part. What the transport then
+    // makes of the truncated request — a dropped connection, or even a 2xx —
+    // must not replace or swallow the producer's error, which its caller turns
+    // into a quiet no-op.
+    await #expect(throws: ProducerFailure.self) {
+      _ = try await ChunkedRequestBody.send(
+        URLRequest(url: URL(staticString: "https://example.invalid")),
+        body: .chunks(Data("partial".utf8), failingWith: ProducerFailure()),
+        delegate: nil
+      ) { request, _ in
+        _ = await readToEnd(request.httpBodyStream)
+        guard answers else { throw URLError(.networkConnectionLost) }
+        let url = try #require(request.url)
+        let ok = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+        return (Data("{}".utf8), ok)
+      }
+    }
+  }
+
   @Test("URLSession is refused a second copy of the body, never handed an empty one")
   func replayIsRefused() async {
     // One of the three no-fallback guarantees. URLSession asks for a fresh body
@@ -165,18 +188,43 @@ extension ChunkedRequestBodyTests {
   /// Stands in for the transport: owns the pipe's read end and drains it until
   /// the writer closes, which is what marks the body complete.
   private func readAll(from body: ChunkedRequestBody) -> Task<Data, Never> {
-    Task.detached {
-      body.input.open()
-      defer { body.input.close() }
-      var received = Data()
-      var buffer = [UInt8](repeating: 0, count: 64)
-      while true {
-        let read = body.input.read(&buffer, maxLength: buffer.count)
-        if read <= 0 { break }
-        received.append(contentsOf: buffer[0..<read])
-      }
-      return received
+    Task { await readToEnd(body.input) }
+  }
+}
+
+/// Reads a body stream until the writer closes it — the transport taking the
+/// whole body before it answers.
+///
+/// On a thread of its own, never the concurrency pool: the read blocks until
+/// the writer — a task on that pool — closes the pipe, and a few blocked
+/// readers on a small CI runner starve the pool, stalling every other test in
+/// the run past its time budget.
+private func readToEnd(_ stream: InputStream?) async -> Data {
+  guard let stream else { return Data() }
+  let reader = BlockingReader(stream)
+  return await withCheckedContinuation { continuation in
+    Thread.detachNewThread { continuation.resume(returning: reader.read()) }
+  }
+}
+
+/// Carries the stream to the reading thread. `@unchecked Sendable` by
+/// confinement: only that thread touches it once it is handed over.
+private final class BlockingReader: @unchecked Sendable {
+  private let stream: InputStream
+
+  init(_ stream: InputStream) { self.stream = stream }
+
+  func read() -> Data {
+    stream.open()
+    defer { stream.close() }
+    var received = Data()
+    var buffer = [UInt8](repeating: 0, count: 64)
+    while true {
+      let count = stream.read(&buffer, maxLength: buffer.count)
+      if count <= 0 { break }
+      received.append(contentsOf: buffer[0..<count])
     }
+    return received
   }
 }
 

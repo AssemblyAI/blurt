@@ -177,6 +177,78 @@
       }
     }
 
+    /// nspasteboard.org's marker for a secret (a password manager's copy). Like
+    /// `TransientType`, its data is empty: the type's presence is the signal.
+    private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+
+    @Test("an item holding only an empty marker type still gets the text floor back")
+    func markerOnlySnapshotKeepsTextFloor() {
+      // #347: the marker's empty `Data` is a successful read, so the item isn't
+      // empty and the batch write succeeds — which used to return before the
+      // text floor ran, leaving the user's copied password replaced by a marker.
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        let concealed = PasteboardSnapshot(
+          items: [SendablePasteboardItem(dataMap: [Self.concealedType: Data()])], plainText: "hunter2")
+
+        clip.setString("transcript")
+        clip.restore(concealed)
+
+        #expect(pb.string(forType: .string) == "hunter2")
+        // Still marked as the secret it was, so a clipboard manager skips it.
+        #expect(pb.types?.contains(Self.concealedType) == true)
+        #expect(pb.pasteboardItems?.count == 1)
+      }
+    }
+
+    @Test("a real copy of a concealed password survives the paste-and-restore round trip")
+    func concealedCopyRoundTrips() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        let item = NSPasteboardItem()
+        item.setString("hunter2", forType: .string)
+        item.setData(Data(), forType: Self.concealedType)
+        pb.clearContents()
+        pb.writeObjects([item])
+
+        let restore = clip.writeAndPrepareRestore("transcript")
+        #expect(pb.string(forType: .string) == "transcript")
+        restore()
+
+        #expect(pb.string(forType: .string) == "hunter2")
+        #expect(pb.types?.contains(Self.concealedType) == true)
+      }
+    }
+
+    @Test("a snapshot whose string did materialize isn't given a second copy of it")
+    func textFloorDoesNotDuplicateMaterializedString() throws {
+      try withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        let image = NSPasteboardItem()
+        image.setData(Data([0x89, 0x50]), forType: .png)
+        let text = NSPasteboardItem()
+        text.setString("second", forType: .string)
+        pb.clearContents()
+        pb.writeObjects([image, text])
+        let snapshot = try #require(clip.snapshot())
+
+        clip.setString("transcript")
+        clip.restore(snapshot)
+
+        // The text stays on the item it came from; the image item gains none.
+        let restored = pb.pasteboardItems ?? []
+        #expect(restored.count == 2)
+        #expect(restored.first?.string(forType: .string) == nil)
+        #expect(restored.last?.string(forType: .string) == "second")
+      }
+    }
+
     @Test("the plain-text floor of a restore is marked transient too")
     func textFloorRestoreIsTransient() {
       withClipboardRestored {

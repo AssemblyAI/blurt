@@ -61,8 +61,8 @@
     /// Accessibility first. The read is synchronous cross-process IPC that can
     /// block a thread for the AX timeout against a hung app, so it runs off the
     /// cooperative pool (`BlockingIPC.run`). When AX can't reach a
-    /// focused element at all, it falls back to copying the selection
-    /// (`SelectionCopy`).
+    /// focused element, or the one it reaches won't say what is selected, it
+    /// falls back to copying the selection (`SelectionCopy`).
     static func focusedSelection() async -> String? {
       let read = await BlockingIPC.run { FocusCapture.captureSelectedText(maxChars: maxCharacters) }
       return await resolve(read, copy: SelectionCopy())
