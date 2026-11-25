@@ -1,5 +1,6 @@
 public import Foundation
 
+// periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
 /// An error a microphone throws whose `errorDescription` is already a sentence
 /// written for the user — "A call or another app has the microphone." — so
 /// `BlurtError.audioCaptureFailed` says it as it is rather than burying it

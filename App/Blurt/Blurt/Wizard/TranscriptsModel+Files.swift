@@ -1,8 +1,7 @@
-import BlurtEngine
 import Foundation
 import UniformTypeIdentifiers
 
-// The model's file naming and file-type rules, and the refusal of a file that
+// The model's file-type rules, and the refusal of a file that
 // breaks them, split from TranscriptsModel.swift for the file-length budget.
 extension TranscriptsModel {
   /// Whether a URL is worth trying: a file whose type is audio or video. The

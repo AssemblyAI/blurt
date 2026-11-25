@@ -1,5 +1,3 @@
-import Foundation
-
 /// The capture-specific faults `MicCapture.start()` wraps in
 /// `BlurtError.audioCaptureFailed`, whose description interpolates them into
 /// the overlay's error pill — so each message must read like a sentence, not

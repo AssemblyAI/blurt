@@ -1,5 +1,6 @@
 public import Foundation
 
+// periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
 /// The loudness of PCM16 LE mono audio on the mic meter's 0...1 scale
 /// (`MicCapture.linearLevel`), so the pill's meter reads a voice playing back
 /// the way it reads one being recorded, and a host that captures its own PCM

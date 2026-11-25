@@ -1,5 +1,3 @@
-public import Foundation
-
 // The edits both apps' editors make to the stored style profiles — field caps applied as
 // the user types, save-or-add by id, and remove by id — once, here, rather than
 // once per editor sheet. The store's own `normalized` still runs on every
