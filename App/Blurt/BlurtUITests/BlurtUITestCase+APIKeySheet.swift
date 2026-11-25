@@ -8,16 +8,43 @@ extension BlurtUITestCase {
   /// window, or the setup window, which hosts the same row) and returns it.
   /// `identifier` picks the row button by its state: "Connect…" before a key
   /// exists, "Change…" once one is stored.
+  ///
+  /// Waits for the button to be hittable, not just to exist: as the first test
+  /// of a run, `testCancelDiscardsKeyEditAndKeepsRow` found Connect… present
+  /// but covered on every attempt. A covered Settings row is raised again with
+  /// ⌘, (as `openSettingsWindow` does), and a row still covered fails naming
+  /// every window's frame, so the next miss says what was on top.
   func openKeyEditor(
     _ settings: XCUIElement,
     via identifier: String = UITestIdentifiers.apiKeyConnect
   ) -> XCUIElement {
     let button = settings.buttons[identifier]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
+    if !waitUntilHittable(button, timeout: 5), settings.title != UITestIdentifiers.mainWindowTitle {
+      app.typeKey(",", modifierFlags: .command)
+    }
+    XCTAssertTrue(
+      waitUntilHittable(button, timeout: 10),
+      "API key row button (\(identifier)) is covered (at \(button.frame)); windows: \(windowFrames())"
+    )
     button.click()
     let sheet = settings.sheets.firstMatch
     XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The API key sheet should open")
     return sheet
+  }
+
+  /// Whether `element` becomes hittable within `timeout`.
+  private func waitUntilHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+    let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: element)
+    return XCTWaiter().wait(for: [hittable], timeout: timeout) == .completed
+  }
+
+  /// Every app window's title and frame, for a failure message.
+  private func windowFrames() -> String {
+    (0..<app.windows.count)
+      .map { app.windows.element(boundBy: $0) }
+      .map { "\($0.title) \($0.frame)" }
+      .joined(separator: "; ")
   }
 
   /// Types into the sheet's key field. The field is focused on open, but a click
