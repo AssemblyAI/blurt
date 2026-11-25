@@ -296,9 +296,10 @@ jobs:
   # They drive the machine they run on, so each asks to (`BLURT_LIVE_AX_TESTS=1`,
   # `BLURT_LIVE_AUDIO_TESTS=1`); a throwaway runner is the safe place. GitHub's
   # macOS image grants the runner's processes Accessibility and Microphone
-  # trust, but has no input device, so a virtual one (BlackHole) is installed
-  # first — the suites check that capture works, not what it hears, and
-  # silence is a valid level. A missing gate *skips* a suite and `swift test`
+  # trust, but has no live input, so a loopback device (BlackHole) is
+  # installed and fed noise first: the capture path rejects a silent input by
+  # design, so the suites need a signal. A missing gate *skips* a suite and
+  # `swift test`
   # still exits 0, so the step passes only if every suite reports it passed.
   # The fixture recorders (`ScreenTreeRecorder`, `PasteFixtureRecorder`) are
   # tools that drive the user's own apps to write fixtures, not tests, and stay
@@ -317,21 +318,36 @@ jobs:
           path: blurt
           persist-credentials: false
 
-      - name: Install a virtual microphone
-        # A Core Audio driver: coreaudiod loads it only on a restart, which
-        # launchd does at once. Waits until the device is listed.
+      - name: Install a virtual microphone and feed it sound
+        # BlackHole, a loopback Core Audio driver: whatever plays to its output
+        # comes back on its input. coreaudiod loads it only on a restart, which
+        # launchd does at once. It then becomes the default input and output,
+        # and low-level white noise loops into it for the rest of the job: the
+        # capture path rejects a silent input by design (an input that never
+        # delivers, or reads below `MicLiveness.silenceFloorDB`), so the suites
+        # need a signal, not just a device. Noise rather than speech: speech
+        # has exact-zero gaps a short capture can land in.
         run: |
           brew install --cask blackhole-2ch
+          brew install switchaudio-osx
           sudo killall coreaudiod || true
           for _ in $(seq 1 30); do
-            if system_profiler SPAudioDataType | grep -q BlackHole; then
-              echo "BlackHole is listed"
-              exit 0
-            fi
+            SwitchAudioSource -a -t input | grep -q 'BlackHole 2ch' && break
             sleep 1
           done
-          echo "::error::BlackHole never appeared as an audio device"
-          exit 1
+          SwitchAudioSource -t input -s 'BlackHole 2ch'
+          SwitchAudioSource -t output -s 'BlackHole 2ch'
+          echo "input: $(SwitchAudioSource -c -t input); output: $(SwitchAudioSource -c -t output)"
+          noise="$RUNNER_TEMP/noise.wav"
+          python3 - "$noise" <<'PY'
+          import random, struct, sys, wave
+          with wave.open(sys.argv[1], "wb") as out:
+              out.setnchannels(1); out.setsampwidth(2); out.setframerate(48000)
+              out.writeframes(b"".join(struct.pack("<h", random.randint(-2000, 2000)) for _ in range(48000 * 30)))
+          PY
+          # Detached, so it outlives this step and plays under the suites; the
+          # runner ends it with the job.
+          nohup bash -c "while true; do afplay '$noise'; done" >/dev/null 2>&1 &
 
       - name: Run the live performer and live-audio suites
         working-directory: blurt

@@ -650,7 +650,7 @@ skipped.
   registers as an accessory app and activates the fixture. It pins a native app's press as trusted:
   Reply, which visibly answers, and Send, which changes nothing, are each pressed once.
   It runs on CI too, in `check.yml`'s required `live-tests` job, with the live-audio suites
-  (`BLURT_LIVE_AUDIO_TESTS=1`, on a virtual input device): a throwaway runner, whose image already
+  (`BLURT_LIVE_AUDIO_TESTS=1`, on a loopback input fed white noise): a throwaway runner, whose image already
   grants the runner's processes Accessibility and Microphone trust. That job fails unless every
   suite reports it _passed_, since a missing gate skips a suite and `swift test` still exits 0.
 - **The planner, `BLURT_PLANNER_EVAL=1`.** `PlannerEvalTests` scores the real planner — instruction,
