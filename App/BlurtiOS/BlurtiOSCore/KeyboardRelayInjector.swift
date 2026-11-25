@@ -33,12 +33,19 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// and the re-signal are stepped through rather than waited out.
   package let clock: any Clock<Duration> & Sendable
 
+  /// The time a keyboard's presence is judged against: the wall clock, or a
+  /// test's fixed instant, so a slow run can't age the keyboard out from under
+  /// the words before they are delivered.
+  package let now: @Sendable () -> Date
+
   package init(
     presser: @escaping @Sendable () -> ResultAddress = { ResultAddress() },
-    clock: any Clock<Duration> & Sendable = ContinuousClock()
+    clock: any Clock<Duration> & Sendable = ContinuousClock(),
+    now: @escaping @Sendable () -> Date = { Date() }
   ) {
     self.presser = presser
     self.clock = clock
+    self.now = now
   }
 
   package func setTarget(_ focus: CapturedFocus?) async {}
@@ -56,7 +63,7 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.
-    let onScreen = Self.onScreen
+    let onScreen = self.onScreen
     let address = presser()
     let recipient = address.keyboard ?? onScreen
     guard let onScreen, recipient == onScreen else {
@@ -109,9 +116,10 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
 
   /// The keyboard process on screen: the presence record's, or — for a
   /// keyboard build that writes none yet — the older heartbeat keys'.
-  private static var onScreen: String? {
-    if let record = SharedStore.keyboardOnScreen() { return record.processID }
-    return SharedStore.isKeyboardPresent ? SharedStore.keyboardInstance : nil
+  private var onScreen: String? {
+    let now = now()
+    if let record = SharedStore.keyboardOnScreen(now: now) { return record.processID }
+    return SharedStore.isKeyboardPresent(now: now) ? SharedStore.keyboardInstance : nil
   }
 
   /// The words to the clipboard, and the quiet "Copied" outcome. A password
