@@ -18,27 +18,51 @@ struct UserAgentTests {
   static let cases: [Case] = [
     Case(
       name: "the agent is the product name, the short version, and the details as a comment",
-      product: "Blurt", version: "0.1.54", details: ["macOS 15.5", "dev"], expected: "Blurt/0.1.54 (macOS 15.5; dev)"),
+      product: "Blurt",
+      version: "0.1.54",
+      details: ["macOS 15.5", "dev"],
+      expected: "Blurt/0.1.54 (macOS 15.5; dev)"
+    ),
     // A release build sends one detail, so the comment must not gain a stray
     // separator — the reason `details` is a list the formatter joins rather than
     // a preformatted string each caller assembles.
     Case(
       name: "a single detail needs no separator",
-      product: "Blurt", version: "0.1.54", details: ["macOS 26.1"], expected: "Blurt/0.1.54 (macOS 26.1)"),
+      product: "Blurt",
+      version: "0.1.54",
+      details: ["macOS 26.1"],
+      expected: "Blurt/0.1.54 (macOS 26.1)"
+    ),
     Case(
       name: "no details means no empty parentheses",
-      product: "Blurt", version: "0.1.54", details: [], expected: "Blurt/0.1.54"),
+      product: "Blurt",
+      version: "0.1.54",
+      details: [],
+      expected: "Blurt/0.1.54"
+    ),
     Case(
       name: "blank details drop out rather than widening the comment",
-      product: "Blurt", version: "0.1.54", details: ["", "  ", "macOS 15.5"], expected: "Blurt/0.1.54 (macOS 15.5)"),
+      product: "Blurt",
+      version: "0.1.54",
+      details: ["", "  ", "macOS 15.5"],
+      expected: "Blurt/0.1.54 (macOS 15.5)"
+    ),
     Case(
       name: "a surrounding-whitespace version is trimmed rather than sent as-is",
-      product: "Blurt", version: " 0.1.54\n", details: [], expected: "Blurt/0.1.54"),
+      product: "Blurt",
+      version: " 0.1.54\n",
+      details: [],
+      expected: "Blurt/0.1.54"
+    ),
     // A `User-Agent` product token may not contain whitespace. Blurt's own name
     // has none, but `HostIdentity` exists so another app can supply its own.
     Case(
       name: "a multi-word product name becomes a single valid token",
-      product: "Acme Voice", version: "2.0", details: [], expected: "Acme-Voice/2.0"),
+      product: "Acme Voice",
+      version: "2.0",
+      details: [],
+      expected: "Acme-Voice/2.0"
+    ),
   ]
 
   @Test("value formats the product, version and details as one header", arguments: cases)

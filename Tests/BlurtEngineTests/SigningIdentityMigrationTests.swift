@@ -38,31 +38,63 @@
       // Unsigned builds never act.
       DecideCase(
         name: "unsigned, untrusted, never seen",
-        last: nil, current: nil, isTrusted: false, expected: .noAction),
+        last: nil,
+        current: nil,
+        isTrusted: false,
+        expected: .noAction
+      ),
       DecideCase(
         name: "unsigned, trusted, seen before",
-        last: "OLD", current: nil, isTrusted: true, expected: .noAction),
+        last: "OLD",
+        current: nil,
+        isTrusted: true,
+        expected: .noAction
+      ),
       // The same identity as last launch is steady state, regardless of trust.
       DecideCase(
         name: "steady state, untrusted",
-        last: "NEW", current: "NEW", isTrusted: false, expected: .noAction),
+        last: "NEW",
+        current: "NEW",
+        isTrusted: false,
+        expected: .noAction
+      ),
       DecideCase(
         name: "steady state, trusted",
-        last: "NEW", current: "NEW", isTrusted: true, expected: .noAction),
+        last: "NEW",
+        current: "NEW",
+        isTrusted: true,
+        expected: .noAction
+      ),
       // No marker (every build predating it) is treated as changed.
       DecideCase(
         name: "first seen, untrusted, resets",
-        last: nil, current: "NEW", isTrusted: false, expected: .resetThenRecord("NEW")),
+        last: nil,
+        current: "NEW",
+        isTrusted: false,
+        expected: .resetThenRecord("NEW")
+      ),
       DecideCase(
         name: "first seen, trusted, records only",
-        last: nil, current: "NEW", isTrusted: true, expected: .record("NEW")),
+        last: nil,
+        current: "NEW",
+        isTrusted: true,
+        expected: .record("NEW")
+      ),
       // Any identity change at all.
       DecideCase(
         name: "identity changed, untrusted, resets",
-        last: "OLD", current: "NEW", isTrusted: false, expected: .resetThenRecord("NEW")),
+        last: "OLD",
+        current: "NEW",
+        isTrusted: false,
+        expected: .resetThenRecord("NEW")
+      ),
       DecideCase(
         name: "identity changed, trusted, records only",
-        last: "OLD", current: "NEW", isTrusted: true, expected: .record("NEW")),
+        last: "OLD",
+        current: "NEW",
+        isTrusted: true,
+        expected: .record("NEW")
+      ),
     ]
 
     @Test("decide resets only an untrusted identity change, and records any change", arguments: decideCases)

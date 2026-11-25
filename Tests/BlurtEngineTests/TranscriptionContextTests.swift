@@ -22,22 +22,34 @@ struct TranscriptionContextTests {
   static let cases: [Case] = [
     Case(
       name: "both fields nil is empty",
-      context: TranscriptionContext(appName: nil, priorText: nil), expectsEmpty: true),
+      context: TranscriptionContext(appName: nil, priorText: nil),
+      expectsEmpty: true
+    ),
     Case(
       name: "whitespace-only fields are empty",
-      context: TranscriptionContext(appName: "   ", priorText: "\n\t "), expectsEmpty: true),
+      context: TranscriptionContext(appName: "   ", priorText: "\n\t "),
+      expectsEmpty: true
+    ),
     Case(
       name: "a real app name makes it non-empty",
-      context: TranscriptionContext(appName: "Slack", priorText: nil), expectsEmpty: false),
+      context: TranscriptionContext(appName: "Slack", priorText: nil),
+      expectsEmpty: false
+    ),
     Case(
       name: "real prior text makes it non-empty",
-      context: TranscriptionContext(appName: nil, priorText: "hello there"), expectsEmpty: false),
+      context: TranscriptionContext(appName: nil, priorText: "hello there"),
+      expectsEmpty: false
+    ),
     Case(
       name: "real selected text makes it non-empty",
-      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "highlighted"), expectsEmpty: false),
+      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "highlighted"),
+      expectsEmpty: false
+    ),
     Case(
       name: "whitespace-only selected text stays empty",
-      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n"), expectsEmpty: true),
+      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n"),
+      expectsEmpty: true
+    ),
   ]
 
   @Test("isEmpty is false only when some field carries real text", arguments: cases)

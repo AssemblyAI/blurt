@@ -33,40 +33,85 @@ struct FocusCaptureTests {
   static let labelCases: [LabelCase] = [
     LabelCase(
       name: "prefers placeholder when present",
-      placeholder: "Search", description: "desc", title: "title", roleDescription: "text field", expected: "Search"),
+      placeholder: "Search",
+      description: "desc",
+      title: "title",
+      roleDescription: "text field",
+      expected: "Search"
+    ),
     LabelCase(
       name: "falls through blanks in priority order",
-      placeholder: "  ", description: nil, title: "Subject", roleDescription: "text field", expected: "Subject"),
+      placeholder: "  ",
+      description: nil,
+      title: "Subject",
+      roleDescription: "text field",
+      expected: "Subject"
+    ),
     LabelCase(
       name: "uses role description only as a last resort",
-      placeholder: nil, description: nil, title: nil, roleDescription: "text entry area", expected: "text entry area"),
+      placeholder: nil,
+      description: nil,
+      title: nil,
+      roleDescription: "text entry area",
+      expected: "text entry area"
+    ),
     LabelCase(
       name: "returns nil when every candidate is blank",
-      placeholder: " ", description: "", title: nil, roleDescription: nil, expected: nil),
+      placeholder: " ",
+      description: "",
+      title: nil,
+      roleDescription: nil,
+      expected: nil
+    ),
     LabelCase(
       name: "trims the chosen candidate",
-      placeholder: "  To  ", description: nil, title: nil, roleDescription: nil, expected: "To"),
+      placeholder: "  To  ",
+      description: nil,
+      title: nil,
+      roleDescription: nil,
+      expected: "To"
+    ),
   ]
 
   static let priorCases: [PriorCase] = [
     PriorCase(name: "returns text up to the caret", full: "hello world", caret: 5, maxChars: 320, expected: "hello"),
     PriorCase(
       name: "keeps only the trailing maxChars before the caret",
-      full: "abcdef", caret: 6, maxChars: 3, expected: "def"),
+      full: "abcdef",
+      caret: 6,
+      maxChars: 3,
+      expected: "def"
+    ),
     // An out-of-range caret falls back to the tail of the whole value.
     PriorCase(
       name: "an unreadable selection (caret -1) falls back to the value's tail",
-      full: "abcdef", caret: -1, maxChars: 3, expected: "def"),
+      full: "abcdef",
+      caret: -1,
+      maxChars: 3,
+      expected: "def"
+    ),
     PriorCase(
       name: "a caret below -1 falls back to the value's tail",
-      full: "abcdef", caret: -5, maxChars: 3, expected: "def"),
+      full: "abcdef",
+      caret: -5,
+      maxChars: 3,
+      expected: "def"
+    ),
     PriorCase(
       name: "a caret past the end falls back to the value's tail",
-      full: "abcdef", caret: 99, maxChars: 10, expected: "abcdef"),
+      full: "abcdef",
+      caret: 99,
+      maxChars: 10,
+      expected: "abcdef"
+    ),
     PriorCase(name: "an empty value is nil", full: "", caret: 0, maxChars: 320, expected: nil),
     PriorCase(
       name: "a caret at 0 is nil — nothing precedes the cursor",
-      full: "hello", caret: 0, maxChars: 320, expected: nil),
+      full: "hello",
+      caret: 0,
+      maxChars: 320,
+      expected: nil
+    ),
   ]
 
   // MARK: selectLabel

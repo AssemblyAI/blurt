@@ -53,8 +53,11 @@ extension HTTPClientTests {
     StatusCase("a moved endpoint says nothing about the key", 405, .unreachable, body: json(["error": "not here"])),
     StatusCase("a gone endpoint says nothing about the key", 410, .unreachable, body: json(["error": "not here"])),
     StatusCase(
-      "a proxy's blocked-request page says nothing about the key", 451, .unreachable,
-      body: json(["error": "not here"])),
+      "a proxy's blocked-request page says nothing about the key",
+      451,
+      .unreachable,
+      body: json(["error": "not here"])
+    ),
     // A good key that happens to be rate-limited during setup must not be
     // rejected — saving anyway is the offline-safe choice for a transient state.
     StatusCase("a rate limit is unreachable, not invalid", 429, .unreachable, body: json(["error": "rate limited"])),

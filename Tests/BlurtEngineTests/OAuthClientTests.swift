@@ -33,26 +33,54 @@ struct OAuthClientTests {
 
   static let tokenFailureCases: [TokenFailureCase] = [
     TokenFailureCase(
-      name: "invalid_grant is a refusal", status: 400, body: json(["error": "invalid_grant"]), expected: .rejected),
+      name: "invalid_grant is a refusal",
+      status: 400,
+      body: json(["error": "invalid_grant"]),
+      expected: .rejected
+    ),
     TokenFailureCase(
       name: "an unauthorized invalid_grant is a refusal",
-      status: 401, body: json(["error": "invalid_grant"]), expected: .rejected),
+      status: 401,
+      body: json(["error": "invalid_grant"]),
+      expected: .rejected
+    ),
     TokenFailureCase(
-      name: "invalid_client is a refusal", status: 401, body: json(["error": "invalid_client"]), expected: .rejected),
+      name: "invalid_client is a refusal",
+      status: 401,
+      body: json(["error": "invalid_client"]),
+      expected: .rejected
+    ),
     TokenFailureCase(
       name: "a server error is unreachable",
-      status: 500, body: json(["error": "invalid_grant"]), expected: .unreachable),
+      status: 500,
+      body: json(["error": "invalid_grant"]),
+      expected: .unreachable
+    ),
     TokenFailureCase(
-      name: "a garbage success body is unreachable", status: 200, body: Data("nope".utf8), expected: .unreachable),
+      name: "a garbage success body is unreachable",
+      status: 200,
+      body: Data("nope".utf8),
+      expected: .unreachable
+    ),
     // A 400 that doesn't name a dead credential is not a refusal.
     TokenFailureCase(
       name: "invalid_request is not a refusal",
-      status: 400, body: json(["error": "invalid_request"]), expected: .unreachable),
+      status: 400,
+      body: json(["error": "invalid_request"]),
+      expected: .unreachable
+    ),
     TokenFailureCase(
       name: "unsupported_grant_type is not a refusal",
-      status: 400, body: json(["error": "unsupported_grant_type"]), expected: .unreachable),
+      status: 400,
+      body: json(["error": "unsupported_grant_type"]),
+      expected: .unreachable
+    ),
     TokenFailureCase(
-      name: "an HTML error page is not a refusal", status: 400, body: Data("<html>".utf8), expected: .unreachable),
+      name: "an HTML error page is not a refusal",
+      status: 400,
+      body: Data("<html>".utf8),
+      expected: .unreachable
+    ),
   ]
 
   private static func form(_ request: URLRequest) -> [String: String] {

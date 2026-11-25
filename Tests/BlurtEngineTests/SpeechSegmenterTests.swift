@@ -15,24 +15,35 @@ struct SpeechSegmenterTests {
   static let cases: [Case] = [
     Case(
       name: "cuts at sentence ends, keeping the punctuation",
-      text: "It works. Does it? Yes it does!", expected: ["It works.", "Does it?", "Yes it does!"]),
+      text: "It works. Does it? Yes it does!",
+      expected: ["It works.", "Does it?", "Yes it does!"]
+    ),
     Case(
       name: "a closing curly quote still ends the sentence",
       text: "She said “you uploaded me.” The clock ticks.",
-      expected: ["She said “you uploaded me.”", "The clock ticks."]),
+      expected: ["She said “you uploaded me.”", "The clock ticks."]
+    ),
     Case(
       name: "decimals and versions are not sentence ends",
-      text: "Pi is 3.14 in v1.2 today.", expected: ["Pi is 3.14 in v1.2 today."]),
+      text: "Pi is 3.14 in v1.2 today.",
+      expected: ["Pi is 3.14 in v1.2 today."]
+    ),
     Case(
       name: "one-word sentences join the next — abbreviations don't flush alone",
-      text: "Dr. Smith is in. Go.", expected: ["Dr. Smith is in. Go."]),
+      text: "Dr. Smith is in. Go.",
+      expected: ["Dr. Smith is in. Go."]
+    ),
     Case(
       name: "a short trailing sentence joins the previous one",
-      text: "That went well. Thanks.", expected: ["That went well. Thanks."]),
+      text: "That went well. Thanks.",
+      expected: ["That went well. Thanks."]
+    ),
     Case(name: "a lone short sentence is its own segment", text: "Hi.", expected: ["Hi."]),
     Case(
       name: "line breaks end a segment even without punctuation",
-      text: "Release notes here\n\nFixed the paste bug", expected: ["Release notes here", "Fixed the paste bug"]),
+      text: "Release notes here\n\nFixed the paste bug",
+      expected: ["Release notes here", "Fixed the paste bug"]
+    ),
     Case(name: "blank input yields nothing to send", text: "  \n ", expected: []),
   ]
 
