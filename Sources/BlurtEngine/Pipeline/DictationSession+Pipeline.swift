@@ -77,11 +77,19 @@ extension DictationSession {
       setPhase(.idle)
       return
     }
+    // Read once for both endings below: the remember decision, and what the
+    // developer-mode log may keep (see `PressContext.TargetSecurity`).
+    let security = pressContext?.targetSecurity ?? .unknown
+    // The log withholds a known password field's transcript itself (from
+    // `targetIsSecure`); an unknown target's is withheld here, since a read that
+    // never landed leaves the log no context to decide from. The same for a
+    // hand-back's spoken request as for a pasted dictation.
+    let loggable = security == .unknown ? DictationLog.unverifiedTranscript : text
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.
     if handsBackTranscript {
-      seams.logTranscript(text, capturedContext, .handedBack(spoken))
+      seams.logTranscript(loggable, capturedContext, .handedBack(spoken))
       setPhase(.handedBack(spoken))
       return
     }
@@ -98,7 +106,6 @@ extension DictationSession {
     // is *unknown* — the read hasn't landed, or reached no focused element —
     // is remembered for the Recent list but never replayed (see
     // `PressContext.TargetSecurity`).
-    let security = pressContext?.targetSecurity ?? .unknown
     if security != .secure {
       recentDictations.record(
         trimmed, spoken: spoken, style: pressStyle.name, at: Date(),
@@ -109,11 +116,7 @@ extension DictationSession {
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded)
-    // The developer-mode log withholds a known password field's transcript
-    // itself (from `targetIsSecure`); an unknown target's is withheld here, since
-    // a read that never landed leaves the log no context to decide from.
-    seams.logTranscript(
-      security == .unknown ? DictationLog.unverifiedTranscript : text, capturedContext, outcome)
+    seams.logTranscript(loggable, capturedContext, outcome)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
