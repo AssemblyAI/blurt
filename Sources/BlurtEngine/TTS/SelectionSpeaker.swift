@@ -29,11 +29,6 @@
     /// Where each read's audio is kept and who hears about it; nil keeps none.
     private let clips: ReadClipSink?
 
-    /// The provider's voice for `id`, its default for nil or an unknown id.
-    func voice(for id: String?) -> ReadAloudVoice? {
-      synthesizer.voices.first { $0.id == id } ?? synthesizer.voices.first
-    }
-
     /// The speaker `services` provide: their voice, and their LLM for the
     /// listening rewrite and the spoken answers.
     init(services: SpeechServices, clips: ReadClipSink? = nil) {
@@ -170,6 +165,11 @@
       let reply = try await llm.answer(request, about: selection.trimmingCharacters(in: .whitespacesAndNewlines))
       try Task.checkCancellation()
       try await speak(reply, style: style.verbatim, onLevel: onLevel, request: request)
+    }
+
+    /// The provider's voice for `id`, its default for nil or an unknown id.
+    func voice(for id: String?) -> ReadAloudVoice? {
+      synthesizer.voices.first { $0.id == id } ?? synthesizer.voices.first
     }
 
     /// A writer for this read's clip, when clips are kept and the file opens.

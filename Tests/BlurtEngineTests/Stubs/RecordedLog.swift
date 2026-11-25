@@ -36,8 +36,8 @@ final class RecordedLog: Sendable {
   var failureNames: [String] { failures.map(\.error.diagnosticName) }
 
   func recordTranscript(_ text: String, context: TranscriptionContext?, outcome: PipelinePhase, prompt: String = "") {
-    state.withLock {
-      $0.transcripts.append(Transcript(text: text, context: context, outcome: outcome, prompt: prompt))
+    state.withLock { state in
+      state.transcripts.append(Transcript(text: text, context: context, outcome: outcome, prompt: prompt))
     }
   }
 

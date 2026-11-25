@@ -39,7 +39,7 @@ extension ReadAloudVoice {
   }
 
   private static func builtIn(_ name: String) -> Self {
-    Self(id: slug(name), name: name, group: .builtIn)
+    Self(id: slug(name), name: name, accent: nil, group: .builtIn)
   }
 
   private static func library(_ name: String, accent: String?) -> Self {

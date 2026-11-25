@@ -23,6 +23,11 @@ extension DictationSession {
   /// substitute one. Each `Seams` value is still immutable in practice — the
   /// session stores one and never writes to it.
   struct Seams: Sendable {
+    /// What records a finished dictation: the transcript, the press's context,
+    /// the phase it ended in, and the contextual prompt the transcriber
+    /// reports sending (`TranscriberProtocol.contextPrompt(for:)`).
+    typealias TranscriptLogger = @Sendable (String, TranscriptionContext?, PipelinePhase, String) -> Void
+
     /// The real focus capture and the real log — what the public initializer
     /// passes when the host supplies no `HostFocusCapture`, and the only value
     /// production on macOS ever uses.
@@ -60,8 +65,7 @@ extension DictationSession {
     /// The third argument: the phase the dictation ended in, which the log
     /// names (`DictationLog.outcomeName`). The fourth: the contextual prompt the
     /// transcriber reports sending (`TranscriberProtocol.contextPrompt(for:)`).
-    var logTranscript: @Sendable (String, TranscriptionContext?, PipelinePhase, String) -> Void = {
-      text, context, outcome, prompt in
+    var logTranscript: TranscriptLogger = { text, context, outcome, prompt in
       DictationLog.append(transcript: text, context: context, contextPrompt: prompt, outcome: outcome)
     }
 

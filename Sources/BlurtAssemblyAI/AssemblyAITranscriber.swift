@@ -33,6 +33,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// handed to the SDK's client so its latency lines land in the same category.
   static let log = HostIdentity.current.logger("Transcriber")
   public static let defaultBaseURL = DictationClient.defaultBaseURL
+  /// Whether the engine's recording policy (`RecordingLimits`) fits what the
+  /// dictation API accepts (`DictationLimits`): the same sample rate, a cap no
+  /// longer than the API's, and a floor no shorter than the one below which it
+  /// transcribes nothing. The engine names no provider, so this is where its
+  /// numbers meet AssemblyAI's: asserted when a transcriber is built, and pinned
+  /// by `RecordingLimitsTests`.
+  static let fitsRecordingLimits =
+    RecordingLimits.sampleRate == DictationLimits.sampleRate
+    && RecordingLimits.maxAudioSeconds <= DictationLimits.maxAudioSeconds
+    && RecordingLimits.minAudioSeconds >= DictationLimits.minAudioSeconds
   private let apiKeyProvider: @Sendable () -> String?
   /// The SDK client every request goes through. Internal and settable so tests
   /// can trip the over-cap fallback's copy guard with a few bytes.
@@ -71,17 +81,6 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
     self.rewriteMode = rewriteMode ?? { RewriteModeStore().mode }
   }
-
-  /// Whether the engine's recording policy (`RecordingLimits`) fits what the
-  /// dictation API accepts (`DictationLimits`): the same sample rate, a cap no
-  /// longer than the API's, and a floor no shorter than the one below which it
-  /// transcribes nothing. The engine names no provider, so this is where its
-  /// numbers meet AssemblyAI's: asserted when a transcriber is built, and pinned
-  /// by `RecordingLimitsTests`.
-  static let fitsRecordingLimits =
-    RecordingLimits.sampleRate == DictationLimits.sampleRate
-    && RecordingLimits.maxAudioSeconds <= DictationLimits.maxAudioSeconds
-    && RecordingLimits.minAudioSeconds >= DictationLimits.minAudioSeconds
 
   // MARK: - Dictation request
 

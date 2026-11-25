@@ -23,7 +23,7 @@ public struct ReadAloudVoice: Sendable, Equatable, Identifiable {
   }
 
   /// A voice named `name`, which the provider's requests call `id`.
-  public init(id: String, name: String, accent: String? = nil, group: Group) {
+  public init(id: String, name: String, accent: String?, group: Group) {
     self.id = id
     self.name = name
     self.accent = accent
