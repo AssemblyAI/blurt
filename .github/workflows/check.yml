@@ -133,15 +133,16 @@ jobs:
         run: scripts/check.sh --lint-only
 
   # The full check.sh on macOS — engine tests, coverage, sanitizers, the app
-  # build, swiftlint analyze and periphery — minus the whole-app integration
-  # steps, which `ui-tests` runs in parallel. (This job was `check` until the
-  # required status moved to the summary job at the bottom; see there.)
+  # build — minus the whole-app integration steps, which `ui-tests` runs in
+  # parallel, and swiftlint analyze and periphery, which `mac-static` does.
+  # (This job was `check` until the required status moved to the summary job at
+  # the bottom; see there.)
   macos:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # ~17 minutes without the UI suite (Nov 2026); 30 leaves headroom for a
-    # slow runner.
+    # ~11 minutes without the UI suite, analyze and periphery (Nov 2026); 30
+    # leaves headroom for a slow runner.
     timeout-minutes: 30
 
     steps:
@@ -180,10 +181,46 @@ jobs:
         # which CI would otherwise run here: `ui-tests` runs them on a runner of
         # its own, in parallel, and the required `check` job fails unless it
         # passed. Drop the variable only together with that job.
+        #
+        # BLURT_STATIC_CHECKS=0 likewise skips `swiftlint analyze` and periphery,
+        # which `mac-static` runs on a runner of its own; the required `check`
+        # job fails unless it passed. Drop it only together with that job.
         env:
           CI: "true"
           BLURT_INTEGRATION_TESTS: "0"
+          BLURT_STATIC_CHECKS: "0"
         run: scripts/check.sh
+
+  # The Mac app's static gates: `swiftlint analyze` (every analyzer rule) over
+  # the app build's compiler log, then periphery's own build and scan —
+  # scripts/mac-static.sh, the same steps check.sh runs after its app build. A
+  # job of its own, beside `macos`, as ios-static is beside ios-build: on that
+  # runner they were ~10 of its ~21 minutes (Nov 2026), and they need nothing
+  # it produces but the build, which takes ~2 minutes to repeat here.
+  mac-static:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    # ~13 minutes (Nov 2026): the build, analyze, periphery; 30 for a slow
+    # runner.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install the Mac static gates' tools
+        # swiftlint for `swiftlint analyze`, periphery for the unused-code scan,
+        # xcbeautify for the build output; all in the Brewfile too, so these are
+        # the versions check.sh uses.
+        run: brew install swiftlint periphery xcbeautify
+
+      - name: Build the Mac app, then run swiftlint analyze and periphery
+        working-directory: blurt
+        run: scripts/mac-static.sh
 
   # The whole-app integration steps check.sh runs under CI: the XCUITest suite
   # (scripts/uitest.sh — 69 tests driving every trigger key, read-aloud and the
@@ -600,6 +637,7 @@ jobs:
         changes,
         lint,
         macos,
+        mac-static,
         ui-tests,
         ios-build,
         ios-audits,
@@ -609,10 +647,11 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the lint, macOS, UI, iOS, iOS-audit, iOS-static and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, Mac-static, UI, iOS, iOS-audit, iOS-static and iOS-sanitizer gates ran or were intentionally skipped
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
+          MAC_STATIC_RESULT: ${{ needs.mac-static.result }}
           UI_RESULT: ${{ needs.ui-tests.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
           IOS_AUDITS_RESULT: ${{ needs.ios-audits.result }}
@@ -622,7 +661,7 @@ jobs:
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-audits=$IOS_AUDITS_RESULT ios-static=$IOS_STATIC_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT mac-static=$MAC_STATIC_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-audits=$IOS_AUDITS_RESULT ios-static=$IOS_STATIC_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -646,6 +685,7 @@ jobs:
           }
           assert_gate lint "$LINT_RESULT" "$CODE_CHANGED"
           assert_gate macOS "$MACOS_RESULT" "$SWIFT_CHANGED"
+          assert_gate "Mac static" "$MAC_STATIC_RESULT" "$SWIFT_CHANGED"
           assert_gate "UI suite" "$UI_RESULT" "$SWIFT_CHANGED"
           assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS audits" "$IOS_AUDITS_RESULT" "$SWIFT_CHANGED"

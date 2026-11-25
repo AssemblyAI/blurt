@@ -159,6 +159,8 @@ scripts/                     check.sh, check-portability.sh, check-invariants.sh
                              step; CI splits them across ios-build, ios-audits and ios-static),
                              swiftlint-analyze.sh (`swiftlint analyze` split across processes —
                              SwiftLint analyzes one file at a time; check.sh and ios-check.sh call it),
+                             mac-static.sh (the Mac app build, then swiftlint analyze and periphery
+                             over it — check.sh's steps; CI runs the last two in its mac-static job),
                              ios-device.sh (a real iPhone, no Xcode window: preflight, install,
                              launch, kill, pull the logs, read the system log — the device gate)
                              hand-run maintainer tools — no automated caller, invoked by a
@@ -276,7 +278,8 @@ tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer
 
 12. **`swiftlint analyze`** (unused imports and declarations — reads the compiler log the app build captured) and
     **`periphery scan --strict`** (unused declarations — runs its own xcodebuild + index). The only
-    two checks that can't move earlier.
+    two checks that can't move earlier. Both are `scripts/mac-static.sh` steps; on CI the
+    `mac-static` job runs them beside `macos`, which skips them (`BLURT_STATIC_CHECKS=0`, CI only).
 13. **`scripts/ios-check.sh`** — the same gates for `App/BlurtiOS`: `BlurtiOSTests` with
     `BlurtiOSCore`'s coverage gate, then `swiftlint analyze` over that build's log and periphery
     over the iPhone project. Locally only, and only when an iPhone simulator on this Xcode's iOS
