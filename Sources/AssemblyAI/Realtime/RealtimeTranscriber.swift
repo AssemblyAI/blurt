@@ -89,13 +89,19 @@ public actor RealtimeTranscriber {
 
   /// The handshake request: internal so tests can read its query.
   nonisolated let request: URLRequest
+  /// Every turn update as it arrives — a turn's partials, then its final.
+  /// It exists from `init`, so it can be read before the socket opens, by
+  /// whichever of `start` and `finish` comes first. It ends after
+  /// `Termination`, or throws if the connection fails; once the session has
+  /// closed it is over. One consumer: it is a single stream.
+  public nonisolated let turns: AsyncThrowingStream<RealtimeTurn, any Error>
+  private let turnFeed: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation
   private let session: URLSession
   /// The session's lifecycle, and its socket while it has one.
   private var phase = Phase.idle
   /// Audio not yet sent. Readable by tests, which check nothing is queued for
   /// a session that has closed.
   private(set) var pending = Data()
-  private var continuation: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation?
   /// Every `finish` waiting for `Termination` — a list, not one slot, so a
   /// second caller can't overwrite (and so strand) the first.
   private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
@@ -104,7 +110,7 @@ public actor RealtimeTranscriber {
   private let decoder = JSONDecoder()
 
   /// A transcriber that will authenticate with `apiKey` against `url`; nothing
-  /// connects until `start`.
+  /// connects until `start`, or a `finish` with audio queued.
   public init(apiKey: String, url: URL = RealtimeTranscriber.defaultURL, userAgent: String? = nil) {
     var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     components?.queryItems = [
@@ -117,25 +123,27 @@ public actor RealtimeTranscriber {
     // which can't set one.
     handshake.authorize(apiKey: apiKey, userAgent: userAgent)
     self.request = handshake
+    let (turns, turnFeed) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+    self.turns = turns
+    self.turnFeed = turnFeed
     self.session = URLSession(configuration: .default)
   }
 
-  /// Opens the socket and returns every turn update as it arrives — a turn's
-  /// partials, then its final. The stream ends after `Termination`, or throws
-  /// if the connection fails. Once the session has closed — `cancel` or
-  /// `finish` got here first — the stream is already over and nothing opens.
-  public func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
-    let (stream, turns) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+  /// Opens the socket; its turns arrive on `turns`. Does nothing once the
+  /// session has moved on — `finish` opened it already, or it has closed
+  /// (`cancel` got here first), when `turns` is already over.
+  public func start() {
     guard case .idle = phase else {
-      turns.finish()
-      return stream
+      return
     }
-    self.continuation = turns
+    open()
+  }
+
+  private func open() {
     let socket = session.webSocketTask(with: request)
     phase = .open(socket)
     socket.resume()
     Task { await receive() }
-    return stream
   }
 
   /// Queues recorded PCM (16 kHz mono S16LE) and sends it once 100 ms has
@@ -161,10 +169,14 @@ public actor RealtimeTranscriber {
 
   /// Sends what's left, asks the service to end the session, and waits for
   /// `Termination` — which arrives after the last turn's final — then closes.
-  /// A session that never opened just closes, dropping any audio queued for
-  /// it — so a caller that has `start` in flight awaits it first; a second
-  /// caller waits on the first's `Termination` rather than asking again.
+  /// A session not yet started with audio queued opens the socket itself, so
+  /// a `finish` that beats `start` still sends that audio and reads its
+  /// turns; one with nothing queued just closes. A second caller waits on
+  /// the first's `Termination` rather than asking again.
   public func finish() async {
+    if case .idle = phase, !pending.isEmpty {
+      open()
+    }
     switch phase {
     case .idle, .closed:
       close(error: nil)
@@ -266,13 +278,12 @@ public actor RealtimeTranscriber {
       else { continue }
       switch event.type {
       case "Turn":
-        if let turn = event.turn { continuation?.yield(turn) }
+        if let turn = event.turn { turnFeed.yield(turn) }
 
       case "Termination":
         didTerminate = true
         releaseTerminationWait()
-        continuation?.finish()
-        continuation = nil
+        turnFeed.finish()
 
       default:
         continue
@@ -294,8 +305,8 @@ public actor RealtimeTranscriber {
     socket?.cancel(with: .normalClosure, reason: nil)
     // The session is this transcriber's alone; left valid, it leaks with it.
     session.finishTasksAndInvalidate()
-    if let error { continuation?.finish(throwing: error) } else { continuation?.finish() }
-    continuation = nil
+    // A no-op once `Termination` has finished it: a stream ends only once.
+    turnFeed.finish(throwing: error)
     releaseTerminationWait()
   }
 

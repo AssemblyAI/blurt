@@ -20,7 +20,8 @@ struct RealtimeTranscriberTests {
   private func connect() async throws -> Connection {
     let server = try await FakeRealtimeServer.start()
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
-    return Connection(server: server, transcriber: transcriber, turns: await transcriber.start())
+    await transcriber.start()
+    return Connection(server: server, transcriber: transcriber, turns: transcriber.turns)
   }
 
   @Test("authenticates, sends 100 ms chunks and a padded tail, and reads turns until Termination")
@@ -59,7 +60,8 @@ struct RealtimeTranscriberTests {
     defer { server.stop() }
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
     await transcriber.send(Data(count: 3_200))  // before start: no socket yet
-    let turns = await transcriber.start()
+    await transcriber.start()
+    let turns = transcriber.turns
     await transcriber.send(Data(count: 3_200))
     await transcriber.finish()
     for try await _ in turns {
@@ -69,13 +71,33 @@ struct RealtimeTranscriberTests {
     #expect(server.chunkSizes == [6_400])
   }
 
+  @Test("a finish that beats start opens the socket itself: the queued audio goes out and the turns arrive")
+  func finishBeforeStart() async throws {
+    let server = try await FakeRealtimeServer.start()
+    defer { server.stop() }
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
+    await transcriber.send(Data(count: 3_200))  // before start: no socket yet
+    await transcriber.finish()
+    await transcriber.start()  // too late: the session is over, and this opens nothing
+    var received: [RealtimeTurn] = []
+    for try await turn in transcriber.turns { received.append(turn) }
+    #expect(server.chunkSizes == [3_200])
+    #expect(server.terminated)
+    #expect(
+      received == [
+        RealtimeTurn(order: 0, transcript: "hello", isFinal: false, speaker: "A"),
+        RealtimeTurn(order: 0, transcript: "Hello.", isFinal: true, speaker: "A"),
+      ])
+  }
+
   @Test("a backlog longer than 1000 ms is sliced on finish, not sent whole")
   func backlogIsSlicedOnFinish() async throws {
     let server = try await FakeRealtimeServer.start()
     defer { server.stop() }
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
     await transcriber.send(Data(count: 40_000))  // before start: no socket yet
-    let turns = await transcriber.start()
+    await transcriber.start()
+    let turns = transcriber.turns
     await transcriber.finish()
     for try await _ in turns {
       // Drained for how the stream ends; its elements don't matter.
@@ -89,7 +111,8 @@ struct RealtimeTranscriberTests {
     defer { server.stop() }
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
     await transcriber.cancel()
-    let turns = await transcriber.start()
+    await transcriber.start()
+    let turns = transcriber.turns
     await transcriber.send(Data(count: 3_200))
     for try await _ in turns {
       // Drained for how the stream ends; its elements don't matter.
@@ -115,7 +138,8 @@ struct RealtimeTranscriberTests {
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
     // Over the 50 ms floor, under a 100 ms chunk, and half a sample over.
     await transcriber.send(Data(count: RealtimeTranscriber.minimumChunkBytes + 1))
-    let turns = await transcriber.start()
+    await transcriber.start()
+    let turns = transcriber.turns
     await transcriber.finish()
     for try await _ in turns {
       // Drained only so the session runs to its end; the turns aren't checked.
@@ -142,7 +166,8 @@ struct RealtimeTranscriberTests {
   func connectionFailure() async throws {
     // Nothing listens on port 9 of loopback.
     let transcriber = RealtimeTranscriber(apiKey: "key", url: URL(literal: "ws://127.0.0.1:9/v3/ws"))
-    let turns = await transcriber.start()
+    await transcriber.start()
+    let turns = transcriber.turns
     await #expect(throws: RealtimeError.self) {
       for try await _ in turns {
         // Drained for how the stream ends; its elements don't matter.

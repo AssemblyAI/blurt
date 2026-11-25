@@ -53,14 +53,13 @@ extension TranscriptsModel {
     pausedAt = nil
     clockStart = .now
     state = .recording
-    let opened = Task { await realtime.start() }
+    Task { await realtime.start() }
     recording = Recording(
       url: url,
       realtime: realtime,
       audio: feed,
       pump: pump,
-      opened: opened,
-      turns: applyTurns(from: realtime, opened: opened),
+      turns: applyTurns(from: realtime),
       quietStop: RecordingQuietStop(now: .now)
     )
     watchForQuiet(url)
@@ -71,14 +70,10 @@ extension TranscriptsModel {
   /// update is checked against the recording it belongs to, as `watchForQuiet`
   /// is: a session that outlives its recording must not write its turns into the
   /// next one's transcript, or end it when it fails.
-  private func applyTurns(
-    from realtime: RealtimeTranscriber,
-    opened: Task<AsyncThrowingStream<RealtimeTurn, any Error>, Never>
-  ) -> Task<Void, Never> {
+  private func applyTurns(from realtime: RealtimeTranscriber) -> Task<Void, Never> {
     Task { [weak self] in
-      let turns = await opened.value
       do {
-        for try await turn in turns {
+        for try await turn in realtime.turns {
           guard let self, recording?.realtime === realtime else {
             return
           }
@@ -152,9 +147,6 @@ extension TranscriptsModel {
     state = .finishingRecording
     Task { [weak self] in
       await recording.pump.value
-      // A Stop that lands before the socket has opened would otherwise find
-      // the session idle, close it, and drop the audio queued for it.
-      _ = await recording.opened.value
       await recording.realtime.finish()
       await recording.turns.value
       self?.saveRecording(recording.url)
