@@ -99,7 +99,7 @@ struct SpeechTransportTests {
     let session = session()
     let request = try AssemblyAISpeechSynthesizer.request(for: "Read this.", voiceID: "v", apiKey: "k")
     let attempt = Task {
-      withUnsafeCurrentTask { $0?.cancel() }
+      unsafe withUnsafeCurrentTask { unsafe $0?.cancel() }
       return try await session.stream(request)
     }
     await #expect(throws: CancellationError.self) { _ = try await attempt.value }
@@ -108,7 +108,7 @@ struct SpeechTransportTests {
 
   @Test("a cancellation that lands before the wait arms is handed over, and the request is never started")
   func delegateCancelledBeforeArm() async {
-    let (body, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+    let (body, feed) = AsyncThrowingStream<Data, any Error>.makeStream()
     let delegate = SpeechStreamDelegate(body: feed)
     delegate.fail(CancellationError())
     let started = ValueBox(true)
@@ -123,7 +123,7 @@ struct SpeechTransportTests {
 
   @Test("once the head is delivered, later outcomes don't resume the wait again")
   func delegateSettlesOnce() async throws {
-    let (_, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+    let (_, feed) = AsyncThrowingStream<Data, any Error>.makeStream()
     let delegate = SpeechStreamDelegate(body: feed)
     let url = AssemblyAISpeechSynthesizer.endpoint
     let head = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// One thing the Control Your Mac key does, as `VoiceCommandPlanner` reads it
 /// out of the model's reply. A closed set Blurt carries out itself

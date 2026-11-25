@@ -1,8 +1,9 @@
-@preconcurrency import AVFoundation
+@preconcurrency @unsafe import AVFoundation
 import CoreMedia
 import Dispatch
 import Foundation
 import Synchronization
+import os
 
 /// The capture backend (owner-directed move to `AVCaptureSession`, 2026-08-25):
 /// a session built fresh per capture around a single audio device — the device
@@ -335,19 +336,19 @@ extension CaptureSessionRecorder {
     var contiguousLength = 0
     var totalLength = 0
     var pointer: UnsafeMutablePointer<Int8>?
-    let located = CMBlockBufferGetDataPointer(
+    let located = unsafe CMBlockBufferGetDataPointer(
       blockBuffer, atOffset: 0, lengthAtOffsetOut: &contiguousLength,
       totalLengthOut: &totalLength, dataPointerOut: &pointer)
-    if located == kCMBlockBufferNoErr, let pointer, contiguousLength >= length {
-      return Data(bytes: pointer, count: length)
+    if located == kCMBlockBufferNoErr, let pointer = unsafe pointer, contiguousLength >= length {
+      return unsafe Data(bytes: pointer, count: length)
     }
     var copied = Data(count: length)
-    let status = copied.withUnsafeMutableBytes { raw -> OSStatus in
+    let status = unsafe copied.withUnsafeMutableBytes { raw -> OSStatus in
       // Empty is excluded by the caller, so a nil base can't happen; answered as
       // a plain non-noErr status rather than trapping, since dropping the buffer
       // is this method's failure mode for every other copy problem too.
       guard let base = raw.baseAddress else { return OSStatus(-1) }
-      return CMBlockBufferCopyDataBytes(
+      return unsafe CMBlockBufferCopyDataBytes(
         blockBuffer, atOffset: 0, dataLength: length, destination: base)
     }
     return status == kCMBlockBufferNoErr ? copied : nil

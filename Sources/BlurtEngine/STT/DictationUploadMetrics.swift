@@ -76,7 +76,7 @@ final class DictationUploadDelegate: NSObject, URLSessionTaskDelegate, @unchecke
     guard let transaction = metrics.transactionMetrics.last else { return }
     func ms(_ from: Date?, _ to: Date?) -> String {
       guard let from, let to else { return "n/a" }
-      return String(format: "%.0f", to.timeIntervalSince(from) * 1000)
+      return unsafe String(format: "%.0f", to.timeIntervalSince(from) * 1000)
     }
     AssemblyAITranscriber.log.info(
       """
@@ -113,7 +113,7 @@ extension AssemblyAITranscriber {
   /// see in a log.
   static func logServerMetrics(_ response: DictationResponse) {
     func ms(_ value: Double?) -> String {
-      value.map { String(format: "%.0f", $0) } ?? "n/a"
+      value.map { unsafe String(format: "%.0f", $0) } ?? "n/a"
     }
     log.info(
       """

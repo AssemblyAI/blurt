@@ -1,9 +1,9 @@
-import Foundation
+public import Foundation
 
 public enum BlurtError: Error, Sendable {
   case accessibilityPermissionMissing
   case apiKeyMissing
-  case sttFailed(underlying: Error)
+  case sttFailed(underlying: any Error)
   /// The app captured as the paste target quit or refused activation, or the
   /// ⌘V couldn't be synthesized. When `KeyInjector.insert` throws this it has
   /// already left the transcript on the clipboard, so the pipeline degrades it
@@ -11,7 +11,7 @@ public enum BlurtError: Error, Sendable {
   /// description only appears when the session relabels an untyped injection
   /// error, where nothing was copied.
   case targetAppLost
-  case audioCaptureFailed(underlying: Error)
+  case audioCaptureFailed(underlying: any Error)
   /// Nothing editable was focused at paste time, so the transcript was left on
   /// the clipboard instead of synthesizing a ⌘V that macOS would just reject with
   /// a beep. Not a fault — the pipeline maps it to a quiet "copied" notice, not

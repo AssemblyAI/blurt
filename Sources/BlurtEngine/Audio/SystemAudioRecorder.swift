@@ -1,8 +1,9 @@
 #if os(macOS)
-  import AVFoundation
+  public import AVFoundation
   import AssemblyAI
   import CoreAudio
-  import Foundation
+  public import Foundation
+  import os
 
   /// Records the microphone **and** the Mac's system audio together, mixed to
   /// mono at 16 kHz — the main window's Record button. Always both: a call
@@ -28,7 +29,10 @@
   /// clamped, then converted to 16 kHz. The first recording asks for the
   /// System Audio Recording permission (`NSAudioCaptureUsageDescription`);
   /// refused, the tap delivers silence and the microphone still records.
-  public final class SystemAudioRecorder {
+  ///
+  /// `@safe`: the IOProc ID it stores is a raw Core Audio handle, but it is
+  /// created, run and destroyed entirely inside this class, never handed out.
+  @safe public final class SystemAudioRecorder {
     public enum RecorderError: Error, LocalizedError {
       case coreAudio(String, OSStatus)
 
@@ -71,13 +75,13 @@
         let writer = try MixWriter(url: url, inputRate: rate, maxFrames: Int(frames), onPCM: onPCM)
         self.writer = writer
         var proc: AudioDeviceIOProcID?
-        try check(
+        try unsafe check(
           "IOProc",
           AudioDeviceCreateIOProcIDWithBlock(&proc, aggregateID, queue) { _, input, _, _, _ in
-            writer.write(input)
+            unsafe writer.write(input)
           })
-        procID = proc
-        try check("start", AudioDeviceStart(aggregateID, proc))
+        unsafe procID = unsafe proc
+        try unsafe check("start", AudioDeviceStart(aggregateID, proc))
         Self.log.notice("recorder started")
       } catch {
         Self.log.error("recorder failed to start: \(error.localizedDescription, privacy: .public)")
@@ -91,15 +95,15 @@
     /// and its indicator goes out — while the tap, the aggregate and the file
     /// stay, for `resume` to carry on into.
     public func pause() {
-      guard let procID else { return }
-      AudioDeviceStop(aggregateID, procID)
+      guard let procID = unsafe procID else { return }
+      unsafe AudioDeviceStop(aggregateID, procID)
       Self.log.notice("recorder paused")
     }
 
     /// Resumes capture into the same file after `pause`.
     public func resume() throws {
-      guard let procID else { return }
-      try check("resume", AudioDeviceStart(aggregateID, procID))
+      guard let procID = unsafe procID else { return }
+      try unsafe check("resume", AudioDeviceStart(aggregateID, procID))
       Self.log.notice("recorder resumed")
     }
 
@@ -109,10 +113,10 @@
     }
 
     private func teardown() {
-      if let procID {
-        AudioDeviceStop(aggregateID, procID)
-        AudioDeviceDestroyIOProcID(aggregateID, procID)
-        self.procID = nil
+      if let procID = unsafe procID {
+        unsafe AudioDeviceStop(aggregateID, procID)
+        unsafe AudioDeviceDestroyIOProcID(aggregateID, procID)
+        unsafe self.procID = nil
       }
       // Every callback already queued has run once this returns, so the file
       // closes after its last write. The summary is read here too, not before
@@ -143,7 +147,7 @@
       description.uuid = tapUUID
       description.isPrivate = true
       description.muteBehavior = .unmuted
-      try check("tap", AudioHardwareCreateProcessTap(description, &tapID))
+      try unsafe check("tap", AudioHardwareCreateProcessTap(description, &tapID))
     }
 
     private func createAggregate() throws {
@@ -175,7 +179,7 @@
           [kAudioSubTapUIDKey: tapUUID.uuidString, kAudioSubTapDriftCompensationKey: true]
         ],
       ]
-      try check("aggregate", AudioHardwareCreateAggregateDevice(description as CFDictionary, &aggregateID))
+      try unsafe check("aggregate", AudioHardwareCreateAggregateDevice(description as CFDictionary, &aggregateID))
     }
 
     private func nominalSampleRate(of device: AudioObjectID) throws -> Double {
@@ -203,7 +207,7 @@
       var pid = ProcessInfo.processInfo.processIdentifier
       var object = AudioObjectID(kAudioObjectUnknown)
       var size = UInt32(MemoryLayout<AudioObjectID>.size)
-      let status = AudioObjectGetPropertyData(
+      let status = unsafe AudioObjectGetPropertyData(
         AudioRoute.systemObject, &address, UInt32(MemoryLayout<pid_t>.size), &pid, &size, &object)
       return status == noErr && object != kAudioObjectUnknown ? object : nil
     }

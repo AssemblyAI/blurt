@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 extension URL {
   /// A URL from a compile-time literal — the force-unwrap-free spelling for the

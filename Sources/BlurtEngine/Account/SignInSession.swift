@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// What Blurt keeps about a "Sign in with AssemblyAI" connection, beside the API
 /// key itself (which lives in the ordinary key item, so every reader of the key

@@ -1,4 +1,6 @@
+import AssemblyAI
 import Foundation
+import os
 
 // The dictation route's connection pre-warming, split from
 // `AssemblyAITranscriber.swift` to stay within the lint file-length budget —

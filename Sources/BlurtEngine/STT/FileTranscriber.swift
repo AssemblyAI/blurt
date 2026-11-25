@@ -1,5 +1,5 @@
-import AssemblyAI
-import Foundation
+public import AssemblyAI
+public import Foundation
 
 /// A file's transcript both ways: speaker-labelled, which is what opens, and
 /// plain, the same words without the labels.

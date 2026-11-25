@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// One named set of style instructions — free text (e.g. "add some emojis where
 /// appropriate sparingly", "always write in lowercase") that the dictation API's

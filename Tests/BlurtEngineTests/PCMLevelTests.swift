@@ -6,7 +6,7 @@ import Testing
 @Suite("PCMLevel")
 struct PCMLevelTests {
   private func pcm(_ samples: [Int16]) -> Data {
-    samples.withUnsafeBufferPointer { Data(buffer: $0) }
+    unsafe samples.withUnsafeBufferPointer { unsafe Data(buffer: $0) }
   }
 
   @Test("silence reads 0, full scale reads 1, and a quieter voice reads in between")

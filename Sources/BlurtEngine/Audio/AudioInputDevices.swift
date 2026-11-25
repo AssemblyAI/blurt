@@ -1,4 +1,4 @@
-@preconcurrency import AVFoundation
+@preconcurrency @unsafe import AVFoundation
 import Foundation
 
 /// One selectable input device: its persistent UID (what `MicDeviceStore` pins)

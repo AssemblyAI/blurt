@@ -1,4 +1,4 @@
-import AssemblyAI
+public import AssemblyAI
 import Foundation
 
 /// One speaker's turn in a transcript: who (nil when no speaker was told

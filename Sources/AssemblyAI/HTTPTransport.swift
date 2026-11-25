@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// The `URLSession` calls the AssemblyAI clients make (`AssemblyAITranscriber`,
 /// `APIKeyValidator`), behind a seam so tests substitute a per-instance fake

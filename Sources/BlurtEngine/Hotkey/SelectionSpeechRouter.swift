@@ -1,6 +1,6 @@
-import Foundation
-
 #if os(macOS)
+  public import Foundation
+  import os
 
   /// Sits between the trigger keys and the dictation session. A press of a key
   /// set to read aloud reads the selected text; a press of a key set to ask
@@ -8,10 +8,9 @@ import Foundation
   /// set to rewrite records a spoken instruction and pastes the selection,
   /// rewritten that way, over it; a press of a key set to compose records
   /// spoken instructions and pastes what they describe at the cursor; a press
-  /// of a key set to command records a
-  /// spoken command and carries it out; a dictating key's
-  /// commands go straight to `DictationSession.submit` (see `TriggerKeyBindings`
-  /// for which key does what).
+  /// of a key set to command records a spoken command and carries it out; a
+  /// dictating key's commands go straight to `DictationSession.submit` (see
+  /// `TriggerKeyBindings` for which key does what).
   ///
   /// The decisions are the engine's `SelectionSpeechRouting`. This class carries
   /// out the actions it returns: the selection read, the hold timer, the speech

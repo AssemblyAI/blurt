@@ -46,7 +46,7 @@ final class FakeSpeechTransport: SpeechTransport, Sendable {
     }
   }
 
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
+  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
     recorded.withLock { $0.append(request) }
     if let failure { throw failure }
     let (status, chunks) = respond(request)

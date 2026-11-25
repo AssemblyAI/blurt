@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Keeps a stream of 16-bit PCM chunks on whole samples, whatever sizes the
 /// chunks arrive in.

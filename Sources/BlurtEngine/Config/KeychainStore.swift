@@ -31,7 +31,7 @@ struct KeychainStore: Sendable {
     query[kSecMatchLimit as String] = kSecMatchLimitOne
 
     var item: CFTypeRef?
-    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    let status = unsafe SecItemCopyMatching(query as CFDictionary, &item)
     switch status {
     case errSecSuccess:
       guard let data = item as? Data,

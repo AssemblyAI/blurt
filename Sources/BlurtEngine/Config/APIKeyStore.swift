@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Keychain-backed storage for the AssemblyAI API key.
 ///

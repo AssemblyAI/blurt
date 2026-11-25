@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 // The Control Your Mac half of the developer-mode log: every command the key
 // carries out — or fails to — is appended to `commands.jsonl`, and a failure

@@ -1,4 +1,4 @@
-import AssemblyAI
+public import AssemblyAI
 
 /// The validate-then-save flow behind the setup/settings screen's Save/Update
 /// button. Owned in the engine — rather than in the app coordinator — so its

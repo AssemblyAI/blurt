@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Persists the experimental "Escape cancels a dictation" switch in
 /// `UserDefaults`. Off by default; the Settings window's Advanced pane flips it
