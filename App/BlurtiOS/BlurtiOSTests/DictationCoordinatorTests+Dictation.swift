@@ -90,14 +90,14 @@ extension DictationCoordinatorTests {
     send(release, to: coordinator)
     #expect(SharedStore.commandAck?.outcome == .stopped(dictation))
     #expect(coordinator.stopAccepted == dictation && coordinator.lastCommandID == release.id)
-    #expect(DictationCoordinator.claimedPress.withLock { $0.stopRecipient } == Self.keyboard)
+    #expect(DictationCoordinator.claimedPress.withLock { $0.stopAddress?.keyboard } == Self.keyboard)
     let result = await takeResult()
     #expect(result?.recipient == Self.keyboard && result?.text == Self.transcript)
     #expect(await until { coordinator.phase == .pasted })
     #expect(published?.state == .pasted && published?.dictation?.id == dictation)
     #expect(coordinator.inFlight == nil && coordinator.answers == nil && coordinator.stopAccepted == nil)
     #expect(coordinator.watchdog == nil)
-    #expect(DictationCoordinator.claimedPress.withLock { $0.stopRecipient } == nil)
+    #expect(DictationCoordinator.claimedPress.withLock { $0.stopAddress } == nil)
     #expect(rig.idle.ended == 1 && rig.tasks.ended.contains(DictationCoordinator.releaseTask))
   }
 
@@ -107,13 +107,37 @@ extension DictationCoordinatorTests {
       DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press() }
       DictationCoordinator.claimedPress.withLock { $0 = DictationCoordinator.Press() }
     }
-    DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press(keyboard: Self.keyboard) }
+    DictationCoordinator.pendingPress.withLock {
+      $0 = DictationCoordinator.Press(address: ResultAddress(keyboard: Self.keyboard))
+    }
     // The release lands first (`handleCommand`), then the session claims.
-    DictationCoordinator.claimedPress.withLock { $0.stopRecipient = "kb-2" }
+    DictationCoordinator.claimedPress.withLock { $0.stopAddress = ResultAddress(keyboard: "kb-2") }
     #expect(DictationCoordinator.claimPress() == nil)
     let claimed = DictationCoordinator.claimedPress.withLock { $0 }
-    #expect(claimed.keyboard == Self.keyboard)
-    #expect(claimed.stopRecipient == "kb-2")
+    #expect(claimed.address.keyboard == Self.keyboard)
+    #expect(claimed.stopAddress?.keyboard == "kb-2")
+  }
+
+  /// #346: the words carry the field, not only the process, so a keyboard in
+  /// the same process over another field can tell they aren't its own.
+  @Test("the words are addressed to the field the press came from, or the accepted stop's")
+  func resultNamesTheField() async throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (coordinator, _) = await listening()
+    let fieldA = UUID()
+    send(command(.press, controllerID: "c-a", documentID: fieldA), to: coordinator)
+    #expect(await until { self.published?.state == .recording })
+    send(command(.release, controllerID: "c-a", documentID: fieldA), to: coordinator)
+    let pressed = await takeResult()
+    #expect(pressed?.recipient == Self.keyboard && pressed?.controllerID == "c-a" && pressed?.documentID == fieldA)
+    #expect(await until { coordinator.phase == .pasted })
+    // An accepted stop from another field of the same keyboard: the words go there.
+    let fieldB = UUID()
+    _ = try await recording(coordinator)
+    send(command(.release, controllerID: "c-b", documentID: fieldB), to: coordinator)
+    let stopped = await takeResult()
+    #expect(stopped?.recipient == Self.keyboard && stopped?.controllerID == "c-b" && stopped?.documentID == fieldB)
   }
 
   @Test("a release from a keyboard that neither owns the dictation nor is on screen is notOwner")
