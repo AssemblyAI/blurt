@@ -82,4 +82,11 @@ struct InsertionSeparatorTests {
   func separatorAfterCloser(prior: String) {
     #expect(InsertionSeparator.withLeadingSeparator("Then.", after: prior) == " Then.")
   }
+
+  // `withLeadingSeparator` returns before asking about an empty prior text, so
+  // only a direct call pins what `endsInOpener` says about one.
+  @Test("empty prior text ends in no opener")
+  func emptyPriorTextIsNoOpener() {
+    #expect(!InsertionSeparator.endsInOpener(""))
+  }
 }

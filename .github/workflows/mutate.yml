@@ -53,38 +53,20 @@ jobs:
         env:
           SHARD: ${{ matrix.index }}/${{ matrix.count }}
           FILES: ${{ inputs.files }}
-          # A shared runner is slower than a developer's Mac; a deadline the
-          # unmutated suite can miss would report mutants as killed by timeout.
-          MUTATE_TEST_DEADLINE_SECONDS: "180"
+        # No --strict here: every shard finishes and uploads, and `report`
+        # decides red/green over the whole set. The per-mutant test deadline
+        # scales from this runner's own baseline run (see mutate.sh).
         run: |
-          set -o pipefail
-          args=(--shard "$SHARD")
+          args=(--shard "$SHARD" --results mutate-results.tsv)
           if [ -n "${FILES:-}" ]; then args+=(--files "$FILES"); fi
-          scripts/mutate.sh "${args[@]}" | tee mutate.log
+          scripts/mutate.sh "${args[@]}"
 
-      - name: Summarize shard
-        if: always()
-        working-directory: blurt
-        env:
-          SHARD: ${{ matrix.index }}
-        run: |
-          touch mutate.log
-          grep -E 'SURVIVED$' mutate.log | sed -E 's/^\[[0-9]+\/[0-9]+\] //; s/ +SURVIVED$//' >survivors.txt || true
-          {
-            echo "### mutate shard $SHARD"
-            echo '```'
-            sed -n '/==> results/,$p' mutate.log
-            echo '```'
-          } >>"$GITHUB_STEP_SUMMARY"
-
-      - name: Upload shard log
+      - name: Upload shard results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutate-shard-${{ matrix.index }}
-          path: |
-            blurt/mutate.log
-            blurt/survivors.txt
+          path: blurt/mutate-results.tsv
           if-no-files-found: warn
 
   report:
@@ -92,38 +74,38 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Download shard logs
+      - name: Download shard results
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: mutate-shard-*
           path: shards
 
+      # Each row: outcome, file, line, from, to (mutate.sh --results).
       - name: Report survivors
         env:
           SHARD_RESULT: ${{ needs.shard.result }}
         run: |
-          survivors="$(cat shards/*/survivors.txt 2>/dev/null | sort || true)"
-          killed=0; survived=0; invalid=0
-          for log in shards/*/mutate.log; do
-            [ -f "$log" ] || continue
-            killed=$((killed + $(grep -cE 'killed( \(timed out.*\))?$' "$log" || true)))
-            survived=$((survived + $(grep -cE 'SURVIVED$' "$log" || true)))
-            invalid=$((invalid + $(grep -cE 'invalid \(does not compile\)$' "$log" || true)))
-          done
+          cat shards/*/mutate-results.tsv >all.tsv 2>/dev/null || : >all.tsv
+          count() { awk -F'\t' -v o="$1" '$1 == o' all.tsv | wc -l | tr -d ' '; }
+          killed=$(count killed); timeout=$(count timeout)
+          survived=$(count survived); invalid=$(count invalid)
           {
             echo "## Mutation testing"
             echo
-            echo "killed: $killed · survived: $survived · invalid (excluded): $invalid"
-            if [ -n "$survivors" ]; then
+            echo "| killed | of which by timeout | survived | invalid (excluded) |"
+            echo "| --- | --- | --- | --- |"
+            echo "| $((killed + timeout)) | $timeout | $survived | $invalid |"
+            if [ "$survived" -gt 0 ]; then
               echo
               echo "### Survivors"
+              echo
               echo '```'
-              echo "$survivors"
+              awk -F'\t' '$1 == "survived" { printf "%s:%s  %s -> %s\n", $2, $3, $4, $5 }' all.tsv | sort
               echo '```'
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$SHARD_RESULT" != "success" ]; then
-            echo "::error::a shard did not finish ($SHARD_RESULT) — the count above is partial"
+            echo "::error::a shard did not finish ($SHARD_RESULT) — the counts above are partial"
             exit 1
           fi
           if [ "$survived" -gt 0 ]; then

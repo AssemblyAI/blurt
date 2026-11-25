@@ -26,6 +26,8 @@
 #   scripts/mutate.sh --files "a.swift b.swift"
 #   scripts/mutate.sh --list                # enumerate mutants, run nothing
 #   scripts/mutate.sh --shard 2/6           # every 6th mutant from the 2nd (CI)
+#   scripts/mutate.sh --results out.tsv     # one "outcome<TAB>file<TAB>line<TAB>from<TAB>to" row per mutant
+#   scripts/mutate.sh --strict              # exit 3 if any mutant survives
 #
 # A line ending `// mutate-ok: <reason>` is exempt — for equivalent mutants only
 # (a change that provably cannot alter behaviour), matching check-portability.sh.
@@ -92,6 +94,8 @@ MAX_MUTANTS=0 # 0 = no cap
 SHARD_INDEX=1
 SHARD_COUNT=1
 LIST_ONLY=0
+STRICT=0
+RESULTS=""
 TARGETS=()
 
 while [ $# -gt 0 ]; do
@@ -123,13 +127,23 @@ while [ $# -gt 0 ]; do
       fi
       shift 2
       ;;
+    --results)
+      RESULTS="${2:?--results needs a file}"
+      shift 2
+      ;;
+    --strict)
+      # For CI (.github/workflows/mutate.yml): a survivor fails the run. Off by
+      # default because a local run is a to-do list, not a gate.
+      STRICT=1
+      shift
+      ;;
     --list)
       LIST_ONLY=1
       shift
       ;;
     -h | --help)
       # The whole header block is the help text; keep this range in step with it.
-      sed -n '2,36p' "$0"
+      sed -n '2,38p' "$0"
       exit 0
       ;;
     *)
@@ -372,7 +386,9 @@ PY
 # directory, and the next mutant then fails for an unrelated reason.
 # Overridable because a shared CI runner is slower than a developer's Mac, and a
 # deadline the *unmutated* suite can miss reports mutants as killed by timeout.
-TEST_DEADLINE_SECONDS="${MUTATE_TEST_DEADLINE_SECONDS:-60}"
+# Unset, it is derived from the baseline run below (5x, floor 60s), so a slow
+# runner needs no tuning.
+TEST_DEADLINE_SECONDS="${MUTATE_TEST_DEADLINE_SECONDS:-}"
 BUILD_DEADLINE_SECONDS="${MUTATE_BUILD_DEADLINE_SECONDS:-300}"
 
 # Returns the command's status, or 124 if it hit the deadline (mirroring what
@@ -431,11 +447,17 @@ if ! swift build --build-tests >/dev/null 2>&1; then
   echo "error: baseline build failed — fix that first" >&2
   exit 1
 fi
+BASELINE_START=$SECONDS
 if ! swift test >/dev/null 2>&1; then
   echo "error: baseline suite is red — fix that first, or every mutant reports killed" >&2
   exit 1
 fi
-echo "baseline green"
+BASELINE_SECONDS=$((SECONDS - BASELINE_START))
+if [ -z "$TEST_DEADLINE_SECONDS" ]; then
+  TEST_DEADLINE_SECONDS=$((BASELINE_SECONDS * 5))
+  [ "$TEST_DEADLINE_SECONDS" -ge 60 ] || TEST_DEADLINE_SECONDS=60
+fi
+echo "baseline green (suite ${BASELINE_SECONDS}s; per-mutant deadline ${TEST_DEADLINE_SECONDS}s)"
 
 echo "==> $TOTAL mutants (~7s each, so roughly $(((TOTAL * 7 + 59) / 60)) min)"
 
@@ -445,6 +467,12 @@ INVALID=0
 TIMED_OUT=0
 SURVIVORS="$WORK/survivors.txt"
 : >"$SURVIVORS"
+# Machine-readable outcome per mutant, so CI aggregates shards without scraping
+# the progress lines above.
+if [ -n "$RESULTS" ]; then : >"$RESULTS"; fi
+record() {
+  if [ -n "$RESULTS" ]; then printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$file" "$line" "$frm" "$to" >>"$RESULTS"; fi
+}
 
 INDEX=0
 # fd 3 so `swift test` inheriting stdin can't consume the mutant list.
@@ -460,6 +488,7 @@ while IFS=$'\t' read -r file line col frm to <&3; do
     # count is how a mutation score flatters itself.
     INVALID=$((INVALID + 1))
     echo "invalid (does not compile)"
+    record invalid
   else
     TEST_STATUS=0
     run_bounded "$TEST_DEADLINE_SECONDS" swift test || TEST_STATUS=$?
@@ -468,6 +497,12 @@ while IFS=$'\t' read -r file line col frm to <&3; do
         SURVIVED=$((SURVIVED + 1))
         printf '%s:%s\t%s -> %s\n' "$file" "$line" "$frm" "$to" >>"$SURVIVORS"
         echo "SURVIVED"
+        record survived
+        # Under GitHub Actions, an annotation pins the survivor to its line in
+        # the run's summary and in any diff that touches it.
+        if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+          echo "::warning file=$file,line=$line,title=Mutant survived::$frm -> $to changed behaviour and no test failed"
+        fi
         ;;
       124)
         # A mutant that hangs the suite changed behaviour observably, so it counts
@@ -476,10 +511,12 @@ while IFS=$'\t' read -r file line col frm to <&3; do
         KILLED=$((KILLED + 1))
         TIMED_OUT=$((TIMED_OUT + 1))
         echo "killed (timed out after ${TEST_DEADLINE_SECONDS}s)"
+        record timeout
         ;;
       *)
         KILLED=$((KILLED + 1))
         echo "killed"
+        record killed
         ;;
     esac
   fi
@@ -514,5 +551,8 @@ if [ "$SURVIVED" -gt 0 ]; then
   sort "$SURVIVORS" | awk -F'\t' '{ printf "  %-58s %s\n", $1, $2 }'
 fi
 
-# Exit 0 regardless of survivors: this is a report, not a gate. `check.sh` owns
-# green/not-green, and it does not call this script.
+# Exit 0 regardless of survivors unless --strict: this is a report, not a gate.
+# `check.sh` owns green/not-green, and it does not call this script.
+if [ "$STRICT" -eq 1 ] && [ "$SURVIVED" -gt 0 ]; then
+  exit 3
+fi
