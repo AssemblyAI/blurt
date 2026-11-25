@@ -65,7 +65,7 @@ packages:
   # none of the plugin products — the free core and nothing else.
   KeyboardKit:
     url: https://github.com/KeyboardKit/KeyboardKit.git
-    exactVersion: 11.1.6
+    exactVersion: 11.3.2
 targets:
   # The iPhone code's logic, apart from its UI, the way BlurtEngine sits apart
   # from the Mac shell: the App Group contract, the keyboard's model and rules,
