@@ -56,22 +56,6 @@ final class PressContext: Sendable {
     var stream: AsyncStream<TranscriptionContext?>?
   }
 
-  /// What the press-time read says about whether the target is a password field.
-  enum TargetSecurity: Equatable {
-    /// The read landed and the field is an ordinary one: remember the dictation
-    /// and replay it as later request context.
-    case ordinary
-    /// The read refused the field (`TranscriptionContext.targetIsSecure`): the
-    /// dictation is the secret, so it is not remembered at all.
-    case secure
-    /// Nothing is known — the read has not landed (a slow or beachballing
-    /// frontmost app), or it reached no focused element
-    /// (`TranscriptionContext.targetSecurityUnknown`). Remembered for the Recent
-    /// list, which stays on this Mac, but never replayed in `stt_prompt`, where
-    /// a password would leave it.
-    case unknown
-  }
-
   /// What the actor already knew at press. The config's fallback when the read
   /// misses its budget.
   let pressKnown: TranscriptionContext?
