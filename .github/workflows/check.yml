@@ -239,9 +239,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
-    # The simulator build plus the unit tests take ~12 minutes on macos-26 and
-    # the periphery scan rebuilds after them; 15 cut the scan off mid-run.
-    timeout-minutes: 30
+    # The simulator build, the unit tests and the periphery scan (which rebuilds
+    # after them) now take 22-29 minutes on macos-26, so 30 started cancelling
+    # healthy runs, main's included (Nov 2026). 45 leaves headroom for a slow
+    # runner without letting a hung simulator burn an hour.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout blurt
@@ -285,8 +287,8 @@ jobs:
 
   # The iPhone suite under each sanitizer, as check.sh runs the engine's. A job
   # of its own, one runner per sanitizer, rather than more steps in ios-build:
-  # each is a full instrumented rebuild, and ios-build is already near its
-  # timeout. The coverage gate runs in ios-build's plain pass only.
+  # each is a full instrumented rebuild, and ios-build already takes most of
+  # its timeout. The coverage gate runs in ios-build's plain pass only.
   ios-sanitizers:
     needs: changes
     if: needs.changes.outputs.code == 'true'

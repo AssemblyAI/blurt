@@ -49,12 +49,17 @@
     /// in the meantime (so a user copy during the paste-settle window survives).
     /// Call the returned action once the paste has settled.
     func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void
+    /// Serializes a paste against Blurt's other turns on this pasteboard
+    /// (`SelectionCopy`'s copy) — see `PasteboardLock`.
+    var lock: PasteboardLock { get }
   }
 
   /// `ClipboardAccess` backed by the real `NSPasteboard.general`. The change-count
   /// comparison that gates the deferred restore lives here, behind the seam, so a
   /// fake never re-implements it.
   struct SystemClipboard: ClipboardAccess {
+    var lock: PasteboardLock { .system }
+
     // Not transient: these words are meant to stay for a paste by hand, so a
     // clipboard manager keeping them is a feature here.
     func write(_ text: String) { setString(text) }
