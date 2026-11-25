@@ -15,7 +15,7 @@ public import Foundation
 /// parameters, binary audio of 50–1000 ms a message, the `Begin`, `Turn` and
 /// `Termination` messages, and `{"type": "Terminate"}` to end. The speech
 /// model is the endpoint's default.
-public actor RealtimeTranscriber {
+public actor RealtimeTranscriber: LiveTranscriptionSession {
   private enum Phase {
     case idle, open, closed
   }

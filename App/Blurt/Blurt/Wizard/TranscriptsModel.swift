@@ -37,7 +37,7 @@ final class TranscriptsModel {
   /// One recording in flight, and when it last heard a word (`+Recording.swift`).
   struct Recording {
     let url: URL
-    let realtime: RealtimeTranscriber
+    let realtime: any LiveTranscriptionSession
     let audio: AsyncStream<Data>.Continuation
     let pump: Task<Void, Never>
     let turns: Task<Void, Never>
@@ -68,7 +68,13 @@ final class TranscriptsModel {
   /// The key the model's own checks read — the same one the transcriber and
   /// the LLM are given, so a test's in-memory key is the only one consulted.
   let apiKey: @Sendable () -> String?
-  let recorder = SystemAudioRecorder()
+  /// What Record captures from (`SystemAudioRecorder`, the microphone and
+  /// system audio), the live transcription it streams to (the realtime API, given
+  /// the key) and where its files go. Seams for the UI tests'
+  /// offline doubles (`TranscriptsModel.uiTest(store:)`), as the transcriber is.
+  let recorder: any RecordingCapture
+  let makeLiveSession: @Sendable (String) -> any LiveTranscriptionSession
+  let recordingsDirectory: URL
   /// Plays saved audio from the Recent list and the sheet.
   let player = ClipPlayer()
   /// Reads a task result aloud (`TranscriptsModel+Playback.swift`).
@@ -114,11 +120,19 @@ final class TranscriptsModel {
     apiKey: @escaping @Sendable () -> String? = { APIKeyStore.current },
     transcriber: FileTranscriber? = nil,
     llm: TranscriptLLM? = nil,
-    store: TranscriptStore = TranscriptStore()
+    store: TranscriptStore = TranscriptStore(),
+    recorder: (any RecordingCapture)? = nil,
+    liveSession: @escaping @Sendable (String) -> any LiveTranscriptionSession = {
+      RealtimeTranscriber.blurt(apiKey: $0)
+    },
+    recordingsDirectory: URL = TranscriptStore.recordingsDirectory
   ) {
     self.apiKey = apiKey
     self.transcriber = transcriber ?? FileTranscriber(apiKeyProvider: apiKey)
     self.llm = llm ?? TranscriptLLM(apiKeyProvider: apiKey)
+    self.recorder = recorder ?? SystemAudioRecorder()
+    self.makeLiveSession = liveSession
+    self.recordingsDirectory = recordingsDirectory
     // The store is read once, below, and written only through `writer`.
     self.writer = TranscriptWriter(store: store)
     self.history = []

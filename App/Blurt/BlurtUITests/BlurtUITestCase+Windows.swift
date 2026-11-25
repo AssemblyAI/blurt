@@ -88,6 +88,19 @@ extension BlurtUITestCase {
     )
   }
 
+  /// The two windows a ready-state launch presents, both left open. The harness
+  /// sits in the top-leading corner (see `BlurtApp`) so it never overlaps the
+  /// centered ready window: a test can drive the harness — a dictation, a live
+  /// recording's turns — and read the result on the still-open ready screen,
+  /// with no closing and reopening.
+  func readyScreenWindows() -> (harness: XCUIElement, main: XCUIElement) {
+    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
+    XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
+    let main = app.windows[UITestIdentifiers.mainWindowTitle]
+    XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
+    return (harness, main)
+  }
+
   /// Waits for the window titled `title`, then closes its siblings so it is
   /// frontmost and its controls are hittable (see `closeWindows`).
   private func frontmostWindow(

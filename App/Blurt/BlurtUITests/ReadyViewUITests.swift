@@ -157,18 +157,6 @@ final class ReadyViewUITests: BlurtUITestCase {
 
   // MARK: - Shared choreography
 
-  /// The two windows a ready-state launch presents. The harness sits in the
-  /// top-leading corner (see `BlurtApp`) so it never overlaps the centered ready
-  /// window: a test can drive a full dictation on the harness, then read the
-  /// result on the still-open ready screen — no closing/reopening.
-  private func readyScreenWindows() -> (harness: XCUIElement, main: XCUIElement) {
-    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
-    XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
-    let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
-    return (harness, main)
-  }
-
   /// Drives one dictation via the same hotkey path the pipeline tests use, then
   /// waits for the harness echo (the newest saved dictation) to show
   /// the canned transcript — at which point the entry the ready screen renders

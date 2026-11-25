@@ -9,8 +9,12 @@ import XCTest
 /// (`-BlurtUITestSeedHistory`: a two-speaker recording, a dictation, a
 /// read-aloud clip) and a canned transport standing in for the async API and
 /// the LLM Gateway, so nothing touches the network or the user's history.
-/// Recording itself isn't driven here: it needs real microphone and
-/// system-audio grants, which the test host can't give.
+/// Recording runs on doubles for its two edges (`TranscriptsModel.uiTest(store:)`):
+/// a capture that needs none of the microphone and system-audio grants the test
+/// host can't give, and a live session whose scripted turns the harness's Next
+/// Turn releases one at a time (or Fail Live drops), so each partial and final
+/// is read as it lands. Everything between them — the model, the live page,
+/// saving, the diarized pass — is the app's own.
 final class TranscriptionUITests: BlurtUITestCase {
   override var extraLaunchArguments: [String] {
     [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.seedHistoryLaunchArgument]
@@ -113,6 +117,96 @@ final class TranscriptionUITests: BlurtUITestCase {
     expectation(for: gone, evaluatedWith: row(titled: UITestIdentifiers.seededDictationText))
     waitForExpectations(timeout: 5)
     XCTAssertTrue(row(titled: UITestIdentifiers.seededRecordingTitle).exists, "Only that entry goes")
+  }
+
+  // MARK: - Recording
+
+  /// Record streams the session's turns in as they're spoken — a partial, then
+  /// its final, each under its speaker — and Stop saves the recording, opens
+  /// it, and upgrades the live transcript to the diarized one under its title.
+  func testRecordStreamsLiveTurnsThenStopSavesThem() {
+    let (harness, main) = readyScreenWindows()
+    startLiveRecording(in: main)
+    XCTAssertTrue(text(containing: "Listening…").waitForExistence(timeout: 5), "Nothing heard yet")
+
+    releaseLiveTurn(in: harness)
+    XCTAssertTrue(
+      windowText(containing: UITestIdentifiers.livePartialA).waitForExistence(timeout: 5),
+      "What's being said shows as it's said"
+    )
+    releaseLiveTurn(in: harness)
+    XCTAssertTrue(
+      windowText(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5), "The final settles it"
+    )
+    releaseLiveTurn(in: harness)
+    releaseLiveTurn(in: harness)
+    XCTAssertTrue(windowText(containing: UITestIdentifiers.liveFinalB).waitForExistence(timeout: 5))
+    XCTAssertTrue(windowText(containing: "Speaker B").exists, "Two speakers: each turn under its speaker")
+
+    main.buttons[UITestIdentifiers.liveRecordingStop].click()
+    XCTAssertTrue(viewPicker.waitForExistence(timeout: 15), "Stop saves the recording and opens it")
+    XCTAssertTrue(
+      windowText(containing: UITestIdentifiers.cannedFileSpeakerA).waitForExistence(timeout: 15),
+      "The diarized pass replaces the live transcript"
+    )
+    app.typeKey(.escape, modifierFlags: [])
+    XCTAssertTrue(
+      row(titled: UITestIdentifiers.cannedFileTitle).waitForExistence(timeout: 10),
+      "The recording is in the Library under its title"
+    )
+  }
+
+  /// Pause stops the clock and says so; Resume carries on recording.
+  func testPauseAndResume() {
+    let (_, main) = readyScreenWindows()
+    startLiveRecording(in: main)
+    let pause = main.buttons[UITestIdentifiers.liveRecordingPause]
+    pause.click()
+    XCTAssertTrue(text(containing: "Paused").waitForExistence(timeout: 5), "Pause says it's paused")
+    pause.click()
+    XCTAssertTrue(text(containing: "Recording").waitForExistence(timeout: 5), "Resume says it's recording again")
+    XCTAssertFalse(text(containing: "Paused").exists)
+  }
+
+  /// Discard… asks first; Escape keeps recording, Discard throws the
+  /// recording and what it heard away.
+  func testDiscardAsksThenThrowsTheRecordingAway() {
+    let (harness, main) = readyScreenWindows()
+    startLiveRecording(in: main)
+    releaseLiveTurn(in: harness)
+    releaseLiveTurn(in: harness)
+    XCTAssertTrue(windowText(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5))
+
+    let discard = main.buttons[UITestIdentifiers.liveRecordingDiscard]
+    discard.click()
+    // Scoped to the window's sheet: a bare "Discard" could match elsewhere.
+    let confirm = main.sheets.buttons["Discard"].firstMatch
+    XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Discarding asks first")
+    app.typeKey(.escape, modifierFlags: [])
+    XCTAssertTrue(confirm.waitForNonExistence(timeout: 5), "Escape closes the question…")
+    XCTAssertTrue(main.buttons[UITestIdentifiers.liveRecordingStop].exists, "…and keeps recording")
+
+    discard.click()
+    XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+    confirm.click()
+    XCTAssertTrue(
+      main.buttons[UITestIdentifiers.liveRecordingStop].waitForNonExistence(timeout: 10), "Discard ends the recording"
+    )
+    XCTAssertFalse(windowText(containing: UITestIdentifiers.liveFinalA).exists, "Nothing of it is kept")
+  }
+
+  /// A live session that drops mid-recording ends the recording and still
+  /// saves it, rather than losing what was said.
+  func testDroppedLiveSessionStillSavesTheRecording() {
+    let (harness, main) = readyScreenWindows()
+    startLiveRecording(in: main)
+    releaseLiveTurn(in: harness)
+    releaseLiveTurn(in: harness)
+    XCTAssertTrue(windowText(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5))
+
+    harness.buttons[UITestIdentifiers.harnessLiveFail].click()
+    XCTAssertTrue(viewPicker.waitForExistence(timeout: 15), "The recording is saved and opened")
+    XCTAssertFalse(main.buttons[UITestIdentifiers.liveRecordingStop].exists, "…and is no longer recording")
   }
 
   // MARK: - Controls and settings

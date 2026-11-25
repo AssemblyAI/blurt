@@ -1,6 +1,8 @@
 import XCTest
 
-/// The Library with entries, and an open transcript in each of its views.
+/// The Library with entries, an open transcript in each of its views, and a
+/// live recording's page (on Record's offline doubles) with its Discard
+/// question.
 final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
   override var extraLaunchArguments: [String] {
     [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.seedHistoryLaunchArgument]
@@ -31,6 +33,31 @@ final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
     )
     XCTAssertTrue(app.descendants(matching: .any).matching(result).firstMatch.waitForExistence(timeout: 10))
     try audit("transcript page, Meeting notes", into: &found)
+    assertNoAccessibilityIssues(found)
+  }
+
+  /// A recording's live page: listening, with two speakers' turns streamed
+  /// in, paused, and asking before Discard.
+  func testLiveRecordingPage() throws {
+    var found: [String] = []
+    let (harness, main) = readyScreenWindows()
+    startLiveRecording(in: main)
+    try audit("live recording, listening", into: &found)
+
+    for _ in 0..<4 { releaseLiveTurn(in: harness) }
+    let lastTurn = NSPredicate(format: "label CONTAINS %@", UITestIdentifiers.liveFinalB)
+    XCTAssertTrue(main.descendants(matching: .any).matching(lastTurn).firstMatch.waitForExistence(timeout: 5))
+    try audit("live recording, two speakers", into: &found)
+
+    main.buttons[UITestIdentifiers.liveRecordingPause].click()
+    let paused = main.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Paused'")).firstMatch
+    XCTAssertTrue(paused.waitForExistence(timeout: 5), "Pause should say so")
+    try audit("live recording, paused", into: &found)
+
+    main.buttons[UITestIdentifiers.liveRecordingDiscard].click()
+    XCTAssertTrue(main.sheets.buttons["Discard"].firstMatch.waitForExistence(timeout: 5), "Discard… should ask first")
+    try audit("live recording, Discard question", into: &found)
+    app.typeKey(.escape, modifierFlags: [])
     assertNoAccessibilityIssues(found)
   }
 }
