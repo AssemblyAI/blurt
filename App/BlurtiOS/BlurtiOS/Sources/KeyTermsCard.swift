@@ -65,7 +65,7 @@ struct KeyTermsCard: View {
       preview: SharePreview(pack.name, icon: Image(systemName: "text.badge.plus"))
     ) {
       Label("Share key terms", systemImage: "square.and.arrow.up")
-      .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
+        .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
     }
     .tint(BlurtBrand.accent)
   }
