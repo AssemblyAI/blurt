@@ -1,5 +1,4 @@
 import AssemblyAI
-import BlurtEngine
 import Testing
 
 @testable import BlurtiOSCore
@@ -16,21 +15,5 @@ struct WordsEditTests {
   func keyTermsStopAtTheCap() {
     let full = (0..<KeyTerms.termCap).map { "t\($0)" }
     #expect(WordsEdit.addingKeyTerms("one more", to: full) == full)
-  }
-
-  @Test("a shortcut needs a phrase with a letter or digit, and a replacement")
-  func canAddShortcut() {
-    #expect(WordsEdit.canAddShortcut(trigger: "my email", expansion: "me@example.com"))
-    #expect(!WordsEdit.canAddShortcut(trigger: "...", expansion: "me@example.com"))
-    #expect(!WordsEdit.canAddShortcut(trigger: "my email", expansion: " \n"))
-  }
-
-  @Test("a new shortcut goes on top; re-adding a phrase replaces its old replacement")
-  func addsShortcuts() {
-    let address = TextShortcut(trigger: "home", expansion: "1 Main St")
-    let email = TextShortcut(trigger: "my email", expansion: "old@example.com")
-    let added = WordsEdit.addingShortcut(trigger: "My-Email", expansion: "me@example.com", to: [address, email])
-    #expect(added.map(\.trigger) == ["My-Email", "home"])
-    #expect(added.map(\.expansion) == ["me@example.com", "1 Main St"])
   }
 }

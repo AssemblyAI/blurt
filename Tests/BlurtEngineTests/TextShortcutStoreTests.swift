@@ -49,6 +49,18 @@ struct TextShortcutStoreTests {
     #expect(TextShortcut.matchKey(for: "Cal.com") == TextShortcut.matchKey(for: "cal com"))
   }
 
+  @Test("a shortcut needs a usable phrase no other shortcut holds, and a replacement")
+  func canSave() {
+    let taken: Set = [TextShortcut.matchKey(for: "my email")]
+    #expect(TextShortcut.canSave(trigger: "home", expansion: "1 Main St", otherKeys: taken))
+    #expect(!TextShortcut.canSave(trigger: "...", expansion: "1 Main St", otherKeys: taken))
+    #expect(!TextShortcut.canSave(trigger: "home", expansion: " \n", otherKeys: taken))
+    #expect(!TextShortcut.canSave(trigger: "My-Email", expansion: "me@example.com", otherKeys: taken))
+    #expect(TextShortcut.isTaken("My-Email", by: taken))
+    #expect(!TextShortcut.isTaken("...", by: taken))
+    #expect(!TextShortcut.isTaken("home", by: taken))
+  }
+
   @Test("an undecodable slot reads as no shortcuts")
   func corrupt() {
     let defaults = freshDefaults()

@@ -122,8 +122,10 @@ final class AccessibilityAuditTests: XCTestCase {
       launchHome()
       let session = app.switches.firstMatch
       scrollTo(session)
-      session.tap()
-      XCTAssertTrue(app.buttons["Not now"].waitForExistence(timeout: 10), "Turning a session on should ask consent")
+      XCTAssertTrue(
+        Self.tap(session, until: app.buttons["Not now"], timeout: 10),
+        "Turning a session on should ask consent (\(Self.missedTapReport(session, in: app)))"
+      )
       try auditScrolling("consent sheet")
     }
   }

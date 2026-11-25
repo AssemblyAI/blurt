@@ -62,13 +62,3 @@ package enum BlurtBrand {
     return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? darkColor : lightColor })
   }
 }
-
-extension Color {
-  /// `Color(hex: 0x1D1B16)`. `nonisolated` so the generated `DesignTokens`
-  /// statics, which are nonisolated too, can call it.
-  package nonisolated init(hex: UInt32) {
-    self.init(
-      red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255
-    )
-  }
-}
