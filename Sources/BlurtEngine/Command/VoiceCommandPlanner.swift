@@ -1,15 +1,5 @@
 import Foundation
 
-/// Turns a spoken command ("open Slack and search for budget") into the steps
-/// that carry it out, for the Control Your Mac key (`SelectionSpeechRouting`).
-/// Public so a host can stand in its own (the engine's tests do).
-public protocol VoiceCommandPlanning: Sendable {
-  /// `context`: what was on screen when it was spoken (`ScreenContext`).
-  /// `trace`: filled with what the model was sent and answered, for the
-  /// developer-mode log — even when the plan then fails.
-  func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep]
-}
-
 /// The production `VoiceCommandPlanning`: one `POST /v1/chat/completions` to
 /// AssemblyAI's LLM Gateway, through `GatewayConnection.send`.
 ///
@@ -174,6 +164,81 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     "empty the trash" → {"steps": []}
     """
 
+  private let apps: @Sendable (String) -> String?
+
+  /// The gateway call, key and transport bound in.
+  private let gateway: GatewayConnection
+
+  public init(gateway: GatewayConnection) {
+    self.init(gateway: gateway, apps: Self.installedApp)
+  }
+
+  /// `apps`: the installed app a name means, by its own name (`AppLink`).
+  init(gateway: GatewayConnection, apps: @escaping @Sendable (String) -> String?) {
+    self.gateway = gateway
+    self.apps = apps
+  }
+
+  static func retryPrompt(_ error: VoiceCommandError) -> String {
+    "That plan couldn't be used: \(error.errorDescription ?? "it didn't parse"). Reply again with only the "
+      + "corrected JSON object, for the same command."
+  }
+
+  /// The user turn: what's on screen (when there's an app in front), then
+  /// what was said, each in its own tag. `fence`: the window block's code,
+  /// fresh for every request.
+  static func prompt(_ command: String, context: ScreenContext, fence: String = ScreenContext.newFence()) -> String {
+    let parts = [
+      context.promptText(fence: fence), AppNotes.promptText(AppNotes.notes(for: command, in: context)),
+      "<spoken_command>\n\(command)\n</spoken_command>",
+    ]
+    return parts.compactMap(\.self).joined(separator: "\n\n")
+  }
+
+  public func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
+    let ask = ReadAloudLLM.Body.Message(role: "user", content: Self.prompt(command, context: context))
+    trace.record(prompt: ask.content, model: Self.model, promptVersion: Self.promptVersion)
+    let first = try await complete([ask], trace: trace)
+    let steps: [VoiceCommandStep]
+    do {
+      steps = try VoiceCommandStep.steps(fromReply: first, maxSteps: Self.maxSteps, listed: context.elements)
+    } catch let error as VoiceCommandError where error.isRetryable {
+      // Once, with the model's own reply and what was wrong with it (Agent-S's
+      // format retry): a plan lost to one bad field is otherwise lost whole.
+      let retry = try await complete(
+        [ask, .init(role: "assistant", content: first), .init(role: "user", content: Self.retryPrompt(error))],
+        trace: trace
+      )
+      steps = try VoiceCommandStep.steps(fromReply: retry, maxSteps: Self.maxSteps, listed: context.elements)
+    }
+    return AppLink.preferApps(steps, said: command, listed: context.elements, app: apps)
+  }
+
+  /// One completion's text. Cut off part-way, the JSON doesn't close, and half
+  /// a plan is a different command: never retried, since it would be again.
+  private func complete(_ turns: [ReadAloudLLM.Body.Message], trace: PlanTrace) async throws -> String {
+    var body = ReadAloudLLM.chat(system: Self.instruction, turns: turns, maxTokens: Self.maxTokens, model: Self.model)
+    body.responseFormat = Self.responseFormat
+    let reply = try await gateway.send(body, timeout: Self.timeout)
+    trace.record(reply: reply.text)
+    guard !reply.truncated else { throw VoiceCommandError.truncatedReply }
+    return reply.text
+  }
+}
+
+extension VoiceCommandPlanner {
+  /// The installed or running app named exactly `name`; none off the Mac.
+  static let installedApp: @Sendable (String) -> String? = { name in
+    #if os(macOS)
+      SystemVoiceCommandPerformer.installedApp(named: name)
+    #else
+      nil
+    #endif
+  }
+}
+
+// The `response_format` schema the gateway holds a plan to.
+extension VoiceCommandPlanner {
   /// The plan's shape, enforced by the gateway (`response_format`): gemma-4-31b
   /// follows it, measured 2026-11-03 — without it the same request came back
   /// as prose, a fenced bare array, and an element named by its label rather
@@ -202,6 +267,9 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     ])
   }()
 
+  private static let string: ReadAloudLLM.JSONValue = .object(["type": .string("string")])
+  private static let integer: ReadAloudLLM.JSONValue = .object(["type": .string("integer")])
+
   /// One action's branch: its name and its fields, all required but a
   /// scroll's element (with none, the window scrolls).
   private static func branch(_ action: VoiceCommandStep.Action) -> ReadAloudLLM.JSONValue {
@@ -222,114 +290,65 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   /// switches below are exhaustive with no `default`: a new action doesn't
   /// compile until each has decided what it takes.
   static func fields(_ action: VoiceCommandStep.Action) -> [String: ReadAloudLLM.JSONValue] {
-    if let name = stringField(action) { return [name: string] }
+    if let name = stringField(action) {
+      return [name: string]
+    }
     return controlFields(action)
   }
 
   /// The one string field an app, link, key, text or button step takes.
   private static func stringField(_ action: VoiceCommandStep.Action) -> String? {
     switch action {
-    case .openApp, .quitApp, .hideApp: Field.app.rawValue
-    case .openURL: Field.url.rawValue
-    case .shortcut: Field.keys.rawValue
-    case .type: Field.text.rawValue
-    case .pressButton: Field.name.rawValue
-    case .media, .menu, .press, .focus, .select, .showMenu, .increment, .decrement, .setValue, .scroll, .window: nil
+    case .openApp, .quitApp, .hideApp:
+      Field.app.rawValue
+
+    case .openURL:
+      Field.url.rawValue
+
+    case .shortcut:
+      Field.keys.rawValue
+
+    case .type:
+      Field.text.rawValue
+
+    case .pressButton:
+      Field.name.rawValue
+
+    case .media, .menu, .press, .focus, .select, .showMenu, .increment, .decrement, .setValue, .scroll, .window:
+      nil
     }
   }
 
   /// The fields of every other step: an element, a path, a choice from a list.
   private static func controlFields(_ action: VoiceCommandStep.Action) -> [String: ReadAloudLLM.JSONValue] {
     switch action {
-    case .media: [Field.control.rawValue: enumeration(MediaKey.allCases.map(\.rawValue))]
-    case .menu: [Field.path.rawValue: .object(["type": .string("array"), "items": string])]
-    case .press, .focus, .select, .showMenu, .increment, .decrement: [Field.element.rawValue: integer]
-    case .setValue: [Field.element.rawValue: integer, Field.value.rawValue: .object(["type": .string("number")])]
+    case .media:
+      [Field.control.rawValue: enumeration(MediaKey.allCases.map(\.rawValue))]
+
+    case .menu:
+      [Field.path.rawValue: .object(["type": .string("array"), "items": string])]
+
+    case .press, .focus, .select, .showMenu, .increment, .decrement:
+      [Field.element.rawValue: integer]
+
+    case .setValue:
+      [Field.element.rawValue: integer, Field.value.rawValue: .object(["type": .string("number")])]
+
     case .scroll:
       [
         Field.direction.rawValue: enumeration(ScrollDirection.allCases.map(\.rawValue)),
         Field.element.rawValue: integer,
       ]
-    case .window: [Field.operation.rawValue: enumeration(WindowOperation.allCases.map(\.rawValue))]
-    case .openApp, .quitApp, .hideApp, .openURL, .shortcut, .type, .pressButton: [:]
+
+    case .window:
+      [Field.operation.rawValue: enumeration(WindowOperation.allCases.map(\.rawValue))]
+
+    case .openApp, .quitApp, .hideApp, .openURL, .shortcut, .type, .pressButton:
+      [:]
     }
   }
-
-  private static let string: ReadAloudLLM.JSONValue = .object(["type": .string("string")])
-  private static let integer: ReadAloudLLM.JSONValue = .object(["type": .string("integer")])
 
   private static func enumeration(_ values: [String]) -> ReadAloudLLM.JSONValue {
     .object(["type": .string("string"), "enum": .array(values.map { .string($0) })])
-  }
-
-  public init(gateway: GatewayConnection) {
-    self.init(gateway: gateway, apps: Self.installedApp)
-  }
-
-  /// `apps`: the installed app a name means, by its own name (`AppLink`).
-  init(gateway: GatewayConnection, apps: @escaping @Sendable (String) -> String?) {
-    self.gateway = gateway
-    self.apps = apps
-  }
-
-  private let apps: @Sendable (String) -> String?
-
-  public func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
-    let ask = ReadAloudLLM.Body.Message(role: "user", content: Self.prompt(command, context: context))
-    trace.record(prompt: ask.content, model: Self.model, promptVersion: Self.promptVersion)
-    let first = try await complete([ask], trace: trace)
-    let steps: [VoiceCommandStep]
-    do {
-      steps = try VoiceCommandStep.steps(fromReply: first, maxSteps: Self.maxSteps, listed: context.elements)
-    } catch let error as VoiceCommandError where error.isRetryable {
-      // Once, with the model's own reply and what was wrong with it (Agent-S's
-      // format retry): a plan lost to one bad field is otherwise lost whole.
-      let retry = try await complete(
-        [ask, .init(role: "assistant", content: first), .init(role: "user", content: Self.retryPrompt(error))],
-        trace: trace)
-      steps = try VoiceCommandStep.steps(fromReply: retry, maxSteps: Self.maxSteps, listed: context.elements)
-    }
-    return AppLink.preferApps(steps, said: command, listed: context.elements, app: apps)
-  }
-
-  /// The gateway call, key and transport bound in.
-  private let gateway: GatewayConnection
-
-  /// One completion's text. Cut off part-way, the JSON doesn't close, and half
-  /// a plan is a different command: never retried, since it would be again.
-  private func complete(_ turns: [ReadAloudLLM.Body.Message], trace: PlanTrace) async throws -> String {
-    var body = ReadAloudLLM.chat(system: Self.instruction, turns: turns, maxTokens: Self.maxTokens, model: Self.model)
-    body.responseFormat = Self.responseFormat
-    let reply = try await gateway.send(body, timeout: Self.timeout)
-    trace.record(reply: reply.text)
-    guard !reply.truncated else { throw VoiceCommandError.truncatedReply }
-    return reply.text
-  }
-
-  static func retryPrompt(_ error: VoiceCommandError) -> String {
-    "That plan couldn't be used: \(error.errorDescription ?? "it didn't parse"). Reply again with only the "
-      + "corrected JSON object, for the same command."
-  }
-
-  /// The user turn: what's on screen (when there's an app in front), then
-  /// what was said, each in its own tag. `fence`: the window block's code,
-  /// fresh for every request.
-  static func prompt(_ command: String, context: ScreenContext, fence: String = ScreenContext.newFence()) -> String {
-    let parts = [
-      context.promptText(fence: fence), AppNotes.promptText(AppNotes.notes(for: command, in: context)),
-      "<spoken_command>\n\(command)\n</spoken_command>",
-    ]
-    return parts.compactMap { $0 }.joined(separator: "\n\n")
-  }
-}
-
-extension VoiceCommandPlanner {
-  /// The installed or running app named exactly `name`; none off the Mac.
-  static let installedApp: @Sendable (String) -> String? = { name in
-    #if os(macOS)
-      SystemVoiceCommandPerformer.installedApp(named: name)
-    #else
-      nil
-    #endif
   }
 }

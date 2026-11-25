@@ -9,7 +9,6 @@ import Testing
 /// rule could slip through. These pin it down.
 @Suite("String.trimmedNonEmpty")
 struct StringNormalizationTests {
-
   @Test("nil stays nil")
   func nilStaysNil() {
     let value: String? = nil

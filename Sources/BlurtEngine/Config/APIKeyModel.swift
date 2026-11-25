@@ -11,6 +11,7 @@ public import Observation
 /// the coordinator. The validate-and-never-persist-an-unverified-key rules
 /// themselves live in `APIKeySubmission`; this type just forwards and mirrors the
 /// result into `hasAPIKey`.
+@preconcurrency
 @MainActor
 @Observable
 public final class APIKeyModel {
@@ -27,23 +28,6 @@ public final class APIKeyModel {
   /// gates dictation on having a key) and the Settings UI.
   public private(set) var hasAPIKey: Bool
 
-  /// `validateKey` defaults to the real AssemblyAI check; UI tests inject an
-  /// offline validator so the settings flow needs no network.
-  ///
-  /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.current`),
-  /// so every later readiness check on the press→recording latency path is
-  /// served from memory instead of paying a cold `SecItemCopyMatching`.
-  public init(
-    keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    validateKey: @escaping @Sendable (String) async -> APIKeyValidator.Result = {
-      await APIKeyValidator.blurt().validate($0)
-    }
-  ) {
-    self.keyStore = keyStore
-    self.submission = APIKeySubmission(keyStore: keyStore, validate: validateKey)
-    self.hasAPIKey = keyStore.hasKey
-  }
-
   /// The key currently stored, read through the gateway. The setup/settings
   /// API-key view reads this (rather than `APIKeyStore` directly) so a UI-test
   /// run sees the injected in-memory store instead of the real Keychain.
@@ -55,6 +39,24 @@ public final class APIKeyModel {
   /// to the production Keychain item. The reset owns that sweep and reports on
   /// it; `refreshStatus()` is how `hasAPIKey` catches up afterwards.
   public var storage: any APIKeyGateway { keyStore }
+
+  /// `validateKey` defaults to the real AssemblyAI check; UI tests inject an
+  /// offline validator so the settings flow needs no network.
+  ///
+  /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.current`),
+  /// so every later readiness check on the press→recording latency path is
+  /// served from memory instead of paying a cold `SecItemCopyMatching`.
+  @preconcurrency
+  public init(
+    keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
+    validateKey: @escaping @Sendable (String) async -> APIKeyValidator.Result = { key in
+      await APIKeyValidator.blurt().validate(key)
+    }
+  ) {
+    self.keyStore = keyStore
+    self.submission = APIKeySubmission(keyStore: keyStore, validate: validateKey)
+    self.hasAPIKey = keyStore.hasKey
+  }
 
   /// Deletes the stored key and refreshes `hasAPIKey`. For a sign-in whose
   /// connection ended (`AssemblyAIAccount`): that key was never the user's to
@@ -70,9 +72,9 @@ public final class APIKeyModel {
   /// with no key saved fails fast as `.failed(.apiKeyMissing)` before any capture.
   /// Captures the (Sendable) store, not this main-actor model, so it can cross
   /// into the session's `@Sendable` closure.
+  @preconcurrency
   public func readinessCheck() -> @Sendable () -> BlurtError? {
-    let keyStore = keyStore
-    return { keyStore.hasKey ? nil : .apiKeyMissing }
+    { [keyStore] in keyStore.hasKey ? nil : .apiKeyMissing }
   }
 
   /// Saves the AssemblyAI API key and refreshes `hasAPIKey` so observers —

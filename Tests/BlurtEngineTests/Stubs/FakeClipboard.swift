@@ -20,45 +20,9 @@
       var keptForHandPaste = false
       var concealed = false
     }
+
     private let state: Mutex<State>
     let lock = PasteboardLock()
-
-    init(string: String?) {
-      state = Mutex(State(text: string))
-    }
-
-    func write(_ text: String, concealed: Bool) {
-      state.withLock {
-        $0.text = text
-        $0.count += 1
-        $0.keptForHandPaste = true
-        $0.concealed = concealed
-      }
-    }
-
-    func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void {
-      let (saved, mark) = state.withLock { s -> (String?, Int) in
-        let previous = s.text
-        s.text = text
-        s.count += 1
-        s.keptForHandPaste = false
-        s.concealed = concealed
-        return (previous, s.count)
-      }
-      return { [self] in
-        state.withLock { s in
-          // Another writer bumped the count during the settle window — leave their
-          // newer contents alone (mirrors SystemClipboard's changeCount guard).
-          guard s.count == mark else { return }
-          s.text = saved
-          s.count += 1
-          s.concealed = false
-        }
-      }
-    }
-
-    /// Simulate another process writing the clipboard mid-paste.
-    func externalWrite(_ text: String) { write(text, concealed: false) }
 
     /// Current plain-string content, for assertions.
     var string: String? {
@@ -79,5 +43,44 @@
     var isConcealed: Bool {
       state.withLock { $0.concealed }
     }
+
+    init(string: String?) {
+      state = Mutex(State(text: string))
+    }
+
+    func write(_ text: String, concealed: Bool) {
+      state.withLock { clip in
+        clip.text = text
+        clip.count += 1
+        clip.keptForHandPaste = true
+        clip.concealed = concealed
+      }
+    }
+
+    func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void {
+      let (saved, mark) = state.withLock { s -> (String?, Int) in
+        let previous = s.text
+        s.text = text
+        s.count += 1
+        s.keptForHandPaste = false
+        s.concealed = concealed
+        return (previous, s.count)
+      }
+      return { [self] in
+        state.withLock { s in
+          // Another writer bumped the count during the settle window — leave their
+          // newer contents alone (mirrors SystemClipboard's changeCount guard).
+          guard s.count == mark else {
+            return
+          }
+          s.text = saved
+          s.count += 1
+          s.concealed = false
+        }
+      }
+    }
+
+    /// Simulate another process writing the clipboard mid-paste.
+    func externalWrite(_ text: String) { write(text, concealed: false) }
   }
 #endif

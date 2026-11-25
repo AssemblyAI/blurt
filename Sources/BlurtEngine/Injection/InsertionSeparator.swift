@@ -10,31 +10,6 @@
 /// with it). `KeyInjector.resolveInsert` composes these two with the
 /// window-identity decision, which stays beside the actor's state.
 public enum InsertionSeparator {
-  // periphery:ignore - public for the iOS keyboard (App/BlurtiOS), which the Mac scan doesn't index.
-  /// Joins `text` to whatever precedes the caret with exactly one separating space,
-  /// so consecutive dictations don't run together. Prepends a *leading* space only
-  /// when there's preceding text (`priorText`) that doesn't already end in
-  /// whitespace; leaves `text` untouched for an empty/unknown field or when the
-  /// caret already follows whitespace.
-  ///
-  /// A leading separator beats a trailing one: a trailing space dangles at the end
-  /// of a paste where many text engines trim or collapse it (so the next paste
-  /// abuts the previous text), whereas a leading space lands *between* the two
-  /// chunks where nothing strips it. `priorText` is nil for empty fields and for
-  /// secure/Accessibility-opaque fields — there we can't tell what precedes the
-  /// caret, so we add no separator rather than risk a stray leading space.
-  ///
-  /// Nor after an *opener* — a character that binds to the word typed after it
-  /// (see `endsInOpener`): `Call me (` + "maybe" pastes `Call me (maybe`, not
-  /// `Call me ( maybe`.
-  public static func withLeadingSeparator(_ text: String, after priorText: String?) -> String {
-    guard !text.isEmpty else { return text }
-    guard let priorText, let last = priorText.last, !last.isWhitespace else { return text }
-    guard let first = text.first, !first.isWhitespace else { return text }
-    guard !endsInOpener(priorText) else { return text }
-    return " " + text
-  }
-
   /// Characters that always open what follows them, so a dictation after one
   /// joins with no space: brackets, the typographic *opening* quotes and
   /// guillemet, Spanish inverted marks, and the mention and currency prefixes.
@@ -59,11 +34,50 @@ public enum InsertionSeparator {
   /// hashtag.
   private static let wordStartOpeners: Set<Character> = ["\"", "'", "#"]
 
+  // periphery:ignore - public for the iOS keyboard (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Joins `text` to whatever precedes the caret with exactly one separating space,
+  /// so consecutive dictations don't run together. Prepends a *leading* space only
+  /// when there's preceding text (`priorText`) that doesn't already end in
+  /// whitespace; leaves `text` untouched for an empty/unknown field or when the
+  /// caret already follows whitespace.
+  ///
+  /// A leading separator beats a trailing one: a trailing space dangles at the end
+  /// of a paste where many text engines trim or collapse it (so the next paste
+  /// abuts the previous text), whereas a leading space lands *between* the two
+  /// chunks where nothing strips it. `priorText` is nil for empty fields and for
+  /// secure/Accessibility-opaque fields — there we can't tell what precedes the
+  /// caret, so we add no separator rather than risk a stray leading space.
+  ///
+  /// Nor after an *opener* — a character that binds to the word typed after it
+  /// (see `endsInOpener`): `Call me (` + "maybe" pastes `Call me (maybe`, not
+  /// `Call me ( maybe`.
+  public static func withLeadingSeparator(_ text: String, after priorText: String?) -> String {
+    guard !text.isEmpty else {
+      return text
+    }
+    guard let priorText, let last = priorText.last, !last.isWhitespace else {
+      return text
+    }
+    guard let first = text.first, !first.isWhitespace else {
+      return text
+    }
+    guard !endsInOpener(priorText) else {
+      return text
+    }
+    return " " + text
+  }
+
   /// Whether `priorText` ends in a character the next word should abut.
   static func endsInOpener(_ priorText: String) -> Bool {
-    guard let last = priorText.last else { return false }
-    if openers.contains(last) { return true }
-    guard wordStartOpeners.contains(last) else { return false }
+    guard let last = priorText.last else {
+      return false
+    }
+    if openers.contains(last) {
+      return true
+    }
+    guard wordStartOpeners.contains(last) else {
+      return false
+    }
     return priorText.dropLast().last?.isWhitespace ?? true
   }
 
@@ -82,7 +96,9 @@ public enum InsertionSeparator {
   /// different window or nothing pasted yet) we return nil rather than risk a
   /// stray leading space into what may be a genuinely fresh field.
   static func basis(priorText: String?, lastInserted: String?, sameWindow: Bool) -> String? {
-    if priorText != nil { return priorText }
+    if priorText != nil {
+      return priorText
+    }
     return sameWindow ? lastInserted : nil
   }
 }

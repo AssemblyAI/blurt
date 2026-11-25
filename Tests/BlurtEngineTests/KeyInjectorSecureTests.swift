@@ -15,7 +15,8 @@
     func noEditableTargetLeavesPlainWords() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(
-        pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: clip)
+        pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: clip
+      )
 
       await #expect(throws: BlurtError.noEditableTarget) {
         try await injector.insert("dictated text")
@@ -31,7 +32,8 @@
     func secureLeaveBehindIsConcealed() async throws {
       let noTarget = FakeClipboard(string: "user-clipboard")
       let unfocused = KeyInjector(
-        pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: noTarget)
+        pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: noTarget
+      )
       await #expect(throws: BlurtError.noEditableTarget) {
         try await unfocused.insert("hunter2", secure: true)
       }
@@ -58,7 +60,8 @@
           seen.value = clip.isConcealed
           return true
         },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       try await injector.insert("hunter2", secure: true)
       await injector.pendingSettle?.value

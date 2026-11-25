@@ -1,13 +1,3 @@
-/// Writes what spoken instructions describe ("ok, a Slack reply to Dan: we
-/// should have a feature to just speak instructions, keep it casual"), for the
-/// Compose From Instructions key (`SelectionSpeechRouting`). Public so a host
-/// can stand in its own (the engine's tests and the app's UI tests do).
-public protocol MessageComposing: Sendable {
-  /// The text `instructions` describe, ready to paste into `app` — the
-  /// frontmost app's name, nil when it isn't known.
-  func compose(_ instructions: String, for app: String?) async throws -> String
-}
-
 /// The production `MessageComposing`: one `POST /v1/chat/completions` to
 /// AssemblyAI's LLM Gateway, through `GatewayConnection.send`.
 ///
@@ -60,19 +50,26 @@ public struct MessageComposer: MessageComposing, GatewayClient {
     self.gateway = gateway
   }
 
-  public func compose(_ instructions: String, for app: String?) async throws -> String {
-    let reply = try await gateway.send(
-      ReadAloudLLM.chat(
-        system: Self.instruction, user: Self.prompt(instructions, for: app), maxTokens: Self.maxTokens,
-        model: Self.model), timeout: Self.timeout)
-    guard !reply.truncated else { throw ReadAloudLLMError.truncated }
-    return reply.text
-  }
-
   /// The user turn: the app, when known, then the instructions.
   static func prompt(_ instructions: String, for app: String?) -> String {
     let spoken = "<spoken_instructions>\n\(instructions)\n</spoken_instructions>"
-    guard let app, !app.isEmpty else { return spoken }
+    guard let app, !app.isEmpty else {
+      return spoken
+    }
     return "<app>\(app)</app>\n\n\(spoken)"
+  }
+
+  public func compose(_ instructions: String, for app: String?) async throws -> String {
+    let reply = try await gateway.send(
+      ReadAloudLLM.chat(
+        system: Self.instruction,
+        user: Self.prompt(instructions, for: app),
+        maxTokens: Self.maxTokens,
+        model: Self.model
+      ),
+      timeout: Self.timeout
+    )
+    guard !reply.truncated else { throw ReadAloudLLMError.truncated }
+    return reply.text
   }
 }

@@ -9,7 +9,6 @@ import Testing
 /// `start()`/`stop()`.
 @Suite("MicCaptureProtocol defaults")
 struct MicCaptureProtocolDefaultsTests {
-
   /// Supplies only the two required capture calls, so `levels`, `warmUp()` and
   /// `cancelCapture()` resolve to the protocol's defaults.
   /// A `final class` over a `Mutex` rather than a struct (what this stub used to
@@ -21,8 +20,8 @@ struct MicCaptureProtocolDefaultsTests {
     /// default can be observed.
     let stops = Mutex(0)
 
-    func start() async throws -> AsyncStream<Data> { .finished }
-    func stop() async throws -> Int {
+    func start() -> AsyncStream<Data> { .finished }
+    func stop() -> Int {
       stops.withLock { $0 += 1 }
       return 0
     }
@@ -32,7 +31,7 @@ struct MicCaptureProtocolDefaultsTests {
   func defaults() async {
     let mic = BareMic()
     // Must return rather than hang or throw — it's fire-and-forget on press.
-    await mic.warmUp()
+    mic.warmUp()
 
     // The default meter finishes at once, so a for-await over it never blocks
     // a host that reads the meter through the protocol.

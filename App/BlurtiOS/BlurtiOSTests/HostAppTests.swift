@@ -10,6 +10,7 @@ import UIKit
 struct HostAppTests {
   final class Holder: NSObject {
     @objc var _hostBundleID: String?  // swiftlint:disable:this identifier_name
+
     init(_ id: String?) { _hostBundleID = id }
   }
 

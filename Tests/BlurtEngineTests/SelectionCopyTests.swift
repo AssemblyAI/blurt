@@ -4,78 +4,6 @@ import Testing
 
 @testable import BlurtEngine
 
-/// An in-memory pasteboard. `postCopy` stands in for the target app answering
-/// ⌘C by writing `copied` (nil models an app with nothing selected).
-final class FakeCopyPasteboard: CopyPasteboard {
-  struct State {
-    var changeCount = 0
-    var string: String? = "user's clipboard"
-    var restoreCount = 0
-    var ownWriteCount = 0
-    /// A write the app makes just after its clear: applied the moment the
-    /// cleared clipboard is first read, so the copier is guaranteed to see the
-    /// clear on one poll and the write on a later one — without racing a timer.
-    var lateWrite: String?
-  }
-
-  let state = Mutex(State())
-  let readable: Bool
-  let lock = PasteboardLock()
-
-  init(readable: Bool = true) { self.readable = readable }
-
-  var changeCount: Int { state.withLock(\.changeCount) }
-  var ownWriteCount: Int { state.withLock(\.ownWriteCount) }
-  func snapshot() -> PasteboardSnapshot? {
-    guard readable else { return nil }
-    return PasteboardSnapshot(items: [], plainText: state.withLock(\.string))
-  }
-  func currentString() -> String? {
-    state.withLock {
-      let current = $0.string
-      if current == nil, let late = $0.lateWrite {
-        $0.lateWrite = nil
-        $0.string = late
-        $0.changeCount += 1
-      }
-      return current
-    }
-  }
-  func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
-    state.withLock {
-      guard $0.changeCount == expected else { return }
-      $0.restoreCount += 1
-      $0.string = saved.plainText
-      $0.changeCount += 1
-    }
-  }
-
-  /// Blurt writing the clipboard itself, as a paste does.
-  func ownWrite(_ text: String) {
-    state.withLock {
-      $0.ownWriteCount += 1
-      $0.string = text
-      $0.changeCount += 1
-    }
-  }
-
-  /// What the target app does on ⌘C.
-  func answerCopy(with copied: String?) -> @Sendable () -> Bool {
-    { [self] in
-      if let copied {
-        self.state.withLock {
-          $0.string = copied
-          $0.changeCount += 1
-        }
-      }
-      return true
-    }
-  }
-
-  var string: String? { state.withLock(\.string) }
-  var restoreCount: Int { state.withLock(\.restoreCount) }
-}
-
 @Suite("SelectionCopy", .timeLimit(.minutes(1)))
 struct SelectionCopyTests {
   private func copy(_ pasteboard: FakeCopyPasteboard, answering copied: String?) -> SelectionCopy {
@@ -103,11 +31,11 @@ struct SelectionCopyTests {
     let pasteboard = FakeCopyPasteboard(readable: false)
     let posted = Mutex(false)
     let copy = SelectionCopy(
-      pasteboard: pasteboard,
-      postCopy: {
-        posted.withLock { $0 = true }
-        return true
-      })
+      pasteboard: pasteboard
+    ) {
+      posted.withLock { $0 = true }
+      return true
+    }
     #expect(await copy.copySelection(maxCharacters: 100) == nil)
     #expect(!posted.withLock { $0 })
   }
@@ -120,11 +48,11 @@ struct SelectionCopyTests {
     pasteboard.ownWrite("transcript")
     let posted = Mutex(false)
     let copy = SelectionCopy(
-      pasteboard: pasteboard,
-      postCopy: {
-        posted.withLock { $0 = true }
-        return pasteboard.answerCopy(with: "selected")()
-      })
+      pasteboard: pasteboard
+    ) {
+      posted.withLock { $0 = true }
+      return pasteboard.answerCopy(with: "selected")()
+    }
     let copying = Task { await copy.copySelection(maxCharacters: 100) }
     try await Task.sleep(for: .milliseconds(50))
     #expect(!posted.withLock { $0 })
@@ -149,14 +77,15 @@ struct SelectionCopyTests {
     let copy = SelectionCopy(
       pasteboard: pasteboard,
       postCopy: {
-        pasteboard.state.withLock {
-          $0.string = nil
-          $0.changeCount += 1
-          $0.lateWrite = "late copy"
+        pasteboard.state.withLock { board in
+          board.string = nil
+          board.changeCount += 1
+          board.lateWrite = "late copy"
         }
         return true
       },
-      timeout: .seconds(5))
+      timeout: .seconds(5)
+    )
     #expect(await copy.copySelection(maxCharacters: 100) == "late copy")
     #expect(pasteboard.string == "user's clipboard")
   }
@@ -168,8 +97,12 @@ struct SelectionCopyTests {
     _ pasteboard: FakeCopyPasteboard, lateCopyWindow: Duration, clock: TestClock
   ) async throws -> Task<Void, Never> {
     let copy = SelectionCopy(
-      pasteboard: pasteboard, postCopy: { true }, timeout: .milliseconds(20), lateCopyWindow: lateCopyWindow,
-      clock: clock)
+      pasteboard: pasteboard,
+      postCopy: { true },
+      timeout: .milliseconds(20),
+      lateCopyWindow: lateCopyWindow,
+      clock: clock
+    )
     async let result = copy.copySelectionWatchingLate(maxCharacters: 100)
     for _ in 1...2 {
       await clock.waitUntilSleeping(for: .milliseconds(10))
@@ -208,7 +141,8 @@ struct SelectionCopyTests {
         pasteboard.ownWrite("an earlier dictation")
         return true
       },
-      timeout: .milliseconds(200))
+      timeout: .milliseconds(200)
+    )
     #expect(await copy.copySelection(maxCharacters: 100) == nil)
     #expect(pasteboard.restoreCount == 0)
     #expect(pasteboard.string == "an earlier dictation")
@@ -232,7 +166,7 @@ struct SelectionCopyTests {
     let pasteboard = FakeCopyPasteboard()
     let copy = copy(pasteboard, answering: "copied")
     #expect(await SelectionSpeaker.resolve(.text("from AX"), copy: copy) == "from AX")
-    #expect(await SelectionSpeaker.resolve(.none, copy: copy) == nil)
+    #expect(await SelectionSpeaker.resolve(.noSelection, copy: copy) == nil)
     #expect(pasteboard.changeCount == 0)
     #expect(await SelectionSpeaker.resolve(.unreadable, copy: copy) == "copied")
   }

@@ -71,8 +71,11 @@
       // Never advanced: a sleep would park forever, so returning at all proves
       // the fast path never sleeps (the suite's time limit backs that up).
       let gap = await MicLiveness.waitUntilLive(
-        timeout: .seconds(1), clock: clock, deliveredFrames: { 1024 },
-        inputPowerDB: { quietRoomPowerDB })
+        timeout: .seconds(1),
+        clock: clock,
+        deliveredFrames: { 1_024 },
+        inputPowerDB: { quietRoomPowerDB }
+      )
       #expect(gap == .zero)
     }
 
@@ -81,15 +84,18 @@
       let clock = TestClock()
       let polls = Mutex(0)
       async let gap = MicLiveness.waitUntilLive(
-        timeout: MicLiveness.bluetoothTimeout, clock: clock,
+        timeout: MicLiveness.bluetoothTimeout,
+        clock: clock,
         deliveredFrames: {
           // Nothing delivered for the first three checks — the route still
           // switching — then buffers start arriving.
           polls.withLock { polls in
             polls += 1
-            return polls < 4 ? 0 : 1024
+            return polls < 4 ? 0 : 1_024
           }
-        }, inputPowerDB: { quietRoomPowerDB })
+        },
+        inputPowerDB: { quietRoomPowerDB }
+      )
       // Each wait is twice the last: 1 ms, 2 ms, 4 ms. Driving the clock by the
       // exact expected delay is also the assertion — `waitUntilSleeping` matches on
       // the deadline, so a loop that slept a fixed quantum would hang here rather
@@ -112,13 +118,16 @@
       let clock = TestClock()
       let polls = Mutex(0)
       async let gap = MicLiveness.waitUntilLive(
-        timeout: .seconds(30), clock: clock,
+        timeout: .seconds(30),
+        clock: clock,
         deliveredFrames: {
           polls.withLock { polls in
             polls += 1
-            return polls < 12 ? 0 : 1024
+            return polls < 12 ? 0 : 1_024
           }
-        }, inputPowerDB: { quietRoomPowerDB })
+        },
+        inputPowerDB: { quietRoomPowerDB }
+      )
       var expected = MicLiveness.initialPollInterval
       for _ in 1...11 {
         await clock.waitUntilSleeping(for: expected)
@@ -139,18 +148,18 @@
       // renegotiating: the "Connecting…" pill flashed past and the start chime
       // fired over a dead mic. With the power term the wait holds, and a device
       // that never delivers ends in nil — which `MicCapture` fails the press on.
-      #expect(await waitToCap(powerDB: { digitalSilencePowerDB }) == nil)
+      #expect(await waitToCap { digitalSilencePowerDB } == nil)
     }
 
     @Test("the floor is exclusive, and a non-finite reading is not live either")
     func silenceFloorEdges() async {
       // At the floor, not above it.
-      #expect(await waitToCap(powerDB: { MicLiveness.silenceFloorDB }) == nil)
+      #expect(await waitToCap { MicLiveness.silenceFloorDB } == nil)
       // NaN fails both comparisons; -infinity is what a truly muted device can
       // report. Both must read as not-live, so the press fails rather than
       // confirming a route that is delivering nothing.
-      #expect(await waitToCap(powerDB: { Float.nan }) == nil)
-      #expect(await waitToCap(powerDB: { -Float.infinity }) == nil)
+      #expect(await waitToCap { Float.nan } == nil)
+      #expect(await waitToCap { -Float.infinity } == nil)
     }
 
     @Test("delivered frames plus real input power confirm at once")
@@ -163,8 +172,11 @@
       // would fail this rather than let it pass slowly.
       let clock = TestClock()
       let gap = await MicLiveness.waitUntilLive(
-        timeout: MicLiveness.bluetoothTimeout, clock: clock, deliveredFrames: { 1024 },
-        inputPowerDB: { quietRoomPowerDB })
+        timeout: MicLiveness.bluetoothTimeout,
+        clock: clock,
+        deliveredFrames: { 1_024 },
+        inputPowerDB: { quietRoomPowerDB }
+      )
       #expect(gap == .zero)
     }
 
@@ -174,8 +186,11 @@
       // reproduced without a Mac and AirPods — so what it must contain is pinned
       // here rather than left to an untested call site in `MicCapture`.
       let confirmed = MicLiveness.logSummary(
-        gap: .milliseconds(1420), timeout: MicLiveness.bluetoothTimeout,
-        transportType: kAudioDeviceTransportTypeBluetooth, powerDB: -37.5)
+        gap: .milliseconds(1_420),
+        timeout: MicLiveness.bluetoothTimeout,
+        transportType: kAudioDeviceTransportTypeBluetooth,
+        powerDB: -37.5
+      )
       #expect(confirmed.contains("live after 1420 ms"))
       #expect(confirmed.contains("transport=\(kAudioDeviceTransportTypeBluetooth)"))
       #expect(confirmed.contains("powerDB=-37.5"))
@@ -183,8 +198,11 @@
       // A timeout reports the cap it waited out. An unreadable transport has to
       // stay distinguishable from `kAudioDeviceTransportTypeUnknown`, which is 0.
       let timedOut = MicLiveness.logSummary(
-        gap: nil, timeout: MicLiveness.unknownTransportTimeout, transportType: nil,
-        powerDB: digitalSilencePowerDB)
+        gap: nil,
+        timeout: MicLiveness.unknownTransportTimeout,
+        transportType: nil,
+        powerDB: digitalSilencePowerDB
+      )
       #expect(timedOut.contains("unconfirmed after 1000 ms"))
       #expect(timedOut.contains("failing closed"))
       #expect(timedOut.contains("transport=nil"))
@@ -200,8 +218,11 @@
       let clock = TestClock()
       let timeout = MicLiveness.initialPollInterval * 3
       async let gap = MicLiveness.waitUntilLive(
-        timeout: timeout, clock: clock, deliveredFrames: { 0 },
-        inputPowerDB: { digitalSilencePowerDB })
+        timeout: timeout,
+        clock: clock,
+        deliveredFrames: { 0 },
+        inputPowerDB: { digitalSilencePowerDB }
+      )
       var expected = MicLiveness.initialPollInterval
       for _ in 1...2 {
         await clock.waitUntilSleeping(for: expected)
@@ -219,7 +240,8 @@
       let clock = TestClock()
       let timeout = MicLiveness.initialPollInterval * 3
       async let gap = MicLiveness.waitUntilLive(
-        timeout: timeout, clock: clock, deliveredFrames: { 1024 }, inputPowerDB: powerDB)
+        timeout: timeout, clock: clock, deliveredFrames: { 1_024 }, inputPowerDB: powerDB
+      )
       var expected = MicLiveness.initialPollInterval
       for _ in 1...2 {
         await clock.waitUntilSleeping(for: expected)
@@ -230,81 +252,4 @@
     }
   }
 
-  /// The transport classification both the liveness cap and `MicCapture`'s tail
-  /// linger hang off. Pure and pinned here because `AudioRoute`, which reads the
-  /// raw value, needs real hardware and is excluded from the coverage gate — so
-  /// this is the only place the decision can be tested.
-  @Suite("AudioTransport")
-  struct AudioTransportTests {
-    @Test("both Bluetooth transport types count")
-    func bluetoothTransports() {
-      #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetooth))
-      #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetoothLE))
-    }
-
-    @Test("the tail linger is Bluetooth-only")
-    func tailLinger() {
-      // The other transport-conditional policy, here rather than in `MicCapture`
-      // so it is reachable by `swift test` at all — the capture actor needs real
-      // hardware and is excluded from the coverage gate.
-      #expect(
-        AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBluetooth)
-          == AudioTransport.bluetoothTailLinger)
-      // `.zero`, not a small duration: `stop()` skips the sleep entirely on a
-      // wired input rather than awaiting a nominal one.
-      #expect(AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBuiltIn) == .zero)
-      #expect(AudioTransport.tailLinger(forTransportType: nil) == .zero)
-    }
-
-    @Test("every wired and on-board transport counts as local")
-    func localTransports() {
-      // Each constant asserted individually: `isLocal` is a switch over all of
-      // them, and a value that only matches the first pattern never executes the
-      // rest — so this is also what keeps those lines covered.
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypeBuiltIn))
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypeUSB))
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypePCI))
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypeFireWire))
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypeThunderbolt))
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypeDisplayPort))
-      #expect(AudioTransport.isLocal(kAudioDeviceTransportTypeHDMI))
-    }
-
-    @Test("Bluetooth, wrapped, unnamed and unreadable transports are not local")
-    func nonLocalTransports() {
-      // `isLocal` is deliberately not `!isBluetooth`: these all fall through to
-      // `MicLiveness.unknownTransportTimeout`, because an aggregate or virtual
-      // device reports its own transport while real AirPods switch underneath it.
-      #expect(!AudioTransport.isLocal(kAudioDeviceTransportTypeAggregate))
-      #expect(!AudioTransport.isLocal(kAudioDeviceTransportTypeVirtual))
-      #expect(!AudioTransport.isLocal(kAudioDeviceTransportTypeUnknown))
-      #expect(!AudioTransport.isLocal(kAudioDeviceTransportTypeBluetooth))
-      #expect(!AudioTransport.isLocal(nil))
-    }
-
-    @Test("wired, built-in, and unreadable transports do not")
-    func nonBluetoothTransports() {
-      #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeBuiltIn))
-      #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeUSB))
-      #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeAggregate))
-      // nil is the conservative answer for both consumers: the short wait cap and
-      // no tail linger. Padding every wired capture with a delay would be a worse
-      // regression than losing the tail on a device we couldn't classify.
-      #expect(!AudioTransport.isBluetooth(nil))
-    }
-  }
-
-  /// `Duration.milliseconds` backs the latency lines `MicCapture` logs for the
-  /// liveness gap — the field evidence for whether the gate is doing anything —
-  /// so a silently wrong conversion would make those logs lie.
-  @Suite("Duration.milliseconds")
-  struct DurationMillisecondsTests {
-    @Test func convertsWholeAndFractionalDurations() {
-      #expect(Duration.milliseconds(250).milliseconds == 250)
-      #expect(Duration.seconds(2).milliseconds == 2000)
-      #expect(Duration.zero.milliseconds == 0)
-      // Sub-millisecond durations keep their fraction rather than truncating to 0.
-      #expect(Duration.microseconds(500).milliseconds == 0.5)
-    }
-  }
 #endif

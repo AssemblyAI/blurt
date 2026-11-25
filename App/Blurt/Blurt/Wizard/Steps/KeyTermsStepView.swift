@@ -19,7 +19,8 @@ struct KeyTermsStepView: View {
   /// keystroke, `@AppStorage` observed that as an external write and pushed the
   /// trimmed string back into the binding, so a trailing space was deleted as the
   /// user typed it and could never be entered at all.
-  @AppStorage(KeyTermsStore.defaultsKey) private var text = ""
+  @AppStorage(KeyTermsStore.defaultsKey)
+  private var text = ""
 
   var body: some View {
     let terms = KeyTerms.parse(text)

@@ -18,7 +18,8 @@ struct SelectionRewriterTests {
       return (200, completion("Dear team, the launch has moved to Friday."))
     }
     let rewrite = try await rewriter(transport).rewrite(
-      "hey all launch is friday now", as: "make it more formal")
+      "hey all launch is friday now", as: "make it more formal"
+    )
     #expect(rewrite == "Dear team, the launch has moved to Friday.")
 
     let request = try #require(sent.value)

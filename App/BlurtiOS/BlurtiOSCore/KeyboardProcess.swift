@@ -14,7 +14,8 @@ package nonisolated enum KeyboardProcess {
   /// can tell a resend (the same id and number again) from a new command.
   @MainActor private static var lastSequence: UInt64 = 0
 
-  @MainActor package static func nextSequence() -> UInt64 {
+  @MainActor
+  package static func nextSequence() -> UInt64 {
     lastSequence += 1
     return lastSequence
   }

@@ -27,6 +27,10 @@ import Sparkle
 /// itself because someone forgot a compilation condition.
 @Observable
 final class UpdaterModel {
+  /// The shipping build updates itself; debug builds (Blurt Dev, the UI-test
+  /// build) never do — see the type comment.
+  private static var startsUpdater: Bool { HostIdentity.isShippingBundle }
+
   @ObservationIgnored private let controller: SPUStandardUpdaterController
   @ObservationIgnored private var observations: [NSKeyValueObservation] = []
 
@@ -42,34 +46,6 @@ final class UpdaterModel {
 
   /// Title of the Settings "Updates" row, e.g. "Blurt 0.1.31".
   let versionLabel: String
-
-  init() {
-    isEnabled = Self.startsUpdater
-    controller = SPUStandardUpdaterController(
-      startingUpdater: isEnabled, updaterDelegate: nil, userDriverDelegate: nil)
-    versionLabel = Self.bundleVersionLabel()
-    // Sparkle publishes these on the main thread. The two preferences are read
-    // live from Sparkle, so their observers only invalidate: Sparkle's own update
-    // alert can flip "install automatically", and an open Settings pane should
-    // show it.
-    let updater = controller.updater
-    observations = [
-      updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] observed, _ in
-        MainActor.assumeIsolated { self?.canCheckForUpdates = observed.canCheckForUpdates }
-      },
-      updater.observe(\.automaticallyChecksForUpdates) { [weak self] _, _ in
-        MainActor.assumeIsolated { self?.withMutation(keyPath: \.automaticallyChecksForUpdates) {} }
-      },
-      updater.observe(\.automaticallyDownloadsUpdates) { [weak self] _, _ in
-        MainActor.assumeIsolated { self?.withMutation(keyPath: \.automaticallyDownloadsUpdates) {} }
-      },
-    ]
-  }
-
-  /// Runs a user-initiated check; Sparkle presents the result either way.
-  func checkForUpdates() {
-    controller.checkForUpdates(nil)
-  }
 
   /// The "check automatically" preference. Sparkle persists it in the app's
   /// defaults; it starts on because `SUEnableAutomaticChecks` is set in
@@ -101,14 +77,49 @@ final class UpdaterModel {
     }
   }
 
-  /// The shipping build updates itself; debug builds (Blurt Dev, the UI-test
-  /// build) never do — see the type comment.
-  private static var startsUpdater: Bool { HostIdentity.isShippingBundle }
+  init() {
+    isEnabled = Self.startsUpdater
+    controller = SPUStandardUpdaterController(
+      startingUpdater: isEnabled, updaterDelegate: nil, userDriverDelegate: nil
+    )
+    versionLabel = Self.bundleVersionLabel()
+    // Sparkle publishes these on the main thread. The two preferences are read
+    // live from Sparkle, so their observers only invalidate: Sparkle's own update
+    // alert can flip "install automatically", and an open Settings pane should
+    // show it.
+    let updater = controller.updater
+    observations = [
+      updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] observed, _ in
+        MainActor.assumeIsolated { self?.canCheckForUpdates = observed.canCheckForUpdates }
+      },
+      updater.observe(\.automaticallyChecksForUpdates) { [weak self] _, _ in
+        MainActor.assumeIsolated {
+          self?.withMutation(keyPath: \.automaticallyChecksForUpdates) {
+            // Invalidation only: the value lives in Sparkle and is read live.
+          }
+        }
+      },
+      updater.observe(\.automaticallyDownloadsUpdates) { [weak self] _, _ in
+        MainActor.assumeIsolated {
+          self?.withMutation(keyPath: \.automaticallyDownloadsUpdates) {
+            // Invalidation only: the value lives in Sparkle and is read live.
+          }
+        }
+      },
+    ]
+  }
 
   private static func bundleVersionLabel() -> String {
     let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Blurt"
     guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-    else { return name }
+    else {
+      return name
+    }
     return "\(name) \(version)"
+  }
+
+  /// Runs a user-initiated check; Sparkle presents the result either way.
+  func checkForUpdates() {
+    controller.checkForUpdates(nil)
   }
 }

@@ -4,9 +4,6 @@ import Security
 /// Reads and writes a single string as a generic-password keychain item.
 /// `service`/`account` are injectable so tests can use an isolated namespace.
 struct KeychainStore: Sendable {
-  let service: String
-  let account: String
-
   /// Why a read produced no value. Collapsing these to a bare `nil` is unsafe for
   /// any caller that *memoizes* the answer: `errSecItemNotFound` is a durable fact
   /// ("nothing saved"), while a locked keychain or a denied ACL prompt is a
@@ -24,6 +21,9 @@ struct KeychainStore: Sendable {
     case unavailable(OSStatus)
   }
 
+  let service: String
+  let account: String
+
   /// Reads the item, distinguishing "nothing saved" from "couldn't read it".
   func read() -> ReadResult {
     var query = baseQuery()
@@ -37,10 +37,14 @@ struct KeychainStore: Sendable {
       guard let data = item as? Data,
         let key = String(data: data, encoding: .utf8),
         !key.isEmpty
-      else { return .absent }
+      else {
+        return .absent
+      }
       return .value(key)
+
     case errSecItemNotFound:
       return .absent
+
     default:
       return .unavailable(status)
     }
@@ -57,20 +61,30 @@ struct KeychainStore: Sendable {
 
     let data = Data(trimmed.utf8)
     switch update(data) {
-    case errSecSuccess: return true
-    case errSecItemNotFound: break
-    default: return false
+    case errSecSuccess:
+      return true
+
+    case errSecItemNotFound:
+      break
+
+    default:
+      return false
     }
 
     var addQuery = baseQuery()
     addQuery[kSecValueData as String] = data
     switch SecItemAdd(addQuery as CFDictionary, nil) {
-    case errSecSuccess: return true
+    case errSecSuccess:
+      return true
+
     // Update-then-add is not atomic: a concurrent writer can insert the item
     // between our two calls. The item exists now, so store our value with a
     // second update instead of reporting a failed save for a key that's there.
-    case errSecDuplicateItem: return update(data) == errSecSuccess
-    default: return false
+    case errSecDuplicateItem:
+      return update(data) == errSecSuccess
+
+    default:
+      return false
     }
   }
 

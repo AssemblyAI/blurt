@@ -16,19 +16,22 @@ final class KeysLiveUpdateUITests: BlurtUITestCase {
     let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
     XCTAssertTrue(
-      app.windows[UITestIdentifiers.mainWindowTitle].waitForExistence(timeout: 10), "Ready window not presented")
+      app.windows[UITestIdentifiers.mainWindowTitle].waitForExistence(timeout: 10), "Ready window not presented"
+    )
     harness.buttons[UITestIdentifiers.setKeyButton].click()
 
     bind("left ⌃", with: UITestIdentifiers.harnessSetAsk, in: harness)
     XCTAssertTrue(
       row("\(KeyActionName.ask): Left Control.").waitForExistence(timeout: 5),
-      "The ready screen should gain a row for the key that asks")
+      "The ready screen should gain a row for the key that asks"
+    )
 
     bind("right ⌥", with: UITestIdentifiers.harnessSetDictate, in: harness)
     bind("right ⌘", with: UITestIdentifiers.harnessSetReadAloud, in: harness)
     XCTAssertTrue(
       row("Dictate: Right Option.").waitForExistence(timeout: 5),
-      "Dictation moved to right ⌥, so the dictation row should name it")
+      "Dictation moved to right ⌥, so the dictation row should name it"
+    )
     XCTAssertTrue(row("\(KeyActionName.readAloud): Right Command.").exists)
 
     let statusItem = app.menuBars.statusItems.firstMatch

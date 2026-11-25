@@ -8,9 +8,8 @@ import Testing
 /// lint file-length budget.
 @Suite("DictationSession guards & phase stream", .timeLimit(.minutes(1)))
 struct DictationSessionGuardTests {
-
   @Test("press while already recording is a silent no-op")
-  func pressWhileRecordingDropped() async throws {
+  func pressWhileRecordingDropped() async {
     let fixture = makeSession(mode: .transcript("hi"))
 
     await fixture.session.press()
@@ -21,7 +20,7 @@ struct DictationSessionGuardTests {
   }
 
   @Test("release with nothing recording is a silent no-op")
-  func releaseFromIdleNoOps() async throws {
+  func releaseFromIdleNoOps() async {
     let fixture = makeSession(mode: .transcript("hi"))
 
     await fixture.session.release()
@@ -31,7 +30,7 @@ struct DictationSessionGuardTests {
   }
 
   @Test("cancel with nothing recording is a silent no-op")
-  func cancelFromIdleNoOps() async throws {
+  func cancelFromIdleNoOps() async {
     let fixture = makeSession(mode: .transcript("hi"))
 
     await fixture.session.cancel()
@@ -41,7 +40,7 @@ struct DictationSessionGuardTests {
   }
 
   @Test("keyTermsProvider is consulted afresh at each press")
-  func keyTermsProviderReadPerPress() async throws {
+  func keyTermsProviderReadPerPress() async {
     // The provider is a closure (not a stored list) precisely so Settings edits
     // take effect on the next dictation without rebuilding the session — that
     // only holds if every press re-reads it.
@@ -50,11 +49,13 @@ struct DictationSessionGuardTests {
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = makeSession(
-      transcriber: stt, mic: mic, injector: injector,
-      keyTermsProvider: {
-        _ = reads.next()
-        return ["Blurt"]
-      })
+      transcriber: stt,
+      mic: mic,
+      injector: injector
+    ) {
+      _ = reads.next()
+      return ["Blurt"]
+    }
 
     await session.press()
     await session.cancel()
@@ -65,7 +66,7 @@ struct DictationSessionGuardTests {
   }
 
   @Test("multiple phaseStream subscribers all receive later transitions")
-  func phaseStreamBroadcastsToMultipleSubscribers() async throws {
+  func phaseStreamBroadcastsToMultipleSubscribers() async {
     let fixture = makeSession(mode: .transcript("hi"))
 
     // Subscribe while recording so each stream's initial yield is non-terminal.

@@ -14,7 +14,9 @@ extension MicCapture {
   /// amplitude leaves ambient noise well above zero, so the bars never rested
   /// at empty.)
   public static func linearLevel(fromPowerDB db: Float) -> Float {
-    guard db.isFinite, db > meterFloorDB else { return 0 }
+    guard db.isFinite, db > meterFloorDB else {
+      return 0
+    }
     return min(1, (db - meterFloorDB) / -meterFloorDB)
   }
 }

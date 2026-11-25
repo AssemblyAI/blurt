@@ -35,10 +35,38 @@ struct ElementActionsTests {
     }
   }
 
+  /// A menu as Accessibility nests it: a bar item's entries inside one menu.
+  private struct Menu {
+    let title: String?
+    var children: [Self] = []
+  }
+
+  private let bar = Menu(
+    title: nil,
+    children: [
+      Menu(
+        title: "File",
+        children: [
+          Menu(
+            title: nil,
+            children: [
+              Menu(title: "New Window"),
+              Menu(title: "Export To", children: [Menu(title: nil, children: [Menu(title: "PDF…")])]),
+              Menu(title: "Move to Trash"),
+            ]
+          )
+        ]
+      )
+    ]
+  )
+
   private func press(_ element: Element, checked: Bool = true) async throws -> String {
     try await ElementActions.press(
-      fingerprint: checked ? { element.fingerprint } : nil, press: { element.press() },
-      settle: { element.calls.append("settle") }, click: { element.click() })
+      fingerprint: checked ? { element.fingerprint } : nil,
+      press: { element.press() },
+      settle: { element.calls.append("settle") },
+      click: { element.click() }
+    )
   }
 
   @Test("a press that changes something is the whole step: no click")
@@ -80,8 +108,14 @@ struct ElementActionsTests {
     let element = Element()
     element.pressChanges = false
     let how = try await ElementActions.press(
-      "AXSelected", fingerprint: { element.fingerprint }, press: { element.press() }, settle: {},
-      click: { element.click() })
+      "AXSelected",
+      fingerprint: { element.fingerprint },
+      press: { element.press() },
+      settle: {
+        // Nothing to wait for: the fake applies a press at once.
+      },
+      click: { element.click() }
+    )
     #expect(how == "AXSelected, then click: nothing visibly changed")
   }
 
@@ -91,8 +125,11 @@ struct ElementActionsTests {
     element.pressChanges = false
     await #expect(throws: CancellationError.self) {
       try await ElementActions.press(
-        fingerprint: { element.fingerprint }, press: { element.press() },
-        settle: { throw CancellationError() }, click: { element.click() })
+        fingerprint: { element.fingerprint },
+        press: { element.press() },
+        settle: { throw CancellationError() },
+        click: { element.click() }
+      )
     }
     #expect(!element.calls.contains("click"))
   }
@@ -104,11 +141,13 @@ struct ElementActionsTests {
         element.calls.append("focus")
         if element.takesFocus { element.focused = true }
       },
-      isFocused: { element.focused }, click: { element.click() },
+      isFocused: { element.focused },
+      click: { element.click() },
       selectAll: {
         element.calls.append("select")
         return "selected 18 characters"
-      })
+      }
+    )
   }
 
   @Test("a field that takes focus has its contents selected, so typing replaces them")
@@ -142,31 +181,10 @@ struct ElementActionsTests {
     #expect(!element.calls.contains("select"))
   }
 
-  /// A menu as Accessibility nests it: a bar item's entries inside one menu.
-  private struct Menu {
-    let title: String?
-    var children: [Menu] = []
-  }
-
-  private let bar = Menu(
-    title: nil,
-    children: [
-      Menu(
-        title: "File",
-        children: [
-          Menu(
-            title: nil,
-            children: [
-              Menu(title: "New Window"),
-              Menu(title: "Export To", children: [Menu(title: nil, children: [Menu(title: "PDF…")])]),
-              Menu(title: "Move to Trash"),
-            ])
-        ])
-    ])
-
   private func item(_ path: [String]) throws -> Menu {
     try ElementActions.menuItem(
-      path, from: bar, entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } }, title: \.title)
+      path, from: bar, entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } }, title: \.title
+    )
   }
 
   @Test("a menu path is walked through each menu's entries, each title matched loosely")
@@ -181,8 +199,11 @@ struct ElementActionsTests {
   func menuAnywhere() throws {
     func anywhere(_ name: String) throws -> Menu? {
       try ElementActions.menuItem(
-        named: name, from: bar, entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } },
-        title: \.title)
+        named: name,
+        from: bar,
+        entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } },
+        title: \.title
+      )
     }
     #expect(try anywhere("pdf…")?.title == "PDF…")
     #expect(try anywhere("Print") == nil)
@@ -203,10 +224,14 @@ struct ElementActionsTests {
       children: [
         Menu(title: "View", children: [Menu(title: nil, children: [Menu(title: "Zoom In")])]),
         Menu(title: "View", children: [Menu(title: nil, children: [Menu(title: "Sidebar")])]),
-      ])
+      ]
+    )
     let found = try ElementActions.menuItem(
-      ["View", "Zoom In"], from: twoViews, entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } },
-      title: \.title)
+      ["View", "Zoom In"],
+      from: twoViews,
+      entries: { $0.children.flatMap { $0.title == nil ? $0.children : [$0] } },
+      title: \.title
+    )
     #expect(found.title == "Zoom In")
   }
 
@@ -217,11 +242,19 @@ struct ElementActionsTests {
     func visit(body: () throws -> Void, beat: @escaping () async throws -> Void) async -> [CGPoint] {
       var warps: [CGPoint] = []
       try? await ElementActions.withPointer(
-        at: target, home: home, warp: { warps.append($0) }, beat: beat, body)
+        at: target, home: home, warp: { warps.append($0) }, beat: beat, body
+      )
       return warps
     }
-    #expect(await visit(body: {}, beat: {}) == [target, home])
-    #expect(await visit(body: { throw VoiceCommandError.couldNotPerform("click there") }, beat: {}) == [target, home])
-    #expect(await visit(body: {}, beat: { throw CancellationError() }) == [target, home])
+    let lands = {
+      // The click itself succeeds; only the pointer's path is under test.
+    }
+    let noBeat = {
+      // No pause between the click and the trip home.
+    }
+    #expect(await visit(body: lands, beat: noBeat) == [target, home])
+    #expect(
+      await visit(body: { throw VoiceCommandError.couldNotPerform("click there") }, beat: noBeat) == [target, home])
+    #expect(await visit(body: lands) { throw CancellationError() } == [target, home])
   }
 }

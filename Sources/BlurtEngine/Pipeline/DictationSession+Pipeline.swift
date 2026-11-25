@@ -47,6 +47,21 @@ extension DictationSession {
   /// audio moving (slightly less primed) beats the wait.
   static let contextWaitBudget: Duration = .milliseconds(500)
 
+  /// The phase a failed paste ends in. Which injector errors are a quiet
+  /// "copied" notice rather than a fault is `BlurtError.isQuietDegradation` — an
+  /// exhaustive switch over the cases, so a new error that leaves the transcript
+  /// on the clipboard has to be classified there instead of silently flashing
+  /// red here. Everything else surfaces its real error (e.g.
+  /// `.accessibilityPermissionMissing`) rather than being relabeled as a lost
+  /// target. An untyped injection error left nothing on the clipboard, so it
+  /// stays a genuine (reported) failure under the generic lost-target label.
+  static func pasteOutcome(_ error: any Error) -> PipelinePhase {
+    guard let err = error as? BlurtError else {
+      return .failed(.targetAppLost)
+    }
+    return err.isQuietDegradation ? .noTarget : .failed(err)
+  }
+
   /// Takes no audio: the recording was uploaded as it was captured, so the
   /// recorded blob's only remaining job — the too-short-clip check — belongs to
   /// `performRelease`, which can abandon the request without racing it.
@@ -63,11 +78,15 @@ extension DictationSession {
     // the release path goes straight to the transcript. This is the second half
     // of the latency win: the old shape spent up to `contextWaitBudget` here,
     // with the user watching the pill.
-    guard let text = await awaitUpload() else { return }
+    guard let text = await awaitUpload() else {
+      return
+    }
 
     // A cancel() that landed while transcribe was in flight already set
     // .cancelled and detached this task — don't inject or touch the phase.
-    if Task.isCancelled { return }
+    if Task.isCancelled {
+      return
+    }
 
     // The log keeps what the service returned; the paste and the Recent list
     // get the expanded text, and the ring also keeps the spoken version (see
@@ -92,9 +111,14 @@ extension DictationSession {
     // from. The same for a hand-back's spoken request as for a pasted dictation.
     let loggable =
       switch security {
-      case .secure: DictationLog.withheldTranscript
-      case .unknown: DictationLog.unverifiedTranscript
-      case .ordinary: text
+      case .secure:
+        DictationLog.withheldTranscript
+
+      case .unknown:
+        DictationLog.unverifiedTranscript
+
+      case .ordinary:
+        text
       }
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
@@ -119,8 +143,12 @@ extension DictationSession {
     // `PressContext.TargetSecurity`).
     if security != .secure {
       recentDictations.record(
-        trimmed, spoken: spoken, style: pressStyle.name, at: Date(),
-        replayable: security == .ordinary)
+        trimmed,
+        at: Date(),
+        spoken: spoken,
+        style: pressStyle.name,
+        replayable: security == .ordinary
+      )
     }
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.
@@ -172,8 +200,10 @@ extension DictationSession {
       // asserting, and `capturedContext`, which is where the release path reads
       // that flag, reads the resolved value and never this one.
       return try await transcriber.transcribe(
-        frames: frames, sampleRate: SyncSTTLimits.sampleRate,
-        context: resolved ?? press?.pressKnown)
+        frames: frames,
+        sampleRate: SyncSTTLimits.sampleRate,
+        context: resolved ?? press?.pressKnown
+      )
     }
   }
 
@@ -228,7 +258,9 @@ extension DictationSession {
       // .cancelled; the transport then surfaces a cancellation-shaped error
       // (URLError(.cancelled) / CancellationError). Leave the claimed phase
       // alone rather than repainting the user's cancel as a red failure.
-      if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return nil }
+      if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+        return nil
+      }
       // The producer refused to close a body below `SyncSTTLimits.minPCMBytes`.
       // `performRelease` normally catches that first and idles quietly; when the
       // producer gets there first instead, the outcome has to be the same
@@ -288,19 +320,6 @@ extension DictationSession {
     }
   }
 
-  /// The phase a failed paste ends in. Which injector errors are a quiet
-  /// "copied" notice rather than a fault is `BlurtError.isQuietDegradation` — an
-  /// exhaustive switch over the cases, so a new error that leaves the transcript
-  /// on the clipboard has to be classified there instead of silently flashing
-  /// red here. Everything else surfaces its real error (e.g.
-  /// `.accessibilityPermissionMissing`) rather than being relabeled as a lost
-  /// target. An untyped injection error left nothing on the clipboard, so it
-  /// stays a genuine (reported) failure under the generic lost-target label.
-  static func pasteOutcome(_ error: any Error) -> PipelinePhase {
-    guard let err = error as? BlurtError else { return .failed(.targetAppLost) }
-    return err.isQuietDegradation ? .noTarget : .failed(err)
-  }
-
   /// The paste, answering how it ended for the log (`DictationLog.Entry.outcome`).
   private func inject(_ text: String) async -> PipelinePhase {
     setPhase(.injecting)
@@ -308,12 +327,17 @@ extension DictationSession {
       // A password field's words are pasted like any others, but if they end
       // up left on the clipboard instead they are left as the secret they are.
       try await injector.insert(
-        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle,
-        secure: capturedContext?.targetIsSecure == true)
+        text,
+        after: capturedContext?.priorText,
+        windowTitle: capturedContext?.windowTitle,
+        secure: capturedContext?.targetIsSecure == true
+      )
       // A cancel() that landed in insert's final, non-cancellable stretch
       // (after its last checkCancellation) already set .cancelled — leave the
       // claimed phase alone rather than repainting it as .pasted.
-      if Task.isCancelled { return .cancelled }
+      if Task.isCancelled {
+        return .cancelled
+      }
       // The paste landed — show the quiet "pasted" notice (the mirror of the
       // "copied" notice below) rather than snapping straight back to idle.
       setPhase(.pasted)
@@ -323,7 +347,9 @@ extension DictationSession {
       // bails via its checkCancellation). Leave the claimed phase alone —
       // including on a late non-cancellation error — rather than relabeling
       // the user's cancel as a failure.
-      if error is CancellationError || Task.isCancelled { return .cancelled }
+      if error is CancellationError || Task.isCancelled {
+        return .cancelled
+      }
       let phase = Self.pasteOutcome(error)
       setPhase(phase)
       return phase

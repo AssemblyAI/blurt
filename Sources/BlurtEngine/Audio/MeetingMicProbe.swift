@@ -41,7 +41,9 @@
         return []
       }
       var objects = [AudioObjectID](repeating: 0, count: Int(dataSize) / MemoryLayout<AudioObjectID>.size)
-      guard unsafe AudioObjectGetPropertyData(system, &address, 0, nil, &dataSize, &objects) == noErr else { return [] }
+      guard unsafe AudioObjectGetPropertyData(system, &address, 0, nil, &dataSize, &objects) == noErr else {
+        return []
+      }
       return objects
     }
 

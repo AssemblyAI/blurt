@@ -26,9 +26,9 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCodes: [55])
     #expect(router.handle(.flagsChanged(keyCode: 55, triggerFlagIsOn: true), at: .zero) == .start)
     #expect(router.handle(.pointerDown, at: .milliseconds(80)) == .cancel)
-    #expect(router.handle(.flagsChanged(keyCode: 55, triggerFlagIsOn: false), at: .milliseconds(150)) == .none)
+    #expect(router.handle(.flagsChanged(keyCode: 55, triggerFlagIsOn: false), at: .milliseconds(150)) == .ignore)
     // With nothing pressed, a click is nothing.
-    #expect(router.handle(.pointerDown, at: .seconds(1)) == .none)
+    #expect(router.handle(.pointerDown, at: .seconds(1)) == .ignore)
   }
 
   @Test("a held press is start → stop")
@@ -44,7 +44,7 @@ struct DictationKeyRouterTests {
     // still set; re-arming the gate on it would corrupt the tap/hold timing.
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(downEvent(trigger), at: .milliseconds(50)) == .none)
+    #expect(router.handle(downEvent(trigger), at: .milliseconds(50)) == .ignore)
     // The eventual release still stops the (single) dictation.
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
   }
@@ -52,7 +52,7 @@ struct DictationKeyRouterTests {
   @Test("an up-state delivery with no tracked down is ignored")
   func upWithoutDownIsIgnored() {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
-    #expect(router.handle(upEvent(trigger), at: .zero) == .none)
+    #expect(router.handle(upEvent(trigger), at: .zero) == .ignore)
   }
 
   @Test("flag changes reported for another keycode never reach the gate")
@@ -60,8 +60,8 @@ struct DictationKeyRouterTests {
     // E.g. right ⌥ going down while right ⌘ is bound: the delivery's flags may
     // even carry the trigger's bit, but the event isn't about the bound key.
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
-    #expect(router.handle(downEvent(otherModifier), at: .zero) == .none)
-    #expect(router.handle(upEvent(otherModifier), at: .seconds(2)) == .none)
+    #expect(router.handle(downEvent(otherModifier), at: .zero) == .ignore)
+    #expect(router.handle(upEvent(otherModifier), at: .seconds(2)) == .ignore)
   }
 
   @Test("another key over a fresh press is a combo and cancels")
@@ -75,7 +75,7 @@ struct DictationKeyRouterTests {
   func triggerKeyDownIsNotACombo() {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(.keyDown(keyCode: trigger), at: .milliseconds(100)) == .none)
+    #expect(router.handle(.keyDown(keyCode: trigger), at: .milliseconds(100)) == .ignore)
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
   }
 
@@ -84,7 +84,7 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
-    #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .none)
+    #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .ignore)
     #expect(router.handle(upEvent(trigger), at: .seconds(5) + .milliseconds(200)) == .stop)
   }
 
@@ -106,12 +106,12 @@ struct DictationKeyRouterTests {
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
     // Another trigger tapped over the latched recording neither stops nor
     // re-starts it, and isn't a combo.
-    #expect(router.handle(downEvent(otherModifier), at: .seconds(1)) == .none)
-    #expect(router.handle(upEvent(otherModifier), at: .seconds(1) + .milliseconds(200)) == .none)
-    #expect(router.handle(.keyDown(keyCode: otherModifier), at: .seconds(1)) == .none)
+    #expect(router.handle(downEvent(otherModifier), at: .seconds(1)) == .ignore)
+    #expect(router.handle(upEvent(otherModifier), at: .seconds(1) + .milliseconds(200)) == .ignore)
+    #expect(router.handle(.keyDown(keyCode: otherModifier), at: .seconds(1)) == .ignore)
     #expect(router.activeKeyCode == trigger)
     // The owner's next tap stops it and frees the gate for either key.
-    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .none)
+    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .ignore)
     #expect(router.handle(upEvent(trigger), at: .seconds(2) + .milliseconds(200)) == .stop)
     #expect(router.handle(downEvent(otherModifier), at: .seconds(3)) == .start)
   }
@@ -121,8 +121,8 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger, otherModifier])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(.keyDown(keyCode: 8), at: .milliseconds(100)) == .cancel)
-    #expect(router.handle(downEvent(otherModifier), at: .milliseconds(200)) == .none)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .none)
+    #expect(router.handle(downEvent(otherModifier), at: .milliseconds(200)) == .ignore)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .ignore)
     #expect(router.activeKeyCode == nil)
   }
 
@@ -144,7 +144,7 @@ struct DictationKeyRouterTests {
     let discarded = router.reset()
     #expect(discarded)
     // The tracker cleared too: the stale key-up is ignored, a new press starts.
-    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .none)
+    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .ignore)
     #expect(router.handle(downEvent(trigger), at: .seconds(3)) == .start)
   }
 
@@ -161,7 +161,7 @@ struct DictationKeyRouterTests {
   func resetClearsLatchSoNextPressStarts() {
     // The bug this pins: when a dictation ends WITHOUT a key event — the
     // auto-release cap fires, or the press is refused/failed — the gate stays
-    // `.latched`. A latched `modifierDown` returns `.none` and the `modifierUp`
+    // `.latched`. A latched `modifierDown` returns `.ignore` and the `modifierUp`
     // after it returns `.stop`, which no-ops on an already-terminal session, so
     // the user's whole next press does nothing. `DictationKeyTap`'s
     // `syncAfterTerminalPhase()` calls `reset()` to clear it; this pins that a
@@ -172,7 +172,7 @@ struct DictationKeyRouterTests {
 
     // Without the reset, this next tap is swallowed — the exact dead press.
     var swallowed = router
-    #expect(swallowed.handle(downEvent(trigger), at: .seconds(5)) == .none)
+    #expect(swallowed.handle(downEvent(trigger), at: .seconds(5)) == .ignore)
 
     router.reset()
     #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .start)
@@ -183,14 +183,14 @@ struct DictationKeyRouterTests {
     // The auto-release/failed-press case where the trigger is still physically
     // held when the phase goes terminal. `syncAfterTerminalPhase` resets anyway
     // (the dictation is over), which clears the modifier tracker — so the release
-    // that follows must route to `.none` rather than emitting a spurious `.stop`,
+    // that follows must route to `.ignore` rather than emitting a spurious `.stop`,
     // and the press after that must start normally.
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
     router.reset()  // terminal phase arrived while the key is still down
 
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .none)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .ignore)
     #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .start)
   }
 
@@ -204,7 +204,7 @@ struct DictationKeyRouterTests {
     #expect(discarded)
     #expect(router.triggerKeyCodes == [otherModifier])
     // The old key is now irrelevant; the new one drives dictation.
-    #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .none)
+    #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .ignore)
     #expect(router.handle(downEvent(otherModifier), at: .seconds(2)) == .start)
   }
 
@@ -218,8 +218,8 @@ struct DictationKeyRouterTests {
     let removed = router.rebind(triggerKeyCodes: [trigger], activation: .tapOrHold)
     #expect(!removed)
     // Still latched: the next tap of the active key stops it.
-    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .none)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(2100)) == .stop)
+    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .ignore)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(2_100)) == .stop)
   }
 
   @Test("changing the mode mid-recording discards it even with the same keys")
@@ -242,7 +242,7 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     router.rebind(triggerKeyCodes: [trigger], activation: .hold)
     // Under hold-only a quick release stops instead of latching — the tap-or-hold
-    // gate this router was built with would have returned `.none` here.
+    // gate this router was built with would have returned `.ignore` here.
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .stop)
   }
@@ -263,7 +263,7 @@ struct DictationKeyRouterTests {
     #expect(!discarded)
 
     // The gate kept its state, so the eventual release still stops this dictation
-    // rather than routing to `.none` as it would after a reset.
+    // rather than routing to `.ignore` as it would after a reset.
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
   }
 
@@ -281,7 +281,7 @@ struct DictationKeyRouterTests {
 
     // The tracker was cleared with the gate, so a stale up can't emit a spurious
     // `.stop`, and the next press starts cleanly.
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .none)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .ignore)
     #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .start)
   }
 

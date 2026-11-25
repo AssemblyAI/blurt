@@ -12,9 +12,12 @@ import SwiftUI
 /// not to literals here.
 @propertyWrapper
 struct ObservedKeyBindings: DynamicProperty {
-  @AppStorage(TriggerKeyStore.defaultsKey) private var boundKeyCode = 0
-  @AppStorage(TriggerKeyStyleStore.defaultsKey) private var choicesRaw = ""
-  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+  @AppStorage(TriggerKeyStore.defaultsKey)
+  private var boundKeyCode = 0
+  @AppStorage(TriggerKeyStyleStore.defaultsKey)
+  private var choicesRaw = ""
+  @AppStorage(TriggerActivationStore.defaultsKey)
+  private var activationRaw = ""
 
   var wrappedValue: TriggerKeyBindings {
     TriggerKeyBindings(boundKeyCode: boundKeyCode, choicesRaw: choicesRaw, activationRaw: activationRaw)

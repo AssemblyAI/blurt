@@ -12,7 +12,7 @@ extension BlurtKeyboardFlows {
   /// thing a fresh appearance in a living extension process can lose. Then
   /// the other way a keyboard comes back: put away and brought up again in
   /// the same field.
-  func switchAwayAndBack() throws {
+  func switchAwayAndBack() {
     let globe = app.buttons["Next keyboard"].firstMatch
     guard globe.exists else {
       check(false, "no globe under the keyboard to switch with")
@@ -36,12 +36,14 @@ extension BlurtKeyboardFlows {
     checkDrawn(mic, "back on Blurt")
     if frame == .zero { print("FLOW-TREE (mic missing after the switch):\n\(app.debugDescription)") }
     shot("switched-back")
-    try dismissAndReturn()
+    dismissAndReturn()
   }
 
-  private func dismissAndReturn() throws {
+  private func dismissAndReturn() {
     let dismiss = app.buttons["probe-dismiss"]
-    guard dismiss.exists else { return }
+    guard dismiss.exists else {
+      return
+    }
     let plus = app.buttons["Add a key term"]
     dismiss.tap()
     Thread.sleep(forTimeInterval: 1.5)

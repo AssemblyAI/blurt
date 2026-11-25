@@ -11,7 +11,9 @@ import Testing
 struct ResetScriptContractTests {
   private static let script: String = {
     let url = URL(filePath: #filePath)
-      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
       .appending(path: "scripts/reset-lib.sh")
     return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
   }()
@@ -37,6 +39,7 @@ struct ResetScriptContractTests {
   func keychainAccounts() {
     #expect(
       Self.script.contains(
-        "BLURT_KEYCHAIN_ACCOUNTS=(\"\(APIKeyStore.keychainAccount)\" \"\(SignInStore.keychainAccount)\")"))
+        "BLURT_KEYCHAIN_ACCOUNTS=(\"\(APIKeyStore.keychainAccount)\" \"\(SignInStore.keychainAccount)\")"
+      ))
   }
 }

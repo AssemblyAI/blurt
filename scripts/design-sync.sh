@@ -73,7 +73,7 @@ exempt = {
 }
 app_exempt = {
     "BlurtiOSApp.swift", "DictationCoordinator.swift", "ListeningWindow.swift", "ListeningSource.swift",
-    "AudioSource.swift", "SimulatorAudioSource.swift", "KeyboardProbeView.swift",
+    "WindowedAudioSource.swift", "SimulatorAudioSource.swift", "KeyboardProbeView.swift",
 }
 files = sorted(
     [path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)

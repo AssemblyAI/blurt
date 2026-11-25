@@ -5,6 +5,17 @@ import UIKit
 // MARK: - Carrying out the handshake's actions
 
 extension KeyboardModel {
+  /// When the command the handshake is waiting on went out.
+  private var awaitingSince: Date? {
+    switch handshake.state {
+    case .pressing(_, let sentAt, _, _), .stopping(_, _, let sentAt, _):
+      sentAt
+
+    case .idle, .owned, .foreign, .unready:
+      nil
+    }
+  }
+
   /// Performs what the handshake asked for, in order, then keeps the ticks
   /// in step with whatever it is waiting on now. A send feeds the handshake
   /// its `pressSent` / `stopSent` from inside, so by the time the next action
@@ -20,10 +31,17 @@ extension KeyboardModel {
 
   private func act(on action: PressHandshake.Action) {
     switch action {
-    case .armGate, .resetGate, .latch: touchGate(action)
-    case .sendPress, .sendRelease, .sendCancel: dispatch(action)
-    case .resendPress(let id), .resendStop(let id): resend(id)
-    case .showConnecting, .show, .hop, .buzz, .none: react(to: action)
+    case .armGate, .resetGate, .latch:
+      touchGate(action)
+
+    case .sendPress, .sendRelease, .sendCancel:
+      dispatch(action)
+
+    case .resendPress(let id), .resendStop(let id):
+      resend(id)
+
+    case .showConnecting, .show, .hop, .buzz, .nothing:
+      react(to: action)
     }
   }
 
@@ -35,12 +53,17 @@ extension KeyboardModel {
     switch action {
     case .armGate:
       _ = gate.modifierDown(at: touchDown ?? elapsed)
+
     case .resetGate:
       gate.reset()
+
     case .latch:
-      guard gate.isIdle else { return }
+      guard gate.isIdle else {
+        return
+      }
       _ = gate.modifierDown(at: elapsed)
       _ = gate.modifierUp(at: elapsed)
+
     default:
       break
     }
@@ -51,12 +74,15 @@ extension KeyboardModel {
     case .sendPress:
       let command = send(.press, dictation: nil)
       perform(handshake.handle(.pressSent(id: command.id, at: command.sentAt), now: now()))
+
     case .sendRelease(let dictation):
       let command = send(.release, dictation: dictation)
       perform(handshake.handle(.stopSent(id: command.id, at: command.sentAt), now: now()))
+
     case .sendCancel(let dictation):
       let command = send(.cancel, dictation: dictation)
       perform(handshake.handle(.cancelSent(id: command.id, at: command.sentAt), now: now()))
+
     default:
       break
     }
@@ -66,12 +92,16 @@ extension KeyboardModel {
     switch action {
     case .showConnecting:
       showsConnecting = true
+
     case .show(let reason):
       KeyboardLog.refused(reason)
+
     case .hop(let reason):
       hop(reason: reason)
+
     case .buzz:
       if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+
     default:
       break
     }
@@ -87,10 +117,19 @@ extension KeyboardModel {
     let isSecure = isPress && proxy?.isPasswordField == true
     let readsField = isPress && !isSecure
     let command = KeyboardCommand(
-      id: UUID(), kind: kind, priorText: readsField ? proxy?.documentContextBeforeInput : nil,
-      selectedText: readsField ? proxy?.selectedText : nil, sentAt: now(), keyboard: KeyboardProcess.id,
-      seq: KeyboardProcess.nextSequence(), controllerID: controllerID, documentID: proxy?.documentIdentifier,
-      dictationID: dictation, stateSequence: listeningState?.sequence, isSecure: isPress ? isSecure : nil)
+      id: UUID(),
+      kind: kind,
+      priorText: readsField ? proxy?.documentContextBeforeInput : nil,
+      selectedText: readsField ? proxy?.selectedText : nil,
+      sentAt: now(),
+      keyboard: KeyboardProcess.id,
+      seq: KeyboardProcess.nextSequence(),
+      controllerID: controllerID,
+      documentID: proxy?.documentIdentifier,
+      dictationID: dictation,
+      stateSequence: listeningState?.sequence,
+      isSecure: isPress ? isSecure : nil
+    )
     lastCommand = command
     transport(command)
     KeyboardLog.wrote(command, resend: false)
@@ -100,7 +139,9 @@ extension KeyboardModel {
   /// The same command again — the id, the stamp, the text — so an app that
   /// did read it answers it as before and one that missed it takes it now.
   private func resend(_ id: UUID) {
-    guard let command = lastCommand, command.id == id else { return }
+    guard let command = lastCommand, command.id == id else {
+      return
+    }
     transport(command)
     KeyboardLog.wrote(command, resend: true)
   }
@@ -125,17 +166,25 @@ extension KeyboardModel {
   /// for the command the handshake is waiting on; a new one replaces them.
   private func syncTicks() {
     let awaiting = handshake.pressID ?? handshake.stopID
-    guard awaiting != ticking else { return }
+    guard awaiting != ticking else {
+      return
+    }
     cancelTicks()
     ticking = awaiting
-    guard awaiting != nil, let sentAt = awaitingSince else { return }
+    guard awaiting != nil, let sentAt = awaitingSince else {
+      return
+    }
     let deadline = handshake.pressID != nil ? handshake.pressDeadline : handshake.stopDeadline
     ticks = [handshake.retryDelay, deadline].map { delay in
       let due = sentAt.addingTimeInterval(delay)
       return Task { [weak self] in
-        guard let self else { return }
+        guard let self else {
+          return
+        }
         try? await clock.sleep(for: .seconds(max(0, due.timeIntervalSince(now()))))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+          return
+        }
         tick()
       }
     }
@@ -145,14 +194,6 @@ extension KeyboardModel {
     ticks.forEach { $0.cancel() }
     ticks = []
     ticking = nil
-  }
-
-  /// When the command the handshake is waiting on went out.
-  private var awaitingSince: Date? {
-    switch handshake.state {
-    case .pressing(_, let sentAt, _, _), .stopping(_, _, let sentAt, _): sentAt
-    case .idle, .owned, .foreign, .unready: nil
-    }
   }
 
   /// The clock, on the handshake's scale: a resend if it is due, the

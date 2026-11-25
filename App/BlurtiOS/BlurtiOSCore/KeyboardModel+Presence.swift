@@ -5,6 +5,10 @@ import UIKit
 // MARK: - Lifecycle, presence and the app's signals
 
 extension KeyboardModel {
+  // MARK: Presence
+
+  package static var pid: Int32 { ProcessInfo.processInfo.processIdentifier }
+
   package func attach(to controller: UIInputViewController) {
     self.controller = controller
     observers = [
@@ -55,8 +59,12 @@ extension KeyboardModel {
     readSelection()
     hostBundleID = controller.flatMap(HostApp.bundleID(of:))
     KeyboardLog.appeared(
-      pid: Self.pid, process: KeyboardProcess.id, controller: controllerID, fullAccess: hasFullAccess,
-      host: hostBundleID)
+      pid: Self.pid,
+      process: KeyboardProcess.id,
+      controller: controllerID,
+      fullAccess: hasFullAccess,
+      host: hostBundleID
+    )
     if hostBundleID == nil, let controller { KeyboardLog.hostUnknown(holders: HostApp.holderNames(of: controller)) }
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (`VoiceRowHost`), but nothing below can
@@ -94,7 +102,9 @@ extension KeyboardModel {
   /// when the app is listening and nothing is in flight; otherwise the orb
   /// sits dimmed and the first tap opens Blurt.
   private func autoStart() {
-    guard isListening, isSettled, gate.isIdle, handshake.isIdle else { return }
+    guard isListening, isSettled, gate.isIdle, handshake.isIdle else {
+      return
+    }
     tapMic()
   }
 
@@ -129,7 +139,9 @@ extension KeyboardModel {
     let clock = clock
     leaving = Task { [weak self] in
       try? await clock.sleep(for: .seconds(Self.leaveGrace))
-      guard !Task.isCancelled, let self else { return }
+      guard !Task.isCancelled, let self else {
+        return
+      }
       leave()
     }
   }
@@ -144,7 +156,9 @@ extension KeyboardModel {
     leaving = nil
     guard SharedStore.keyboardPresence?.controllerID == controllerID,
       SharedStore.writeKeyboardPresence(presence(onScreen: false), ifOwnedBy: KeyboardProcess.id)
-    else { return }
+    else {
+      return
+    }
     SharedStore.keyboardSeenAt = nil
     SharedStore.post(BlurtShared.Signal.keyboard)
   }
@@ -161,21 +175,25 @@ extension KeyboardModel {
   /// is cancelled; anything else — processing, another keyboard's, a press
   /// unanswered — is left to the app and its watchdog.
   private func endOwnedDictation() {
-    guard case .owned(let dictation, let phase) = handshake.state else { return }
+    guard case let .owned(dictation, phase) = handshake.state else {
+      return
+    }
     switch phase {
-    case .recording: perform([.sendRelease(dictation: dictation)])
-    case .connecting: perform([.sendCancel(dictation: dictation)])
-    case .idle, .processing, .pasted, .copied, .error: break
+    case .recording:
+      perform([.sendRelease(dictation: dictation)])
+
+    case .connecting:
+      perform([.sendCancel(dictation: dictation)])
+
+    case .idle, .processing, .pasted, .copied, .error:
+      break
     }
   }
 
-  // MARK: Presence
-
-  package static var pid: Int32 { ProcessInfo.processInfo.processIdentifier }
-
   package func presence(onScreen: Bool) -> KeyboardPresenceRecord {
     KeyboardPresenceRecord(
-      processID: KeyboardProcess.id, controllerID: controllerID, pid: Self.pid, seenAt: now(), onScreen: onScreen)
+      processID: KeyboardProcess.id, controllerID: controllerID, pid: Self.pid, onScreen: onScreen, seenAt: now()
+    )
   }
 
   /// The presence record, and the older keys an app that reads those still
@@ -194,7 +212,9 @@ extension KeyboardModel {
     heartbeat?.cancel()
     heartbeat = Task { [weak self] in
       while !Task.isCancelled {
-        guard let self else { return }
+        guard let self else {
+          return
+        }
         writePresence(onScreen: true)
         readListeningState()
         perform(handshake.handle(.stateChanged(listeningState), now: now()))
@@ -218,7 +238,9 @@ extension KeyboardModel {
     readListeningState()
     perform(handshake.handle(.stateChanged(listeningState), now: now()))
     if let ack = SharedStore.commandAck { perform(handshake.handle(.ack(ack), now: now())) }
-    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
+    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else {
+      return
+    }
     apply(current.isStale(now: now()) || current.noticeDwellSeconds != nil ? .idle : current, haptics: false)
   }
 
@@ -232,7 +254,9 @@ extension KeyboardModel {
 
   /// `Signal.ack`: the app answered a command.
   package func ackArrived() {
-    guard let ack = SharedStore.commandAck else { return }
+    guard let ack = SharedStore.commandAck else {
+      return
+    }
     KeyboardLog.ack(ack)
     perform(handshake.handle(.ack(ack), now: now()))
   }

@@ -9,9 +9,10 @@
   /// and the fallback/cancel suite live in separate files to stay within the
   /// lint file-length budget, but drive the injector the same way).
   ///
-  /// The boxes are classes over `Mutex` (not actors) because they're poked from
-  /// synchronous `@Sendable` seams like `postPaste`; the `Mutex` makes each
-  /// `Sendable` conformance compiler-checked instead of `@unchecked`-asserted.
+  /// The boxes beside this file (`AsyncGate`, `StringListBox`, `ValueBox`) are
+  /// classes over `Mutex` (not actors) because they're poked from synchronous
+  /// `@Sendable` seams like `postPaste`; the `Mutex` makes each `Sendable`
+  /// conformance compiler-checked instead of `@unchecked`-asserted.
 
   /// A live application to stand in as the captured paste target: one of the
   /// system's own, which run for the whole GUI session, so it can't exit between
@@ -27,8 +28,10 @@
   /// pid — never come to the front — and the `#require` says so if it can't.
   func liveTargetApp() throws -> NSRunningApplication {
     let longLived = ["com.apple.dock", "com.apple.finder", "com.apple.loginwindow"]
-    let app = longLived.lazy.compactMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first }
-      .first { !$0.isTerminated }
+    let app = longLived.lazy.compactMap { bundleID in
+      NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+    }
+    .first { !$0.isTerminated }
     let pinned = try #require(app, "no long-lived system app is running")
     // What `KeyInjector.setTarget` will do with the pid: it has to come back.
     #expect(NSRunningApplication(processIdentifier: pinned.processIdentifier) != nil)
@@ -68,86 +71,9 @@
       // stable non-nil app identity, not activation.
       activateTarget: { _ in true },
       secondsSinceUserInput: secondsSinceUserInput,
-      clipboard: clip)
+      clipboard: clip
+    )
     return (injector, pasted)
   }
 
-  /// One-shot async gate: `wait()` suspends until `open()` is called. Tolerates
-  /// `open()` racing ahead of `wait()` (the waiter then returns immediately), and
-  /// any number of concurrent waiters — `Gate`, which is built from a pair of
-  /// these, needs that for the stubs whose blocked method is called twice by the
-  /// regression under test.
-  ///
-  /// `open()` is synchronous (a `Mutex`-guarded class, not an actor) because the
-  /// seams that trip these gates are synchronous `@Sendable` closures like
-  /// `KeyInjector.postPaste`.
-  final class AsyncGate: Sendable {
-    private struct State {
-      var waiters: [CheckedContinuation<Void, Never>] = []
-      var opened = false
-    }
-    private let state = Mutex(State())
-
-    func wait() async {
-      await withCheckedContinuation { cont in
-        let openedAlready = state.withLock { s -> Bool in
-          if s.opened { return true }
-          s.waiters.append(cont)
-          return false
-        }
-        if openedAlready { cont.resume() }
-      }
-    }
-
-    func open() {
-      let waiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
-        s.opened = true
-        let pending = s.waiters
-        s.waiters.removeAll()
-        return pending
-      }
-      for waiter in waiters { waiter.resume() }
-    }
-  }
-
-  /// Thread-safe ordered list of strings recorded inside a `@Sendable` closure,
-  /// for asserting the sequence of texts a test observed being pasted. Not a
-  /// `ValueBox<[String]>`: the atomic append is the point — appending through a
-  /// get-then-set property would race two recorders against each other.
-  final class StringListBox: Sendable {
-    private let items = Mutex<[String]>([])
-    func append(_ value: String?) {
-      items.withLock { $0.append(value ?? "") }
-    }
-    var values: [String] {
-      items.withLock { $0 }
-    }
-  }
-
-  /// Thread-safe single-value cell for capturing an arbitrary value written inside
-  /// a `@Sendable` closure and reading it back after the awaited call returns —
-  /// also how a closure holds the handle of the very task executing it, so it can
-  /// cancel it (a `Task` is `Sendable`, so that needs no separate box).
-  final class ValueBox<T: Sendable>: Sendable {
-    private let stored: Mutex<T>
-    init(_ initial: T) { stored = Mutex(initial) }
-    /// One settable property rather than a `value` getter beside a `set(_:)` — the
-    /// `Mutex` is what makes the class `Sendable`, so both accessors can go through
-    /// it and callers read as ordinary assignment.
-    var value: T {
-      get { stored.withLock { $0 } }
-      set { stored.withLock { $0 = newValue } }
-    }
-  }
-
-  extension ValueBox where T == Bool {
-    /// A `KeyInjector` `postPaste` double that records the ⌘V was posted and
-    /// reports it landed — for a test that asserts on whether the paste happened.
-    var recordingPaste: @Sendable (CGKeyCode) -> Bool {
-      { _ in
-        self.value = true
-        return true
-      }
-    }
-  }
 #endif

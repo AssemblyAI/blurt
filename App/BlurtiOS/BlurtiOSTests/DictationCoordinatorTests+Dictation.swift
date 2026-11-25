@@ -16,6 +16,9 @@ extension DictationCoordinatorTests {
   /// The keyboard process the rig's presses come from.
   static let keyboard = "kb-1"
 
+  /// The phase the keyboard reads.
+  var published: PhaseSnapshot? { SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) }
+
   /// A coordinator listening, with a key saved and `keyboard` on screen —
   /// the state a press records from.
   func listening(startDelay: Duration = .zero) async -> (DictationCoordinator, WindowRig) {
@@ -32,12 +35,14 @@ extension DictationCoordinatorTests {
   func onScreen(_ keyboard: String, age: TimeInterval = 0) {
     SharedStore.writeKeyboardPresence(
       KeyboardPresenceRecord(
-        processID: keyboard, controllerID: "field", pid: 1, seenAt: frozenNow.addingTimeInterval(-age),
-        onScreen: true))
+        processID: keyboard,
+        controllerID: "field",
+        pid: 1,
+        onScreen: true,
+        seenAt: frozenNow.addingTimeInterval(-age)
+      )
+    )
   }
-
-  /// The phase the keyboard reads.
-  var published: PhaseSnapshot? { SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) }
 
   /// Presses and waits for the recording; the dictation's id.
   func recording(_ coordinator: DictationCoordinator) async throws -> UUID {
@@ -53,7 +58,9 @@ extension DictationCoordinatorTests {
   /// clipboard on a slow run before the test gets to the result.
   func takeResult(stepping clock: TestClock) async -> DictationResult? {
     let arrived = await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil }
-    guard arrived else { return nil }
+    guard arrived else {
+      return nil
+    }
     let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
     SharedStore.remove(forKey: BlurtShared.Key.result)
     await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
@@ -237,8 +244,8 @@ extension DictationCoordinatorTests {
       DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press() }
       DictationCoordinator.claimedPress.withLock { $0 = DictationCoordinator.Press() }
     }
-    DictationCoordinator.pendingPress.withLock {
-      $0 = DictationCoordinator.Press(address: ResultAddress(keyboard: Self.keyboard))
+    DictationCoordinator.pendingPress.withLock { pending in
+      pending = DictationCoordinator.Press(address: ResultAddress(keyboard: Self.keyboard))
     }
     // The release lands first (`handleCommand`), then the session claims.
     DictationCoordinator.claimedPress.withLock { $0.stopAddress = ResultAddress(keyboard: "kb-2") }

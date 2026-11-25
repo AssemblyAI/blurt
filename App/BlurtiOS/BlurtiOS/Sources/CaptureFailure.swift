@@ -15,13 +15,24 @@ nonisolated enum CaptureFailure {
   /// silence, and the rest — no device, a dead or unconfigurable session,
   /// anything the source didn't throw — is the microphone busy.
   static func reason(for error: any Error) -> FailureReason {
-    guard let failure = unwrapped(error) as? ListeningSourceFailure else { return .micBusy }
+    guard let failure = unwrapped(error) as? ListeningSourceFailure else {
+      return .micBusy
+    }
     return switch failure {
-    case .windowClosed: .sessionOff
-    case .noInputDevice, .runtimeError, .configureFailed: .micBusy
-    case .interrupted, .couldNotResume: .interrupted
-    case .inputSilent: .micSilent
-    case .backgroundStartRefused: .needsForeground
+    case .windowClosed:
+      .sessionOff
+
+    case .noInputDevice, .runtimeError, .configureFailed:
+      .micBusy
+
+    case .interrupted, .couldNotResume:
+      .interrupted
+
+    case .inputSilent:
+      .micSilent
+
+    case .backgroundStartRefused:
+      .needsForeground
     }
   }
 
@@ -36,16 +47,25 @@ nonisolated enum CaptureFailure {
   /// an interruption ending, the route changing.
   static func reason(for event: SourceEvent) -> FailureReason? {
     switch event {
-    case .interrupted: .interrupted
-    case .runtimeError: .micBusy
-    case .silent: .micSilent
-    case .interruptionEnded, .routeChanged: nil
+    case .interrupted:
+      .interrupted
+
+    case .runtimeError:
+      .micBusy
+
+    case .silent:
+      .micSilent
+
+    case .interruptionEnded, .routeChanged:
+      nil
     }
   }
 
   /// The error under the engine's `audioCaptureFailed`, or the error itself.
   private static func unwrapped(_ error: any Error) -> any Error {
-    if case BlurtError.audioCaptureFailed(let underlying) = error { return underlying }
+    if case BlurtError.audioCaptureFailed(let underlying) = error {
+      return underlying
+    }
     return error
   }
 }

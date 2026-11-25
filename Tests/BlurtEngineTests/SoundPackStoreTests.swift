@@ -12,7 +12,8 @@ struct SoundPackStoreTests {
   /// round trip and the decode-with-default, and the engine no longer ships a
   /// catalog to borrow.
   private static let catalog = SoundPackCatalog(
-    voices: [brass, clav], defaultVoiceID: "rom1a-0")
+    voices: [brass, clav], defaultVoiceID: "rom1a-0"
+  )
 
   @Test("defaults to the catalog's default voice when unset")
   func defaultsToCatalogDefault() {
@@ -31,12 +32,13 @@ struct SoundPackStoreTests {
   func readAloudIsSeparate() {
     let defaults = freshDefaults()
     let readAloud = SoundPackStore(
-      catalog: Self.catalog.defaulting(to: "rom1a-19"), cue: .readAloud, defaults: defaults)
+      catalog: Self.catalog.defaulting(to: "rom1a-19"), cue: .readAloud, defaults: defaults
+    )
     #expect(readAloud.soundPack == Self.clav)
-    readAloud.soundPack = .none
+    readAloud.soundPack = .silent
     #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == Self.brass)
-    #expect(readAloud.soundPack == .none)
-    #expect(Self.catalog.defaulting(to: "missing").fromPersisted(nil) == .none)
+    #expect(readAloud.soundPack == .silent)
+    #expect(Self.catalog.defaulting(to: "missing").fromPersisted(nil) == .silent)
   }
 
   @Test("Control Your Mac's cues are a third setting, apart from dictation's and read-aloud's")
@@ -45,8 +47,8 @@ struct SoundPackStoreTests {
     let command = SoundPackStore(catalog: Self.catalog.defaulting(to: "rom1a-19"), cue: .command, defaults: defaults)
     let readAloud = SoundPackStore(catalog: Self.catalog, cue: .readAloud, defaults: defaults)
     #expect(command.soundPack == Self.clav)
-    command.soundPack = .none
-    #expect(command.soundPack == .none)
+    command.soundPack = .silent
+    #expect(command.soundPack == .silent)
     #expect(readAloud.soundPack == Self.brass)
     #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == Self.brass)
   }
@@ -54,8 +56,8 @@ struct SoundPackStoreTests {
   @Test("none is a storable, distinct value")
   func storesNone() {
     let defaults = freshDefaults()
-    SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack = .none
-    #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == .none)
+    SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack = .silent
+    #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == .silent)
   }
 
   @Test("an unknown stored value falls back to the default")

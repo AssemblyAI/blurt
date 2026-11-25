@@ -24,11 +24,12 @@ final class GatedTransport: HTTPTransport, Sendable {
       return armed && request.url == testOAuthConfiguration.tokenURL
     }
     if hold { await gate.enter() }
-    return try await inner.data(for: request)
+    return try inner.data(for: request)
   }
 
   func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    for request: URLRequest,
+    streaming body: AsyncThrowingStream<Data, any Error>,
     delegate: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
     try await inner.upload(for: request, streaming: body, delegate: delegate)

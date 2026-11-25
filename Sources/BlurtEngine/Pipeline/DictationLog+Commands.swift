@@ -47,18 +47,6 @@ extension DictationLog {
     let milliseconds: Int
   }
 
-  /// Where commands land, beside the dictation and error logs.
-  static var defaultCommandURL: URL { HostIdentity.current.logURL("commands.jsonl") }
-
-  /// `defaultCommandURL` as a home-abbreviated path, for the Advanced pane.
-  public static var defaultCommandDisplayPath: String { displayPath(of: defaultCommandURL) }
-
-  /// A log file's location as the Advanced pane shows it: unescaped (a space
-  /// is a space, not `%20`) and the home directory as a tilde.
-  static func displayPath(of url: URL) -> String {
-    (url.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
-  }
-
   /// One command as it ended: what the router knows by then.
   public struct CommandRecord: Sendable {
     public let id: String
@@ -74,8 +62,14 @@ extension DictationLog {
     public let trace: PlanTrace.Snapshot
 
     public init(
-      id: String = UUID().uuidString, command: String, context: ScreenContext, steps: [VoiceCommandStep],
-      outcome: OverlayUIState?, failure: (kind: String, text: String)?, duration: Duration, ran: [StepRecord] = [],
+      command: String,
+      context: ScreenContext,
+      steps: [VoiceCommandStep],
+      outcome: OverlayUIState?,
+      failure: (kind: String, text: String)?,
+      duration: Duration,
+      id: String = UUID().uuidString,
+      ran: [StepRecord] = [],
       trace: PlanTrace.Snapshot = .init()
     ) {
       self.id = id
@@ -90,49 +84,6 @@ extension DictationLog {
     }
   }
 
-  /// Appends `record`, and a failure to the error log as well. **Gated on
-  /// developer mode**, like the other two logs: with the switch off this
-  /// returns without touching the disk. `store` and the URLs for tests, as
-  /// `append` takes them.
-  public static func appendCommand(_ record: CommandRecord) {
-    appendCommand(record, store: DeveloperModeStore())
-  }
-
-  static func appendCommand(
-    _ record: CommandRecord, store: DeveloperModeStore, to url: URL = defaultCommandURL,
-    errorsTo errorsURL: URL = defaultErrorURL
-  ) {
-    gated(store: store) { now in
-      let entry = makeCommandEntry(record, now: now)
-      appendLine(entry, to: url)
-      guard let failure = record.failure else { return }
-      appendLine(
-        ErrorEntry(
-          kind: "command.\(failure.kind)", error: failure.text, ts: entry.ts, app: record.context.appName,
-          window: record.context.windowTitle, field: nil),
-        to: errorsURL)
-    }
-  }
-
-  static func makeCommandEntry(_ record: CommandRecord, now: Date) -> CommandEntry {
-    let context = record.context
-    return CommandEntry(
-      id: record.id, ts: now.formatted(timestampFormat), command: record.command, app: context.appName,
-      window: context.windowTitle, elements: context.elements.count, incomplete: context.incomplete,
-      steps: record.steps.map { $0.logLine(in: context) }, ran: record.ran, prompt: record.trace.prompt,
-      replies: record.trace.replies, model: record.trace.model, promptVersion: record.trace.promptVersion,
-      build: build, outcome: outcomeName(record.outcome),
-      errorKind: record.failure?.kind, error: record.failure?.text,
-      milliseconds: Int(record.duration / .milliseconds(1)))
-  }
-
-  /// Blurt's version and build, from the running bundle.
-  static var build: String? {
-    let info = Bundle.main.infoDictionary
-    guard let version = info?["CFBundleShortVersionString"] as? String else { return nil }
-    return (info?["CFBundleVersion"] as? String).map { "\(version) (\($0))" } ?? version
-  }
-
   /// A complaint about a command — "that didn't work" said to the command key
   /// (`CommandFeedback`) — logged against the command it's about, by id.
   struct FeedbackEntry: Encodable {
@@ -143,6 +94,87 @@ extension DictationLog {
     let aboutCommand: String?
   }
 
+  /// Where commands land, beside the dictation and error logs.
+  static var defaultCommandURL: URL { HostIdentity.current.logURL("commands.jsonl") }
+
+  /// `defaultCommandURL` as a home-abbreviated path, for the Advanced pane.
+  public static var defaultCommandDisplayPath: String { displayPath(of: defaultCommandURL) }
+
+  /// Blurt's version and build, from the running bundle.
+  static var build: String? {
+    let info = Bundle.main.infoDictionary
+    guard let version = info?["CFBundleShortVersionString"] as? String else {
+      return nil
+    }
+    return (info?["CFBundleVersion"] as? String).map { "\(version) (\($0))" } ?? version
+  }
+
+  /// A log file's location as the Advanced pane shows it: unescaped (a space
+  /// is a space, not `%20`) and the home directory as a tilde.
+  static func displayPath(of url: URL) -> String {
+    // Only `NSString` offers `abbreviatingWithTildeInPath`; `String` has no equivalent.
+    // swiftlint:disable:next legacy_objc_type
+    (url.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+  }
+
+  /// Appends `record`, and a failure to the error log as well. **Gated on
+  /// developer mode**, like the other two logs: with the switch off this
+  /// returns without touching the disk. `store` and the URLs for tests, as
+  /// `append` takes them.
+  public static func appendCommand(_ record: CommandRecord) {
+    appendCommand(record, store: DeveloperModeStore())
+  }
+
+  static func appendCommand(
+    _ record: CommandRecord,
+    store: DeveloperModeStore,
+    to url: URL = defaultCommandURL,
+    errorsTo errorsURL: URL = defaultErrorURL
+  ) {
+    gated(store: store) { now in
+      let entry = makeCommandEntry(record, now: now)
+      appendLine(entry, to: url)
+      guard let failure = record.failure else {
+        return
+      }
+      appendLine(
+        ErrorEntry(
+          kind: "command.\(failure.kind)",
+          error: failure.text,
+          ts: entry.ts,
+          app: record.context.appName,
+          window: record.context.windowTitle,
+          field: nil
+        ),
+        to: errorsURL
+      )
+    }
+  }
+
+  static func makeCommandEntry(_ record: CommandRecord, now: Date) -> CommandEntry {
+    let context = record.context
+    return CommandEntry(
+      id: record.id,
+      ts: now.formatted(timestampFormat),
+      command: record.command,
+      app: context.appName,
+      window: context.windowTitle,
+      elements: context.elements.count,
+      incomplete: context.incomplete,
+      steps: record.steps.map { $0.logLine(in: context) },
+      ran: record.ran,
+      prompt: record.trace.prompt,
+      replies: record.trace.replies,
+      model: record.trace.model,
+      promptVersion: record.trace.promptVersion,
+      build: build,
+      outcome: outcomeName(record.outcome),
+      errorKind: record.failure?.kind,
+      error: record.failure?.text,
+      milliseconds: Int(record.duration / .milliseconds(1))
+    )
+  }
+
   /// Logs `feedback` against `about` (the last command logged, if any), in the
   /// command log and — as `command.userReported` — the error log, so a
   /// reported failure sits with every other. Gated on developer mode.
@@ -151,7 +183,10 @@ extension DictationLog {
   }
 
   static func appendFeedback(
-    _ feedback: String, about: CommandRecord?, store: DeveloperModeStore, to url: URL = defaultCommandURL,
+    _ feedback: String,
+    about: CommandRecord?,
+    store: DeveloperModeStore,
+    to url: URL = defaultCommandURL,
     errorsTo errorsURL: URL = defaultErrorURL
   ) {
     gated(store: store) { now in
@@ -160,53 +195,93 @@ extension DictationLog {
       appendLine(
         ErrorEntry(
           kind: "command.userReported",
-          error: "Said “\(feedback)” about “\(about?.command ?? "no command")” (\(about?.id ?? "-"))", ts: ts,
-          app: about?.context.appName, window: about?.context.windowTitle, field: nil),
-        to: errorsURL)
+          error: "Said “\(feedback)” about “\(about?.command ?? "no command")” (\(about?.id ?? "-"))",
+          ts: ts,
+          app: about?.context.appName,
+          window: about?.context.windowTitle,
+          field: nil
+        ),
+        to: errorsURL
+      )
     }
   }
 
   private static func outcomeName(_ outcome: OverlayUIState?) -> String {
-    guard let outcome else { return "abandoned" }
+    guard let outcome else {
+      return "abandoned"
+    }
     return switch outcome {
-    case .done: "done"
-    case .pasted: "pasted"
-    case .noTarget: "copied"
-    case .noted: "noted"
-    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding, .error: "failed"
+    case .done:
+      "done"
+
+    case .pasted:
+      "pasted"
+
+    case .noTarget:
+      "copied"
+
+    case .noted:
+      "noted"
+
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding, .error:
+      "failed"
     }
   }
 }
 
 extension VoiceCommandStep {
+  /// The line for a step that names no element: an app, a link, keys, text,
+  /// a button by name, a menu path, the window.
+  private var appLine: String? {
+    switch self {
+    case .openApp(let app), .quitApp(let app), .hideApp(let app):
+      "\(action.rawValue) \(app)"
+
+    case .openURL(let url):
+      "open_url \(url.absoluteString)"
+
+    case .shortcut(let chord):
+      "shortcut \(chord.spelled)"
+
+    case .type(let text):
+      "type \"\(text)\""
+
+    case .media(let key):
+      "media \(key.rawValue)"
+
+    case .pressButton(let name):
+      "press_button \"\(name)\""
+
+    case .chooseMenuItem(let path):
+      "menu \(path.joined(separator: " › "))"
+
+    case .window(let operation):
+      "window \(operation.rawValue)"
+
+    default:
+      nil
+    }
+  }
+
   /// The step as the command log shows it: its action and everything it names,
   /// a numbered element with the kind and label it was listed under.
   func logLine(in context: ScreenContext) -> String {
-    if let line = appLine { return line }
+    if let line = appLine {
+      return line
+    }
     func element(_ id: Int) -> String {
       let listed = context.elements.first { $0.id == id }
       return "#\(id)" + (listed.map { " (\($0.kind) \"\($0.label)\")" } ?? "")
     }
     switch self {
-    case .scroll(let direction, let id): return "scroll \(direction.rawValue)" + (id.map { " in \(element($0))" } ?? "")
-    case .setValue(let id, let value): return "set_value \(element(id)) to \(value)"
-    default: return "\(action.rawValue) \(elementID.map(element) ?? "")"
-    }
-  }
+    case let .scroll(direction, id):
+      return "scroll \(direction.rawValue)" + (id.map { " in \(element($0))" } ?? "")
 
-  /// The line for a step that names no element: an app, a link, keys, text,
-  /// a button by name, a menu path, the window.
-  private var appLine: String? {
-    switch self {
-    case .openApp(let app), .quitApp(let app), .hideApp(let app): "\(action.rawValue) \(app)"
-    case .openURL(let url): "open_url \(url.absoluteString)"
-    case .shortcut(let chord): "shortcut \(chord.spelled)"
-    case .type(let text): "type \"\(text)\""
-    case .media(let key): "media \(key.rawValue)"
-    case .pressButton(let name): "press_button \"\(name)\""
-    case .chooseMenuItem(let path): "menu \(path.joined(separator: " › "))"
-    case .window(let operation): "window \(operation.rawValue)"
-    default: nil
+    case let .setValue(id, value):
+      return "set_value \(element(id)) to \(value)"
+
+    default:
+      return "\(action.rawValue) \(elementID.map(element) ?? "")"
     }
   }
 }
@@ -220,7 +295,9 @@ extension KeyChord {
     if modifiers.contains(.shift) { parts.append("shift") }
     if modifiers.contains(.command) { parts.append("cmd") }
     switch key {
-    case .character(let character): parts.append(String(character))
+    case .character(let character):
+      parts.append(String(character))
+
     case .code(let code):
       let name = Self.namedKeyCodes.first { $0.value == code && !Self.keyAliases.contains($0.key) }?.key
       parts.append(name ?? "key \(code)")

@@ -2,6 +2,14 @@ import BlurtEngine
 import SwiftUI
 
 struct OverlayView: View {
+  /// Horizontal inset of a notice written out on the pill. Internal so
+  /// `OverlayWindowController.pillWidth(for:)` sizes the pill with the same value.
+  static let errorTextInset: CGFloat = 14
+
+  /// The pill's inner inset and the gap between the orb and what follows it.
+  private static let contentInset: CGFloat = 12
+  private static let contentSpacing: CGFloat = 8
+
   // The single source of pill state. The live mic level is *not* read in this
   // body: that would rebuild the whole pill (capsule, shadow, REC tag) on
   // every ~20 Hz meter tick. Only `bridge.state` is read here (via `state`
@@ -12,7 +20,8 @@ struct OverlayView: View {
 
   private var state: OverlayUIState { bridge.state }
 
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceMotion)
+  private var reduceMotion
 
   // The pill is only on screen while a dictation is happening, always at its full
   // size — it fades in on key-down and out at idle (OverlayWindowController), so
@@ -74,8 +83,7 @@ struct OverlayView: View {
       .accessibilityIdentifier(UITestIdentifiers.overlayPill)
   }
 
-  @ViewBuilder
-  private var content: some View {
+  @ViewBuilder private var content: some View {
     switch state {
     case .idle:
       // Never actually on screen: dismissal keeps the last real state through
@@ -85,6 +93,7 @@ struct OverlayView: View {
       // background would collapse with it) keeps the pill's shape intact for
       // `hide()`'s pre-hide reset.
       Color.clear
+
     case .connecting:
       // The mic is coming up; nothing is being captured yet. Shaped like
       // "Transcribing" — orb with the ring sweeping, then the label — so the
@@ -97,6 +106,7 @@ struct OverlayView: View {
       // which is the whole point.
       waitingContent("Connecting")
         .transition(.opacity)
+
     case .recording, .speaking:
       // A read wears the same pill, the meter following the voice instead.
       // The orb beside the live waveform, its ring sweeping as it does in every
@@ -115,6 +125,7 @@ struct OverlayView: View {
       }
       .padding(.horizontal, Self.contentInset)
       .transition(.opacity)
+
     case .processing:
       // The meter stops and the ring takes over as the activity cue, so the
       // wait for the dictation API + paste reads as active work rather than a
@@ -123,20 +134,25 @@ struct OverlayView: View {
       // surface progressing rather than three unrelated states.
       waitingContent("Transcribing")
         .transition(.opacity)
+
     case .rewriting:
       waitingContent("Rewriting")
         .transition(.opacity)
+
     case .composing:
       waitingContent("Writing")
         .transition(.opacity)
+
     case .commanding:
       waitingContent("Working")
         .transition(.opacity)
+
     case .error(let message, nil):
       // "Try again" tells the user what to do; the full failure reason is too
       // long for the pill, so expose it on hover. The VoiceOver announcement
       // (OverlayWindowController) speaks the same message for non-sighted users.
       errorPill(help: message)
+
     case .pasted:
       // Quiet, informational notice confirming the transcript was typed into the
       // focused field. Styled exactly like "Transcribing…" (same type, tracking,
@@ -146,6 +162,7 @@ struct OverlayView: View {
       StatusLineText("Pasted")
         .transition(.opacity)
         .help(state.accessibilityLabel)
+
     case .error(_, let notice?):
       // A failure that spells out its reason (the silent mic: the device name is
       // the diagnosis), so it goes on the pill itself — the controller has
@@ -156,8 +173,11 @@ struct OverlayView: View {
       // always shows in full, and neither shrinks.
       HStack(spacing: 0) {
         StatusLineText(
-          notice.subject + " ", color: BlurtBrand.errorOrange,
-          truncation: .middle, shrinksToFit: false)
+          notice.subject + " ",
+          color: BlurtBrand.errorOrange,
+          truncation: .middle,
+          shrinksToFit: false
+        )
         StatusLineText(notice.predicate, color: BlurtBrand.errorOrange, shrinksToFit: false)
           .fixedSize()
           .layoutPriority(1)
@@ -165,6 +185,7 @@ struct OverlayView: View {
       .padding(.horizontal, Self.errorTextInset)
       .transition(.opacity)
       .help(state.accessibilityLabel)
+
     case .noTarget:
       // Quiet, informational notice: there was no text field to type into, so
       // the transcript went to the clipboard. Styled exactly like "Pasted"
@@ -174,11 +195,13 @@ struct OverlayView: View {
       StatusLineText("Copied")
         .transition(.opacity)
         .help(state.accessibilityLabel)
+
     case .done:
       // A command's "Pasted": the same quiet status line.
       StatusLineText("Done")
         .transition(.opacity)
         .help(state.accessibilityLabel)
+
     case .noted:
       // A complaint about the last command, logged against it.
       StatusLineText("Noted")
@@ -186,14 +209,6 @@ struct OverlayView: View {
         .help(state.accessibilityLabel)
     }
   }
-
-  /// Horizontal inset of a notice written out on the pill. Internal so
-  /// `OverlayWindowController.pillWidth(for:)` sizes the pill with the same value.
-  static let errorTextInset: CGFloat = 14
-
-  /// The pill's inner inset and the gap between the orb and what follows it.
-  private static let contentInset: CGFloat = 12
-  private static let contentSpacing: CGFloat = 8
 
   /// The shape both waits share: the brand orb, then the status word in place
   /// of the meter. One builder rather than two call sites that happen to match,

@@ -9,9 +9,11 @@ import Synchronization
 nonisolated final class TestClock: Clock, Sendable {
   struct Instant: InstantProtocol {
     let offset: Duration
-    func advanced(by duration: Duration) -> Instant { Instant(offset: offset + duration) }
-    func duration(to other: Instant) -> Duration { other.offset - offset }
-    static func < (lhs: Instant, rhs: Instant) -> Bool { lhs.offset < rhs.offset }
+
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.offset < rhs.offset }
+
+    func advanced(by duration: Duration) -> Self { Self(offset: offset + duration) }
+    func duration(to other: Self) -> Duration { other.offset - offset }
   }
 
   private struct Sleeper {
@@ -24,12 +26,20 @@ nonisolated final class TestClock: Clock, Sendable {
     var sleepers: [Sleeper] = []
     var nextID = 0
   }
+
   private let state = Mutex(State())
 
   var now: Instant { state.withLock { $0.now } }
   var minimumResolution: Duration { .zero }
 
-  func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+  /// How far from now each parked sleeper's deadline is, soonest first — so a
+  /// test can assert a timer was *cancelled* (its sleeper is gone) rather than
+  /// waiting to see that it doesn't fire.
+  var sleepingFor: [Duration] {
+    state.withLock { s in s.sleepers.map { s.now.duration(to: $0.deadline) }.sorted() }
+  }
+
+  func sleep(until deadline: Instant, tolerance _: Duration?) async throws {
     let id = state.withLock { s -> Int in
       s.nextID += 1
       return s.nextID
@@ -41,20 +51,31 @@ nonisolated final class TestClock: Clock, Sendable {
         // slip between the checks and the append — closing the already-cancelled
         // and already-past-deadline races.
         let resume = state.withLock { s -> Resume in
-          if Task.isCancelled { return .cancel }
-          if s.now >= deadline { return .fire }
+          if Task.isCancelled {
+            return .cancel
+          }
+          if s.now >= deadline {
+            return .fire
+          }
           s.sleepers.append(Sleeper(id: id, deadline: deadline, continuation: cont))
           return .park
         }
         switch resume {
-        case .park: break
-        case .fire: cont.resume()
-        case .cancel: cont.resume(throwing: CancellationError())
+        case .park:
+          break
+
+        case .fire:
+          cont.resume()
+
+        case .cancel:
+          cont.resume(throwing: CancellationError())
         }
       }
     } onCancel: {
       let cont = state.withLock { s -> CheckedContinuation<Void, any Error>? in
-        guard let index = s.sleepers.firstIndex(where: { $0.id == id }) else { return nil }
+        guard let index = s.sleepers.firstIndex(where: { $0.id == id }) else {
+          return nil
+        }
         return s.sleepers.remove(at: index).continuation
       }
       cont?.resume(throwing: CancellationError())
@@ -79,13 +100,6 @@ nonisolated final class TestClock: Clock, Sendable {
       state.withLock { s in s.sleepers.contains { $0.deadline == deadline } }
     }
     while !isParked() { await Task.yield() }
-  }
-
-  /// How far from now each parked sleeper's deadline is, soonest first — so a
-  /// test can assert a timer was *cancelled* (its sleeper is gone) rather than
-  /// waiting to see that it doesn't fire.
-  var sleepingFor: [Duration] {
-    state.withLock { s in s.sleepers.map { s.now.duration(to: $0.deadline) }.sorted() }
   }
 
   /// Advance virtual time, waking every sleeper whose deadline has now passed.

@@ -114,7 +114,7 @@ struct ListeningWindowTests {
     defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
-    rig.source.eventSink.yield(.runtimeError(code: -12782))
+    rig.source.eventSink.yield(.runtimeError(code: -12_782))
     #expect(await until { rig.state?.window == .interrupted })
     #expect(rig.state?.micLive == false)
     #expect(rig.state?.reason == .micBusy)
@@ -136,12 +136,16 @@ struct ListeningWindowTests {
     let rig = WindowRig()
     rig.window.start()
     await rig.opened()
-    guard let first = rig.state else { return }
+    guard let first = rig.state else {
+      return
+    }
     #expect(first.leaseUntil < Date().addingTimeInterval(ListeningState.lease + 1))
     #expect(first.leaseUntil > Date())
     rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
     #expect(await until { (rig.state?.sequence ?? 0) > first.sequence })
-    guard let beat = rig.state else { return }
+    guard let beat = rig.state else {
+      return
+    }
     #expect(beat.leaseUntil >= first.leaseUntil)
     #expect(beat.leaseUntil < Date().addingTimeInterval(ListeningState.lease + 1))
     #expect(beat.micLive && beat.window == .open)

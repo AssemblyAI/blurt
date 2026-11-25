@@ -17,17 +17,21 @@ final class SettingsUITests: BlurtUITestCase {
 
     XCTAssertTrue(
       sheet.waitForNonExistence(timeout: 10),
-      "A verified key should dismiss the sheet")
+      "A verified key should dismiss the sheet"
+    )
     let saved = settings.staticTexts[UITestIdentifiers.apiKeySavedStatus]
     XCTAssertTrue(
       saved.waitForExistence(timeout: 5),
-      "A verified key should leave the row connected")
+      "A verified key should leave the row connected"
+    )
     XCTAssertTrue(
       settings.buttons[UITestIdentifiers.apiKeyChange].exists,
-      "The row button should become Change… once a key is stored")
+      "The row button should become Change… once a key is stored"
+    )
     XCTAssertFalse(
       settings.staticTexts[UITestIdentifiers.apiKeyNotConnected].exists,
-      "The row should no longer read Not connected")
+      "The row should no longer read Not connected"
+    )
   }
 
   /// A rejected key keeps the sheet open and explains itself there, rather than
@@ -42,7 +46,8 @@ final class SettingsUITests: BlurtUITestCase {
     let error = sheet.staticTexts[UITestIdentifiers.apiKeyError]
     XCTAssertTrue(
       error.waitForExistence(timeout: 10),
-      "A rejected key should show the inline error in the sheet")
+      "A rejected key should show the inline error in the sheet"
+    )
     XCTAssertTrue(sheet.exists, "A rejected key should leave the sheet open to retry")
     XCTAssertFalse(settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].exists)
   }
@@ -54,12 +59,14 @@ final class SettingsUITests: BlurtUITestCase {
     let sheet = openKeyEditor(settings)
 
     XCTAssertTrue(
-      sheet.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5))
+      sheet.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5)
+    )
     sheet.checkBoxes[UITestIdentifiers.apiKeyReveal].click()
 
     XCTAssertTrue(
       sheet.textFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5),
-      "Show key should expose a plain (non-secure) text field")
+      "Show key should expose a plain (non-secure) text field"
+    )
   }
 
   /// Dictation moves to another key, and the key it left can take another
@@ -91,7 +98,8 @@ final class SettingsUITests: BlurtUITestCase {
     let value = picker.value as? String ?? ""
     XCTAssertTrue(
       value.hasPrefix("Same as system"),
-      "The picker should start on the system default (got: \(value))")
+      "The picker should start on the system default (got: \(value))"
+    )
   }
 
   /// The sound-cue picker changes the persisted selection. Selecting "None"
@@ -211,7 +219,8 @@ final class SettingsUITests: BlurtUITestCase {
     let confirmationTitle = app.staticTexts["Reset Blurt?"]
     XCTAssertTrue(
       confirmationTitle.waitForExistence(timeout: 10),
-      "Reset should ask for confirmation rather than acting on the click")
+      "Reset should ask for confirmation rather than acting on the click"
+    )
 
     // Every button query below is scoped to the alert rather than to `app`:
     // the runner mirrors an alert's buttons into a simulated Touch Bar, so an
@@ -219,7 +228,7 @@ final class SettingsUITests: BlurtUITestCase {
     // which XCUITest refuses to click ("cannot be called with Touch Bar
     // elements"). AppKit decides whether a SwiftUI alert is a sheet on its
     // window or a free-standing dialog, so accept either.
-    guard let confirmation = [app.sheets.firstMatch, app.dialogs.firstMatch].first(where: { $0.exists })
+    guard let confirmation = [app.sheets.firstMatch, app.dialogs.firstMatch].first(where: \.exists)
     else {
       // Dump the tree rather than just failing: which element the alert is, is
       // the one thing this test can't find out from a red CI run.
@@ -228,15 +237,19 @@ final class SettingsUITests: BlurtUITestCase {
     }
     XCTAssertTrue(
       confirmation.buttons["Reset and Restart"].exists,
-      "The confirmation should say that Blurt restarts when the reset finishes")
+      "The confirmation should say that Blurt restarts when the reset finishes"
+    )
 
     confirmation.buttons["Cancel"].click()
 
     XCTAssertTrue(
-      confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
+      confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation"
+    )
     XCTAssertEqual(
-      "\(setting.value ?? "")", "1",
-      "Cancelling the confirmation should leave the settings alone")
+      "\(setting.value ?? "")",
+      "1",
+      "Cancelling the confirmation should leave the settings alone"
+    )
   }
 
   /// After a key is stored, "Change…" re-opens the sheet so it can be rotated.
@@ -247,7 +260,8 @@ final class SettingsUITests: BlurtUITestCase {
     let reopened = openKeyEditor(settings, via: UITestIdentifiers.apiKeyChange)
     XCTAssertTrue(
       reopened.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5),
-      "Change… should re-open the sheet on the key field")
+      "Change… should re-open the sheet on the key field"
+    )
   }
 
   /// "Cancel" in the sheet discards the edit and leaves the stored key's row
@@ -264,7 +278,8 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
     XCTAssertTrue(
       settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
-      "Cancel should return to the connected row")
+      "Cancel should return to the connected row"
+    )
   }
 
   // MARK: - Keys
@@ -282,11 +297,13 @@ final class SettingsUITests: BlurtUITestCase {
     for action in actions {
       XCTAssertTrue(
         keys.popUpButtons[UITestIdentifiers.actionKeyPicker(action)].exists,
-        "The tab should list a key pop-up for \(action)")
+        "The tab should list a key pop-up for \(action)"
+      )
     }
     XCTAssertTrue(keys.popUpButtons[UITestIdentifiers.activationPicker].exists)
     XCTAssertEqual(
-      keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)].value as? String, "Left Option")
+      keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)].value as? String, "Left Option"
+    )
     XCTAssertEqual(keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.ask)].value as? String, "None")
 
     let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
@@ -306,8 +323,10 @@ final class SettingsUITests: BlurtUITestCase {
     let settings = openSettingsWindow()
     let reopened = selectSettingsTab(settings, named: UITestIdentifiers.keysSettingsTab)
     XCTAssertEqual(
-      reopened.popUpButtons[UITestIdentifiers.activationPicker].value as? String, "Hold",
-      "The mode should survive leaving the tab")
+      reopened.popUpButtons[UITestIdentifiers.activationPicker].value as? String,
+      "Hold",
+      "The mode should survive leaving the tab"
+    )
   }
 
   /// The Read Aloud tab's voice picker starts on the service's default voice.
@@ -362,9 +381,11 @@ final class SettingsUITests: BlurtUITestCase {
     sheet.buttons[UITestIdentifiers.apiKeySave].click()
     XCTAssertTrue(
       sheet.waitForNonExistence(timeout: 10),
-      "Connecting a valid key should dismiss the sheet")
+      "Connecting a valid key should dismiss the sheet"
+    )
     XCTAssertTrue(
       settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
-      "Connecting a valid key should show the connected row")
+      "Connecting a valid key should show the connected row"
+    )
   }
 }

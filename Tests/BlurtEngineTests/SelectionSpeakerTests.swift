@@ -7,21 +7,22 @@ import Testing
 
 @Suite("SelectionSpeaker", .timeLimit(.minutes(1)))
 struct SelectionSpeakerTests {
+  private let fastSkipping = ReadAloudStyle(rate: 2, skipsJargon: true)
+
   private func speaker(
-    _ transport: any SpeechTransport, sink: RecordingSink,
+    _ transport: any SpeechTransport,
+    sink: RecordingSink,
     gateway: any HTTPTransport = FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet)),
     rate: ValueBox<Double?> = ValueBox(nil)
   ) -> SelectionSpeaker {
     SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: transport),
-      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
-      makeSink: { played in
-        rate.value = played
-        return sink
-      })
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway)
+    ) { played in
+      rate.value = played
+      return sink
+    }
   }
-
-  private let fastSkipping = ReadAloudStyle(rate: 2, skipsJargon: true)
 
   @Test("plays every chunk in order, then drains")
   func plays() async throws {
@@ -41,8 +42,8 @@ struct SelectionSpeakerTests {
     let sink = LevelSink(level: 0.6) { levels.value.contains(0.6) }
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: FakeSpeechTransport()),
-      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut))),
-      makeSink: { _ in sink })
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
+    ) { _ in sink }
     try await speaker.speak("Say something here.") { level in levels.value.append(level) }
     // The level once (the meter reports only a change), then the final 0.
     #expect(levels.value == [0.6, 0])
@@ -105,8 +106,9 @@ struct SelectionSpeakerTests {
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: transport),
       llm: ReadAloudLLM(
-        apiKeyProvider: { "k" }, transport: FakeHTTPTransport { _ in (200, completion("An answer.")) }),
-      makeSink: { _ in RecordingSink() })
+        apiKeyProvider: { "k" }, transport: FakeHTTPTransport { _ in (200, completion("An answer.")) }
+      )
+    ) { _ in RecordingSink() }
     let style = ReadAloudStyle(rate: 1, skipsJargon: false, voiceID: "aai-buford")
     try await speaker.speak("Read this.", style: style)
     try await speaker.answer("Explain.", about: "x", style: style)
@@ -168,90 +170,35 @@ struct SelectionSpeakerTests {
   @Test("an ask stopped while the gateway answers plays nothing and makes no TTS request")
   func cancelledAsAnswerLands() async {
     await expectStoppedAsGatewayAnswers { speaker in
-      Task { try await speaker.answer("Explain.", about: "x", style: .standard) }
+      try await speaker.answer("Explain.", about: "x", style: .standard)
     }
   }
 
   @Test("a rewrite that answers after the stop still plays nothing and makes no TTS request")
   func cancelledAsRewriteLands() async {
     await expectStoppedAsGatewayAnswers { [fastSkipping] speaker in
-      Task { try await speaker.speak("Say something here.", style: fastSkipping) }
+      try await speaker.speak("Say something here.", style: fastSkipping)
     }
   }
 
   /// Starts a read or answer whose gateway call answers only after the stop,
   /// stops it mid-call, and checks it throws a cancellation and plays nothing.
-  private func expectStoppedAsGatewayAnswers(_ start: (SelectionSpeaker) -> Task<Void, any Error>) async {
+  private func expectStoppedAsGatewayAnswers(
+    _ start: @escaping @Sendable (SelectionSpeaker) async throws -> Void
+  ) async {
     let sink = RecordingSink()
     let transport = FakeSpeechTransport()
     let gateway = LateAnsweringTransport()
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: transport),
-      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
-      makeSink: { _ in sink })
-    let task = start(speaker)
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway)
+    ) { _ in sink }
+    let task = Task { try await start(speaker) }
     while !gateway.asked { await Task.yield() }
     task.cancel()
     gateway.release()
     await #expect(throws: CancellationError.self) { try await task.value }
     #expect(transport.requests.isEmpty)
     #expect(sink.chunks.isEmpty)
-  }
-}
-
-/// A gateway that ignores cancellation: it waits for `release()`, then answers
-/// 200 anyway, the way a response already in flight lands after a stop.
-private final class LateAnsweringTransport: GatewayStub {
-  private let state = Mutex((asked: false, released: false))
-  var asked: Bool { state.withLock { $0.asked } }
-  func release() { state.withLock { $0.released = true } }
-
-  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    state.withLock { $0.asked = true }
-    while !state.withLock({ $0.released }) { await Task.yield() }
-    return try ok(request, completion("Say something here."))
-  }
-}
-
-/// A gateway that never answers, until the request's task is cancelled.
-private final class HangingTransport: GatewayStub {
-  private let called = Mutex(false)
-  var asked: Bool { called.withLock { $0 } }
-
-  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    called.withLock { $0 = true }
-    try await Task.sleep(for: .seconds(60))
-    throw URLError(.timedOut)
-  }
-}
-
-/// A sink that plays at a fixed loudness until `heard` holds, so the meter has
-/// something to hear before the read finishes.
-private final class LevelSink: PCMSink {
-  let currentLevel: Float
-  private let heard: @Sendable () -> Bool
-  init(level: Float, playsUntil heard: @escaping @Sendable () -> Bool) {
-    currentLevel = level
-    self.heard = heard
-  }
-  func enqueue(_ pcm: Data) {}
-  func drain() async {
-    while !heard() { await Task.yield() }
-  }
-  func stop() {}
-}
-
-/// A TTS service that takes the request and never answers it, until the
-/// request is cancelled: a read that's still waiting on its first audio.
-private final class HangingSpeechTransport: SpeechTransport, Sendable {
-  private let state = Mutex(false)
-
-  var asked: Bool { state.withLock { $0 } }
-
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
-    state.withLock { $0 = true }
-    while true {
-      try await Task.sleep(for: .milliseconds(5))
-    }
   }
 }

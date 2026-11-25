@@ -15,7 +15,6 @@ import Testing
 /// finish in milliseconds).
 @Suite("DictationSession cancel races", .timeLimit(.minutes(1)))
 struct CancelRaceTests {
-
   /// A session parked in `.transcribing`: pressed, released, and its pipeline
   /// suspended inside the gated transcriber until the test calls `allowToFinish()`.
   private func parkedTranscribing(
@@ -30,7 +29,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancel during transcribing discards the transcript and ends .cancelled")
-  func cancelDuringTranscribingDiscards() async throws {
+  func cancelDuringTranscribingDiscards() async {
     let stt = GatedTranscriber(text: "Hello world.")
     let (session, injector) = await parkedTranscribing(stt)
     #expect(await session.phase == .transcribing)
@@ -50,7 +49,7 @@ struct CancelRaceTests {
   }
 
   @Test("a submitted cancel during transcribing is spent there, not on the next press")
-  func submittedCancelDuringTranscribingIsSpent() async throws {
+  func submittedCancelDuringTranscribingIsSpent() async {
     let stt = GatedTranscriber(text: "Summarize this.")
     let (session, _) = await parkedTranscribing(stt)
     // The submitted door records the request before its turn (`requestCancel`).
@@ -67,7 +66,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancel during transcribing with a throwing transcriber stays .cancelled")
-  func cancelDuringTranscribingThrowingStaysCancelled() async throws {
+  func cancelDuringTranscribingThrowingStaysCancelled() async {
     // Mimics the real transcriber: the cancelled URLSession request throws
     // URLError(.cancelled), which must not be repainted as a red .failed (or
     // reported as a fault) over the .cancelled the cancel() already claimed.
@@ -84,7 +83,7 @@ struct CancelRaceTests {
   }
 
   @Test("transcriber throwing URLError.cancelled without task cancellation is ignored rather than failed")
-  func transcriberThrowingURLErrorCancelledIsIgnored() async throws {
+  func transcriberThrowingURLErrorCancelledIsIgnored() async {
     let stt = GatedTranscriber(text: "Hello world.", throwsCancelled: true)
     let (session, injector) = await parkedTranscribing(stt)
     await stt.allowToFinish()
@@ -95,14 +94,14 @@ struct CancelRaceTests {
   }
 
   @Test("cancel during injecting discards the transcript and ends .cancelled")
-  func cancelDuringInjectingDiscards() async throws {
+  func cancelDuringInjectingDiscards() async {
     // `expectedCount: 0`: the paste must never be recorded. This is event-driven
     // (the injector fires the confirmation only if it actually records) rather
     // than inferred from an empty array after the fact.
     await confirmation("cancelled injection records no paste", expectedCount: 0) { pasted in
       let mic = StubMicCapture()
       let stt = StubTranscriber(mode: .transcript("Hello world."))
-      let injector = GatedInjector(onRecord: { pasted() })
+      let injector = GatedInjector { pasted() }
       let session = makeSession(transcriber: stt, mic: mic, injector: injector)
 
       await session.press()
@@ -122,7 +121,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancel while release is stopping the mic discards the recording")
-  func cancelDuringMicStopDiscards() async throws {
+  func cancelDuringMicStopDiscards() async {
     let mic = GatedStopMic()
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
@@ -149,7 +148,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancel while release's mic.stop fails still wins over the audio error")
-  func cancelDuringFailingMicStopWinsOverError() async throws {
+  func cancelDuringFailingMicStopWinsOverError() async {
     let mic = GatedStopMic(stopError: URLError(.unknown))
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
@@ -178,7 +177,7 @@ struct CancelRaceTests {
   /// UI — the user asked for nothing to happen, so the phase is still `.cancelled`
   /// and no transcript is produced.
   @Test("cancel of a live recording survives a failing mic.stop")
-  func cancelDuringRecordingSurvivesFailingMicStop() async throws {
+  func cancelDuringRecordingSurvivesFailingMicStop() async {
     let fixture = makeSession()
     await fixture.mic.setStopError(URLError(.unknown))
 
@@ -192,7 +191,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancelRecording during transcribing leaves the pipeline alone")
-  func cancelRecordingDoesNotTearDownTranscribing() async throws {
+  func cancelRecordingDoesNotTearDownTranscribing() async {
     let stt = GatedTranscriber(text: "Hello world.")
     let (session, injector) = await parkedTranscribing(stt)
     #expect(await session.phase == .transcribing)
@@ -211,7 +210,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancel landing in insert's non-cancellable tail stays .cancelled, not .pasted")
-  func cancelDuringInjectingTailStaysCancelled() async throws {
+  func cancelDuringInjectingTailStaysCancelled() async {
     let mic = StubMicCapture()
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     // Models the real injector's final stretch (after its last cancellation
@@ -236,7 +235,7 @@ struct CancelRaceTests {
   }
 
   @Test("cancel tears down the armed auto-release timer; the session stays .cancelled")
-  func cancelTearsDownAutoRelease() async throws {
+  func cancelTearsDownAutoRelease() async {
     let mic = StubMicCapture()
     // Would inject "Timed out text." if the auto-release timer ever fired release().
     let stt = StubTranscriber(mode: .transcript("Timed out text."))
@@ -246,7 +245,8 @@ struct CancelRaceTests {
     // the timer simply hasn't elapsed in wall-clock time.
     let clock = TestClock()
     let session = makeSession(
-      transcriber: stt, mic: mic, injector: injector, maxRecordingSeconds: 0.05, clock: clock)
+      transcriber: stt, mic: mic, injector: injector, maxRecordingSeconds: 0.05, clock: clock
+    )
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -270,90 +270,4 @@ struct CancelRaceTests {
     // Only the cancel's own stop ran — the auto-release never stopped the mic again.
     #expect(await mic.stopCalls == 1)
   }
-}
-
-/// A press refused while the last dictation transcribes must not restyle it:
-/// the style is resolved on the press's own turn, past the session's guard.
-@Suite("Press style across a refused press", .timeLimit(.minutes(1)))
-struct PressStyleRaceTests {
-  @Test("the Recent row names the style its own press resolved, not a refused later one's")
-  func refusedPressKeepsTheStyle() async {
-    let casual = PressStyle(instructions: "keep it breezy", name: "Casual")
-    let formal = PressStyle(instructions: "no contractions", name: "Formal")
-    let transcriber = GatedTranscriber(text: "Hello world.")
-    let session = makeSession(
-      transcriber: transcriber, pressStyle: { $0 == .rightOption ? casual : formal })
-
-    await session.press(key: .rightOption)
-    await session.release()
-    await transcriber.waitUntilStarted()
-    // Refused: the dictation above is still transcribing.
-    await session.press(key: .function)
-    await transcriber.allowToFinish()
-    await session.waitForIdle()
-
-    #expect(await session.recentDictations.entries.map(\.style) == ["Casual"])
-  }
-}
-
-/// Transcriber stub that signals when `transcribe` is entered and then blocks
-/// until released, so a `cancel()` can be landed deterministically while the
-/// session is suspended in `.transcribing`. Gate choreography lives in `Gate`.
-private actor GatedTranscriber: TranscriberProtocol {
-  private let text: String
-  /// When true, a release that arrives after the task was cancelled throws
-  /// `URLError(.cancelled)` — mimicking the real URLSession-backed transcriber,
-  /// whose in-flight request is torn down by task cancellation.
-  private let throwsWhenCancelled: Bool
-  private let throwsCancelled: Bool
-  private let gate = Gate()
-
-  init(text: String, throwsWhenCancelled: Bool = false, throwsCancelled: Bool = false) {
-    self.text = text
-    self.throwsWhenCancelled = throwsWhenCancelled
-    self.throwsCancelled = throwsCancelled
-  }
-
-  func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
-  ) async throws -> String {
-    try await drainUntilAbandoned(frames)
-    await gate.enter()
-    if throwsCancelled || (throwsWhenCancelled && Task.isCancelled) { throw URLError(.cancelled) }
-    return text
-  }
-
-  func waitUntilStarted() async { await gate.waitUntilEntered() }
-  func allowToFinish() async { gate.allowToFinish() }
-}
-
-/// Injector stub that honors task cancellation (like the real `KeyInjector`) and
-/// blocks inside `insert` until released, so a `cancel()` can be landed while the
-/// session is suspended in `.injecting`. Gate choreography lives in `Gate`.
-private actor GatedInjector: InjectorProtocol {
-  /// Fired each time a paste is actually recorded — lets a test assert, via
-  /// `confirmation(expectedCount: 0)`, that a cancelled injection records nothing.
-  private let onRecord: @Sendable () -> Void
-
-  /// When false, `insert` skips its cancellation check and returns normally on a
-  /// cancelled task — modeling the real injector's final, non-cancellable
-  /// stretch after its last `checkCancellation` (the paste already landed).
-  private let honorsCancellation: Bool
-  private let gate = Gate()
-
-  init(honorsCancellation: Bool = true, onRecord: @escaping @Sendable () -> Void = {}) {
-    self.honorsCancellation = honorsCancellation
-    self.onRecord = onRecord
-  }
-
-  func setTarget(_ focus: CapturedFocus?) async {}
-
-  func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) async throws {
-    await gate.enter()
-    if honorsCancellation { try Task.checkCancellation() }
-    onRecord()
-  }
-
-  func waitUntilInsertEntered() async { await gate.waitUntilEntered() }
-  func allowInsertToFinish() async { gate.allowToFinish() }
 }

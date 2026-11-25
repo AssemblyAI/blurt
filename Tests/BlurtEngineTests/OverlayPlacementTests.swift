@@ -10,7 +10,7 @@ import Testing
 /// since been unplugged) and must never leave the pill invisible off-screen.
 @Suite("OverlayPlacement")
 struct OverlayPlacementTests {
-  private let screen = CGRect(x: 0, y: 0, width: 1000, height: 600)
+  private let screen = CGRect(x: 0, y: 0, width: 1_000, height: 600)
   private let panel = CGSize(width: 200, height: 60)
 
   @Test("the panel grows by the shadow margin on every side")
@@ -41,7 +41,8 @@ struct OverlayPlacementTests {
     let pill = CGSize(width: 168, height: 28)
     let size = OverlayPlacement.panelSize(pillSize: pill, shadowMargin: margin)
     let origin = OverlayPlacement.panelOrigin(
-      panelSize: size, visibleFrame: screen, customOrigin: nil, shadowMargin: margin)
+      panelSize: size, visibleFrame: screen, customOrigin: nil, shadowMargin: margin
+    )
     #expect(origin.y + margin == OverlayPlacement.defaultBottomClearance)
     // And the pill ends up horizontally centered on screen, not the panel's
     // transparent box being centered while the pill drifts.
@@ -57,7 +58,8 @@ struct OverlayPlacementTests {
     // much lower.
     let margin: CGFloat = 28
     let origin = OverlayPlacement.panelOrigin(
-      panelSize: panel, visibleFrame: screen, customOrigin: nil, shadowMargin: margin)
+      panelSize: panel, visibleFrame: screen, customOrigin: nil, shadowMargin: margin
+    )
     #expect(origin.y == OverlayPlacement.defaultBottomClearance - margin)
     // The pill's own bottom edge still lands exactly at the clearance.
     #expect(origin.y + margin == OverlayPlacement.defaultBottomClearance)
@@ -66,16 +68,18 @@ struct OverlayPlacementTests {
 
   @Test("panelOrigin still clamps a stale dragged origin back on screen")
   func panelOriginClampsCustom() {
-    let far = CGPoint(x: 5000, y: 5000)
+    let far = CGPoint(x: 5_000, y: 5_000)
     let origin = OverlayPlacement.panelOrigin(
-      panelSize: panel, visibleFrame: screen, customOrigin: far, shadowMargin: 28)
+      panelSize: panel, visibleFrame: screen, customOrigin: far, shadowMargin: 28
+    )
     #expect(origin == CGPoint(x: 800, y: 540))
   }
 
   @Test("no custom origin: horizontally centered, bottomOffset above the bottom")
   func defaultPlacement() {
     let origin = OverlayPlacement.origin(
-      panelSize: panel, visibleFrame: screen, customOrigin: nil, bottomOffset: 64)
+      panelSize: panel, visibleFrame: screen, customOrigin: nil, bottomOffset: 64
+    )
     #expect(origin == CGPoint(x: 400, y: 64))
   }
 
@@ -83,7 +87,8 @@ struct OverlayPlacementTests {
   func defaultPlacementOnInsetScreen() {
     let inset = CGRect(x: 100, y: 50, width: 800, height: 500)
     let origin = OverlayPlacement.origin(
-      panelSize: panel, visibleFrame: inset, customOrigin: nil, bottomOffset: 64)
+      panelSize: panel, visibleFrame: inset, customOrigin: nil, bottomOffset: 64
+    )
     #expect(origin == CGPoint(x: 400, y: 114))
   }
 
@@ -91,7 +96,8 @@ struct OverlayPlacementTests {
   func onScreenCustomOriginUnchanged() {
     let custom = CGPoint(x: 300, y: 200)
     let origin = OverlayPlacement.origin(
-      panelSize: panel, visibleFrame: screen, customOrigin: custom, bottomOffset: 64)
+      panelSize: panel, visibleFrame: screen, customOrigin: custom, bottomOffset: 64
+    )
     #expect(origin == custom)
   }
 
@@ -99,8 +105,11 @@ struct OverlayPlacementTests {
   func staleOriginClampsToMaxCorner() {
     // E.g. saved on a larger external monitor that's since been unplugged.
     let origin = OverlayPlacement.origin(
-      panelSize: panel, visibleFrame: screen, customOrigin: CGPoint(x: 2400, y: 1300),
-      bottomOffset: 64)
+      panelSize: panel,
+      visibleFrame: screen,
+      customOrigin: CGPoint(x: 2_400, y: 1_300),
+      bottomOffset: 64
+    )
     #expect(origin == CGPoint(x: 800, y: 540))  // maxX - width, maxY - height
   }
 
@@ -108,16 +117,22 @@ struct OverlayPlacementTests {
   func staleOriginClampsToMinCorner() {
     let inset = CGRect(x: 100, y: 50, width: 800, height: 500)
     let origin = OverlayPlacement.origin(
-      panelSize: panel, visibleFrame: inset, customOrigin: CGPoint(x: -500, y: -500),
-      bottomOffset: 64)
+      panelSize: panel,
+      visibleFrame: inset,
+      customOrigin: CGPoint(x: -500, y: -500),
+      bottomOffset: 64
+    )
     #expect(origin == CGPoint(x: 100, y: 50))
   }
 
   @Test("a barely-off-screen origin only moves along the offending axis")
   func clampIsPerAxis() {
     let origin = OverlayPlacement.origin(
-      panelSize: panel, visibleFrame: screen, customOrigin: CGPoint(x: 900, y: 200),
-      bottomOffset: 64)
+      panelSize: panel,
+      visibleFrame: screen,
+      customOrigin: CGPoint(x: 900, y: 200),
+      bottomOffset: 64
+    )
     #expect(origin == CGPoint(x: 800, y: 200))
   }
 
@@ -127,7 +142,8 @@ struct OverlayPlacementTests {
     // deterministic rather than oscillate between the two constraints.
     let tiny = CGRect(x: 0, y: 0, width: 100, height: 40)
     let clamped = OverlayPlacement.clamped(
-      origin: CGPoint(x: 50, y: 20), size: panel, into: tiny)
+      origin: CGPoint(x: 50, y: 20), size: panel, into: tiny
+    )
     #expect(clamped == CGPoint(x: -100, y: -20))  // maxX - width, maxY - height
   }
 }

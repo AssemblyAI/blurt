@@ -118,7 +118,11 @@ struct SpeechTransportTests {
       }
     }
     #expect(!started.value)
-    await #expect(throws: CancellationError.self) { for try await _ in body {} }
+    await #expect(throws: CancellationError.self) {
+      for try await _ in body {
+        // Drained for how the stream ends; its elements don't matter.
+      }
+    }
   }
 
   @Test("once the head is delivered, later outcomes don't resume the wait again")
@@ -142,8 +146,8 @@ struct SpeechTransportTests {
     let sink = RecordingSink()
     let speaker = SelectionSpeaker(
       synthesizer: synthesizer(session()),
-      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut))),
-      makeSink: { _ in sink })
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
+    ) { _ in sink }
     let reading = Task { try await speaker.speak("Read this.", style: .standard, onLevel: nil) }
     // Cancelled mid-body: once the first audio has reached the sink, rather
     // than a fixed moment after the request started that a slow run can miss.
@@ -153,73 +157,5 @@ struct SpeechTransportTests {
     // Unbounded, as the suite's time limit bounds it: a request left
     // synthesizing fails there, and a slow URLSession teardown doesn't.
     while !ScriptedSpeechProtocol.stopped { await Task.yield() }
-  }
-}
-
-/// A `URLProtocol` playing one scripted response, registered only on the
-/// private sessions `SpeechTransportTests` builds (never globally).
-final class ScriptedSpeechProtocol: URLProtocol, @unchecked Sendable {
-  enum Script: Sendable {
-    case respond(status: Int, chunks: [Data], finishes: Bool)
-    case respondThenFail(chunk: Data, URLError)
-    case fail(URLError)
-  }
-
-  private struct State {
-    var script = Script.fail(URLError(.unknown))
-    var started = false
-    var stopped = false
-  }
-
-  private static let state = Mutex(State())
-
-  static func play(_ script: Script) {
-    state.withLock { $0 = State(script: script) }
-  }
-
-  static var started: Bool { state.withLock(\.started) }
-  static var stopped: Bool { state.withLock(\.stopped) }
-
-  override static func canInit(with request: URLRequest) -> Bool { true }
-  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-  override func startLoading() {
-    let script = Self.state.withLock { state in
-      state.started = true
-      return state.script
-    }
-    let url = request.url ?? AssemblyAISpeechSynthesizer.endpoint
-    switch script {
-    case .respond(let status, let chunks, let finishes):
-      respond(status: status, url: url)
-      for chunk in chunks { client?.urlProtocol(self, didLoad: chunk) }
-      if finishes { client?.urlProtocolDidFinishLoading(self) }
-    case .respondThenFail(let chunk, let error):
-      respond(status: 200, url: url)
-      client?.urlProtocol(self, didLoad: chunk)
-      // A moment later, as a real connection drops after audio has flowed:
-      // failing in the same instant, URLSession reports only the failure.
-      DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { [self] in
-        client?.urlProtocol(self, didFailWithError: error)
-      }
-    case .fail(let error):
-      client?.urlProtocol(self, didFailWithError: error)
-    }
-  }
-
-  override func stopLoading() {
-    Self.state.withLock { $0.stopped = true }
-  }
-
-  /// With the content type the service sends: without one, URLSession sniffs
-  /// the body before reporting the response, holding it back until enough of
-  /// the body (or its end) arrives.
-  private func respond(status: Int, url: URL) {
-    let type = status == 200 ? "audio/pcm;rate=24000;channels=1" : "application/json"
-    guard
-      let response = HTTPURLResponse(
-        url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": type])
-    else { return }
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
   }
 }

@@ -17,7 +17,7 @@ struct VoiceStateTests {
     #expect(state.glyph == nil)
     #expect(!state.isRecording && !state.isWorking && !state.isNotice && !state.dimmed && !state.canCancel)
     #expect(state.accessibilityLabel == "Dictate")
-    #expect(state.accessibilityValue == "")
+    #expect(state.accessibilityValue.isEmpty)
   }
 
   @Test("the mic coming up and the words being made sweep the ring; recording is the meter, ring still")

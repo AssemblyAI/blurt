@@ -4,7 +4,7 @@ import XCTest
 /// the transcript into the focused app — driven through the test harness window.
 ///
 /// In UI-test mode the mic, transcriber, and injector are offline stubs (see
-/// `UITestSupport.swift`): "recording" captures a fixed buffer, the transcriber
+/// `UITestMode.swift` and the `UITest*` doubles beside it): "recording" captures a fixed buffer, the transcriber
 /// returns the harness's canned transcript, and the injector records what it
 /// would have pasted (the harness window plays the role of the target app). That
 /// lets these tests exercise the real `DictationSession` → `AppCoordinator`
@@ -36,8 +36,11 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     waitForLabel(
-      pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
-      "Hotkey release should paste the transcript")
+      pasted,
+      equals: UITestIdentifiers.defaultCannedTranscript,
+      timeout: 15,
+      "Hotkey release should paste the transcript"
+    )
     waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pipeline should return to idle after pasting")
   }
 
@@ -59,8 +62,11 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     waitForLabel(
-      pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
-      "Stop should paste the transcript")
+      pasted,
+      equals: UITestIdentifiers.defaultCannedTranscript,
+      timeout: 15,
+      "Stop should paste the transcript"
+    )
     waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pipeline should return to idle after pasting")
   }
 
@@ -81,8 +87,11 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
       harness.buttons[UITestIdentifiers.stopButton].click()
       waitForLabel(
-        pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
-        "Pass \(pass): release should paste the transcript")
+        pasted,
+        equals: UITestIdentifiers.defaultCannedTranscript,
+        timeout: 15,
+        "Pass \(pass): release should paste the transcript"
+      )
       waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pass \(pass): pipeline should return to idle")
     }
   }
@@ -112,7 +121,8 @@ final class DictationPipelineUITests: BlurtUITestCase {
     // absent element is the "no dictation happening" resting state.
     XCTAssertTrue(
       pill.waitForNonExistence(timeout: 10),
-      "Overlay pill should leave the screen after the pipeline settles to idle")
+      "Overlay pill should leave the screen after the pipeline settles to idle"
+    )
   }
 
   /// Cancelling an in-flight recording injects nothing and returns to idle.
@@ -152,7 +162,10 @@ final class DictationPipelineUITests: BlurtUITestCase {
     harness.buttons[UITestIdentifiers.stopButton].click()
 
     waitForLabel(
-      echo, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
-      "Completed dictation should appear as the newest recent-dictations entry")
+      echo,
+      equals: UITestIdentifiers.defaultCannedTranscript,
+      timeout: 15,
+      "Completed dictation should appear as the newest recent-dictations entry"
+    )
   }
 }

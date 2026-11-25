@@ -22,17 +22,21 @@ public enum CredentialRows: Sendable, Equatable {
   /// Out stays reachable.
   case accountRow
 
-  public static func resolve(
-    isKeyStored: Bool, isSignInAvailable: Bool, status: AssemblyAIAccount.Status
-  ) -> CredentialRows {
-    if status != .signedOut { return .accountRow }
-    if isSignInAvailable && !isKeyStored { return .choice }
-    return .keyRow(connectIsPrimary: !isKeyStored)
-  }
-
   /// The `.choice` row's title, subtitle and key button. Here rather than in
   /// the view for the reason `APIKeyDisplay` owns the key row's wording.
   public static let choiceTitle = "Connect to AssemblyAI"
   public static let choiceSubtitle = "Sign in, or use an API key. Either works."
   public static let choiceKeyButtonTitle = "Use API Key…"
+
+  public static func resolve(
+    isKeyStored: Bool, isSignInAvailable: Bool, status: AssemblyAIAccount.Status
+  ) -> Self {
+    if status != .signedOut {
+      return .accountRow
+    }
+    if isSignInAvailable, !isKeyStored {
+      return .choice
+    }
+    return .keyRow(connectIsPrimary: !isKeyStored)
+  }
 }

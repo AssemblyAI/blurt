@@ -4,13 +4,6 @@ import Foundation
 /// planner eval's corpus — found from one place, and held to one privacy
 /// rule: a fixture carries structure, never anything that reads as a person's.
 enum TestFixtures {
-  /// A path relative to the repository root.
-  static func url(_ relativeToRepo: String) -> URL {
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-      .appendingPathComponent(relativeToRepo)
-  }
-
   /// Shapes of personal data: an email address, a home-folder path, a phone
   /// number. No fixture may hold one.
   static let personalShapes = [
@@ -20,6 +13,16 @@ enum TestFixtures {
   /// A web address — personal in a recording or a paste fixture, which hold
   /// no page content, but the subject of some planner eval cases.
   static let webShapes = [#"https?://"#, #"www\."#]
+
+  /// A path relative to the repository root.
+  static func url(_ relativeToRepo: String) -> URL {
+    URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent(relativeToRepo)
+  }
 
   /// Every problem with a fixture's raw JSON: a string shaped like one of
   /// `shapes`, or a key — at any depth — outside `allowedKeys`, so nothing
@@ -36,7 +39,9 @@ enum TestFixtures {
     if let dictionary = object as? [String: Any] {
       return dictionary.values.reduce(into: Set(dictionary.keys)) { $0.formUnion(keys(in: $1)) }
     }
-    if let array = object as? [Any] { return array.reduce(into: []) { $0.formUnion(keys(in: $1)) } }
+    if let array = object as? [Any] {
+      return array.reduce(into: []) { $0.formUnion(keys(in: $1)) }
+    }
     return []
   }
 }

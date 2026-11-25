@@ -5,8 +5,16 @@ import UIKit
 // MARK: - What comes back from the app: phase, results, haptics
 
 extension KeyboardModel {
+  /// Words may be on their way to this keyboard: a dictation of its own is
+  /// in flight or being stopped, or the app is transcribing one.
+  package var expectsResult: Bool {
+    handshake.isOwned || handshake.stopID != nil || snapshot.state == .processing
+  }
+
   package func phaseChanged() {
-    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
+    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else {
+      return
+    }
     apply(current.isStale(now: now()) ? .idle : current)
     // The result's own signal can be missed, or held while this process was
     // suspended: a phase that says the words are being made, or were, is
@@ -14,16 +22,12 @@ extension KeyboardModel {
     if expectsResult { resultArrived() }
   }
 
-  /// Words may be on their way to this keyboard: a dictation of its own is
-  /// in flight or being stopped, or the app is transcribing one.
-  package var expectsResult: Bool {
-    handshake.isOwned || handshake.stopID != nil || snapshot.state == .processing
-  }
-
   package func apply(_ current: PhaseSnapshot, haptics wantsHaptics: Bool = true) {
     // A notice the keyboard already let go of (its dwell ran out) is not
     // replayed by a second read of the same snapshot.
-    if let dismissedNoticeAt, current.at == dismissedNoticeAt { return }
+    if let dismissedNoticeAt, current.at == dismissedNoticeAt {
+      return
+    }
     let previous = snapshot.state
     // A dictation in flight belongs to an app that is there to run it: with
     // the app gone — its lease lapsed, or no record at all — the picture is
@@ -49,7 +53,9 @@ extension KeyboardModel {
       let clock = clock
       noticeDwell = Task { [weak self] in
         try? await clock.sleep(for: .seconds(seconds))
-        guard !Task.isCancelled, let self else { return }
+        guard !Task.isCancelled, let self else {
+          return
+        }
         dismissedNoticeAt = at
         snapshot = .idle
       }
@@ -58,8 +64,12 @@ extension KeyboardModel {
   }
 
   package func resultArrived() {
-    guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) else { return }
-    guard result.id != lastResultID else { return }
+    guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) else {
+      return
+    }
+    guard result.id != lastResultID else {
+      return
+    }
     guard let proxy else {
       KeyboardLog.result(result.id, inserted: false, why: "no field")
       return
@@ -99,16 +109,22 @@ extension KeyboardModel {
   }
 
   package func haptics(from previous: PhaseSnapshot.State, to state: PhaseSnapshot.State) {
-    guard hasFullAccess else { return }
+    guard hasFullAccess else {
+      return
+    }
     switch state {
     case .recording:
       UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
     case .processing where previous == .recording:
       UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
     case .pasted, .copied:
       UINotificationFeedbackGenerator().notificationOccurred(.success)
+
     case .error:
       UINotificationFeedbackGenerator().notificationOccurred(.error)
+
     case .idle, .connecting, .processing:
       break
     }

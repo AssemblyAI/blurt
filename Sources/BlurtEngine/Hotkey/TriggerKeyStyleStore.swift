@@ -15,6 +15,7 @@ public struct TriggerKeyStyleStore {
 
   private let defaults: UserDefaults
 
+  /// A store over `defaults` (a suite of its own in tests).
   public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }

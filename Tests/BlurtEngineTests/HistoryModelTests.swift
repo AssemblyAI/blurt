@@ -68,12 +68,16 @@ struct HistoryModelTests {
     try Data("audio".utf8).write(to: url)
     let transport = FakeHTTPTransport { request in
       switch request.url?.path {
-      case "/v2/upload": return (200, self.json(["upload_url": "https://cdn.example/x"]))
-      case "/v2/transcript": return (200, self.json(["id": "t", "status": "queued"]))
+      case "/v2/upload":
+        return (200, json(["upload_url": "https://cdn.example/x"]))
+
+      case "/v2/transcript":
+        return (200, json(["id": "t", "status": "queued"]))
+
       default:
         return (
           200,
-          self.json([
+          json([
             "id": "t", "status": "completed", "text": "Hi. Hey.",
             "utterances": [["speaker": "A", "text": "Hi."], ["speaker": "B", "text": "Hey."]],
           ])
@@ -81,7 +85,8 @@ struct HistoryModelTests {
       }
     }
     let transcriber = FileTranscriber(
-      client: AsyncTranscriptionClient(transport: transport, pollInterval: .zero), apiKeyProvider: { "key" })
+      client: AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
+    ) { "key" }
     let result = try await transcriber.transcribe(fileAt: url)
     #expect(result.text == "Speaker A: Hi.\n\nSpeaker B: Hey.")
     #expect(result.plainText == "Hi. Hey.")
@@ -95,7 +100,7 @@ struct HistoryModelTests {
     let sent = Mutex(Data())
     let transport = FakeHTTPTransport { request in
       sent.withLock { $0 = request.httpBody ?? Data() }
-      return (200, self.json(["choices": [["message": ["content": "\"Launch Plan.\""], "finish_reason": "stop"]]]))
+      return (200, json(["choices": [["message": ["content": "\"Launch Plan.\""], "finish_reason": "stop"]]]))
     }
     let long = String(repeating: "word ", count: 10_000)
     let title = try await TranscriptLLM(apiKeyProvider: { "key" }, transport: transport).title(for: long)
@@ -169,18 +174,4 @@ struct HistoryModelTests {
     }
     #expect(starts.withLock { $0 } == 0)
   }
-}
-
-/// A speaker that reports `levels` meter readings, as audio playing does, then
-/// finishes.
-private struct LevelSpeaker: ReadAloudSpeaker {
-  let levels: Int
-
-  func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws {
-    for _ in 0..<levels { onLevel?(0.5) }
-  }
-
-  func answer(
-    _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
-  ) async throws {}
 }

@@ -18,7 +18,8 @@ struct MessageComposerTests {
       return (200, completion("Hey Dan, we should have a way to just speak instructions."))
     }
     let text = try await composer(transport).compose(
-      "ok I'm writing a Slack reply, tell Dan we should have a feature to just speak instructions", for: "Slack")
+      "ok I'm writing a Slack reply, tell Dan we should have a feature to just speak instructions", for: "Slack"
+    )
     #expect(text == "Hey Dan, we should have a way to just speak instructions.")
 
     let request = try #require(sent.value)

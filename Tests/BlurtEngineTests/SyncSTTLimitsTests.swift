@@ -27,7 +27,7 @@ struct SyncSTTLimitsTests {
     // If this product drifted from the duration floor, ultra-brief taps would
     // reach the API and earn a 400 (or real clips would silently be dropped).
     #expect(SyncSTTLimits.minSamples == Int(SyncSTTLimits.minAudioSeconds * Double(SyncSTTLimits.sampleRate)))
-    #expect(SyncSTTLimits.minSamples == 1600)
+    #expect(SyncSTTLimits.minSamples == 1_600)
   }
 
   @Test("minPCMBytes is minSamples in the captured 16-bit encoding")
@@ -36,7 +36,7 @@ struct SyncSTTLimitsTests {
     // byte floor must stay exactly the sample floor times the sample width.
     #expect(SyncSTTLimits.bytesPerSample == 2)
     #expect(SyncSTTLimits.minPCMBytes == SyncSTTLimits.minSamples * SyncSTTLimits.bytesPerSample)
-    #expect(SyncSTTLimits.minPCMBytes == 3200)
+    #expect(SyncSTTLimits.minPCMBytes == 3_200)
   }
 
   @Test("durationMs converts a raw S16LE byte count to milliseconds")
@@ -46,11 +46,11 @@ struct SyncSTTLimitsTests {
     // and those logs are the documented way to diagnose pipeline latency — so
     // pin the arithmetic rather than only exercising it incidentally.
     #expect(SyncSTTLimits.durationMs(ofPCMBytes: SyncSTTLimits.minPCMBytes) == 100)
-    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 32_000) == 1000)
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 32_000) == 1_000)
     #expect(SyncSTTLimits.durationMs(ofPCMBytes: 0) == 0)
     // An explicit rate covers the transcriber's call, which passes the rate it
     // declared on the request rather than defaulting.
-    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 16_000, rate: 8_000) == 1000)
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 16_000, rate: 8_000) == 1_000)
     // A zero/garbage rate must not divide by zero into an Int conversion trap.
     #expect(SyncSTTLimits.durationMs(ofPCMBytes: 32_000, rate: 0) == 0)
   }
@@ -66,8 +66,8 @@ struct SyncSTTLimitsTests {
   func audioCapPinned() {
     // What a user feels: a held trigger stops recording at 19 min 55 s. Pinned
     // so moving either number is a deliberate change, not a side effect.
-    #expect(SyncSTTLimits.maxAudioSeconds == 1200)
-    #expect(SyncSTTLimits.autoReleaseSeconds == 1195)
+    #expect(SyncSTTLimits.maxAudioSeconds == 1_200)
+    #expect(SyncSTTLimits.autoReleaseSeconds == 1_195)
   }
 
   @Test("a whole recording at the cap fits the fallback's copy, with room to spare")

@@ -44,8 +44,16 @@ final class LiveCapTransport: HTTPTransport, Sendable {
   private let state = Mutex(State())
   private let liveAnswered = AsyncGate()
 
+  /// Every byte the streaming request's body carried before it was answered.
+  var liveBody: Data { state.withLock { $0.liveBody } }
+  /// The buffered requests made, in order — the fallback sends at most one.
+  var bufferedRequests: [URLRequest] { state.withLock { $0.bufferedRequests } }
+
   init(
-    live: Answer, answerAfterBytes: Int? = nil, abandonsBody: Bool = false, buffered: Answer,
+    live: Answer,
+    buffered: Answer,
+    answerAfterBytes: Int? = nil,
+    abandonsBody: Bool = false,
     bufferedHold: Gate? = nil
   ) {
     self.live = live
@@ -55,9 +63,23 @@ final class LiveCapTransport: HTTPTransport, Sendable {
     self.bufferedHold = bufferedHold
   }
 
+  /// What an abandoned body (`abandonsBody`) still had in it, read to its end
+  /// once the streaming request was answered: returns only once the body's
+  /// producer has finished.
+  func restOfAbandonedBody() async throws -> Data {
+    await liveAnswered.wait()
+    guard let body = state.withLock({ $0.abandonedBody }) else {
+      return Data()
+    }
+    var rest = Data()
+    for try await chunk in body { rest.append(chunk) }
+    return rest
+  }
+
   func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
-    delegate: (any URLSessionTaskDelegate)?
+    for request: URLRequest,
+    streaming body: AsyncThrowingStream<Data, any Error>,
+    delegate _: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
     let threshold = answerAfterBytes
     let abandons = abandonsBody
@@ -70,7 +92,9 @@ final class LiveCapTransport: HTTPTransport, Sendable {
           if abandons { break }
           reached.open()
         }
-      } catch {}
+      } catch {
+        // A failed body just ends the read early; the gate opens below either way.
+      }
       reached.open()
     }
     await reached.wait()
@@ -92,9 +116,9 @@ final class LiveCapTransport: HTTPTransport, Sendable {
 
   /// Appends a chunk of the streamed body and returns the running total.
   private func record(_ chunk: Data) -> Int {
-    state.withLock {
-      $0.liveBody.append(chunk)
-      return $0.liveBody.count
+    state.withLock { recorded in
+      recorded.liveBody.append(chunk)
+      return recorded.liveBody.count
     }
   }
 
@@ -102,27 +126,14 @@ final class LiveCapTransport: HTTPTransport, Sendable {
   /// audio that is certain to arrive *after* the refusal.
   func waitUntilLiveAnswered() async { await liveAnswered.wait() }
 
-  /// What an abandoned body (`abandonsBody`) still had in it, read to its end
-  /// once the streaming request was answered: returns only once the body's
-  /// producer has finished.
-  func restOfAbandonedBody() async throws -> Data {
-    await liveAnswered.wait()
-    guard let body = state.withLock({ $0.abandonedBody }) else { return Data() }
-    var rest = Data()
-    for try await chunk in body { rest.append(chunk) }
-    return rest
-  }
-
-  /// Every byte the streaming request's body carried before it was answered.
-  var liveBody: Data { state.withLock { $0.liveBody } }
-  /// The buffered requests made, in order — the fallback sends at most one.
-  var bufferedRequests: [URLRequest] { state.withLock { $0.bufferedRequests } }
-
   private func respond(to request: URLRequest, with answer: Answer) throws -> (Data, URLResponse) {
     guard let url = request.url,
       let response = HTTPURLResponse(
-        url: url, statusCode: answer.status, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])
+        url: url,
+        statusCode: answer.status,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )
     else { throw URLError(.badURL) }
     return (answer.body, response)
   }
@@ -131,15 +142,16 @@ final class LiveCapTransport: HTTPTransport, Sendable {
 extension LiveCapTransport.Answer {
   /// The streaming route's documented refusal past its cap.
   static let audioTooLarge = Self(
-    status: 413, body: json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"]))
+    status: 413, body: json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"])
+  )
+
+  /// An answer the test never expects to be reached; a 500 so reaching it fails
+  /// loudly rather than passing on an empty body.
+  static let unreachable = Self(status: 500, body: json(["error": "unexpected request"]))
 
   /// A 200 carrying `text` as the verbatim transcript and `rewrite` as the
   /// cleanup rewrite.
   static func transcript(_ text: String, rewrite: String) -> Self {
     Self(status: 200, body: json(["text": text, "llm_response": rewrite]))
   }
-
-  /// An answer the test never expects to be reached; a 500 so reaching it fails
-  /// loudly rather than passing on an empty body.
-  static let unreachable = Self(status: 500, body: json(["error": "unexpected request"]))
 }

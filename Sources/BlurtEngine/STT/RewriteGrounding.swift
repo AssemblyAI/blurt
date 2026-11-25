@@ -26,11 +26,17 @@ enum RewriteGrounding {
 
   static func isSpeech(_ rewrite: String, instruction: String?) -> Bool {
     let words = normalized(rewrite)
-    guard !words.isEmpty else { return false }
-    guard let instruction else { return true }
+    guard !words.isEmpty else {
+      return false
+    }
+    guard let instruction else {
+      return true
+    }
     // Both sides are single-spaced words, so padding them with a space makes
     // `contains` match whole words only: "done" is not inside "abandoned".
-    if " \(normalized(instruction)) ".contains(" \(words) ") { return false }
+    if " \(normalized(instruction)) ".contains(" \(words) ") {
+      return false
+    }
     return !sentences(of: instruction).contains { " \(words) ".contains(" \($0) ") }
   }
 
@@ -55,7 +61,7 @@ enum RewriteGrounding {
   /// rather than a phrase.
   static func sentences(of instruction: String) -> [String] {
     instruction
-      .split(whereSeparator: { $0 == "." || $0 == "\n" || $0 == ":" || $0 == ";" })
+      .split { $0 == "." || $0 == "\n" || $0 == ":" || $0 == ";" }
       .map { normalized(String($0)) }
       .filter { $0.count >= sentenceFloor }
   }

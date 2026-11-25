@@ -28,16 +28,24 @@ import Foundation
 package nonisolated enum OwnerWatchdog {
   /// Whether the dictation in flight has lost its keyboard.
   package static func shouldRelease(inFlight: DictationRef?, presence: KeyboardPresenceRecord?, now: Date) -> Bool {
-    guard let inFlight else { return false }
-    guard let presence else { return true }
+    guard let inFlight else {
+      return false
+    }
+    guard let presence else {
+      return true
+    }
     let old = now.timeIntervalSince(presence.seenAt) > BlurtShared.ownerWatchdog
-    guard stands(presence, for: inFlight) else { return presence.onScreen || old }
+    guard stands(presence, for: inFlight) else {
+      return presence.onScreen || old
+    }
     return !presence.onScreen || old
   }
 
   /// The record is the owner's, or the dictation has no owner to be stricter about.
   private static func stands(_ presence: KeyboardPresenceRecord, for inFlight: DictationRef) -> Bool {
-    guard let owner = inFlight.ownerProcessID else { return true }
+    guard let owner = inFlight.ownerProcessID else {
+      return true
+    }
     return presence.processID == owner
   }
 }

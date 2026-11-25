@@ -1,13 +1,3 @@
-import Foundation
-
-/// Rewrites a selection the way a spoken instruction asks ("make it more
-/// formal"), for the Rewrite Selection key (`SelectionSpeechRouting`).
-/// Public so a host can stand in its own (the engine's tests do; the app's UI
-/// tests don't drive a rewrite).
-public protocol SelectionRewriting: Sendable {
-  func rewrite(_ selection: String, as request: String) async throws -> String
-}
-
 /// The production `SelectionRewriting`: one `POST /v1/chat/completions` to
 /// AssemblyAI's LLM Gateway, through `GatewayConnection.send`.
 ///
@@ -64,43 +54,14 @@ public struct SelectionRewriter: SelectionRewriting, GatewayClient {
     let edges = SelectionEdges(selection)
     let reply = try await gateway.send(
       ReadAloudLLM.chat(
-        system: Self.instruction, user: ReadAloudLLM.answerPrompt(request, about: String(edges.words)),
+        system: Self.instruction,
+        user: ReadAloudLLM.answerPrompt(request, about: String(edges.words)),
         maxTokens: Self.maxTokens,
-        model: Self.model), timeout: Self.timeout)
+        model: Self.model
+      ),
+      timeout: Self.timeout
+    )
     guard !reply.truncated else { throw ReadAloudLLMError.truncated }
     return edges.around(reply.text)
-  }
-}
-
-/// A selection split around its words: the whitespace it starts and ends with,
-/// and what's between. The rewrite gets only the words and the edges are put
-/// back around its reply, because the paste replaces the whole highlight — a
-/// line triple-clicked with its line break, or an indented one, must keep it,
-/// and the reply comes back trimmed (`ReadAloudLLM.reply(from:)`).
-struct SelectionEdges: Equatable, Sendable {
-  let leading: Substring
-  let words: Substring
-  let trailing: Substring
-
-  init(_ selection: String) {
-    let start = selection.firstIndex { !$0.isWhitespace } ?? selection.endIndex
-    let end = selection.lastIndex { !$0.isWhitespace }.map(selection.index(after:)) ?? start
-    leading = selection[..<start]
-    words = selection[start..<end]
-    trailing = selection[end...]
-  }
-
-  /// `rewrite` in the selection's place: its edges around it.
-  func around(_ rewrite: String) -> String { leading + rewrite + trailing }
-}
-
-enum SelectionRewriteError: Error, Equatable, LocalizedError {
-  /// The selection is past `SelectionRewriter.maxCharacters`.
-  case tooLong
-
-  var errorDescription: String? {
-    switch self {
-    case .tooLong: "The selection is too long to rewrite."
-    }
   }
 }

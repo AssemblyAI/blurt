@@ -62,7 +62,7 @@ extension DictationLog {
     to url: URL = defaultErrorURL
   ) {
     gated(store: store) { now in
-      writeError(error, context: context, to: url, now: now)
+      writeError(error, to: url, now: now, context: context)
     }
   }
 
@@ -81,14 +81,17 @@ extension DictationLog {
       // so a future case that forgets one logs *something* rather than "".
       error: error.errorDescription ?? String(describing: error),
       ts: now.formatted(timestampFormat),
-      app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel)
+      app: context?.appName,
+      window: context?.windowTitle,
+      field: context?.fieldLabel
+    )
   }
 
   /// The unconditional writer, named distinctly from `appendError` for the same
   /// reason `write` is: the gated entry point above must not be bypassable by
   /// accidentally satisfying a different signature.
   static func writeError(
-    _ error: BlurtError, context: TranscriptionContext? = nil, to url: URL, now: Date
+    _ error: BlurtError, to url: URL, now: Date, context: TranscriptionContext? = nil
   ) {
     appendLine(makeErrorEntry(error, context: context, now: now), to: url)
   }

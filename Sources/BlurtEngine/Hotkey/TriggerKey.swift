@@ -13,15 +13,15 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   case leftOption = 58
   case leftControl = 59
 
-  public var keyCode: Int { rawValue }
+  /// `CGEventFlags`' generic ⌘, ⌥, ⌃ and ⇧ bits — `maskCommand`,
+  /// `maskAlternate`, `maskControl`, `maskShift` — raw, so the engine stays
+  /// free of CoreGraphics. Each is set by either side's key.
+  static let commandFlag: UInt64 = 0x10_0000
+  static let optionFlag: UInt64 = 0x8_0000
+  static let controlFlag: UInt64 = 0x4_0000
+  static let shiftFlag: UInt64 = 0x2_0000
 
-  /// Decodes a persisted keycode into a `TriggerKey`, falling back to right ⌘
-  /// when the value isn't one of the curated options. The single decode-with-
-  /// default rule shared by `TriggerKeyStore` and the `@AppStorage` views that
-  /// read the raw keycode directly (so they re-render live on a Settings change).
-  public static func fromPersisted(_ code: Int) -> TriggerKey {
-    TriggerKey(rawValue: code) ?? .rightCommand
-  }
+  public var keyCode: Int { rawValue }
 
   /// The **device-dependent** modifier flag bit this key toggles, as a raw
   /// `CGEventFlags`/IOKit value (the app wraps it in `CGEventFlags(rawValue:)`).
@@ -37,22 +37,25 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   /// names one physical key.
   public var deviceModifierMask: UInt64 {
     switch self {
-    case .rightCommand: return 0x10  // NX_DEVICERCMDKEYMASK
-    case .rightOption: return 0x40  // NX_DEVICERALTKEYMASK
-    case .function: return 0x80_0000  // kCGEventFlagMaskSecondaryFn
-    case .leftCommand: return 0x08  // NX_DEVICELCMDKEYMASK
-    case .leftOption: return 0x20  // NX_DEVICELALTKEYMASK
-    case .leftControl: return 0x01  // NX_DEVICELCTLKEYMASK
+    case .rightCommand:
+      return 0x10  // NX_DEVICERCMDKEYMASK
+
+    case .rightOption:
+      return 0x40  // NX_DEVICERALTKEYMASK
+
+    case .function:
+      return 0x80_0000  // kCGEventFlagMaskSecondaryFn
+
+    case .leftCommand:
+      return 0x08  // NX_DEVICELCMDKEYMASK
+
+    case .leftOption:
+      return 0x20  // NX_DEVICELALTKEYMASK
+
+    case .leftControl:
+      return 0x01  // NX_DEVICELCTLKEYMASK
     }
   }
-
-  /// `CGEventFlags`' generic ⌘, ⌥, ⌃ and ⇧ bits — `maskCommand`,
-  /// `maskAlternate`, `maskControl`, `maskShift` — raw, so the engine stays
-  /// free of CoreGraphics. Each is set by either side's key.
-  static let commandFlag: UInt64 = 0x10_0000
-  static let optionFlag: UInt64 = 0x8_0000
-  static let controlFlag: UInt64 = 0x4_0000
-  static let shiftFlag: UInt64 = 0x2_0000
 
   /// The generic `CGEventFlags` bit this key sets along with its device bit —
   /// `maskCommand`, `maskAlternate`, `maskControl` — which its other-side twin
@@ -60,10 +63,17 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   /// shortcut reads it as a modifier.
   var sharedModifierMask: UInt64 {
     switch self {
-    case .rightCommand, .leftCommand: return Self.commandFlag
-    case .rightOption, .leftOption: return Self.optionFlag
-    case .leftControl: return Self.controlFlag
-    case .function: return 0
+    case .rightCommand, .leftCommand:
+      return Self.commandFlag
+
+    case .rightOption, .leftOption:
+      return Self.optionFlag
+
+    case .leftControl:
+      return Self.controlFlag
+
+    case .function:
+      return 0
     }
   }
 
@@ -72,22 +82,40 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   /// well can be told from this key alone.
   var twinDeviceMask: UInt64 {
     switch self {
-    case .rightCommand, .leftCommand: return Self.leftCommand.deviceModifierMask | Self.rightCommand.deviceModifierMask
-    case .rightOption, .leftOption: return Self.leftOption.deviceModifierMask | Self.rightOption.deviceModifierMask
-    case .leftControl: return deviceModifierMask | 0x2000
-    case .function: return deviceModifierMask
+    case .rightCommand, .leftCommand:
+      return Self.leftCommand.deviceModifierMask | Self.rightCommand.deviceModifierMask
+
+    case .rightOption, .leftOption:
+      return Self.leftOption.deviceModifierMask | Self.rightOption.deviceModifierMask
+
+    case .leftControl:
+      return deviceModifierMask | 0x2000
+
+    case .function:
+      return deviceModifierMask
     }
   }
 
   /// Inline sentence form, e.g. "Tap or hold right ⌘ to dictate".
   public var label: String {
     switch self {
-    case .rightCommand: return "right ⌘"
-    case .rightOption: return "right ⌥"
-    case .function: return "fn"
-    case .leftCommand: return "left ⌘"
-    case .leftOption: return "left ⌥"
-    case .leftControl: return "left ⌃"
+    case .rightCommand:
+      return "right ⌘"
+
+    case .rightOption:
+      return "right ⌥"
+
+    case .function:
+      return "fn"
+
+    case .leftCommand:
+      return "left ⌘"
+
+    case .leftOption:
+      return "left ⌥"
+
+    case .leftControl:
+      return "left ⌃"
     }
   }
 
@@ -96,12 +124,31 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   /// the bare symbol alone assumes the reader already knows the glyph.
   public var fullName: String {
     switch self {
-    case .rightCommand: return "Right Command (⌘)"
-    case .rightOption: return "Right Option (⌥)"
-    case .function: return "Function (fn)"
-    case .leftCommand: return "Left Command (⌘)"
-    case .leftOption: return "Left Option (⌥)"
-    case .leftControl: return "Left Control (⌃)"
+    case .rightCommand:
+      return "Right Command (⌘)"
+
+    case .rightOption:
+      return "Right Option (⌥)"
+
+    case .function:
+      return "Function (fn)"
+
+    case .leftCommand:
+      return "Left Command (⌘)"
+
+    case .leftOption:
+      return "Left Option (⌥)"
+
+    case .leftControl:
+      return "Left Control (⌃)"
     }
+  }
+
+  /// Decodes a persisted keycode into a `TriggerKey`, falling back to right ⌘
+  /// when the value isn't one of the curated options. The single decode-with-
+  /// default rule shared by `TriggerKeyStore` and the `@AppStorage` views that
+  /// read the raw keycode directly (so they re-render live on a Settings change).
+  public static func fromPersisted(_ code: Int) -> Self {
+    Self(rawValue: code) ?? .rightCommand
   }
 }

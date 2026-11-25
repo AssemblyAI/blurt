@@ -1,13 +1,3 @@
-/// Which record cue chime a pipeline-phase change should fire, if any. A pure
-/// projection of `PipelinePhase` transitions — owned here (rather than in the
-/// AppKit `CueSoundPlayer`) so the edge logic is unit-testable, the same split
-/// as `OverlayUIState` and `MenuBarStatus`. The AppKit side just plays whichever
-/// sound this resolves to.
-public enum RecordingCue: Equatable, Sendable {
-  case start
-  case stop
-}
-
 /// Which record cue chime fires on each recording edge. The host calls
 /// `cue(for:)` on *every* pipeline phase, so the gate fires `.start` only on the
 /// edge into `.recording` and `.stop` only on the recording→not-recording edge,
@@ -30,14 +20,21 @@ public enum RecordingCue: Equatable, Sendable {
 public struct RecordingCueGate: Sendable {
   private var edges = RecordingEdgeDetector()
 
-  public init() {}
+  public init() {
+    // Nothing to set up: a fresh gate has not seen a recording edge.
+  }
 
   /// The cue to play for `phase`, or `nil` when the recording edge didn't move.
   public mutating func cue(for phase: PipelinePhase) -> RecordingCue? {
     switch edges.edge(for: phase) {
-    case .began: return .start
-    case .ended: return .stop
-    case nil: return nil
+    case .began:
+      return .start
+
+    case .ended:
+      return .stop
+
+    case nil:
+      return nil
     }
   }
 }

@@ -29,7 +29,9 @@ extension ListeningWindowTests {
     await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
     rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
     #expect(await until { rig.state?.sequence == 1 })
-    guard let beat = rig.state else { return }
+    guard let beat = rig.state else {
+      return
+    }
     #expect(beat.window == .closed && beat.reason == .sessionOff && !beat.micLive)
     #expect(beat.leaseUntil > launched.leaseUntil && beat.leaseUntil > Date())
     #expect(beat.notReady(now: Date()) == .sessionOff, "off, never suspended")

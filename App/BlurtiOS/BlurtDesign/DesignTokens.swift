@@ -12,60 +12,60 @@ import SwiftUI
 /// `package`: BlurtDesign's, read by the app, the keyboard and the tests.
 package enum DesignTokens {
   package enum Brand {
-    package nonisolated static let black: Color = Color(hex: 0x000000)
+    package nonisolated static let black = Color(hex: 0x000000)
     /// The warm card fill; the paper theme's surface.
-    package nonisolated static let card: Color = Color(hex: 0xEBE8E8)
+    package nonisolated static let card = Color(hex: 0xEBE8E8)
     /// The card's hairline; the paper theme's modifier key.
-    package nonisolated static let cardBorder: Color = Color(hex: 0xDEDBDB)
+    package nonisolated static let cardBorder = Color(hex: 0xDEDBDB)
     /// AssemblyAI's primary violet: the drop, never a key or a surface.
-    package nonisolated static let cobolt: Color = Color(hex: 0x3923C7)
+    package nonisolated static let cobolt = Color(hex: 0x3923C7)
     /// The design system's UI-and-code green fill (unused on the phone yet).
-    package nonisolated static let green100: Color = Color(hex: 0xCCE4D5)
+    package nonisolated static let green100 = Color(hex: 0xCCE4D5)
     /// The design system's UI-and-code green highlight (unused on the phone yet).
-    package nonisolated static let green200: Color = Color(hex: 0x99C8AC)
+    package nonisolated static let green200 = Color(hex: 0x99C8AC)
     /// The brand hue lifted for dark chrome: the meter, the ring, the wave on ink.
-    package nonisolated static let green400: Color = Color(hex: 0x67AD82)
+    package nonisolated static let green400 = Color(hex: 0x67AD82)
     /// The wordmark green, light chrome (the app's accent in light).
-    package nonisolated static let green700: Color = Color(hex: 0x01762F)
+    package nonisolated static let green700 = Color(hex: 0x01762F)
     /// The pale green the orb lightens into.
-    package nonisolated static let greenMist: Color = Color(hex: 0xDBF5E6)
+    package nonisolated static let greenMist = Color(hex: 0xDBF5E6)
     /// The brand ink: the Mac pill's body, the ink theme's surface.
-    package nonisolated static let ink: Color = Color(hex: 0x1D1B16)
+    package nonisolated static let ink = Color(hex: 0x1D1B16)
     /// The Mac's dark card border.
-    package nonisolated static let ink600: Color = Color(hex: 0x3A362F)
+    package nonisolated static let ink600 = Color(hex: 0x3A362F)
     /// An ordinary key on ink, one step up.
-    package nonisolated static let ink700: Color = Color(hex: 0x33302A)
+    package nonisolated static let ink700 = Color(hex: 0x33302A)
     /// A modifier key on ink; the Mac's dark card fill.
-    package nonisolated static let ink800: Color = Color(hex: 0x26231E)
+    package nonisolated static let ink800 = Color(hex: 0x26231E)
     /// Black-100: the lightest warm grey.
-    package nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
+    package nonisolated static let neutral300 = Color(hex: 0xD2D1D0)
     /// Black-200: mono labels on the dark face.
-    package nonisolated static let neutral500: Color = Color(hex: 0xA5A4A2)
+    package nonisolated static let neutral500 = Color(hex: 0xA5A4A2)
     /// Black-300: muted text and mono labels on the light face.
-    package nonisolated static let neutral700: Color = Color(hex: 0x777673)
+    package nonisolated static let neutral700 = Color(hex: 0x777673)
     /// Black-400: body text on the light face.
-    package nonisolated static let neutral900: Color = Color(hex: 0x4A4945)
+    package nonisolated static let neutral900 = Color(hex: 0x4A4945)
     /// The error word and ring, cancel, the Full Access note; never a red body.
-    package nonisolated static let orange: Color = Color(hex: 0xE67F36)
+    package nonisolated static let orange = Color(hex: 0xE67F36)
     /// Neutral-100: the light face's surface.
-    package nonisolated static let paper200: Color = Color(hex: 0xECEBE5)
+    package nonisolated static let paper200 = Color(hex: 0xECEBE5)
     /// Neutral-200: a modifier key on the light face.
-    package nonisolated static let paper300: Color = Color(hex: 0xDAD7CB)
+    package nonisolated static let paper300 = Color(hex: 0xDAD7CB)
     /// Neutral-300: hairlines and field borders on the light face.
-    package nonisolated static let paper400: Color = Color(hex: 0xC7C3B2)
+    package nonisolated static let paper400 = Color(hex: 0xC7C3B2)
     /// The design system's page: the app's light ground.
-    package nonisolated static let paperPage: Color = Color(hex: 0xFDFCF8)
+    package nonisolated static let paperPage = Color(hex: 0xFDFCF8)
     /// The warm off-white one step in: light cards, dark legends.
-    package nonisolated static let paperTint: Color = Color(hex: 0xF5F3EB)
+    package nonisolated static let paperTint = Color(hex: 0xF5F3EB)
     /// The orb gradient's upper violet stop.
-    package nonisolated static let violetIris: Color = Color(hex: 0x887BDD)
+    package nonisolated static let violetIris = Color(hex: 0x887BDD)
     /// The orb's lightest violet: its top and the gradient's ends.
-    package nonisolated static let violetLavender: Color = Color(hex: 0xD7D3F4)
+    package nonisolated static let violetLavender = Color(hex: 0xD7D3F4)
     /// The orb's mid violet: the drop's halo.
-    package nonisolated static let violetPeriwinkle: Color = Color(hex: 0xB0A7E9)
+    package nonisolated static let violetPeriwinkle = Color(hex: 0xB0A7E9)
     /// Key legends on ink: warm white on warm ink.
-    package nonisolated static let warmWhite: Color = Color(hex: 0xF2EEE6)
-    package nonisolated static let white: Color = Color(hex: 0xFFFFFF)
+    package nonisolated static let warmWhite = Color(hex: 0xF2EEE6)
+    package nonisolated static let white = Color(hex: 0xFFFFFF)
   }
 
   package enum Themes {
@@ -93,9 +93,9 @@ package enum DesignTokens {
     /// The catalog's CardFill in light.
     package nonisolated static let appCardFillLight: Color = Brand.paperTint
     /// The catalog's CTA in dark: the one accent button.
-    package nonisolated static let appCtaDark: Color = Keyboard.appAccentDark
+    package nonisolated static let appCtaDark: Color = Self.appAccentDark
     /// The catalog's CTA in light: the one accent button.
-    package nonisolated static let appCtaLight: Color = Keyboard.appAccentLight
+    package nonisolated static let appCtaLight: Color = Self.appAccentLight
     /// The catalog's CTAText in dark: ink on green, as the site.
     package nonisolated static let appCtaTextDark: Color = Brand.ink
     /// The catalog's CTAText in light.
@@ -354,8 +354,9 @@ package enum DesignTokens {
     /// A colour or fill changing state: the brand's transition.
     package nonisolated static let colour: Double = 0.2
     /// The house curve for everything that moves; nothing springs.
-    package nonisolated static let easeSignature: UnitCurve = UnitCurve.bezier(
-      startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
+    package nonisolated static let easeSignature = UnitCurve.bezier(
+      startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1)
+    )
     /// The Blurt-is-on card fading in over the app as the scene leaves the front, and out as it returns.
     package nonisolated static let keepOpenFade: Double = 0.6
     /// The first exact corner, this long after the card appears; the rest come as the screen allows.

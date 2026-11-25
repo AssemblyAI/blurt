@@ -51,6 +51,17 @@ final class WizardController {
   /// ready screen is reachable without the TCC grants the test host can't make.
   private let checkPermissions: () -> PermissionStatus
 
+  /// The live readiness value, computed from the current inputs. Private so only
+  /// `syncReadiness` touches the raw `permissions`/`hasAPIKey` — that keeps their
+  /// observable dependency off view bodies (the whole point of the stored
+  /// `isReady`). The gate itself is the engine's `SetupReadiness`, where it's
+  /// unit-tested (including the deliberate exclusion of the dictation shortcut,
+  /// which has a default binding and is rebound in Settings — so a shortcut change
+  /// can't trap the user in the wizard).
+  private var computedReadiness: Bool {
+    SetupReadiness.isReady(permissions: permissions, hasAPIKey: apiKey.hasAPIKey)
+  }
+
   init(
     coordinator: AppCoordinator,
     onNeedsForeground: @escaping @MainActor () -> Void,
@@ -73,17 +84,6 @@ final class WizardController {
     startPolling()
   }
 
-  /// The live readiness value, computed from the current inputs. Private so only
-  /// `syncReadiness` touches the raw `permissions`/`hasAPIKey` — that keeps their
-  /// observable dependency off view bodies (the whole point of the stored
-  /// `isReady`). The gate itself is the engine's `SetupReadiness`, where it's
-  /// unit-tested (including the deliberate exclusion of the dictation shortcut,
-  /// which has a default binding and is rebound in Settings — so a shortcut change
-  /// can't trap the user in the wizard).
-  private var computedReadiness: Bool {
-    SetupReadiness.isReady(permissions: permissions, hasAPIKey: apiKey.hasAPIKey)
-  }
-
   /// Streams the API-key model's readiness input (`hasAPIKey`) via `Observations`,
   /// which emits after each change commits — no one-shot re-arming (the
   /// pre-macOS-26 `withObservationTracking` fired once, *before* the mutation
@@ -97,9 +97,11 @@ final class WizardController {
     // syncReadiness() re-derives readiness (including hasAPIKey) each tick, so a
     // saved key surfaces within a poll interval (≤1s during setup) rather than
     // instantly — an acceptable degradation on older systems.
-    guard #available(macOS 26.0, *) else { return }
-    let apiKey = apiKey
-    let hasAPIKey = Observations { apiKey.hasAPIKey }
+    guard #available(macOS 26.0, *) else {
+      return
+    }
+    let keyModel = apiKey
+    let hasAPIKey = Observations { keyModel.hasAPIKey }
     keyObservationTask = Task { @MainActor [weak self] in
       for await _ in hasAPIKey {
         self?.syncReadiness()
@@ -120,8 +122,10 @@ final class WizardController {
         // across the sleep.)
         let interval = SetupReadiness.pollInterval(isReady: self?.isReady ?? false)
         try? await Task.sleep(for: interval)
-        guard !Task.isCancelled, let self else { return }
-        self.refreshPermissions()
+        guard !Task.isCancelled, let self else {
+          return
+        }
+        refreshPermissions()
       }
     }
   }
@@ -157,7 +161,9 @@ final class WizardController {
   /// `refreshPermissions`, where the cause is known.)
   private func syncReadiness() {
     let ready = computedReadiness
-    guard ready != isReady else { return }
+    guard ready != isReady else {
+      return
+    }
     isReady = ready
     if ready {
       coordinator?.showOverlay()

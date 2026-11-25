@@ -10,7 +10,9 @@ extension TranscriptsModel {
   /// Sets the switch, and starts the probe loop the first time.
   func setAutoRecordMeetings(_ isOn: Bool) {
     autoRecordMeetings = isOn
-    guard meetingProbe == nil else { return }
+    guard meetingProbe == nil else {
+      return
+    }
     meetingProbe = Task { [weak self] in
       while !Task.isCancelled {
         await self?.probeForMeeting()
@@ -32,22 +34,29 @@ extension TranscriptsModel {
 
   private func probeForMeeting() async {
     // Nothing to start or stop: leave Core Audio alone.
-    guard autoRecordMeetings || isRecording else { return }
+    guard autoRecordMeetings || isRecording else {
+      return
+    }
     // Synchronous Core Audio reads: off the main actor.
     let meeting = await Task.detached(priority: .utility) { MeetingMicProbe.meetingInProgress() }.value
-    guard !Task.isCancelled else { return }
+    guard !Task.isCancelled else {
+      return
+    }
     lastMeetingActive = meeting != nil
     let action = meetingPolicy.probe(
-      meeting: meeting, recording: isRecording, autoStart: autoRecordMeetings, now: .now)
+      meeting: meeting, recording: isRecording, autoStart: autoRecordMeetings, now: .now
+    )
     switch action {
     case .start:
       // Not over a sheet already in use (a transcript open, a file going up):
       // treat it as a decline, so this meeting doesn't keep asking.
       if canRecord { startRecording(byUser: false) }
       if !isRecording { meetingPolicy.userStopped(meetingActive: true) }
+
     case .stop:
       stopRecording(byUser: false)
-    case .none:
+
+    case .noChange:
       break
     }
   }

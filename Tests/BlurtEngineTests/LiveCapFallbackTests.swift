@@ -24,10 +24,23 @@ struct LiveCapFallbackTests {
   /// Past the `config` part and into `before`, so the refusal lands mid-upload.
   static let refusalPoint = 30_000
 
+  /// Every refusal that is *not* the cap, mid-upload: each must surface as the
+  /// same `AssemblyAIError.http` it always did, with no second request.
+  static let otherFailures: [(status: Int, body: Data)] = [
+    // 413 without the documented code — the `{status, title, detail}` shape.
+    (413, json(["status": "413", "title": "Payload Too Large", "detail": "body too large"])),
+    (413, json(["error": "something else", "error_code": "bad_request"])),
+    // The code without the status.
+    (400, json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"])),
+    (401, json(["detail": "Invalid API key"])),
+    (502, json(["error": "upstream unavailable", "error_code": "upstream_error"])),
+  ]
+
   @Test("a recording the route accepts never touches the buffered route")
   func successPathUnchanged() async throws {
     let transport = LiveCapTransport(
-      live: .transcript("um hello", rewrite: "Hello."), buffered: .unreachable)
+      live: .transcript("um hello", rewrite: "Hello."), buffered: .unreachable
+    )
 
     #expect(try await recordWhole(makeTranscriber(apiKey: "k", transport: transport)) == "Hello.")
     #expect(transport.bufferedRequests.isEmpty)
@@ -37,8 +50,10 @@ struct LiveCapFallbackTests {
   @Test("a mid-upload 413 sends everything to the buffered route, including audio after it")
   func midUploadRefusalFallsBackWithAllTheAudio() async throws {
     let transport = LiveCapTransport(
-      live: .audioTooLarge, answerAfterBytes: Self.refusalPoint,
-      buffered: .transcript("um all of it", rewrite: "All of it."))
+      live: .audioTooLarge,
+      buffered: .transcript("um all of it", rewrite: "All of it."),
+      answerAfterBytes: Self.refusalPoint
+    )
     let (dictation, capture) = startSpeaking(makeTranscriber(apiKey: "k", transport: transport))
 
     // The user is still talking when the refusal lands; what they say next is
@@ -64,7 +79,8 @@ struct LiveCapFallbackTests {
   @Test("a 413 after the whole upload falls back too")
   func refusalAfterTheUploadFallsBack() async throws {
     let transport = LiveCapTransport(
-      live: .audioTooLarge, buffered: .transcript("all of it", rewrite: "All of it."))
+      live: .audioTooLarge, buffered: .transcript("all of it", rewrite: "All of it.")
+    )
 
     #expect(try await recordWhole(makeTranscriber(apiKey: "k", transport: transport)) == "All of it.")
     let request = try #require(transport.bufferedRequests.first)
@@ -74,32 +90,24 @@ struct LiveCapFallbackTests {
   @Test("the buffered response picks verbatim text exactly as a streamed one would")
   func bufferedResponseFollowsTheEnhancedSetting() async throws {
     let transport = LiveCapTransport(
-      live: .audioTooLarge, buffered: .transcript("um all of it", rewrite: "All of it."))
+      live: .audioTooLarge, buffered: .transcript("um all of it", rewrite: "All of it.")
+    )
     let transcriber = makeTranscriber(apiKey: "k", transport: transport, enhancedTranscripts: false)
 
     let result = try await transcriber.transcribe(
-      frames: .oneShot(Self.before), sampleRate: 16_000, context: nil)
+      frames: .oneShot(Self.before), sampleRate: 16_000, context: nil
+    )
 
     #expect(result == "um all of it")
   }
 
-  /// Every refusal that is *not* the cap, mid-upload: each must surface as the
-  /// same `AssemblyAIError.http` it always did, with no second request.
-  static let otherFailures: [(status: Int, body: Data)] = [
-    // 413 without the documented code — the `{status, title, detail}` shape.
-    (413, json(["status": "413", "title": "Payload Too Large", "detail": "body too large"])),
-    (413, json(["error": "something else", "error_code": "bad_request"])),
-    // The code without the status.
-    (400, json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"])),
-    (401, json(["detail": "Invalid API key"])),
-    (502, json(["error": "upstream unavailable", "error_code": "upstream_error"])),
-  ]
-
   @Test("any other failure surfaces as before, with no fallback request", arguments: otherFailures)
   func otherFailuresDoNotFallBack(status: Int, body: Data) async throws {
     let transport = LiveCapTransport(
-      live: .init(status: status, body: body), answerAfterBytes: Self.refusalPoint,
-      buffered: .unreachable)
+      live: .init(status: status, body: body),
+      buffered: .unreachable,
+      answerAfterBytes: Self.refusalPoint
+    )
     let (dictation, capture) = startSpeaking(makeTranscriber(apiKey: "k", transport: transport))
 
     #expect(try await httpFailure(of: dictation).status == status)
@@ -116,8 +124,11 @@ struct LiveCapFallbackTests {
     // nobody reads, beside the fallback's own copy — and this read never
     // ended before key up.
     let transport = LiveCapTransport(
-      live: .audioTooLarge, answerAfterBytes: Self.refusalPoint, abandonsBody: true,
-      buffered: .transcript("all of it", rewrite: "All of it."))
+      live: .audioTooLarge,
+      buffered: .transcript("all of it", rewrite: "All of it."),
+      answerAfterBytes: Self.refusalPoint,
+      abandonsBody: true
+    )
     let (dictation, capture) = startSpeaking(makeTranscriber(apiKey: "k", transport: transport))
 
     let unread = try await transport.restOfAbandonedBody()
@@ -125,7 +136,7 @@ struct LiveCapFallbackTests {
     capture.finish()
 
     #expect(try await dictation.value == "All of it.")
-    #expect(unread.range(of: Self.after) == nil)
+    #expect(!unread.contains(Self.after))
     let request = try #require(transport.bufferedRequests.first)
     #expect(try audioPart(ofBuffered: #require(request.httpBody)) == Self.before + Self.after)
   }
@@ -133,9 +144,12 @@ struct LiveCapFallbackTests {
   @Test("a failed fallback surfaces its own error, not the 413")
   func failedFallbackSurfacesItsOwnError() async throws {
     let transport = LiveCapTransport(
-      live: .audioTooLarge, answerAfterBytes: Self.refusalPoint,
+      live: .audioTooLarge,
       buffered: .init(
-        status: 504, body: json(["error": "upstream timed out", "error_code": "upstream_timeout"])))
+        status: 504, body: json(["error": "upstream timed out", "error_code": "upstream_timeout"])
+      ),
+      answerAfterBytes: Self.refusalPoint
+    )
     let (dictation, capture) = startSpeaking(makeTranscriber(apiKey: "k", transport: transport))
 
     await transport.waitUntilLiveAnswered()
@@ -150,7 +164,8 @@ struct LiveCapFallbackTests {
   @Test("a cancel while the refused recording drains sends nothing")
   func cancelDuringDrainMakesNoFallbackRequest() async throws {
     let transport = LiveCapTransport(
-      live: .audioTooLarge, answerAfterBytes: Self.refusalPoint, buffered: .unreachable)
+      live: .audioTooLarge, buffered: .unreachable, answerAfterBytes: Self.refusalPoint
+    )
     let (dictation, capture) = startSpeaking(makeTranscriber(apiKey: "k", transport: transport))
 
     await transport.waitUntilLiveAnswered()
@@ -165,7 +180,8 @@ struct LiveCapFallbackTests {
   @Test("a copy that would pass the byte cap fails cleanly instead of sending")
   func copyPastTheCapFailsCleanly() async throws {
     let transport = LiveCapTransport(
-      live: .audioTooLarge, answerAfterBytes: Self.refusalPoint, buffered: .unreachable)
+      live: .audioTooLarge, buffered: .unreachable, answerAfterBytes: Self.refusalPoint
+    )
     var transcriber = makeTranscriber(apiKey: "k", transport: transport)
     transcriber.bufferedAudioByteCap = Self.before.count + Self.after.count - 1
     let (dictation, capture) = startSpeaking(transcriber)
@@ -177,19 +193,23 @@ struct LiveCapFallbackTests {
     do {
       _ = try await dictation.value
       Issue.record("expected a throw")
-    } catch AssemblyAIError.recordingTooLarge {}
+    } catch AssemblyAIError.recordingTooLarge {
+      // The expected error: the over-cap recording was refused.
+    }
     #expect(transport.bufferedRequests.isEmpty)
   }
 
   @Test("the byte cap bounds only the copy: the streamed request still gets everything")
   func capDoesNotTouchTheStreamedRequest() async throws {
     let transport = LiveCapTransport(
-      live: .transcript("hello", rewrite: "Hello."), buffered: .unreachable)
+      live: .transcript("hello", rewrite: "Hello."), buffered: .unreachable
+    )
     var transcriber = makeTranscriber(apiKey: "k", transport: transport)
     transcriber.bufferedAudioByteCap = 1
 
     let result = try await transcriber.transcribe(
-      frames: .oneShot(Self.before), sampleRate: 16_000, context: nil)
+      frames: .oneShot(Self.before), sampleRate: 16_000, context: nil
+    )
 
     #expect(result == "Hello.")
     #expect(try audioPart(ofStreamed: transport.liveBody) == Self.before)
@@ -199,7 +219,8 @@ struct LiveCapFallbackTests {
   func relayKeepsOrDropsTheCopy() async {
     let (live, liveFeed) = AsyncStream.makeStream(of: Data.self)
     let kept = await AssemblyAITranscriber.relay(
-      .oneShot(Self.before), to: liveFeed, keepingAtMost: Self.before.count)
+      .oneShot(Self.before), to: liveFeed, keepingAtMost: Self.before.count
+    )
     #expect(kept == Self.before)
     // The streaming side got the same frame, and was ended with the feed.
     var relayed = Data()
@@ -208,19 +229,23 @@ struct LiveCapFallbackTests {
 
     let (_, droppedFeed) = AsyncStream.makeStream(of: Data.self)
     let dropped = await AssemblyAITranscriber.relay(
-      .oneShot(Self.before), to: droppedFeed, keepingAtMost: Self.before.count - 1)
+      .oneShot(Self.before), to: droppedFeed, keepingAtMost: Self.before.count - 1
+    )
     #expect(dropped == nil)
   }
 
   @Test("the pill reads Transcribing while the fallback is in flight, then pastes")
-  func sessionShowsTranscribingThroughTheFallback() async throws {
+  func sessionShowsTranscribingThroughTheFallback() async {
     let hold = Gate()
     let transport = LiveCapTransport(
-      live: .audioTooLarge, buffered: .transcript("um all of it", rewrite: "All of it."),
-      bufferedHold: hold)
+      live: .audioTooLarge,
+      buffered: .transcript("um all of it", rewrite: "All of it."),
+      bufferedHold: hold
+    )
     let injector = StubInjector()
     let session = makeSession(
-      transcriber: makeTranscriber(apiKey: "k", transport: transport), injector: injector)
+      transcriber: makeTranscriber(apiKey: "k", transport: transport), injector: injector
+    )
 
     await session.press()
     await session.release()
@@ -282,7 +307,9 @@ extension LiveCapFallbackTests {
   /// recorder's feed is left in once the transcription is over, so later
   /// frames are dropped instead of buffered.
   func isReleased(_ capture: AsyncStream<Data>.Continuation) -> Bool {
-    if case .terminated = capture.yield(Data([0])) { return true }
+    if case .terminated = capture.yield(Data([0])) {
+      return true
+    }
     return false
   }
 

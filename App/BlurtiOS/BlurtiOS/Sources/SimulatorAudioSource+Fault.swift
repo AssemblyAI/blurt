@@ -26,7 +26,7 @@
       static let environmentKey = "BLURT_SIM_FAULT"
       static let fromEnvironment = ProcessInfo.processInfo.environment[environmentKey].flatMap(parse)
       /// The simulator's own capture error: FigCaptureSessionSimulator's.
-      static let errorCode = -12782
+      static let errorCode = -12_782
       /// `AVAudioSession.ErrorCode.cannotStartRecording` (`!rec`), what iOS
       /// answers a recording started from the background with.
       static let backgroundRefusalCode = 561_015_905
@@ -34,28 +34,44 @@
       static let routeChangeReason = "newDeviceAvailable"
       static let routeInput = "BluetoothHFP"
 
-      /// `refuseStart`, `silentFrames`, `refuseBackgroundStart`, or
-      /// `interruptAfter:<s>` / `runtimeErrorAfter:<s>` / `routeChangeAfter:<s>`
-      /// with a non-negative number of seconds; anything else is no fault.
-      static func parse(_ value: String) -> Fault? {
-        let parts = value.split(separator: ":", maxSplits: 1).map(String.init)
-        let seconds = parts.count == 2 ? Double(parts[1]).flatMap { $0 >= 0 ? $0 : nil } : nil
-        return switch (parts.first, seconds) {
-        case ("refuseStart", nil): .refuseStart
-        case ("silentFrames", nil): .silentFrames
-        case ("refuseBackgroundStart", nil): .refuseBackgroundStart
-        case ("interruptAfter", let seconds?): .interruptAfter(seconds: seconds)
-        case ("runtimeErrorAfter", let seconds?): .runtimeErrorAfter(seconds: seconds)
-        case ("routeChangeAfter", let seconds?): .routeChangeAfter(seconds: seconds)
-        default: nil
-        }
-      }
-
       /// When the timed fault fires, if this is one.
       var delay: Double? {
         switch self {
-        case .interruptAfter(let seconds), .runtimeErrorAfter(let seconds), .routeChangeAfter(let seconds): seconds
-        case .refuseStart, .silentFrames, .refuseBackgroundStart: nil
+        case .interruptAfter(let seconds), .runtimeErrorAfter(let seconds), .routeChangeAfter(let seconds):
+          seconds
+
+        case .refuseStart, .silentFrames, .refuseBackgroundStart:
+          nil
+        }
+      }
+
+      /// `refuseStart`, `silentFrames`, `refuseBackgroundStart`, or
+      /// `interruptAfter:<s>` / `runtimeErrorAfter:<s>` / `routeChangeAfter:<s>`
+      /// with a non-negative number of seconds; anything else is no fault.
+      static func parse(_ value: String) -> Self? {
+        let parts = value.split(separator: ":", maxSplits: 1).map(String.init)
+        let seconds = parts.count == 2 ? Double(parts[1]).flatMap { $0 >= 0 ? $0 : nil } : nil
+        return switch (parts.first, seconds) {
+        case ("refuseStart", nil):
+          .refuseStart
+
+        case ("silentFrames", nil):
+          .silentFrames
+
+        case ("refuseBackgroundStart", nil):
+          .refuseBackgroundStart
+
+        case ("interruptAfter", let seconds?):
+          .interruptAfter(seconds: seconds)
+
+        case ("runtimeErrorAfter", let seconds?):
+          .runtimeErrorAfter(seconds: seconds)
+
+        case ("routeChangeAfter", let seconds?):
+          .routeChangeAfter(seconds: seconds)
+
+        default:
+          nil
         }
       }
     }

@@ -37,7 +37,7 @@ struct KeyTermsTests {
 
   @Test("an oversized list is fitted to the cap, keeping whole leading terms")
   func oversizedListIsFitted() {
-    let terms = (0..<2000).map { "term\($0)" }
+    let terms = (0..<2_000).map { "term\($0)" }
     let fitted = KeyTerms.fitted(terms)
     #expect(fitted.reduce(0) { $0 + $1.utf8.count } <= KeyTerms.characterCap)
     #expect(fitted.first == "term0")
@@ -86,54 +86,10 @@ struct KeyTermsTests {
   func capIsDistinctFromTheContextCap() {
     // Two caps on two fields of one request. Borrowing the other field's figure
     // is how an over-cap value shipped once before, so pin them apart.
-    #expect(KeyTerms.characterCap == 2048)
+    #expect(KeyTerms.characterCap == 2_048)
     #expect(KeyTerms.characterCap != STTPrompt.characterCap)
     // And the term cap is a count, not a size — pinned so the two caps on this
     // one field can't be conflated either.
     #expect(KeyTerms.termCap == 100)
-  }
-}
-
-@Suite("KeyTerms.parse")
-struct KeyTermsParseTests {
-  @Test("nil and blank input yield no terms")
-  func emptyInputs() {
-    #expect(KeyTerms.parse(nil).isEmpty)
-    #expect(KeyTerms.parse("").isEmpty)
-    #expect(KeyTerms.parse("   ,  , \n").isEmpty)
-  }
-
-  @Test("comma-separated input splits and trims each term")
-  func splitsAndTrims() {
-    #expect(KeyTerms.parse("AssemblyAI, Kubernetes ,  Anthropic") == ["AssemblyAI", "Kubernetes", "Anthropic"])
-  }
-
-  @Test("blank entries between commas are dropped")
-  func dropsBlanks() {
-    #expect(KeyTerms.parse("foo,,bar, ,baz") == ["foo", "bar", "baz"])
-  }
-
-  @Test("duplicates are removed case-insensitively, keeping the first spelling")
-  func dedupesCaseInsensitively() {
-    #expect(KeyTerms.parse("Blurt, blurt, BLURT, Slack") == ["Blurt", "Slack"])
-  }
-
-  @Test("multi-word terms survive (only commas split)")
-  func multiWordTerms() {
-    #expect(KeyTerms.parse("San Francisco, New York") == ["San Francisco", "New York"])
-  }
-
-  @Test("join is what parse reads back")
-  func joinRoundTrips() {
-    let terms = ["AssemblyAI", "San Francisco", "LeMUR"]
-    #expect(KeyTerms.join(terms) == "AssemblyAI, San Francisco, LeMUR")
-    #expect(KeyTerms.parse(KeyTerms.join(terms)) == terms)
-  }
-
-  @Test("normalized cleans a list without splitting its terms on commas")
-  func normalizedKeepsCommas() {
-    // A contact called "Smith, John" is one name; the iPhone app merges such
-    // names with the user's terms through this rather than through `parse`.
-    #expect(KeyTerms.normalized([" Smith, John ", "", "smith, john", "Blurt"]) == ["Smith, John", "Blurt"])
   }
 }

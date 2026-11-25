@@ -1,14 +1,6 @@
 import Foundation
 import os
 
-nonisolated extension BlurtShared {
-  /// The unified-logging subsystem both processes log under, so one predicate
-  /// reads the app's lines and the keyboard's together. The app sets the
-  /// same string on `HostIdentity`; the keyboard never configures one, so
-  /// `KeyboardLog` names it here.
-  package static let logSubsystem = "com.assemblyai.blurt.iphone"
-}
-
 /// The keyboard's log: one line per thing the keyboard does with the app, so
 /// a phone's log archive tells the whole story of a press from the keyboard's
 /// side — which process and controller was up, what the readiness record said
@@ -26,7 +18,8 @@ package nonisolated enum KeyboardLog {
       appeared pid=\(pid, privacy: .public) process=\(process, privacy: .public) \
       controller=\(controller, privacy: .public) fullAccess=\(fullAccess, privacy: .public) \
       host=\(host ?? "unknown", privacy: .public)
-      """)
+      """
+    )
   }
 
   /// No holder had the host's bundle id: the classes that were asked, so the
@@ -40,7 +33,8 @@ package nonisolated enum KeyboardLog {
       """
       disappeared pid=\(pid, privacy: .public) process=\(process, privacy: .public) \
       controller=\(controller, privacy: .public)
-      """)
+      """
+    )
   }
 
   package static func hostLeaving(process: String, controller: String) {
@@ -53,7 +47,8 @@ package nonisolated enum KeyboardLog {
       """
       tap: record sequence=\(sequence.map { "\($0)" } ?? "none", privacy: .public) \
       ready=\(ready, privacy: .public) reason=\(reason?.rawValue ?? "none", privacy: .public)
-      """)
+      """
+    )
   }
 
   package static func wrote(_ command: KeyboardCommand, resend: Bool) {
@@ -63,7 +58,8 @@ package nonisolated enum KeyboardLog {
       id=\(command.id.uuidString, privacy: .public) seq=\(command.seq ?? 0, privacy: .public) \
       dictation=\(command.dictationID?.uuidString ?? "none", privacy: .public) \
       state=\(command.stateSequence.map { "\($0)" } ?? "none", privacy: .public)
-      """)
+      """
+    )
   }
 
   package static func ack(_ ack: CommandAck) {
@@ -71,12 +67,14 @@ package nonisolated enum KeyboardLog {
       """
       ack id=\(ack.commandID.uuidString, privacy: .public) \
       outcome=\(String(describing: ack.outcome), privacy: .public)
-      """)
+      """
+    )
   }
 
   package static func deadline(command: UUID, reason: FailureReason) {
     logger.info(
-      "deadline id=\(command.uuidString, privacy: .public) → \(reason.rawValue, privacy: .public)")
+      "deadline id=\(command.uuidString, privacy: .public) → \(reason.rawValue, privacy: .public)"
+    )
   }
 
   package static func refused(_ reason: FailureReason) {
@@ -87,7 +85,8 @@ package nonisolated enum KeyboardLog {
   /// chain held no application to ask (a model with no controller).
   package static func hop(_ url: URL, asked: Bool) {
     logger.info(
-      "hop \(url.absoluteString, privacy: .public) \(asked ? "asked" : "no application to ask", privacy: .public)")
+      "hop \(url.absoluteString, privacy: .public) \(asked ? "asked" : "no application to ask", privacy: .public)"
+    )
   }
 
   package static func result(_ id: UUID, inserted: Bool, why: String) {
@@ -95,6 +94,15 @@ package nonisolated enum KeyboardLog {
       """
       result id=\(id.uuidString, privacy: .public) \(inserted ? "inserted" : "skipped", privacy: .public): \
       \(why, privacy: .public)
-      """)
+      """
+    )
   }
+}
+
+nonisolated extension BlurtShared {
+  /// The unified-logging subsystem both processes log under, so one predicate
+  /// reads the app's lines and the keyboard's together. The app sets the
+  /// same string on `HostIdentity`; the keyboard never configures one, so
+  /// `KeyboardLog` names it here.
+  package static let logSubsystem = "com.assemblyai.blurt.iphone"
 }

@@ -49,19 +49,3 @@ extension View {
     modifier(ScaledFont(size: size, relativeTo: .footnote) { BlurtType.mono($0, weight: weight) })
   }
 }
-
-/// A role's font at a token size scaled by the user's text size: `@ScaledMetric`
-/// re-reads the setting, so a change in Settings reaches the screen at once.
-private struct ScaledFont: ViewModifier {
-  @ScaledMetric private var size: CGFloat
-  private let font: (CGFloat) -> Font
-
-  init(size: CGFloat, relativeTo style: Font.TextStyle, font: @escaping (CGFloat) -> Font) {
-    _size = ScaledMetric(wrappedValue: size, relativeTo: style)
-    self.font = font
-  }
-
-  func body(content: Content) -> some View {
-    content.font(font(size))
-  }
-}

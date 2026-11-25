@@ -7,12 +7,25 @@ import SwiftUI
 /// single page, so the rows simply reflect live status (the controller polls
 /// while the window is open).
 struct PermissionsStepView: View {
+  /// Static descriptors for a permission row, bundled so `permissionRow` stays
+  /// within the parameter-count limit.
+  private struct PermissionInfo {
+    let label: String
+    let symbol: String
+    let buttonLabel: String
+    let detail: String
+  }
+
+  /// How long the grant stays outstanding after opening System Settings before
+  /// the footer suggests a relaunch. Long enough to find and flip the toggle.
+  private static let stuckGrantHintDelay: Duration = .seconds(12)
+
   var controller: WizardController
 
   /// Observed rather than read once via `TriggerKeyStore()`: Settings is reachable
   /// with ⌘, while this page is showing, so a one-shot read left the footer naming
   /// the old key after a rebind until something else re-rendered the view. Same
-  /// `ObservedKeyBindings` as `ReadyView` / `MenuBarScene`.
+  /// `ObservedKeyBindings` as `ReadyView` / `MenuBarLabel`.
   @ObservedKeyBindings private var bindings
   private var triggerKey: TriggerKey? { bindings.dictationKey }
 
@@ -29,10 +42,6 @@ struct PermissionsStepView: View {
   /// Relaunching runs the launch-time self-heal, so the footer says so.
   @State private var accessibilityGrantLooksStuck = false
 
-  /// How long the grant stays outstanding after opening System Settings before
-  /// the footer suggests a relaunch. Long enough to find and flip the toggle.
-  private static let stuckGrantHintDelay: Duration = .seconds(12)
-
   var body: some View {
     Section("Permissions") {
       microphoneSection
@@ -44,24 +53,26 @@ struct PermissionsStepView: View {
     VStack(alignment: .leading, spacing: 6) {
       permissionRow(
         PermissionInfo(
-          label: "Microphone", symbol: "mic.fill", buttonLabel: "Allow Access",
-          detail: triggerKey.map { "Records when you use \($0.spokenName)." } ?? "Records when you dictate."),
-        granted: controller.permissions.microphone,
-        action: {
-          Task {
-            let granted = await PermissionsChecker.requestMicrophone()
-            controller.refreshPermissions()
-            // The in-app prompt only appears while the status is undetermined;
-            // once the user has declined (or the system won't present it) the
-            // button would otherwise do nothing. Fall back to System Settings so
-            // the row always makes progress, like the Accessibility row.
-            if !granted {
-              openedMicrophoneSettings = true
-              PermissionsChecker.openMicrophoneSettings()
-            }
+          label: "Microphone",
+          symbol: "mic.fill",
+          buttonLabel: "Allow Access",
+          detail: triggerKey.map { "Records when you use \($0.spokenName)." } ?? "Records when you dictate."
+        ),
+        granted: controller.permissions.microphone
+      ) {
+        Task {
+          let granted = await PermissionsChecker.requestMicrophone()
+          controller.refreshPermissions()
+          // The in-app prompt only appears while the status is undetermined;
+          // once the user has declined (or the system won't present it) the
+          // button would otherwise do nothing. Fall back to System Settings so
+          // the row always makes progress, like the Accessibility row.
+          if !granted {
+            openedMicrophoneSettings = true
+            PermissionsChecker.openMicrophoneSettings()
           }
         }
-      )
+      }
       settingsFooter(
         opened: openedMicrophoneSettings,
         granted: controller.permissions.microphone,
@@ -74,44 +85,56 @@ struct PermissionsStepView: View {
     VStack(alignment: .leading, spacing: 6) {
       permissionRow(
         PermissionInfo(
-          label: "Accessibility", symbol: "accessibility", buttonLabel: "Open Settings…",
-          detail: "Pastes dictations into the active app."),
+          label: "Accessibility",
+          symbol: "accessibility",
+          buttonLabel: "Open Settings…",
+          detail: "Pastes dictations into the active app."
+        ),
+        granted: controller.permissions.accessibility
+      ) {
+        openedAccessibilitySettings = true
+        PermissionsChecker.openAccessibilitySettings()
+      }
+      accessibilityFooter
+    }
+  }
+
+  /// The Accessibility row's waiting cue, and the relaunch hint once the grant
+  /// looks stuck.
+  private var accessibilityFooter: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      settingsFooter(
+        opened: openedAccessibilitySettings,
         granted: controller.permissions.accessibility,
-        action: {
-          openedAccessibilitySettings = true
-          PermissionsChecker.openAccessibilitySettings()
-        }
+        waiting: "Waiting for you to turn on Blurt in the Accessibility list…"
       )
-      VStack(alignment: .leading, spacing: 4) {
-        settingsFooter(
-          opened: openedAccessibilitySettings,
-          granted: controller.permissions.accessibility,
-          waiting: "Waiting for you to turn on Blurt in the Accessibility list…"
-        )
-        if accessibilityGrantLooksStuck && openedAccessibilitySettings
-          && !controller.permissions.accessibility
-        {
-          Text("If the Blurt toggle is already on, quit and reopen Blurt to refresh the grant.")
-        }
+      if accessibilityGrantLooksStuck, openedAccessibilitySettings, !controller.permissions.accessibility {
+        Text("If the Blurt toggle is already on, quit and reopen Blurt to refresh the grant.")
       }
-      // Arms the stuck cue once the user heads to System Settings; if the grant
-      // lands first, the condition above keeps the line hidden.
-      .task(id: openedAccessibilitySettings) {
-        guard openedAccessibilitySettings else { return }
-        try? await Task.sleep(for: Self.stuckGrantHintDelay)
-        // The sleep swallows cancellation (`try?`), so check it explicitly —
-        // a cancelled arm (view gone, id flipped back) must not set the flag.
-        guard !Task.isCancelled else { return }
-        accessibilityGrantLooksStuck = true
+    }
+    // Arms the stuck cue once the user heads to System Settings; if the grant
+    // lands first, the condition above keeps the line hidden.
+    .task(id: openedAccessibilitySettings) {
+      guard openedAccessibilitySettings else {
+        return
       }
-      // A grant that lands retires both cues: if the user later revokes it with
-      // the wizard still open, the footer should re-arm from a fresh settings
-      // tap rather than show the relaunch hint instantly with stale advice.
-      .onChange(of: controller.permissions.accessibility) {
-        guard controller.permissions.accessibility else { return }
-        openedAccessibilitySettings = false
-        accessibilityGrantLooksStuck = false
+      try? await Task.sleep(for: Self.stuckGrantHintDelay)
+      // The sleep swallows cancellation (`try?`), so check it explicitly —
+      // a cancelled arm (view gone, id flipped back) must not set the flag.
+      guard !Task.isCancelled else {
+        return
       }
+      accessibilityGrantLooksStuck = true
+    }
+    // A grant that lands retires both cues: if the user later revokes it with
+    // the wizard still open, the footer should re-arm from a fresh settings
+    // tap rather than show the relaunch hint instantly with stale advice.
+    .onChange(of: controller.permissions.accessibility) {
+      guard controller.permissions.accessibility else {
+        return
+      }
+      openedAccessibilitySettings = false
+      accessibilityGrantLooksStuck = false
     }
   }
 
@@ -122,7 +145,7 @@ struct PermissionsStepView: View {
   private func settingsFooter(opened: Bool, granted: Bool, waiting: String)
     -> some View
   {
-    if opened && !granted {
+    if opened, !granted {
       HStack(spacing: 6) {
         ProgressView().controlSize(.small)
         Text(waiting)
@@ -130,15 +153,6 @@ struct PermissionsStepView: View {
       .font(.callout)
       .foregroundStyle(.secondary)
     }
-  }
-
-  /// Static descriptors for a permission row, bundled so `permissionRow` stays
-  /// within the parameter-count limit.
-  private struct PermissionInfo {
-    let label: String
-    let symbol: String
-    let buttonLabel: String
-    let detail: String
   }
 
   @ViewBuilder

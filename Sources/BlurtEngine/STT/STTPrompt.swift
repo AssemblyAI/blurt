@@ -94,7 +94,7 @@ enum STTPrompt {
   /// unit `KeyTerms` and `CleanupInstruction` use, where the server's own
   /// unit is unmeasured) would needlessly halve the budget for any accented
   /// text. Scalars are exactly what the server counts.
-  static let characterCap = 4096
+  static let characterCap = 4_096
 
   /// What joins the turns. A newline rather than a space: the pieces are
   /// separate utterances, and running them together would invent a sentence
@@ -123,12 +123,14 @@ enum STTPrompt {
   /// transcriber and the developer-mode log both — so the log records exactly
   /// what went on the wire, including the trimming.
   static func text(context: TranscriptionContext?) -> String {
-    guard let context else { return "" }
+    guard let context else {
+      return ""
+    }
     let recent = context.recentTranscripts.compactMap { $0.trimmedNonEmpty() }
     // Scrubbed here, where the wire string is built, rather than at capture:
     // the log's `prior` and the paste separator read the field text as it was.
-    let scrubbed = context.priorText.map {
-      TextShortcutExpander.redactingExpansions(in: $0, using: context.textShortcuts)
+    let scrubbed = context.priorText.map { prior in
+      TextShortcutExpander.redactingExpansions(in: prior, using: context.textShortcuts)
     }
     guard let prior = scrubbed.trimmedNonEmpty() else {
       return fitted(recent)

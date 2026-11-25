@@ -17,9 +17,11 @@ func makeTranscriber(
   rewriteMode: RewriteMode = .fast
 ) -> AssemblyAITranscriber {
   AssemblyAITranscriber(
-    apiKeyProvider: { apiKey }, transport: transport,
+    apiKeyProvider: { apiKey },
+    transport: transport,
     enhancedTranscripts: { enhancedTranscripts },
-    rewriteMode: { rewriteMode })
+    rewriteMode: { rewriteMode }
+  )
 }
 
 /// Drains a canned frame feed the way a conforming transcriber must: consume it
@@ -31,7 +33,9 @@ func makeTranscriber(
 /// because three doubles re-derived the rule in prose and two got it wrong, and
 /// three of them had started re-deriving it again.
 func drainUntilAbandoned(_ frames: AsyncStream<Data>) async throws {
-  for await _ in frames {}
+  for await _ in frames {
+    // Drained to the end; the frames themselves don't matter.
+  }
   try Task.checkCancellation()
 }
 
@@ -43,5 +47,6 @@ func collectTranscript(
   context: TranscriptionContext? = nil
 ) async throws -> String {
   try await transcriber.transcribe(
-    frames: .oneShot(pcm), sampleRate: 16_000, context: context)
+    frames: .oneShot(pcm), sampleRate: 16_000, context: context
+  )
 }

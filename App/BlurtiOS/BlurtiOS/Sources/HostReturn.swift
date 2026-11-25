@@ -17,10 +17,13 @@ import ObjectiveC
 /// before. App Review scans for these names; shipping this is a decision
 /// taken knowingly, not a side effect.
 enum HostReturn {
+  // The C-convention signature needs the Objective-C type: a Swift `String` has no C representation.
+  // swiftlint:disable:next legacy_objc_type
+  private typealias Open = @convention(c) (NSObject, Selector, NSString) -> Bool
+
   private static let workspaceClassName = "LSApplicationWorkspace"
   private static let defaultWorkspace = NSSelectorFromString("defaultWorkspace")
   private static let openByBundleID = NSSelectorFromString("openApplicationWithBundleID:")
-  private typealias Open = @convention(c) (NSObject, Selector, NSString) -> Bool
 
   /// Asks iOS to bring `bundleID` to the front; whether it agreed.
   static func open(bundleID: String) -> Bool {
@@ -30,8 +33,12 @@ enum HostReturn {
       let workspace = workspaceClass.perform(defaultWorkspace)?.takeUnretainedValue() as? NSObject,
       workspace.responds(to: openByBundleID),
       let implementation = class_getMethodImplementation(type(of: workspace), openByBundleID)
-    else { return false }
+    else {
+      return false
+    }
     let open = unsafeBitCast(implementation, to: Open.self)
+    // `Open` takes the Objective-C string the C-convention call needs.
+    // swiftlint:disable:next legacy_objc_type
     return open(workspace, openByBundleID, bundleID as NSString)
   }
 }

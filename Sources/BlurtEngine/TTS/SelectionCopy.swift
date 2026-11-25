@@ -67,23 +67,25 @@
     private func copySelection(
       maxCharacters: Int, on clock: some Clock<Duration>
     ) async -> (text: String?, lateWatch: Task<Void, Never>?) {
-      let pasteboard = pasteboard
+      let board = pasteboard
       // The whole snapshot → ⌘C → poll → restore is one turn on the pasteboard:
       // a dictation's paste still settling (its transcript on the clipboard, its
       // restore not yet run) would otherwise be snapshotted as the user's
       // clipboard, or restore under the copy's poll. So the press waits out an
       // in-flight paste first. The late-copy watch runs after the turn ends: it
       // stands down on any Blurt write, so it never fights a paste.
-      let turn = await pasteboard.lock.acquire()
+      let turn = await board.lock.acquire()
       defer { turn.end() }
       // An unreadable pasteboard can't be restored, so don't disturb it. The
       // own-write count is read first: a Blurt write racing this read can then
       // only make the copy give up, never be taken for the app's answer.
       let (ownWrites, saved, before) = await BlockingIPC.run {
-        let ownWrites = pasteboard.ownWriteCount
-        return (ownWrites, pasteboard.snapshot(), pasteboard.changeCount)
+        let ownWrites = board.ownWriteCount
+        return (ownWrites, board.snapshot(), board.changeCount)
       }
-      guard let saved, await postCopy() else { return (nil, nil) }
+      guard let saved, await postCopy() else {
+        return (nil, nil)
+      }
       let deadline = clock.now.advanced(by: timeout)
       // Wait for a string, not just a change: an app may clear the clipboard and
       // write it a moment later, and the clear alone moves the change count.
@@ -93,27 +95,33 @@
       repeat {
         try? await clock.sleep(for: .milliseconds(10))
         (seen, copied, blurtWrote) = await BlockingIPC.run {
-          let count = pasteboard.changeCount
-          guard count != before else { return (count, nil, false) }
+          let count = board.changeCount
+          guard count != before else {
+            return (count, nil, false)
+          }
           // After the change count, as in `restoreLateCopy`: a change that is
           // Blurt's own (an earlier dictation's paste) is already counted.
-          guard pasteboard.ownWriteCount == ownWrites else { return (count, nil, true) }
-          let string = pasteboard.currentString()
+          guard board.ownWriteCount == ownWrites else {
+            return (count, nil, true)
+          }
+          let string = board.currentString()
           // A write between the two reads would pair the string with a stale
           // count, and the restore would then skip. Poll again instead.
-          return pasteboard.changeCount == count ? (count, string, false) : (count, nil, false)
+          return board.changeCount == count ? (count, string, false) : (count, nil, false)
         }
       } while copied == nil && !blurtWrote && clock.now < deadline
       // Blurt wrote the clipboard itself: whatever is there is a paste's, not
       // the selection, and its own restore puts the user's clipboard back.
-      guard !blurtWrote else { return (nil, nil) }
+      guard !blurtWrote else {
+        return (nil, nil)
+      }
       let copyCount = seen
       let (settled, writesAtSettle) = await BlockingIPC.run {
-        if copyCount != before { pasteboard.restore(saved, ifChangeCountIs: copyCount) }
+        if copyCount != before { board.restore(saved, ifChangeCountIs: copyCount) }
         // The counter before the change count, so a Blurt write landing
         // between them is in the baseline the watcher compares against.
-        let writes = pasteboard.ownWriteCount
-        return (pasteboard.changeCount, writes)
+        let writes = board.ownWriteCount
+        return (board.changeCount, writes)
       }
       // Nothing readable in time, but the app may still answer. Nothing else
       // would put the user's clipboard back then.
@@ -134,38 +142,29 @@
     private func restoreLateCopy(
       _ saved: PasteboardSnapshot, after baseline: Int, ownWrites: Int, on clock: some Clock<Duration>
     ) -> Task<Void, Never> {
-      let pasteboard = pasteboard
+      let board = pasteboard
       let deadline = clock.now.advanced(by: lateCopyWindow)
       return Task {
         while clock.now < deadline {
           try? await clock.sleep(for: .milliseconds(20))
           let done = await BlockingIPC.run { () -> Bool in
-            let count = pasteboard.changeCount
-            guard count != baseline else { return false }
+            let count = board.changeCount
+            guard count != baseline else {
+              return false
+            }
             // Read after the change count: Blurt counts a write before making
             // it, so a change that is Blurt's is already counted here.
-            guard pasteboard.ownWriteCount == ownWrites else { return true }
-            pasteboard.restore(saved, ifChangeCountIs: count)
+            guard board.ownWriteCount == ownWrites else {
+              return true
+            }
+            board.restore(saved, ifChangeCountIs: count)
             return true
           }
-          if done { return }
+          if done {
+            return
+          }
         }
       }
     }
-  }
-
-  /// The pasteboard operations `SelectionCopy` needs, so tests never touch the real
-  /// clipboard. `SystemClipboard` is the production conformance.
-  protocol CopyPasteboard: Sendable {
-    var changeCount: Int { get }
-    /// How many writes Blurt itself has made to the pasteboard, counted before
-    /// each write lands.
-    var ownWriteCount: Int { get }
-    func snapshot() -> PasteboardSnapshot?
-    func currentString() -> String?
-    func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int)
-    /// Serializes the copy against Blurt's paste on this pasteboard — see
-    /// `PasteboardLock`.
-    var lock: PasteboardLock { get }
   }
 #endif

@@ -5,9 +5,8 @@ import Testing
 
 @Suite("DictationSession", .timeLimit(.minutes(1)))
 struct DictationSessionTests {
-
   @Test("press from idle transitions to recording")
-  func pressIdleToRecording() async throws {
+  func pressIdleToRecording() async {
     let fixture = makeSession(mode: .transcript("hello"))
 
     await fixture.session.press()
@@ -19,7 +18,7 @@ struct DictationSessionTests {
 
 extension DictationSessionTests {
   @Test("happy path: press → release → transcribe → inject")
-  func happyPath() async throws {
+  func happyPath() async {
     // The dictation API returns the already-cleaned text in one response.
     let fixture = makeSession(mode: .transcript("Hello world."))
 
@@ -35,7 +34,7 @@ extension DictationSessionTests {
   }
 
   @Test("a too-short clip is dropped as a silent no-op, not sent to STT")
-  func tooShortClipNoOps() async throws {
+  func tooShortClipNoOps() async {
     let fixture = makeSession(mode: .transcript("should not be used"))
     // Below SyncSTTLimits.minPCMBytes (3200 at 16 kHz) — an accidental brief
     // tap the endpoint would reject with a 400.
@@ -50,7 +49,7 @@ extension DictationSessionTests {
 
 extension DictationSessionTests {
   @Test("STT failure surfaces .failed and skips injection")
-  func sttFailure() async throws {
+  func sttFailure() async {
     struct Boom: Error {}
     let fixture = makeSession(mode: .throwError(Boom()))
 
@@ -65,7 +64,7 @@ extension DictationSessionTests {
   }
 
   @Test("BlurtError from transcriber surfaces verbatim, not wrapped in sttFailed")
-  func transcriberBlurtErrorSurfaces() async throws {
+  func transcriberBlurtErrorSurfaces() async {
     let fixture = makeSession(mode: .throwError(BlurtError.apiKeyMissing))
 
     await fixture.session.dictate()
@@ -77,13 +76,14 @@ extension DictationSessionTests {
 
 extension DictationSessionTests {
   @Test("press after .failed succeeds (state recovers)")
-  func pressAfterFailure() async throws {
+  func pressAfterFailure() async {
     struct Boom: Error {}
     let fixture = makeSession(mode: .throwError(Boom()))
 
     // First run: fail in STT
     await fixture.session.dictate()
     if case .failed = await fixture.session.phase {
+      // The expected outcome: the failed STT run left the session failed.
     } else {
       Issue.record("expected .failed after STT throws")
     }
@@ -96,7 +96,7 @@ extension DictationSessionTests {
 
 extension DictationSessionTests {
   @Test("mic.start failure surfaces .failed(.audioCaptureFailed), stays out of recording")
-  func micStartFailureSurfaces() async throws {
+  func micStartFailureSurfaces() async {
     struct Boom: Error {}
     let fixture = makeSession(mode: .transcript("never"))
     await fixture.mic.setStartError(Boom())
@@ -111,7 +111,7 @@ extension DictationSessionTests {
   }
 
   @Test("empty transcript returns to idle without injecting")
-  func emptyTranscriptReturnsToIdle() async throws {
+  func emptyTranscriptReturnsToIdle() async {
     // The API yielded only whitespace (e.g. silence) — nothing to inject.
     let fixture = makeSession(mode: .transcript("   "))
 
@@ -122,7 +122,7 @@ extension DictationSessionTests {
   }
 
   @Test("untyped injector failure surfaces .failed(.targetAppLost)")
-  func injectorFailureSurfaces() async throws {
+  func injectorFailureSurfaces() async {
     struct Boom: Error {}
     let fixture = makeSession(mode: .transcript("Hello world."))
     await fixture.injector.setError(Boom())
@@ -133,7 +133,7 @@ extension DictationSessionTests {
   }
 
   @Test("injector BlurtError surfaces verbatim, not relabeled as targetAppLost")
-  func injectorBlurtErrorPassesThrough() async throws {
+  func injectorBlurtErrorPassesThrough() async {
     let fixture = makeSession(mode: .transcript("Hello world."))
     // A typed BlurtError from the injector must reach the UI as-is rather
     // than being flattened to .targetAppLost.
@@ -145,7 +145,7 @@ extension DictationSessionTests {
   }
 
   @Test("no editable target surfaces the quiet .noTarget phase, not a failure")
-  func noEditableTargetIsQuiet() async throws {
+  func noEditableTargetIsQuiet() async {
     let fixture = makeSession(mode: .transcript("Hello world."))
     // The injector left the transcript on the clipboard and signalled there was
     // nowhere to type — the session should treat that as the quiet .noTarget
@@ -158,7 +158,7 @@ extension DictationSessionTests {
   }
 
   @Test("lost target surfaces the quiet .noTarget phase, not a failure")
-  func targetAppLostIsQuiet() async throws {
+  func targetAppLostIsQuiet() async {
     let fixture = makeSession(mode: .transcript("Hello world."))
     // The target app quit (or refused activation) before the paste; the
     // injector left the transcript on the clipboard, so the session degrades
@@ -171,7 +171,7 @@ extension DictationSessionTests {
   }
 
   @Test("mic.stop failure surfaces .failed(.audioCaptureFailed), no injection")
-  func micStopFailureSurfaces() async throws {
+  func micStopFailureSurfaces() async {
     struct Boom: Error {}
     let fixture = makeSession(mode: .transcript("never"))
     await fixture.mic.setStopError(Boom())
@@ -187,7 +187,7 @@ extension DictationSessionTests {
   }
 
   @Test("auto-release after maxRecordingSeconds")
-  func autoRelease() async throws {
+  func autoRelease() async {
     let fixture = makeSession(mode: .transcript("Timed out text."), maxRecordingSeconds: 0.05)
 
     await fixture.session.press()
@@ -197,7 +197,7 @@ extension DictationSessionTests {
   }
 
   @Test("phaseStream yields the current phase then transitions through to terminal")
-  func phaseStreamObservesTransitions() async throws {
+  func phaseStreamObservesTransitions() async {
     let session = makeSession(mode: .transcript("Hi.")).session
 
     // Subscribe while recording (phase is non-terminal, so the initial yield
@@ -217,7 +217,7 @@ extension DictationSessionTests {
   }
 
   @Test("press claims .connecting while the mic comes up, then .recording")
-  func pressPublishesConnectingBeforeRecording() async throws {
+  func pressPublishesConnectingBeforeRecording() async {
     // The whole point of the phase: `mic.start()` now holds until the input
     // route actually delivers frames (~1–2 s on a Bluetooth link), and the
     // overlay needs something to show for that whole window — while the start
@@ -248,7 +248,7 @@ extension DictationSessionTests {
   @Test(
     "cancel during active recording stops mic, discards audio, and transitions to .cancelled",
     arguments: CancelCommand.allCases)
-  func cancelDuringRecording(command: CancelCommand) async throws {
+  func cancelDuringRecording(command: CancelCommand) async {
     let fixture = makeSession(mode: .transcript("Hello"))
 
     await fixture.session.press()
@@ -261,7 +261,7 @@ extension DictationSessionTests {
   }
 
   @Test("a cancel tears the mic down through cancelCapture, a release through stop")
-  func cancelUsesTheDiscardingTeardown() async throws {
+  func cancelUsesTheDiscardingTeardown() async {
     // The two teardowns want opposite things, so the session must not conflate
     // them. `stop()` may legitimately spend time preserving the audio —
     // `MicCapture` waits out a Bluetooth link's tail before ending the
@@ -277,26 +277,5 @@ extension DictationSessionTests {
     await released.session.dictate()
     #expect(await released.mic.cancelCaptureCalls == 0)
     #expect(await released.mic.stopCalls == 1)
-  }
-}
-
-// Guard/no-op behaviors and phase-stream supersession live in
-// `DictationSessionGuardTests.swift` (same collaborators and stubs), split out
-// to stay within the lint file-length budget. The `onTranscriptDelivered`
-// side-channel tests live in `DictationSessionTranscriptTests.swift`, and the
-// `.connecting` bring-up window in `DictationSessionBringUpTests.swift`, for the
-// same reason.
-
-/// `DictationSession`'s two cancel entry points, for a test that holds both to the
-/// same outcome.
-enum CancelCommand: CaseIterable, Sendable {
-  case cancel
-  case cancelRecording
-
-  func send(to session: DictationSession) async {
-    switch self {
-    case .cancel: await session.cancel()
-    case .cancelRecording: await session.cancelRecording()
-    }
   }
 }

@@ -9,15 +9,21 @@ extension KeyboardModel {
   /// Why a press would not record now, as the record says it; `sessionOff`
   /// with no record, or with no Full Access to read one.
   package var readinessReason: FailureReason? {
-    guard hasFullAccess else { return .sessionOff }
-    guard !isListening else { return nil }
+    guard hasFullAccess else {
+      return .sessionOff
+    }
+    guard !isListening else {
+      return nil
+    }
     return listeningState?.notReady(now: now()) ?? .sessionOff
   }
 
   /// What the voice control shows: the phase the app published — or, from
   /// the press going out until the app answers it, the mic coming up.
   package var voiceState: VoiceState {
-    if showsConnecting, snapshot.state.isSettled { return VoiceState(phase: .connecting, isReady: isReady) }
+    if showsConnecting, snapshot.state.isSettled {
+      return VoiceState(phase: .connecting, isReady: isReady)
+    }
     return VoiceState(snapshot: snapshot, isReady: isReady)
   }
 
@@ -37,16 +43,19 @@ extension KeyboardModel {
     case .hop(let hop):
       ready = false
       reason = hop ?? readinessReason
+
     case .setup:
       ready = false
       reason = .sessionOff
+
     case .press, .buzz, nil:
       ready = isReady
       reason = readinessReason
     }
     KeyboardLog.readiness(sequence: listeningState?.sequence, ready: ready, reason: reason)
     let event = PressHandshake.Event.micDown(
-      ready: ready, reason: reason, phase: snapshot.state, inFlight: snapshot.dictation)
+      ready: ready, reason: reason, phase: snapshot.state, inFlight: snapshot.dictation
+    )
     perform(handshake.handle(event, now: now()))
   }
 
@@ -79,8 +88,11 @@ extension KeyboardModel {
   /// it, and a press the orb ignored started nothing.
   package func undoPress() {
     switch snapshot.state {
-    case .recording, .processing: return
-    case .idle, .connecting, .pasted, .copied, .error: perform(handshake.undoBeforeRecording(now: now()))
+    case .recording, .processing:
+      return
+
+    case .idle, .connecting, .pasted, .copied, .error:
+      perform(handshake.undoBeforeRecording(now: now()))
     }
   }
 
@@ -110,16 +122,23 @@ extension KeyboardModel {
   package func endDictation(keepWords: Bool) {
     let phase: PhaseSnapshot.State
     switch handshake.state {
-    case .idle, .unready, .stopping: return
-    case .owned(_, let owned): phase = owned
-    case .pressing, .foreign: phase = snapshot.state
+    case .idle, .unready, .stopping:
+      return
+
+    case .owned(_, let owned):
+      phase = owned
+
+    case .pressing, .foreign:
+      phase = snapshot.state
     }
     let dictation = handshake.dictationID
     switch phase {
     case .recording:
       perform([keepWords ? .sendRelease(dictation: dictation) : .sendCancel(dictation: dictation)])
+
     case .processing:
       if !keepWords { perform([.sendCancel(dictation: dictation)]) }
+
     case .idle, .connecting, .pasted, .copied, .error:
       perform([.sendCancel(dictation: dictation)])
     }

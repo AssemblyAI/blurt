@@ -11,8 +11,10 @@ import SwiftUI
 /// and the keyboard later from Settings, where the steps move.
 struct SetupView: View {
   var coordinator: DictationCoordinator
-  @Environment(\.scenePhase) private var scenePhase
-  @AppStorage(SetupProgress.finishedKey) private var finished = false
+  @Environment(\.scenePhase)
+  private var scenePhase
+  @AppStorage(SetupProgress.finishedKey)
+  private var finished = false
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
 
@@ -37,17 +39,7 @@ struct SetupView: View {
             .foregroundStyle(BlurtBrand.errorOrange)
             .fixedSize(horizontal: false, vertical: true)
         }
-        VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
-          Eyebrow("Set up Blurt")
-          SetupSteps(
-            hasKey: hasKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen, refresh: refresh
-          ) {
-            KeyStep(apiKey: coordinator.apiKey)
-          }
-        }
-        .padding(DesignTokens.Metrics.appCardPad)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card()
+        stepsCard
         if hasKey {
           Button("Start dictating") { finished = true }
             .buttonStyle(BrandButtonStyle())
@@ -66,64 +58,24 @@ struct SetupView: View {
     }
   }
 
+  /// The three steps, in a card under their eyebrow.
+  private var stepsCard: some View {
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
+      Eyebrow("Set up Blurt")
+      SetupSteps(
+        hasKey: hasKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen, refresh: refresh
+      ) {
+        KeyStep(apiKey: coordinator.apiKey)
+      }
+    }
+    .padding(DesignTokens.Metrics.appCardPad)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .card()
+  }
+
   private func refresh() {
     microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
     keyboardSeen = SharedStore.keyboardEverSeen
     coordinator.apiKey.refreshStatus()
-  }
-}
-
-/// Paste a key, checked with AssemblyAI before it is saved (`APIKeySubmission`
-/// owns that rule): the field, Continue, Get a free key, and what happens to
-/// the key and the audio.
-private struct KeyStep: View {
-  var apiKey: APIKeyModel
-  @Environment(\.openURL) private var openURL
-  @State private var draft = ""
-  @State private var isChecking = false
-  @State private var errorMessage: String?
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
-      SecureField("Paste your API key", text: $draft)
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .submitLabel(.go)
-        .onSubmit { Task { await submit() } }
-        .brandInput()
-      if let errorMessage {
-        Text(errorMessage)
-          .bodyFont(DesignTokens.Typography.sizeCaption)
-          .foregroundStyle(BlurtBrand.errorOrange)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      // Stacked, not side by side: at half the card's width the mono labels
-      // wrap ("GET A / FREE KEY").
-      VStack(spacing: DesignTokens.Metrics.appChipGap) {
-        Button(isChecking ? "Checking…" : "Continue") { Task { await submit() } }
-          .buttonStyle(BrandButtonStyle())
-          .disabled(isChecking || draft.trimmedNonEmpty() == nil)
-        Button("Get a free key") { openURL(APIKeyStore.dashboardURL) }
-          .buttonStyle(BrandButtonStyle(role: .secondary))
-      }
-      Text(
-        "Blurt sends what you dictate to AssemblyAI to transcribe it, using this key. "
-          + "New accounts come with free credits. The key is stored in this iPhone's Keychain."
-      )
-      .brandFootnote()
-    }
-  }
-
-  private func submit() async {
-    guard !isChecking else { return }
-    isChecking = true
-    defer { isChecking = false }
-    switch await apiKey.submit(draft).failureReport {
-    case .none:
-      errorMessage = nil
-      draft = ""
-    case .some(.inline(let message)): errorMessage = message
-    case .some(.alert(let title, let message)): errorMessage = "\(title) \(message)"
-    }
   }
 }

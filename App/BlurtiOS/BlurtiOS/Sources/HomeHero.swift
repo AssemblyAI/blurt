@@ -16,27 +16,7 @@ struct HomeHero: View {
       if coordinator.startedFromKeyboard, status.isOn {
         ReturnHint()
       }
-      // The session and its line read as one thing, so they sit close.
-      VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
-        HStack {
-          Eyebrow(status.label, color: status.isOn ? BlurtBrand.accent : BlurtBrand.muted)
-          Spacer()
-          if coordinator.microphoneDenied {
-            Button("Open Settings") { SystemSettings.open() }
-              .buttonStyle(BrandButtonStyle())
-              .fixedSize()
-          } else {
-            Toggle("Session", isOn: session)
-              .labelsHidden()
-              .tint(BlurtBrand.accent)
-              .disabled(!coordinator.apiKey.hasAPIKey)
-          }
-        }
-        Text(status.message)
-          .bodyFont(DesignTokens.Typography.sizeBody)
-          .foregroundStyle(BlurtBrand.text)
-          .fixedSize(horizontal: false, vertical: true)
-      }
+      sessionLine
       TryItBox()
       if let error = status.error ?? coordinator.window.lastError {
         note(error)
@@ -53,6 +33,30 @@ struct HomeHero: View {
     .card(radius: DesignTokens.Metrics.radiusHero)
   }
 
+  /// The session and its line read as one thing, so they sit close.
+  private var sessionLine: some View {
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
+      HStack {
+        Eyebrow(status.label, color: status.isOn ? BlurtBrand.accent : BlurtBrand.muted)
+        Spacer()
+        if coordinator.microphoneDenied {
+          Button("Open Settings") { SystemSettings.open() }
+            .buttonStyle(BrandButtonStyle())
+            .fixedSize()
+        } else {
+          Toggle("Session", isOn: session)
+            .labelsHidden()
+            .tint(BlurtBrand.accent)
+            .disabled(!coordinator.apiKey.hasAPIKey)
+        }
+      }
+      Text(status.message)
+        .bodyFont(DesignTokens.Typography.sizeBody)
+        .foregroundStyle(BlurtBrand.text)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
   /// The switch is the session, which is the listening window as its record
   /// says it (opening, open or paused): on opens it (with its key, consent
   /// and microphone gates), off closes it and keeps it closed until the user
@@ -66,25 +70,11 @@ struct HomeHero: View {
         } else {
           coordinator.turnSessionOff()
         }
-      })
+      }
+    )
   }
 
   private func note(_ text: String) -> some View {
     Text(text).bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.errorOrange)
-  }
-}
-
-/// After the keyboard brought Blurt forward to start a session: points at
-/// iOS's own back link, "◀ Notes" or whichever app it was, in place of the
-/// clock at the top left — the one way back to the app the user was typing in
-/// (an app can't return there itself).
-private struct ReturnHint: View {
-  var body: some View {
-    Label("To keep typing, tap “◀” with the app's name in the top-left corner.", systemImage: "arrow.up.left")
-      .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
-      .foregroundStyle(BlurtBrand.ctaText)
-      .padding(DesignTokens.Metrics.appChipPadX)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(BlurtBrand.cta, in: RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusInput))
   }
 }

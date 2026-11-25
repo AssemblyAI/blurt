@@ -41,7 +41,8 @@ struct RewriteGroundingTests {
     for (verbatim, rewrite) in [("Um, done.", "Done."), ("Uh, ten.", "Ten."), ("Um, sent.", "Sent.")] {
       #expect(
         AssemblyAITranscriber.chooseTranscript(
-          verbatim: verbatim, rewrite: rewrite, enhanced: true, instruction: base) == rewrite)
+          verbatim: verbatim, rewrite: rewrite, enhanced: true, instruction: base
+        ) == rewrite)
     }
   }
 
@@ -66,7 +67,7 @@ struct RewriteGroundingTests {
   @Test("normalization keeps letters and digits, single-spaced and lowercased")
   func normalization() {
     #expect(RewriteGrounding.normalized("  No, grammatical — FIXES!\n2x ") == "no grammatical fixes 2x")
-    #expect(RewriteGrounding.normalized("...") == "")
+    #expect(RewriteGrounding.normalized("...").isEmpty)
     #expect(
       RewriteGrounding.sentences(of: "Be brief. No emojis. Write like a quick text to a friend")
         == ["write like a quick text to a friend"])

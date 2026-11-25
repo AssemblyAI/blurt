@@ -13,9 +13,11 @@ actor StubMicCapture: MicCaptureProtocol {
   var startError: (any Error & Sendable)?
   var stopError: (any Error & Sendable)?
 
+  private var framesContinuation: AsyncStream<Data>.Continuation?
+
   // Actor-isolated methods satisfy these `async` protocol requirements directly,
   // so no `nonisolated` + hop-back-onto-self dance is needed.
-  func start() async throws -> AsyncStream<Data> {
+  func start() throws -> AsyncStream<Data> {
     startCalls += 1
     if let startError { throw startError }
     // Publishes the "captured" bytes while recording is open and ends only at
@@ -28,7 +30,7 @@ actor StubMicCapture: MicCaptureProtocol {
     if !pcmToReturn.isEmpty { continuation.yield(pcmToReturn) }
     return stream
   }
-  func stop() async throws -> Int {
+  func stop() throws -> Int {
     stopCalls += 1
     // Ends the feed before the (possibly throwing) stop, mirroring
     // `CaptureSessionRecorder.stopAndReadByteCount`: the upload's body is completed by
@@ -37,8 +39,6 @@ actor StubMicCapture: MicCaptureProtocol {
     if let stopError { throw stopError }
     return pcmToReturn.count
   }
-
-  private var framesContinuation: AsyncStream<Data>.Continuation?
 
   private func finishFrames() {
     framesContinuation?.finish()
@@ -49,9 +49,9 @@ actor StubMicCapture: MicCaptureProtocol {
   /// they did before the cancel path had its own entry point — the suites that
   /// assert a cancel stopped the mic (and that a failing stop is logged) are
   /// unchanged. `MicCaptureProtocolDefaultsTests` covers the bare default.
-  func cancelCapture() async throws {
+  func cancelCapture() throws {
     cancelCaptureCalls += 1
-    _ = try await stop()
+    _ = try stop()
   }
   func setPCM(_ pcm: Data) { pcmToReturn = pcm }
   func setStartError(_ error: (any Error & Sendable)?) { startError = error }

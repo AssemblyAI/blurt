@@ -7,7 +7,7 @@ import Testing
 // press and its answers, so neither file crowds the other.
 extension KeyboardModelGateTests {
   @Test("the retry and the deadline fire on the clock by themselves")
-  func pressTimers() async throws {
+  func pressTimers() async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()

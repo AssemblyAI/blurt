@@ -14,7 +14,8 @@ struct HostIdentityTests {
     subsystem: "com.acme.voice",
     keychainService: "acme-voice",
     defaultsPrefix: "AcmeVoice",
-    logDirectoryName: "Acme Voice")
+    logDirectoryName: "Acme Voice"
+  )
 
   @Test("the reverse-DNS identity matches the value scripts hard-code")
   func subsystemPinned() {
@@ -64,12 +65,18 @@ struct HostIdentityTests {
   @Test("a host's style limit and Library folder default to Blurt's rule, and the limit is never below one")
   func styleProfileLimit() {
     let identity = HostIdentity(
-      productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host")
+      productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host"
+    )
     #expect(identity.styleProfileLimit == StyleProfileStore.profileLimit)
     #expect(identity.dataDirectoryName == "Host", "the Library folder defaults to the product name")
     let none = HostIdentity(
-      productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host",
-      styleProfileLimit: 0)
+      productName: "Host",
+      subsystem: "host",
+      keychainService: "host",
+      defaultsPrefix: "Host",
+      logDirectoryName: "Host",
+      styleProfileLimit: 0
+    )
     #expect(none.styleProfileLimit == 1)
   }
 
@@ -84,10 +91,12 @@ struct HostIdentityTests {
   @Test("log URLs live under the identity's directory in ~/Library/Logs")
   func logURLsFollowTheIdentity() {
     #expect(
-      HostIdentity.blurt.logURL("dictations.jsonl").path(percentEncoded: false)
+      HostIdentity.blurt.logURL("dictations.jsonl")
+        .path(percentEncoded: false)
         .hasSuffix("Library/Logs/Blurt/dictations.jsonl"))
     #expect(
-      Self.acme.logURL("errors.jsonl").path(percentEncoded: false)
+      Self.acme.logURL("errors.jsonl")
+        .path(percentEncoded: false)
         .hasSuffix("Library/Logs/Acme Voice/errors.jsonl"))
   }
 

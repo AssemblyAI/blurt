@@ -10,7 +10,7 @@ import Testing
 @Suite("DictationSession mic bring-up", .timeLimit(.minutes(1)))
 struct DictationSessionBringUpTests {
   @Test("a cancel landing during the bring-up never reaches .recording")
-  func cancelDuringBringUpSkipsRecording() async throws {
+  func cancelDuringBringUpSkipsRecording() async {
     // The regression this guards: the press used to finish the bring-up, claim
     // `.recording` and fire the start chime — cueing "speak now" for a capture
     // the user had already cancelled — and only then get torn down by the queued
@@ -47,7 +47,7 @@ struct DictationSessionBringUpTests {
   }
 
   @Test("a submitted cancel preempts the bring-up instead of queueing behind it")
-  func submittedCancelPreemptsBringUp() async throws {
+  func submittedCancelPreemptsBringUp() async {
     // The app's cancel door is `submit`, and its consumer is serial — so a
     // `.cancel` submitted during a press cannot reach `cancel()` until that press
     // returns. With `MicCapture.start()` holding until the mic is live, that made
@@ -80,7 +80,7 @@ struct DictationSessionBringUpTests {
   }
 
   @Test("a cancel that aborts the bring-up doesn't leak its request into the next press")
-  func abortedBringUpLeavesNoStandingCancel() async throws {
+  func abortedBringUpLeavesNoStandingCancel() async {
     // The route where `start()` actually throws — a cancel landing *inside* the
     // liveness wait, which is what the real `MicCapture` does. `cancel()`'s
     // `.connecting` branch claims the phase and returns without enqueueing

@@ -7,7 +7,7 @@ import XCTest
 /// the attachment.
 final class BlurtKeyboardShot: XCTestCase {
   @MainActor
-  func testShot() throws {
+  func testShot() {
     let arguments =
       ProcessInfo.processInfo.environment["BLURT_PROBE_ARGS"]?.split(separator: " ").map(String.init) ?? []
     let app = KeyboardMeasure.launch(face: arguments.first ?? "light", arguments: Array(arguments.dropFirst()))

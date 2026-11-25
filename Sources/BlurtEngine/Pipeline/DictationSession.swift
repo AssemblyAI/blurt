@@ -2,7 +2,14 @@
 // count instead of a `Data` blob, and the off-pool queue moved to `BlockingIPC`.
 import Synchronization
 
+/// The dictation pipeline: turns trigger-key presses and releases into a
+/// recording, a transcription and a paste, publishing each phase on the way.
 public actor DictationSession {
+  struct CancelState {
+    var requested = false
+    var press: Task<Void, Never>?
+  }
+
   /// `internal(set)`, not `private(set)`: `private` is file-scoped, and the one
   /// writer — `setPhase` — lives in `+Observation` (see the split note below).
   /// Hosts outside the module still can't assign it. **`setPhase` remains the
@@ -126,11 +133,6 @@ public actor DictationSession {
   /// press it means to cancel has finished.
   let cancelState = Mutex(CancelState())
 
-  struct CancelState {
-    var requested = false
-    var press: Task<Void, Never>?
-  }
-
   // Internal, like `pipelineTask`, so a test can witness the cancel teardown
   // *directly* — nil means disarmed. Asserting it through the timer's effects
   // doesn't work: a surviving timer wakes, calls `release()`, and `performRelease`
@@ -159,7 +161,7 @@ public actor DictationSession {
   var handsBackTranscript = false
 
   /// The style this press resolved (`pressStyleProvider`), named on its Recent row.
-  var pressStyle = PressStyle.none
+  var pressStyle = PressStyle.base
 
   /// The name of the app the last press pinned as its paste target
   /// (`injector.setTarget`): what a composition is written for, since it is
@@ -169,6 +171,7 @@ public actor DictationSession {
   /// The production entry point: the real log, and the real focus capture unless the host
   /// supplies its own (`hostFocusCapture`: the iOS app, whose keyboard knows the text before
   /// the cursor). Delegates to the seam-carrying initializer below, which can't be public.
+  @preconcurrency
   public init(
     mic: any MicCaptureProtocol,
     transcriber: any TranscriberProtocol,
@@ -183,12 +186,18 @@ public actor DictationSession {
     hostFocusCapture: HostFocusCapture? = nil
   ) {
     self.init(
-      mic: mic, transcriber: transcriber, injector: injector,
-      maxRecordingSeconds: maxRecordingSeconds, clock: clock,
-      keyTermsProvider: keyTermsProvider, pressStyleProvider: pressStyleProvider,
-      textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
+      mic: mic,
+      transcriber: transcriber,
+      injector: injector,
+      maxRecordingSeconds: maxRecordingSeconds,
+      clock: clock,
+      keyTermsProvider: keyTermsProvider,
+      pressStyleProvider: pressStyleProvider,
+      textShortcutsProvider: textShortcutsProvider,
+      readinessCheck: readinessCheck,
       onTranscriptDelivered: onTranscriptDelivered,
-      seams: hostFocusCapture.map(Seams.init(hostFocusCapture:)) ?? .production)
+      seams: hostFocusCapture.map(Seams.init(hostFocusCapture:)) ?? .production
+    )
   }
 
   /// `seams` is deliberately required rather than defaulted: it's what keeps this
@@ -228,21 +237,11 @@ public actor DictationSession {
     // feed so the loop (and its task) winds down with the session.
     Task { [weak self] in
       for await command in commands {
-        guard let self else { return }
-        await self.run(command)
+        guard let self else {
+          return
+        }
+        await run(command)
       }
-    }
-  }
-
-  deinit {
-    // The one door into a terminal state that is not a phase transition, so the
-    // `setPhase` funnel never runs for it: a session dropped mid-recording would
-    // otherwise leave its request to be wound down by continuation deallocation
-    // rather than by the rule.
-    upload?.cancel()
-    commandFeed.finish()
-    for continuation in continuations.values {
-      continuation.finish()
     }
   }
 
@@ -277,12 +276,15 @@ public actor DictationSession {
     clearInFlightPress(task)
   }
 
+  /// The trigger key came up: ends the recording, queued behind the press.
   public func release() async {
     await enqueue { await self.performRelease() }
   }
 
   private func performRelease() async {
-    guard phase == .recording else { return }
+    guard phase == .recording else {
+      return
+    }
     cancelAutoRelease()
     // Flip the phase before stopping the mic, not after: the stop chime and
     // the pill's "Transcribing…" ride this transition, and mic.stop() waits out
@@ -300,7 +302,9 @@ public actor DictationSession {
       // ending the feed can't leave it streaming until the idle timeout.
       // A cancel wins over surfacing the audio error — the user asked for
       // nothing to happen.
-      if cancelWonRelease() { return }
+      if cancelWonRelease() {
+        return
+      }
       // Audio capture/conversion failed (e.g. the recorded file couldn't be
       // read back). Surface it instead of silently transcribing an empty blob.
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
@@ -308,7 +312,9 @@ public actor DictationSession {
     }
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
-    if cancelWonRelease() { return }
+    if cancelWonRelease() {
+      return
+    }
     // A clip too short for the STT model (an accidental brief tap) comes back
     // 200-with-empty-text, not 400 (measured) — so drop it as a silent no-op
     // rather than paying for a request that transcribes nothing.
@@ -343,7 +349,9 @@ public actor DictationSession {
   /// Consumes a cancel requested while this release held the queue, claiming the
   /// phase for the user's cancel. Returns whether it fired.
   func consumeCancelRequest() -> Bool {
-    guard cancelRequested else { return false }
+    guard cancelRequested else {
+      return false
+    }
     cancelRequested = false
     setPhase(.cancelled)
     return true
@@ -351,37 +359,24 @@ public actor DictationSession {
 
   // `cancel()` and `performCancel()` — the user-intent cancel — live with the rest
   // of the command surface in `DictationSession+Commands.swift`, beside the
-  // narrower `cancelRecording()`; both end up in `stopAndCancel` below.
+  // narrower `cancelRecording()` and the `stopAndCancel` tail both end up in.
 
-  /// Shared tail of the cancel ops once the guards agree there is a live
-  /// recording to tear down.
-  func stopAndCancel() async {
-    cancelAutoRelease()
-    // Before the mic teardown, not after: `cancelCapture()` finishes the frame
-    // stream, and a still-live upload would read that as "the utterance ended",
-    // write its config part and transcribe audio the user just discarded.
-    cancelUpload()
-    do {
-      // `cancelCapture`, not `stop`: the audio is being thrown away, so
-      // preserving it (the Bluetooth tail linger) is not worth delaying the
-      // user's cancel for.
-      try await mic.cancelCapture()
-    } catch {
-      // Stays out of the UI: the user asked for nothing to happen, and a cancel
-      // must not flash red (same rule as `performRelease`'s "a cancel wins over
-      // surfacing the audio error"). But a mic teardown that genuinely failed was
-      // reported nowhere at all, which made a recorder stuck mid-cancel
-      // indistinguishable from a clean one. Record it for developer mode without
-      // touching the phase — the log is exactly the channel for a fault the user
-      // shouldn't be shown.
-      seams.logFailure(.audioCaptureFailed(underlying: error), capturedContext)
-    }
-    setPhase(.cancelled)
-  }
-
-  private func cancelAutoRelease() {
+  /// Internal, not private: `stopAndCancel` in `+Commands` calls it too.
+  func cancelAutoRelease() {
     autoReleaseTask?.cancel()
     autoReleaseTask = nil
+  }
+
+  deinit {
+    // The one door into a terminal state that is not a phase transition, so the
+    // `setPhase` funnel never runs for it: a session dropped mid-recording would
+    // otherwise leave its request to be wound down by continuation deallocation
+    // rather than by the rule.
+    upload?.cancel()
+    commandFeed.finish()
+    for continuation in continuations.values {
+      continuation.finish()
+    }
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

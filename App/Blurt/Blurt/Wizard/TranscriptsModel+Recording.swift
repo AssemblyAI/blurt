@@ -8,11 +8,25 @@ import Foundation
 // rather than private there.
 
 extension TranscriptsModel {
+  /// A recording is running or finishing: the sheet is its, and nothing else
+  /// may take it.
+  var isRecordingBusy: Bool {
+    switch state {
+    case .recording, .finishingRecording:
+      true
+
+    default:
+      false
+    }
+  }
+
   /// Starts recording the microphone and system audio together, streaming
   /// both to the realtime API so the transcript appears as it's spoken.
   /// `byUser` is false when a meeting started it (`MeetingAutoRecord`).
   func startRecording(byUser: Bool = true) {
-    guard canRecord else { return }
+    guard canRecord else {
+      return
+    }
     guard let apiKey = apiKey(), !apiKey.isEmpty else {
       state = .failed(fileName: "Recording", message: BlurtError.apiKeyMissing.localizedDescription)
       return
@@ -39,27 +53,40 @@ extension TranscriptsModel {
     pausedAt = nil
     clockStart = .now
     state = .recording
-    // Every update is checked against the recording it belongs to, as
-    // `watchForQuiet` is: a session that outlives its recording must not write
-    // its turns into the next one's transcript, or end it when it fails.
-    let turns = Task { [weak self] in
+    recording = Recording(
+      url: url,
+      realtime: realtime,
+      audio: feed,
+      pump: pump,
+      turns: applyTurns(from: realtime),
+      quietStop: RecordingQuietStop(now: .now)
+    )
+    watchForQuiet(url)
+    if byUser { noteUserStartedRecording() }
+  }
+
+  /// Applies `realtime`'s turns to the live transcript as they arrive. Every
+  /// update is checked against the recording it belongs to, as `watchForQuiet`
+  /// is: a session that outlives its recording must not write its turns into the
+  /// next one's transcript, or end it when it fails.
+  private func applyTurns(from realtime: RealtimeTranscriber) -> Task<Void, Never> {
+    Task { [weak self] in
       let turns = await realtime.start()
       do {
         for try await turn in turns {
-          guard let self, recording?.realtime === realtime else { return }
+          guard let self, recording?.realtime === realtime else {
+            return
+          }
           live.apply(turn)
           if turn.transcript.trimmedNonEmpty() != nil { recording?.quietStop.heard(at: .now) }
         }
       } catch {
-        guard let self, recording?.realtime === realtime else { return }
+        guard let self, recording?.realtime === realtime else {
+          return
+        }
         liveTranscriptionFailed(error)
       }
     }
-    recording = Recording(
-      url: url, realtime: realtime, audio: feed, pump: pump, turns: turns,
-      quietStop: RecordingQuietStop(now: .now))
-    watchForQuiet(url)
-    if byUser { noteUserStartedRecording() }
   }
 
   /// Ends the recording at `url` once nothing has been said for
@@ -72,7 +99,9 @@ extension TranscriptsModel {
     Task { [weak self] in
       while true {
         try? await Task.sleep(for: RecordingQuietStop.checkInterval)
-        guard let self, isRecording, let recording, recording.url == url else { return }
+        guard let self, isRecording, let recording, recording.url == url else {
+          return
+        }
         if !isPaused, recording.quietStop.isOver(now: .now) {
           stopRecording()
           return
@@ -87,7 +116,9 @@ extension TranscriptsModel {
   /// asked for (`inactivity_timeout`, which Blurt doesn't send), and reopening
   /// would restart turn numbering mid-transcript.
   func togglePause() {
-    guard isRecording else { return }
+    guard isRecording else {
+      return
+    }
     if let pausedAt {
       do {
         try recorder.resume()
@@ -108,7 +139,9 @@ extension TranscriptsModel {
   /// `byUser` is false when a meeting's end stopped it (`MeetingAutoRecord`);
   /// a long silence (`watchForQuiet`) stops it as the user would.
   func stopRecording(byUser: Bool = true) {
-    guard isRecording, let recording else { return }
+    guard isRecording, let recording else {
+      return
+    }
     if byUser { noteUserStoppedRecording() }
     endCapture(recording, dropUnsent: false)
     state = .finishingRecording
@@ -122,7 +155,9 @@ extension TranscriptsModel {
 
   /// Stops and throws the recording away, file and all.
   func discardRecording() {
-    guard isRecording, let recording else { return }
+    guard isRecording, let recording else {
+      return
+    }
     noteUserStoppedRecording()
     endCapture(recording, dropUnsent: true)
     Task { await recording.realtime.cancel() }
@@ -158,7 +193,9 @@ extension TranscriptsModel {
   /// still open: it is closed here, and its turns stop, rather than left
   /// running into the next recording.
   private func liveTranscriptionFailed(_: any Error) {
-    guard isRecording, let recording else { return }
+    guard isRecording, let recording else {
+      return
+    }
     endCapture(recording, dropUnsent: true)
     recording.turns.cancel()
     Task { await recording.realtime.cancel() }
@@ -172,31 +209,28 @@ extension TranscriptsModel {
   /// has it open — shows the labelled transcript, with Plain text beside it.
   /// Best-effort: on failure the live transcript simply stays.
   func diarize(_ entry: SavedTranscript) {
-    guard let url = entry.fileURL else { return }
+    guard let url = entry.fileURL else {
+      return
+    }
     Task { [weak self, transcriber] in
       guard let result = try? await transcriber.transcribe(fileAt: url), let self,
         result.text.trimmedNonEmpty() != nil,
         let index = history.firstIndex(where: { $0.id == entry.id })
-      else { return }
+      else {
+        return
+      }
       history[index].replaceTranscript(result.text, plain: result.plainText)
       save()
       if openEntry?.id == entry.id { showTranscript(of: history[index]) }
     }
   }
 
-  /// A recording is running or finishing: the sheet is its, and nothing else
-  /// may take it.
-  var isRecordingBusy: Bool {
-    switch state {
-    case .recording, .finishingRecording: true
-    default: false
-    }
-  }
-
   /// Transcribes again a recording kept without a transcript — Try Again on
   /// the failure page, or opening it from the Library.
   func retranscribe(_ entry: SavedTranscript) {
-    guard history.contains(where: { $0.id == entry.id }), let url = entry.fileURL else { return }
+    guard history.contains(where: { $0.id == entry.id }), let url = entry.fileURL else {
+      return
+    }
     transcribe(url, kind: entry.kind, entry: entry)
   }
 
@@ -213,7 +247,9 @@ extension TranscriptsModel {
   /// Gives a recording kept without a transcript the one just made, and
   /// opens it; false if it was deleted meanwhile.
   func fillIn(_ entry: SavedTranscript, with result: FileTranscription) -> Bool {
-    guard let index = history.firstIndex(where: { $0.id == entry.id }) else { return false }
+    guard let index = history.firstIndex(where: { $0.id == entry.id }) else {
+      return false
+    }
     history[index].replaceTranscript(result.text, plain: result.plainText)
     save()
     let transcribed = history[index]
@@ -240,9 +276,14 @@ extension TranscriptsModel {
       let heard = text.trimmedNonEmpty() != nil
       history.insert(
         SavedTranscript(
-          kind: .recording, date: .now, text: heard ? text : "", fileURL: recording.url,
-          plainText: heard ? live.plainText : nil),
-        at: 0)
+          kind: .recording,
+          date: .now,
+          text: heard ? text : "",
+          fileURL: recording.url,
+          plainText: heard ? live.plainText : nil
+        ),
+        at: 0
+      )
     }
     flushHistory()
   }

@@ -15,7 +15,8 @@ final class TextShortcutsUITests: BlurtUITestCase {
     addShortcut(in: pane, trigger: "work email", expansion: "me@example.com")
     XCTAssertTrue(
       rowText(in: pane, reading: "me@example.com").waitForExistence(timeout: 5),
-      "A saved shortcut should appear in the list")
+      "A saved shortcut should appear in the list"
+    )
 
     let sheet = openSheet(in: pane, byDoubleClicking: "me@example.com")
     let expansion = sheet.anyDescendant(identified: UITestIdentifiers.textShortcutExpansion)
@@ -26,17 +27,20 @@ final class TextShortcutsUITests: BlurtUITestCase {
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Save should dismiss the sheet")
     XCTAssertTrue(
       rowText(in: pane, reading: "you@example.com").waitForExistence(timeout: 5),
-      "An edit should replace the row's text")
+      "An edit should replace the row's text"
+    )
     XCTAssertFalse(
       rowText(in: pane, reading: "me@example.com").exists,
-      "An edit should not leave the old text behind")
+      "An edit should not leave the old text behind"
+    )
 
     let deleting = openSheet(in: pane, byDoubleClicking: "you@example.com")
     deleting.buttons[UITestIdentifiers.textShortcutDelete].click()
     XCTAssertTrue(deleting.waitForNonExistence(timeout: 5), "Delete should dismiss the sheet")
     XCTAssertTrue(
       rowText(in: pane, reading: "you@example.com").waitForNonExistence(timeout: 5),
-      "Delete should remove the row")
+      "Delete should remove the row"
+    )
   }
 
   /// The − under the table removes the selected row, and is disabled with
@@ -74,7 +78,8 @@ final class TextShortcutsUITests: BlurtUITestCase {
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
     XCTAssertFalse(
       rowText(in: pane, reading: "other@example.com").exists,
-      "A refused duplicate should not add a row")
+      "A refused duplicate should not add a row"
+    )
   }
 
   // MARK: - Helpers

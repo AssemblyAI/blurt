@@ -12,7 +12,6 @@
   /// isolation — no dependency on (or races with) the host's real clipboard.
   @Suite("KeyInjector.insert")
   struct KeyInjectorInsertTests {
-
     @Test("restores the prior pasteboard contents after pasting")
     func restoresClipboard() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
@@ -31,7 +30,8 @@
       // A 1s settle: long enough that the assertions below run well before the
       // background restore fires, so the "still pending" checks are deterministic.
       let injector = KeyInjector(
-        pasteSettleDuration: .seconds(1), postPaste: { _ in true }, clipboard: clip)
+        pasteSettleDuration: .seconds(1), postPaste: { _ in true }, clipboard: clip
+      )
 
       try await injector.insert("dictated text")
 
@@ -51,7 +51,8 @@
     func holdsLockThroughSettle() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(
-        pasteSettleDuration: .milliseconds(200), postPaste: { _ in true }, clipboard: clip)
+        pasteSettleDuration: .milliseconds(200), postPaste: { _ in true }, clipboard: clip
+      )
 
       try await injector.insert("dictated text")
       // `insert` is back with the transcript still on the clipboard. Another
@@ -82,7 +83,8 @@
           activated.value = true
           return true
         },
-        clipboard: FakeClipboard(string: nil))
+        clipboard: FakeClipboard(string: nil)
+      )
       await injector.setTarget(try liveTargetFocus())
       try await injector.insert("dictated text")  // must not throw
       #expect(activated.value)
@@ -96,7 +98,8 @@
         pasteSettleDuration: .zero,
         postPaste: posted.recordingPaste,
         activateTarget: { _ in false },
-        clipboard: clip)
+        clipboard: clip
+      )
       await injector.setTarget(try liveTargetFocus())
 
       await #expect(throws: BlurtError.targetAppLost) {
@@ -113,7 +116,8 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: posted.recordingPaste)
+        postPaste: posted.recordingPaste
+      )
       try await injector.insert("")
       #expect(posted.value == false)
     }
@@ -141,7 +145,8 @@
         pasteSettleDuration: .zero,
         postPaste: posted.recordingPaste,
         isAccessibilityTrusted: { false },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       await #expect(throws: BlurtError.accessibilityPermissionMissing) {
         try await injector.insert("text")
@@ -159,7 +164,8 @@
         pasteSettleDuration: .zero,
         postPaste: posted.recordingPaste,
         hasEditableTarget: { false },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       await #expect(throws: BlurtError.noEditableTarget) {
         try await injector.insert("dictated text")
@@ -179,7 +185,8 @@
         postPaste: posted.recordingPaste,
         hasEditableTarget: { false },  // Electron/Chromium exposes no editable AX signal
         isAXOpaqueApp: { _ in true },  // …but it *is* an AX-opaque app (Electron editor)
-        clipboard: clip)
+        clipboard: clip
+      )
 
       // Must not throw noEditableTarget: the Electron exception keeps the paste.
       try await injector.insert("dictated text")
@@ -201,7 +208,8 @@
         hasEditableTarget: { false },  // a just-opened Electron app: nothing focused yet
         isAXOpaqueApp: { $0 != nil },  // the app in front is opaque; no app at all isn't
         frontmostApp: { NSRunningApplication.current },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       // A voice command's `type` step: no pinned target, so the app judged is
       // the one in front, not a nil that reads as "not opaque".
@@ -219,7 +227,8 @@
         hasEditableTarget: { false },
         isAXOpaqueApp: { $0 != nil },
         frontmostApp: { NSRunningApplication.current },
-        clipboard: FakeClipboard(string: "user-clipboard"))
+        clipboard: FakeClipboard(string: "user-clipboard")
+      )
       // No capture, so no target: the paste lands where focus is, and that app
       // is the one asked whether it hides its fields.
       try await injector.insert("hello")
@@ -257,7 +266,7 @@
       // changed, but the caret no longer follows our paste — a leading space
       // there is a stray indent. Input "0 seconds ago" is always newer than the
       // first paste, which is what pressing Return between dictations looks like.
-      let (injector, pasted) = makeRecordingInjector(secondsSinceUserInput: { 0 })
+      let (injector, pasted) = makeRecordingInjector { 0 }
       await injector.setTarget(try liveTargetFocus())
 
       try await injector.insert("First.", after: nil, windowTitle: "Doc - Google Docs")
@@ -284,7 +293,8 @@
           firstParked.open()
           return true
         },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       let first = Task { try await injector.insert("first") }
       await firstParked.wait()
@@ -310,7 +320,8 @@
           pasted.open()
           return true
         },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       let task = Task { try await injector.insert("dictated") }
       await pasted.wait()
@@ -328,7 +339,8 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: posted.recordingPaste)
+        postPaste: posted.recordingPaste
+      )
       // Gate the body so `cancel()` is guaranteed to land before `insert` reaches
       // its first cancellation check. Without this, a busy machine can run the
       // task past that check before `cancel()` arrives, posting the paste and
@@ -348,6 +360,6 @@
   }
 
 // The shared fixtures these tests drive the injector with — `liveTargetApp`,
-// `AsyncGate`, `StringListBox`, `ValueBox` — live in `Stubs/InjectorTestSupport.swift`
-// so the fallback/cancel suite (a separate file) can reuse them.
+// `AsyncGate`, `StringListBox`, `ValueBox` — live in `Stubs/` (`InjectorTestSupport.swift`
+// and one file per box) so the fallback/cancel suite (a separate file) can reuse them.
 #endif

@@ -1,6 +1,4 @@
 #if os(macOS)
-  import Synchronization
-
   /// Reads any text aloud in the user's read-aloud voice and speed — the
   /// transcript sheet's Play on a task result (meeting notes, a summary), which
   /// has no audio of its own. The same streaming TTS as the read-aloud key,
@@ -23,25 +21,13 @@
 
     /// Reads `text` aloud. `onStart` runs once, when the first audio plays —
     /// the speaker's first level reading — and not at all if none does.
+    @preconcurrency
     public func read(_ text: String, onStart: (@Sendable () -> Void)? = nil) async throws {
       let onLevel: (@Sendable (Float) -> Void)? = onStart.map { onStart in
-        let once = Once()
+        let once = OnceFlag()
         return { _ in if once.claim() { onStart() } }
       }
       try await speaker.speak(text, style: ReadAloudStyleStore().style.verbatim, onLevel: onLevel)
-    }
-  }
-
-  /// True from `claim()` the first time only, from any thread: the speaker
-  /// reports levels off the main actor, many times a second.
-  private final class Once: Sendable {
-    private let claimed = Mutex(false)
-
-    func claim() -> Bool {
-      claimed.withLock { claimed in
-        defer { claimed = true }
-        return !claimed
-      }
     }
   }
 #endif

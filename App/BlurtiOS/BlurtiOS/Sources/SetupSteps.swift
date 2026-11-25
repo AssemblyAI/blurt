@@ -1,7 +1,6 @@
 import AVFoundation
 import BlurtDesign
 import SwiftUI
-import UIKit
 
 /// The setup steps, numbered: an AssemblyAI API key, the microphone, the
 /// keyboard, each with its control until it is done and a check after. The
@@ -49,41 +48,6 @@ struct SetupSteps<KeyStep: View>: View {
           .bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.muted)
           Button("Open Settings") { SystemSettings.open() }.buttonStyle(BrandButtonStyle(role: .secondary))
         }
-      }
-    }
-  }
-
-}
-
-/// Blurt's page in the Settings app.
-enum SystemSettings {
-  static func open() {
-    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-    UIApplication.shared.open(url)
-  }
-}
-
-/// One step: its number in mono, the step, and its control while it is still
-/// to do; a check when done.
-private struct SetupRow<Action: View>: View {
-  let number: String
-  let done: Bool
-  let title: String
-  @ViewBuilder let action: () -> Action
-
-  var body: some View {
-    HStack(alignment: .top, spacing: DesignTokens.Metrics.appStackGap) {
-      Eyebrow(number, color: done ? BlurtBrand.accent : BlurtBrand.muted)
-        // At least the column's width, and never narrower than the number:
-        // at a large text size "01" would otherwise break over two lines.
-        .fixedSize()
-        .frame(minWidth: DesignTokens.Metrics.appSetupNumberWidth, alignment: .leading)
-      VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
-        HStack {
-          Text(title).bodyFont(DesignTokens.Typography.sizeBody).foregroundStyle(BlurtBrand.text)
-          if done { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent) }
-        }
-        if !done { action() }
       }
     }
   }

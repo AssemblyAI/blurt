@@ -9,38 +9,6 @@ import Testing
 @MainActor
 @Suite("SelectionSpeechRouter · Command", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterCommandTests {
-  private let defaults = freshDefaults()
-
-  /// Runs one held command press of right ⌥, the session transcribing the
-  /// command as "Open Slack and search for budget.", up to the planner's call.
-  private func command(
-    _ planner: StubPlanner, performer: StubPerformer = StubPerformer(),
-    injectorError: (any Error & Sendable)? = nil
-  ) async throws -> Rig {
-    let rig = try await press(
-      saying: "Open Slack and search for budget.", planner, performer: performer, injectorError: injectorError)
-    try await waitUntil { !planner.calls.isEmpty }
-    return rig
-  }
-
-  /// One held command press of right ⌥ transcribed as `said`, returned as
-  /// soon as the key is up.
-  private func press(
-    saying said: String, _ planner: StubPlanner, performer: StubPerformer = StubPerformer(),
-    injectorError: (any Error & Sendable)? = nil
-  ) async throws -> Rig {
-    let fixture = makeSession(mode: .transcript(said))
-    let clock = TestClock()
-    await fixture.injector.setError(injectorError)
-    let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: GatedSpeaker(), planner: planner, performer: performer,
-      readSelection: { nil }, defaults: defaults, clock: clock)
-    TriggerKeyStyleStore(defaults: defaults).setChoice(.command, for: .rightOption)
-    let events = JobEvents(watching: router)
-    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
-    return Rig(router: router, events: events, injector: fixture.injector, performer: performer, phases: phases)
-  }
-
   @MainActor
   private struct Rig {
     let router: SelectionSpeechRouter
@@ -59,11 +27,54 @@ struct SelectionSpeechRouterCommandTests {
     .openApp("Slack"), .shortcut(KeyChord(modifiers: .command, key: .character("k"))), .type("budget"),
   ]
 
+  private let defaults = freshDefaults()
+
+  /// Runs one held command press of right ⌥, the session transcribing the
+  /// command as "Open Slack and search for budget.", up to the planner's call.
+  private func command(
+    _ planner: StubPlanner,
+    performer: StubPerformer = StubPerformer(),
+    injectorError: (any Error & Sendable)? = nil
+  ) async throws -> Rig {
+    let rig = try await press(
+      saying: "Open Slack and search for budget.", planner, performer: performer, injectorError: injectorError
+    )
+    try await waitUntil { !planner.calls.isEmpty }
+    return rig
+  }
+
+  /// One held command press of right ⌥ transcribed as `said`, returned as
+  /// soon as the key is up.
+  private func press(
+    saying said: String,
+    _ planner: StubPlanner,
+    performer: StubPerformer = StubPerformer(),
+    injectorError: (any Error & Sendable)? = nil
+  ) async throws -> Rig {
+    let fixture = makeSession(mode: .transcript(said))
+    let clock = TestClock()
+    await fixture.injector.setError(injectorError)
+    let router = SelectionSpeechRouter(
+      session: fixture.session,
+      speaker: GatedSpeaker(),
+      planner: planner,
+      performer: performer,
+      readSelection: { nil },
+      defaults: defaults,
+      clock: clock
+    )
+    TriggerKeyStyleStore(defaults: defaults).setChoice(.command, for: .rightOption)
+    let events = JobEvents(watching: router)
+    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
+    return Rig(router: router, events: events, injector: fixture.injector, performer: performer, phases: phases)
+  }
+
   @Test("the spoken command is planned with what's on screen, then each step runs in order and the pill says Done")
   func runsSteps() async throws {
     let planner = StubPlanner(steps: Self.slackSearch)
     let screen = ScreenContext(
-      appName: "Safari", windowTitle: "Start Page", elements: [.init(id: 1, kind: "button", label: "Back")])
+      appName: "Safari", windowTitle: "Start Page", elements: [.init(id: 1, kind: "button", label: "Back")]
+    )
     let rig = try await command(planner, performer: StubPerformer(screen: screen))
     #expect(try await rig.outcomes() == [.done])
     #expect(planner.calls == [StubPlanner.Call(command: "Open Slack and search for budget.", context: screen)])
@@ -96,7 +107,8 @@ struct SelectionSpeechRouterCommandTests {
       try await rig.outcomes() == [
         .error(
           message: "No app named Figma is installed.",
-          notice: PillNotice(subject: "Figma", predicate: "isn’t installed"))
+          notice: PillNotice(subject: "Figma", predicate: "isn’t installed")
+        )
       ])
     #expect(rig.performer.performed.isEmpty)
   }
@@ -144,7 +156,8 @@ struct SelectionSpeechRouterCommandTests {
     let ran = SelectionSpeechRouter.StepLog()
     let screen = ScreenContext(appName: "Mail", elements: [.init(id: 4, kind: "button", label: "Reply")])
     _ = try await SelectionSpeechRouter.perform(
-      [.pressElement(4), .type("hi")], in: screen, performer: StubPerformer(), session: fixture.session, recording: ran)
+      [.pressElement(4), .type("hi")], in: screen, performer: StubPerformer(), session: fixture.session, recording: ran
+    )
     #expect(ran.records.map(\.step) == ["press #4 (button \"Reply\")", "type \"hi\""])
     #expect(ran.records.map(\.how) == ["stubbed", "pasted"])
     #expect(ran.records.allSatisfy { $0.error == nil })
@@ -152,9 +165,12 @@ struct SelectionSpeechRouterCommandTests {
     let failed = SelectionSpeechRouter.StepLog()
     await #expect(throws: VoiceCommandError.self) {
       try await SelectionSpeechRouter.perform(
-        [.openApp("Figma"), .media(.mute)], in: screen,
-        performer: StubPerformer(error: VoiceCommandError.appNotFound("Figma")), session: fixture.session,
-        recording: failed)
+        [.openApp("Figma"), .media(.mute)],
+        in: screen,
+        performer: StubPerformer(error: VoiceCommandError.appNotFound("Figma")),
+        session: fixture.session,
+        recording: failed
+      )
     }
     #expect(failed.records.map(\.step) == ["open_app Figma"])
     #expect(failed.records.first?.error == "No app named Figma is installed.")
@@ -165,8 +181,12 @@ struct SelectionSpeechRouterCommandTests {
     let performer = StubPerformer(error: VoiceCommandError.elementGone, failingAt: 1)
     await #expect(throws: VoiceCommandError.elementGone) {
       try await SelectionSpeechRouter.perform(
-        [.media(.mute), .pressElement(4), .media(.playPause)], in: screen, performer: performer,
-        session: fixture.session, recording: partway)
+        [.media(.mute), .pressElement(4), .media(.playPause)],
+        in: screen,
+        performer: performer,
+        session: fixture.session,
+        recording: partway
+      )
     }
     #expect(performer.performed == [.media(.mute)])
     #expect(partway.records.map(\.step) == ["media mute", "press #4 (button \"Reply\")"])

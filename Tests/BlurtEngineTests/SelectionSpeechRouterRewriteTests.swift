@@ -9,27 +9,6 @@ import Testing
 @MainActor
 @Suite("SelectionSpeechRouter · Rewrite", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterRewriteTests {
-  private let defaults = freshDefaults()
-
-  /// Runs one held rewrite press of right ⌥ over "hey all", the session
-  /// transcribing the instruction as "Make it more formal.", up to the
-  /// rewriter's call. The rig's events record what the pill was told.
-  private func rewrite(
-    _ rewriter: StubRewriter, injectorError: (any Error & Sendable)? = nil
-  ) async throws -> Rig {
-    let fixture = makeSession(mode: .transcript("Make it more formal."))
-    let clock = TestClock()
-    await fixture.injector.setError(injectorError)
-    let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: GatedSpeaker(), rewriter: rewriter, readSelection: { "hey all" },
-      defaults: defaults, clock: clock)
-    TriggerKeyStyleStore(defaults: defaults).setChoice(.rewrite, for: .rightOption)
-    let events = JobEvents(watching: router)
-    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
-    try await waitUntil { !rewriter.calls.isEmpty }
-    return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
-  }
-
   /// A rewrite press's router, what it reported, and the injector it pasted through.
   @MainActor
   private struct Rig {
@@ -42,6 +21,32 @@ struct SelectionSpeechRouterRewriteTests {
     func outcomes() async throws -> [OverlayUIState?] {
       try await events.outcomes(after: .rewriting, stopping: phases)
     }
+  }
+
+  private let defaults = freshDefaults()
+
+  /// Runs one held rewrite press of right ⌥ over "hey all", the session
+  /// transcribing the instruction as "Make it more formal.", up to the
+  /// rewriter's call. The rig's events record what the pill was told.
+  private func rewrite(
+    _ rewriter: StubRewriter, injectorError: (any Error & Sendable)? = nil
+  ) async throws -> Rig {
+    let fixture = makeSession(mode: .transcript("Make it more formal."))
+    let clock = TestClock()
+    await fixture.injector.setError(injectorError)
+    let router = SelectionSpeechRouter(
+      session: fixture.session,
+      speaker: GatedSpeaker(),
+      rewriter: rewriter,
+      readSelection: { "hey all" },
+      defaults: defaults,
+      clock: clock
+    )
+    TriggerKeyStyleStore(defaults: defaults).setChoice(.rewrite, for: .rightOption)
+    let events = JobEvents(watching: router)
+    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
+    try await waitUntil { !rewriter.calls.isEmpty }
+    return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
   }
 
   @Test("the spoken instruction rewrites the selection, pasted over it with no separator")

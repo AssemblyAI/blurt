@@ -90,32 +90,6 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// Nil under base styling.
   public let styleInstructions: String?
 
-  public init(
-    appName: String?,
-    windowTitle: String? = nil,
-    fieldLabel: String? = nil,
-    priorText: String?,
-    selectedText: String? = nil,
-    recentTranscripts: [String] = [],
-    keyTerms: [String] = [],
-    textShortcuts: [TextShortcut] = [],
-    styleInstructions: String? = nil,
-    targetIsSecure: Bool = false,
-    targetSecurityUnknown: Bool = false
-  ) {
-    self.appName = appName
-    self.windowTitle = windowTitle
-    self.fieldLabel = fieldLabel
-    self.priorText = priorText
-    self.selectedText = selectedText
-    self.recentTranscripts = recentTranscripts
-    self.keyTerms = keyTerms
-    self.textShortcuts = textShortcuts
-    self.styleInstructions = styleInstructions
-    self.targetIsSecure = targetIsSecure
-    self.targetSecurityUnknown = targetSecurityUnknown
-  }
-
   /// True when no focus field carries usable (non-whitespace) content, there is no
   /// history, no key terms, no style, and the target wasn't secure. Covers every signal,
   /// including the ones that stay local, so it answers "is this snapshot worth
@@ -135,8 +109,34 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// exists to prevent. `targetSecurityUnknown` counts for the same reason.
   public var isEmpty: Bool {
     !targetIsSecure && !targetSecurityUnknown && keyTerms.isEmpty && recentTranscripts.isEmpty
-      && [appName, windowTitle, fieldLabel, priorText, selectedText, styleInstructions].allSatisfy {
-        $0.trimmedNonEmpty() == nil
+      && [appName, windowTitle, fieldLabel, priorText, selectedText, styleInstructions].allSatisfy { field in
+        field.trimmedNonEmpty() == nil
       }
+  }
+
+  public init(
+    appName: String?,
+    priorText: String?,
+    windowTitle: String? = nil,
+    fieldLabel: String? = nil,
+    selectedText: String? = nil,
+    recentTranscripts: [String] = [],
+    keyTerms: [String] = [],
+    textShortcuts: [TextShortcut] = [],
+    styleInstructions: String? = nil,
+    targetIsSecure: Bool = false,
+    targetSecurityUnknown: Bool = false
+  ) {
+    self.appName = appName
+    self.windowTitle = windowTitle
+    self.fieldLabel = fieldLabel
+    self.priorText = priorText
+    self.selectedText = selectedText
+    self.recentTranscripts = recentTranscripts
+    self.keyTerms = keyTerms
+    self.textShortcuts = textShortcuts
+    self.styleInstructions = styleInstructions
+    self.targetIsSecure = targetIsSecure
+    self.targetSecurityUnknown = targetSecurityUnknown
   }
 }

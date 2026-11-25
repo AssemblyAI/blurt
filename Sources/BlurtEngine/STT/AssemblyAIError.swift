@@ -30,13 +30,18 @@ enum AssemblyAIError: Error, LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .http(let status, let message):
-      if let message { return "AssemblyAI error \(status): \(message)" }
+    case let .http(status, message):
+      if let message {
+        return "AssemblyAI error \(status): \(message)"
+      }
       return "AssemblyAI error \(status)"
+
     case .malformedResponse:
       return "Unexpected response from AssemblyAI."
+
     case .audioTooShort:
       return "That recording was too short to transcribe."
+
     case .recordingTooLarge:
       return "That recording was too large to transcribe."
     }
@@ -50,7 +55,9 @@ extension AssemblyAITranscriber {
   /// service's own sentence. Shared by both requests, so a failed fallback
   /// surfaces *its* error in exactly the shape a failed live request does.
   static func requireSuccess(_ response: URLResponse, body data: Data) throws {
-    guard let http = response as? HTTPURLResponse else { return }
+    guard let http = response as? HTTPURLResponse else {
+      return
+    }
     guard (200..<300).contains(http.statusCode) else {
       throw AssemblyAIError.http(status: http.statusCode, message: errorMessage(from: data))
     }
@@ -71,7 +78,9 @@ extension AssemblyAITranscriber {
     {
       return message
     }
-    guard let raw = String(bytes: data, encoding: .utf8).trimmedNonEmpty() else { return nil }
+    guard let raw = String(bytes: data, encoding: .utf8).trimmedNonEmpty() else {
+      return nil
+    }
     return String(raw.prefix(500))
   }
 }

@@ -19,12 +19,16 @@
     static func current(commandHeld: Bool = false) -> [Character: UInt16] {
       guard let source = unsafe TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue(),
         let raw = unsafe TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
-      else { return [:] }
+      else {
+        return [:]
+      }
       // `UCKeyTranslate` takes the Carbon modifier mask shifted down a byte.
       let modifiers = commandHeld ? UInt32((cmdKey >> 8) & 0xFF) : 0
       let data = unsafe Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
       return unsafe data.withUnsafeBytes { buffer in
-        guard let layout = unsafe buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return [:] }
+        guard let layout = unsafe buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else {
+          return [:]
+        }
         var map: [Character: UInt16] = [:]
         for code in UInt16(0)..<128 {
           guard let character = unsafe character(typedBy: code, modifiers: modifiers, on: layout), map[character] == nil
@@ -49,9 +53,20 @@
       var length = 0
       var characters = [UniChar](repeating: 0, count: 4)
       let status = unsafe UCKeyTranslate(
-        layout, code, UInt16(kUCKeyActionDown), modifiers, UInt32(LMGetKbdType()),
-        OptionBits(kUCKeyTranslateNoDeadKeysBit), &deadKeys, characters.count, &length, &characters)
-      guard status == noErr, length == 1, let scalar = Unicode.Scalar(characters[0]) else { return nil }
+        layout,
+        code,
+        UInt16(kUCKeyActionDown),
+        modifiers,
+        UInt32(LMGetKbdType()),
+        OptionBits(kUCKeyTranslateNoDeadKeysBit),
+        &deadKeys,
+        characters.count,
+        &length,
+        &characters
+      )
+      guard status == noErr, length == 1, let scalar = Unicode.Scalar(characters[0]) else {
+        return nil
+      }
       return Character(String(scalar).lowercased())
     }
   }

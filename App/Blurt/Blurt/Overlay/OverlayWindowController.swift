@@ -1,40 +1,6 @@
 import AppKit
 import BlurtEngine
-import Observation
 import SwiftUI
-
-@Observable
-final class OverlayBridge {
-  var state: OverlayUIState = .idle
-  /// The latest mic loudness, 0...1 (MicCapture.linearLevel). The overlay's
-  /// voice bars track this current value — there is no scrolling history.
-  var level: Float = 0
-  /// The capsule's current width: `OverlayWindowController.pillSize.width`,
-  /// except while a notice that writes its reason on the pill is up (see
-  /// `OverlayWindowController.pillWidth(for:)`).
-  var pillWidth: CGFloat = OverlayWindowController.pillSize.width
-  /// Whether the view cross-fades its latest state change. False for a change
-  /// that also resizes the pill: the panel and the capsule can't move in step,
-  /// so that swap happens in one step under a fade of the whole panel instead.
-  /// A flag the view reads rather than a `withTransaction`, because this
-  /// `@Observable` reaches the view in a later update, after any transaction
-  /// set here has ended.
-  var animatesStateChange = true
-
-  func pushLevel(_ value: Float) {
-    // `value` arrives on the fixed 0...1 scale `MicCaptureProtocol.levels`
-    // documents (MicCapture.linearLevel). Clamp once here — the single seam where
-    // any capture implementation crosses into the view layer — so the bars can
-    // trust the range instead of re-checking it. (No auto-gain normalizing to a
-    // running peak: that stretched sustained speech to full.)
-    let clamped = min(1, max(0, value))
-    // @Observable invalidates on assignment, not on change, and `linearLevel` is
-    // floored so room ambient maps to exactly 0 — without this guard every silent
-    // tick would rebuild the whole bar row 20×/s with an unchanged value.
-    guard clamped != level else { return }
-    level = clamped
-  }
-}
 
 final class OverlayWindowController {
   // The panel is sized larger than the visible pill so SwiftUI's drop shadow
@@ -62,11 +28,22 @@ final class OverlayWindowController {
   // that backs the placement clearance off by the same margin — so a change to
   // `shadowMargin` is checked on both sides rather than only one.
   private static let panelSize = OverlayPlacement.panelSize(
-    pillSize: pillSize, shadowMargin: shadowMargin)
+    pillSize: pillSize, shadowMargin: shadowMargin
+  )
   // Ceiling for a pill that writes its reason out (`OverlayUIState.pillNotice`):
   // room for the sentence with an ordinary device name; a longer one truncates
   // rather than stretching the pill across the screen.
   private static let maxPillWidth: CGFloat = 340
+
+  // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
+  // ramp reads as instant response — but fades out gently. Asymmetric on purpose.
+  private static let appearFadeDuration: Double = 0.08
+  private static let dismissFadeDuration: Double = 0.2
+
+  /// Persistence for the dragged origin lives in the engine next to the clamping
+  /// it feeds, and is registered in `PersistedSettings.allDefaultsKeys` so reset
+  /// sweeps clear it.
+  private static let originStore = OverlayOriginStore()
 
   private let panel: NSPanel
   private let hosting: NSHostingView<OverlayView>
@@ -81,16 +58,16 @@ final class OverlayWindowController {
   /// Whether a fade-out is under way, so a show during it fades back in.
   private var fadingOut = false
 
-  // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
-  // ramp reads as instant response — but fades out gently. Asymmetric on purpose.
-  private static let appearFadeDuration: Double = 0.08
-  private static let dismissFadeDuration: Double = 0.2
-
   // Token for the block-based didMove observer so `deinit` can deregister it.
   // `nonisolated(unsafe)` because the nonisolated deinit reads it: it's written
   // once in init and read once in deinit, both with exclusive access, so the
   // unchecked access is sound.
-  private nonisolated(unsafe) var didMoveObserver: (any NSObjectProtocol)?
+  nonisolated(unsafe) private var didMoveObserver: (any NSObjectProtocol)?
+
+  /// How much wider than standard the panel is right now. The persisted drag
+  /// origin is always the *standard* panel's, so the two places that cross that
+  /// boundary — placing the panel and saving a drag — shift by half of this.
+  private var extraPanelWidth: CGFloat { panel.frame.width - Self.panelSize.width }
 
   init() {
     self.hosting = NSHostingView(rootView: OverlayView(bridge: bridge))
@@ -134,15 +111,28 @@ final class OverlayWindowController {
     }
   }
 
-  /// OverlayWindowController lives for the whole app session, so this never runs
-  /// in practice — but tearing the observer down (and cancelling any pending
-  /// error-flash revert) mirrors the `[weak self]` care above and documents that
-  /// the registrations are owned, not leaked.
-  deinit {
-    if let didMoveObserver {
-      NotificationCenter.default.removeObserver(didMoveObserver)
+  // MARK: - Pill width
+
+  /// The pill's width for `state`: the compact standard width, or — for a notice
+  /// that writes its reason out — wide enough for that text in the status-line
+  /// type, capped at `maxPillWidth`. Measured with the same font and tracking
+  /// `StatusLineText` draws with, so the text fits without scaling down.
+  static func pillWidth(for state: OverlayUIState) -> CGFloat {
+    guard let text = state.pillNotice?.text else {
+      return pillSize.width
     }
-    errorRevertTask?.cancel()
+    let measured = NSAttributedString(
+      string: text.uppercased(),
+      attributes: [
+        .font: NSFont.systemFont(ofSize: StatusLineText.fontSize, weight: .semibold),
+        .kern: StatusLineText.tracking,
+      ]
+    ).size().width
+    // The same few points of headroom the standard width keeps for its longest
+    // word (see `pillSize`), so Bold Text or a font-metric change truncates
+    // nothing at an ordinary device name.
+    let width = (measured + OverlayView.errorTextInset * 2 + 8).rounded(.up)
+    return min(max(width, pillSize.width), maxPillWidth)
   }
 
   func show(state: OverlayUIState) {
@@ -196,11 +186,14 @@ final class OverlayWindowController {
         userInfo: [
           .announcement: state.accessibilityLabel,
           .priority: NSAccessibilityPriorityLevel.high.rawValue,
-        ])
+        ]
+      )
       errorRevertTask = Task { [weak self] in
         try? await Task.sleep(for: .seconds(dwell))
-        guard let self, !Task.isCancelled else { return }
-        self.show(state: .idle)
+        guard let self, !Task.isCancelled else {
+          return
+        }
+        show(state: .idle)
       }
     }
     setVisible(true)
@@ -281,7 +274,9 @@ final class OverlayWindowController {
       // instant the fade starts, so a hide→show in one pass (any phase that
       // hides the pill, then one that shows it) returned here and left the
       // fade running — the pill invisible for the whole command (2026-11-04).
-      if panel.isVisible, panel.alphaValue >= 1, !fadingOut { return }
+      if panel.isVisible, panel.alphaValue >= 1, !fadingOut {
+        return
+      }
       fadingOut = false
       if !panel.isVisible {
         reposition()
@@ -297,7 +292,9 @@ final class OverlayWindowController {
         }
       }
     } else {
-      guard panel.isVisible else { return }
+      guard panel.isVisible else {
+        return
+      }
       if reduceMotion {
         dismissPanel()
         return
@@ -311,43 +308,19 @@ final class OverlayWindowController {
         completionHandler: { [weak self] in
           // NSAnimationContext completion handlers run on the main thread.
           MainActor.assumeIsolated {
-            guard let self, self.fadeGeneration == generation, self.panel.alphaValue < 0.01 else { return }
+            guard let self, self.fadeGeneration == generation, self.panel.alphaValue < 0.01 else {
+              return
+            }
             self.dismissPanel()
           }
-        })
+        }
+      )
     }
   }
 
   func pushLevel(_ value: Float) {
     bridge.pushLevel(value)
   }
-
-  // MARK: - Pill width
-
-  /// The pill's width for `state`: the compact standard width, or — for a notice
-  /// that writes its reason out — wide enough for that text in the status-line
-  /// type, capped at `maxPillWidth`. Measured with the same font and tracking
-  /// `StatusLineText` draws with, so the text fits without scaling down.
-  static func pillWidth(for state: OverlayUIState) -> CGFloat {
-    guard let text = state.pillNotice?.text else { return pillSize.width }
-    let measured = NSAttributedString(
-      string: text.uppercased(),
-      attributes: [
-        .font: NSFont.systemFont(ofSize: StatusLineText.fontSize, weight: .semibold),
-        .kern: StatusLineText.tracking,
-      ]
-    ).size().width
-    // The same few points of headroom the standard width keeps for its longest
-    // word (see `pillSize`), so Bold Text or a font-metric change truncates
-    // nothing at an ordinary device name.
-    let width = (measured + OverlayView.errorTextInset * 2 + 8).rounded(.up)
-    return min(max(width, pillSize.width), maxPillWidth)
-  }
-
-  /// How much wider than standard the panel is right now. The persisted drag
-  /// origin is always the *standard* panel's, so the two places that cross that
-  /// boundary — placing the panel and saving a drag — shift by half of this.
-  private var extraPanelWidth: CGFloat { panel.frame.width - Self.panelSize.width }
 
   /// Resizes the panel to hold a `width`-wide pill. Widening grows it evenly on
   /// both sides, so the pill stays centred where it was, then clamps it onto the
@@ -357,13 +330,16 @@ final class OverlayWindowController {
   /// programmatic move either way, so it isn't persisted as a drag.
   private func resizePanel(toPillWidth width: CGFloat) {
     let delta = width + Self.shadowMargin * 2 - panel.frame.width
-    guard delta != 0 else { return }
+    guard delta != 0 else {
+      return
+    }
     var frame = panel.frame
     frame.origin.x -= delta / 2
     frame.size.width += delta
     if width > Self.pillSize.width, let screen = panel.screen ?? NSScreen.main {
       frame.origin = OverlayPlacement.clamped(
-        origin: frame.origin, size: frame.size, into: screen.visibleFrame)
+        origin: frame.origin, size: frame.size, into: screen.visibleFrame
+      )
     }
     suppressOriginPersist = true
     panel.setFrame(frame, display: false)
@@ -372,7 +348,9 @@ final class OverlayWindowController {
   }
 
   private func reposition() {
-    guard let screen = NSScreen.main else { return }
+    guard let screen = NSScreen.main else {
+      return
+    }
     // All the placement policy — default bottom-center, the clearance, the
     // pill-vs-panel shadow correction, and clamping a stale dragged origin back on
     // screen — is the engine's `OverlayPlacement`, unit-tested there. This passes
@@ -381,20 +359,29 @@ final class OverlayWindowController {
       panelSize: panel.frame.size,
       visibleFrame: screen.visibleFrame,
       customOrigin: Self.originStore.origin.map { CGPoint(x: $0.x - extraPanelWidth / 2, y: $0.y) },
-      shadowMargin: Self.shadowMargin)
+      shadowMargin: Self.shadowMargin
+    )
     suppressOriginPersist = true
     panel.setFrameOrigin(origin)
     suppressOriginPersist = false
   }
 
   private func handleDidMove() {
-    guard !suppressOriginPersist else { return }
+    guard !suppressOriginPersist else {
+      return
+    }
     let origin = panel.frame.origin
     Self.originStore.origin = CGPoint(x: origin.x + extraPanelWidth / 2, y: origin.y)
   }
 
-  /// Persistence for the dragged origin lives in the engine next to the clamping
-  /// it feeds, and is registered in `PersistedSettings.allDefaultsKeys` so reset
-  /// sweeps clear it.
-  private static let originStore = OverlayOriginStore()
+  /// OverlayWindowController lives for the whole app session, so this never runs
+  /// in practice — but tearing the observer down (and cancelling any pending
+  /// error-flash revert) mirrors the `[weak self]` care above and documents that
+  /// the registrations are owned, not leaked.
+  deinit {
+    if let didMoveObserver {
+      NotificationCenter.default.removeObserver(didMoveObserver)
+    }
+    errorRevertTask?.cancel()
+  }
 }

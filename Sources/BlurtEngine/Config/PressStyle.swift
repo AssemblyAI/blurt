@@ -7,6 +7,9 @@ import Foundation
 /// main window's sticky selection, and a later press can't restyle a dictation
 /// already under way.
 public struct PressStyle: Sendable, Equatable {
+  /// Base styling, unnamed: no style appended, none on the Recent row.
+  public static let base = Self(instructions: nil, name: nil)
+
   /// Appended to the cleanup instruction — `TranscriptionContext`'s
   /// `styleInstructions`. Nil under base styling or for a blank style.
   public let instructions: String?
@@ -18,9 +21,6 @@ public struct PressStyle: Sendable, Equatable {
     self.instructions = instructions
     self.name = name
   }
-
-  /// Base styling, unnamed: no style appended, none on the Recent row.
-  public static let none = PressStyle(instructions: nil, name: nil)
 
   /// `key`'s style, or the main window's selection for nil, a key with no
   /// style, or one whose style is gone (`StyleProfileStore.profile(for:)`).

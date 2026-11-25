@@ -37,8 +37,12 @@ struct AsyncTranscriptionRetryTests {
     let polls = Counter()
     let transport = ScriptedTransport { request in
       switch request.url?.path {
-      case "/v2/upload": return .success((200, self.json(["upload_url": "https://cdn.example/abc"])))
-      case "/v2/transcript": return .success((200, self.json(["id": "t1", "status": "queued"])))
+      case "/v2/upload":
+        return .success((200, json(["upload_url": "https://cdn.example/abc"])))
+
+      case "/v2/transcript":
+        return .success((200, json(["id": "t1", "status": "queued"])))
+
       default:
         _ = polls.next()
         return .failure(URLError(.cancelled))
@@ -61,9 +65,13 @@ struct AsyncTranscriptionRetryTests {
       case "/v2/upload":
         return uploads.next() == 1
           ? .failure(URLError(.networkConnectionLost))
-          : .success((200, self.json(["upload_url": "https://cdn.example/abc"])))
-      case "/v2/transcript": return .success((200, self.json(["id": "t1", "status": "queued"])))
-      default: return .success((200, self.json(["id": "t1", "status": "completed", "text": "Done."])))
+          : .success((200, json(["upload_url": "https://cdn.example/abc"])))
+
+      case "/v2/transcript":
+        return .success((200, json(["id": "t1", "status": "queued"])))
+
+      default:
+        return .success((200, json(["id": "t1", "status": "completed", "text": "Done."])))
       }
     }
     let transcript = try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
@@ -80,11 +88,14 @@ struct AsyncTranscriptionRetryTests {
       let submits = Counter()
       let transport = ScriptedTransport { request in
         switch request.url?.path {
-        case "/v2/upload": return .success((200, self.json(["upload_url": "https://cdn.example/abc"])))
+        case "/v2/upload":
+          return .success((200, json(["upload_url": "https://cdn.example/abc"])))
+
         case "/v2/transcript":
           return submits.next() == 1
             ? .failure(failure)
-            : .success((200, self.json(["id": "t1", "status": "completed", "text": "Done."])))
+            : .success((200, json(["id": "t1", "status": "completed", "text": "Done."])))
+
         default:
           Issue.record("unexpected poll")
           return .success((500, Data()))

@@ -61,7 +61,9 @@ extension AssemblyAITranscriber {
   /// alone is not specific: a `413` carrying anything else is surfaced as the
   /// error it is.
   static func isLiveCapRefusal(_ response: URLResponse, body: Data) -> Bool {
-    guard (response as? HTTPURLResponse)?.statusCode == 413 else { return false }
+    guard (response as? HTTPURLResponse)?.statusCode == 413 else {
+      return false
+    }
     let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: body)
     return parsed?.errorCode == "audio_too_large"
   }
@@ -130,7 +132,8 @@ extension AssemblyAITranscriber {
     try Task.checkCancellation()
     guard let recording else {
       Self.log.error(
-        "buffered fallback abandoned: the recording passed \(bufferedAudioByteCap, privacy: .public) bytes")
+        "buffered fallback abandoned: the recording passed \(bufferedAudioByteCap, privacy: .public) bytes"
+      )
       throw AssemblyAIError.recordingTooLarge
     }
     var request = makeRequest(path: Self.bufferedTranscribePath, apiKey: apiKey, boundary: boundary)
@@ -143,7 +146,8 @@ extension AssemblyAITranscriber {
       dictation buffered round-trip \
       audioMs=\(SyncSTTLimits.durationMs(ofPCMBytes: recording.count, rate: sampleRate), privacy: .public) \
       postSpeechMs=\((clock.now - start).milliseconds, format: .fixed(precision: 0), privacy: .public)
-      """)
+      """
+    )
     try Self.requireSuccess(response, body: data)
     return data
   }

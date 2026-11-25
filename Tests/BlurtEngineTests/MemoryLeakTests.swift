@@ -9,7 +9,6 @@ import Testing
 /// (usually a self-capturing `Task` or closure) formed a cycle.
 @Suite("Memory leaks")
 struct MemoryLeakTests {
-
   /// Builds and fully exercises an instance via `build`, then fails if it is
   /// still alive after `build`'s strong reference is released. Polls briefly so
   /// an in-flight task that's winding down isn't mistaken for a leak.

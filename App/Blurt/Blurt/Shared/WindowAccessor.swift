@@ -5,19 +5,6 @@ import SwiftUI
 /// `NSWindow.identifier`). Drop it in a `.background(...)`; `configure` runs once
 /// the view is installed in a window, and again if the hosting window changes.
 struct WindowAccessor: NSViewRepresentable {
-  /// Called with the hosting window on the main actor, once the view has joined
-  /// one. Re-invoked if the view later moves to a different window.
-  var configure: (NSWindow) -> Void
-
-  func makeNSView(context: Context) -> WindowReportingView {
-    WindowReportingView(frame: .zero)
-  }
-
-  func updateNSView(_ nsView: WindowReportingView, context: Context) {
-    // Refreshed on every update so the view calls the current closure.
-    nsView.onWindow = configure
-  }
-
   /// An empty view that reports its window the moment AppKit attaches it
   /// (`viewDidMoveToWindow`), rather than polling for one: `window` is nil in
   /// `makeNSView`, and can still be on early update passes during a cold launch,
@@ -35,10 +22,25 @@ struct WindowAccessor: NSViewRepresentable {
 
     /// Once per window: a new window is configured, the same one isn't again.
     private func report() {
-      guard let window, window !== reported, let onWindow else { return }
+      guard let window, window !== reported, let onWindow else {
+        return
+      }
       reported = window
       onWindow(window)
     }
+  }
+
+  /// Called with the hosting window on the main actor, once the view has joined
+  /// one. Re-invoked if the view later moves to a different window.
+  var configure: (NSWindow) -> Void
+
+  func makeNSView(context _: Context) -> WindowReportingView {
+    WindowReportingView(frame: .zero)
+  }
+
+  func updateNSView(_ nsView: WindowReportingView, context _: Context) {
+    // Refreshed on every update so the view calls the current closure.
+    nsView.onWindow = configure
   }
 }
 

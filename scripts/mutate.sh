@@ -48,7 +48,7 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Config/APIKeyDisplay.swift"
   "Sources/AssemblyAI/APIKeyValidator.swift"
   "Sources/AssemblyAI/Dictation/KeyTerms.swift"
-  "Sources/BlurtEngine/Pipeline/TextShortcuts.swift"
+  "Sources/BlurtEngine/Pipeline/TextShortcut.swift"
   "Sources/BlurtEngine/FocusCapture/FocusCapture+Pure.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyGate.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyRouter.swift"
@@ -60,7 +60,7 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Pipeline/RecordingCueGate.swift"
   "Sources/BlurtEngine/STT/STTPrompt.swift"
   "Sources/BlurtEngine/STT/SyncSTTLimits.swift"
-  "Sources/BlurtEngine/StringNormalization.swift"
+  "Sources/BlurtEngine/String+Normalization.swift"
   # Control Your Mac's decisions: the reply parser and its checks, name
   # matching and the destructive guard, the screen read over any tree, the
   # press/focus/menu choices apart from Accessibility, window layout, the
@@ -68,16 +68,17 @@ DEFAULT_TARGETS=(
   # shell around them (SystemVoiceCommandPerformer*) is no target: nothing
   # unit-tests those lines, so every mutant there would survive.
   "Sources/BlurtEngine/Command/VoiceCommandStep+Parse.swift"
-  "Sources/BlurtEngine/Command/CommandMatching.swift"
+  "Sources/BlurtEngine/Command/NameMatch.swift"
   "Sources/BlurtEngine/Command/ScreenRead.swift"
   "Sources/BlurtEngine/Command/ScreenContext.swift"
   "Sources/BlurtEngine/Command/ElementActions.swift"
   "Sources/BlurtEngine/Command/WindowLayout.swift"
   "Sources/BlurtEngine/Command/AppNotes.swift"
-  "Sources/BlurtEngine/Command/CommandTrace.swift"
+  "Sources/BlurtEngine/Command/PlanTrace.swift"
   "Sources/BlurtEngine/Command/VoiceCommandStep.swift"
   "Sources/BlurtEngine/Command/VoiceCommandPlanner.swift"
   "Sources/BlurtEngine/Command/ElementSnapshot.swift"
+  "Sources/BlurtEngine/Command/EnhancedInterface.swift"
   # The press routing and the command log around it, and the paste decision
   # the recorded paste fixtures replay.
   "Sources/BlurtEngine/Hotkey/SelectionSpeechRouting.swift"

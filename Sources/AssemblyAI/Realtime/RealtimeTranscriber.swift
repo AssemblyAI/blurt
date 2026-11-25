@@ -16,6 +16,41 @@ public import Foundation
 /// `Termination` messages, and `{"type": "Terminate"}` to end. The speech
 /// model is the endpoint's default.
 public actor RealtimeTranscriber {
+  private enum Phase {
+    case idle, open, closed
+  }
+
+  /// One server message — only the fields read. `Turn`'s are flattened into
+  /// `turn`; `Begin` and anything else are ignored.
+  struct Event: Decodable {
+    enum CodingKeys: String, CodingKey {
+      case type
+      case turnOrder = "turn_order"
+      case transcript
+      case endOfTurn = "end_of_turn"
+      case speakerLabel = "speaker_label"
+    }
+
+    let type: String
+    let turn: RealtimeTurn?
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      type = try container.decode(String.self, forKey: .type)
+      guard type == "Turn" else {
+        turn = nil
+        return
+      }
+      turn = RealtimeTurn(
+        order: try container.decode(Int.self, forKey: .turnOrder),
+        transcript: try container.decodeIfPresent(String.self, forKey: .transcript) ?? "",
+        isFinal: try container.decodeIfPresent(Bool.self, forKey: .endOfTurn) ?? false,
+        speaker: try container.decodeIfPresent(String.self, forKey: .speakerLabel)
+      )
+    }
+  }
+
+  /// The documented Universal-Streaming endpoint, which `init` defaults to.
   public static let defaultURL = URL(literal: "wss://streaming.assemblyai.com/v3/ws")
   /// The sample rate of the PCM `send` takes — the recorder's output.
   public static let sampleRate = 16_000
@@ -48,13 +83,11 @@ public actor RealtimeTranscriber {
   private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
   private var isFinishing = false
   private var didTerminate = false
-
-  private enum Phase {
-    case idle, open, closed
-  }
   /// One decoder for every message: a partial arrives several times a second.
   private let decoder = JSONDecoder()
 
+  /// A transcriber that will authenticate with `apiKey` against `url`; nothing
+  /// connects until `start`.
   public init(apiKey: String, url: URL = RealtimeTranscriber.defaultURL, userAgent: String? = nil) {
     var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     components?.queryItems = [
@@ -62,18 +95,12 @@ public actor RealtimeTranscriber {
       URLQueryItem(name: "sample_rate", value: String(Self.sampleRate)),
       URLQueryItem(name: "speaker_labels", value: "true"),
     ]
-    var request = URLRequest(url: components?.url ?? url)
+    var handshake = URLRequest(url: components?.url ?? url)
     // The header, not the `token` query parameter: that is for browsers,
     // which can't set one.
-    request.authorize(apiKey: apiKey, userAgent: userAgent)
-    self.request = request
+    handshake.authorize(apiKey: apiKey, userAgent: userAgent)
+    self.request = handshake
     self.session = URLSession(configuration: .default)
-  }
-
-  /// A transcriber dropped without `finish` or `cancel` — the recorder failed
-  /// to start, say — still releases its session, which would otherwise leak.
-  deinit {
-    session.invalidateAndCancel()
   }
 
   /// Opens the socket and returns every turn update as it arrives — a turn's
@@ -81,16 +108,16 @@ public actor RealtimeTranscriber {
   /// if the connection fails. Once the session has closed — `cancel` or
   /// `finish` got here first — the stream is already over and nothing opens.
   public func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
-    let (stream, continuation) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+    let (stream, turns) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
     guard phase == .idle else {
-      continuation.finish()
+      turns.finish()
       return stream
     }
     phase = .open
-    self.continuation = continuation
-    let task = session.webSocketTask(with: request)
-    self.task = task
-    task.resume()
+    self.continuation = turns
+    let socket = session.webSocketTask(with: request)
+    self.task = socket
+    socket.resume()
     Task { await receive() }
     return stream
   }
@@ -103,9 +130,13 @@ public actor RealtimeTranscriber {
   /// Once the session is finishing or closed, audio is dropped rather than
   /// sent after `Terminate` or queued for a socket that will never take it.
   public func send(_ pcm: Data) async {
-    guard phase != .closed, !isFinishing else { return }
+    guard phase != .closed, !isFinishing else {
+      return
+    }
     pending.append(pcm)
-    guard phase == .open else { return }
+    guard phase == .open else {
+      return
+    }
     await drainPending(final: false)
   }
 
@@ -170,7 +201,9 @@ public actor RealtimeTranscriber {
   /// The completion handler, not the async `send(_:)`, for the same
   /// ThreadSanitizer report `receive()` avoids.
   private func transmit(_ message: URLSessionWebSocketTask.Message) async {
-    guard let task else { return }
+    guard let task else {
+      return
+    }
     await withCheckedContinuation { continuation in
       task.send(message) { _ in continuation.resume() }
     }
@@ -185,7 +218,9 @@ public actor RealtimeTranscriber {
   private func waitForTermination() async {
     // Already closed (the socket failed, or `cancel`): no `Termination` is
     // coming, so don't sit out the timeout for one.
-    guard !didTerminate, task != nil else { return }
+    guard !didTerminate, task != nil else {
+      return
+    }
     await withCheckedContinuation { terminationWaiters.append($0) }
   }
 
@@ -209,11 +244,13 @@ public actor RealtimeTranscriber {
       switch event.type {
       case "Turn":
         if let turn = event.turn { continuation?.yield(turn) }
+
       case "Termination":
         didTerminate = true
         releaseTerminationWait()
         continuation?.finish()
         continuation = nil
+
       default:
         continue
       }
@@ -239,61 +276,9 @@ public actor RealtimeTranscriber {
     releaseTerminationWait()
   }
 
-  /// One server message — only the fields read. `Turn`'s are flattened into
-  /// `turn`; `Begin` and anything else are ignored.
-  struct Event: Decodable {
-    let type: String
-    let turn: RealtimeTurn?
-
-    enum CodingKeys: String, CodingKey {
-      case type
-      case turnOrder = "turn_order"
-      case transcript
-      case endOfTurn = "end_of_turn"
-      case speakerLabel = "speaker_label"
-    }
-
-    init(from decoder: any Decoder) throws {
-      let container = try decoder.container(keyedBy: CodingKeys.self)
-      type = try container.decode(String.self, forKey: .type)
-      guard type == "Turn" else {
-        turn = nil
-        return
-      }
-      turn = RealtimeTurn(
-        order: try container.decode(Int.self, forKey: .turnOrder),
-        transcript: try container.decodeIfPresent(String.self, forKey: .transcript) ?? "",
-        isFinal: try container.decodeIfPresent(Bool.self, forKey: .endOfTurn) ?? false,
-        speaker: try container.decodeIfPresent(String.self, forKey: .speakerLabel))
-    }
-  }
-}
-
-/// One turn as the realtime API last described it. A later update with the
-/// same `order` replaces it — partials grow, then the final lands.
-public struct RealtimeTurn: Sendable, Equatable {
-  public let order: Int
-  public let transcript: String
-  /// `end_of_turn`: the speaker finished this turn and the text is settled.
-  public let isFinal: Bool
-  /// `speaker_label`, with speaker labels on: "A", "B", …
-  public let speaker: String?
-
-  public init(order: Int, transcript: String, isFinal: Bool, speaker: String?) {
-    self.order = order
-    self.transcript = transcript
-    self.isFinal = isFinal
-    self.speaker = speaker
-  }
-}
-
-enum RealtimeError: Error, Equatable, LocalizedError {
-  /// The socket failed or the service closed it, with its reason.
-  case connection(String)
-
-  var errorDescription: String? {
-    switch self {
-    case .connection(let reason): "The live transcription stopped: \(reason)"
-    }
+  /// A transcriber dropped without `finish` or `cancel` — the recorder failed
+  /// to start, say — still releases its session, which would otherwise leak.
+  deinit {
+    session.invalidateAndCancel()
   }
 }

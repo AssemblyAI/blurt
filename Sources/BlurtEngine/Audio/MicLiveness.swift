@@ -28,7 +28,7 @@ enum MicLiveness {
   /// pays it again, not just the first one. Nothing on the capture path can
   /// pre-pay it — `MicCapture.warmUp()` holds that measurement — so this cap
   /// governs every press that lands on a cold link.
-  static let bluetoothTimeout: Duration = .milliseconds(2500)
+  static let bluetoothTimeout: Duration = .milliseconds(2_500)
 
   /// Wait cap for a transport known to be wired or on-board
   /// (`AudioTransport.isLocal`): those inputs deliver frames near-instantly, so
@@ -49,7 +49,7 @@ enum MicLiveness {
   /// virtual device would feel like a 2.5 s hang on every press. This splits
   /// them — long enough to cover most of a profile switch, short enough that a
   /// genuinely dead input is reported as a failure promptly rather than a stall.
-  static let unknownTransportTimeout: Duration = .milliseconds(1000)
+  static let unknownTransportTimeout: Duration = .milliseconds(1_000)
 
   /// The dBFS meter reading at or below which a poll counts as *digital*
   /// silence — zero-filled buffers from a device that hasn't started delivering
@@ -85,7 +85,9 @@ enum MicLiveness {
   /// `unknownTransportTimeout` for why nil and the unclassifiable transports
   /// can't share the local cap.
   static func timeout(forTransportType transportType: UInt32?) -> Duration {
-    if AudioTransport.isBluetooth(transportType) { return bluetoothTimeout }
+    if AudioTransport.isBluetooth(transportType) {
+      return bluetoothTimeout
+    }
     return AudioTransport.isLocal(transportType) ? defaultTimeout : unknownTransportTimeout
   }
 
@@ -145,8 +147,8 @@ enum MicLiveness {
   static func waitUntilLive(
     timeout: Duration,
     clock: some Clock<Duration>,
-    deliveredFrames: @escaping @Sendable () -> Int,
-    inputPowerDB: @escaping @Sendable () -> Float
+    deliveredFrames: @Sendable () -> Int,
+    inputPowerDB: @Sendable () -> Float
   ) async -> Duration? {
     let start = clock.now
     let deadline = start.advanced(by: timeout)
@@ -154,7 +156,9 @@ enum MicLiveness {
     // Negated `>` rather than `<=` on purpose: a NaN reading fails both
     // comparisons, and this spelling makes that "not live" instead of "live".
     while deliveredFrames() <= 0 || !(inputPowerDB() > silenceFloorDB) {
-      guard clock.now < deadline, !Task.isCancelled else { return nil }
+      guard clock.now < deadline, !Task.isCancelled else {
+        return nil
+      }
       try? await clock.sleep(for: interval)
       interval = min(interval * 2, maxPollInterval)
     }

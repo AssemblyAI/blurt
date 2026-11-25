@@ -30,6 +30,13 @@ import UIKit
 @Observable
 final class ListeningWindow {
   typealias Machine = ListeningWindowMachine
+
+  /// What the loop takes: the machine's events, and the heartbeat's turn.
+  enum Input: Sendable {
+    case event(Machine.Event)
+    case heartbeat
+  }
+
   static let log = HostIdentity.current.logger("ListeningWindow")
   /// How long a resume waits for the source to come back on its own after an
   /// interruption ends, polling, before the window stays interrupted until
@@ -81,75 +88,6 @@ final class ListeningWindow {
   /// starting a source under a session that isn't there.
   @ObservationIgnored var activationFailed = false
 
-  /// What the loop takes: the machine's events, and the heartbeat's turn.
-  enum Input: Sendable {
-    case event(Machine.Event)
-    case heartbeat
-  }
-
-  init(
-    source: any ListeningSource, audioSession: any AudioSessionControlling,
-    appState: @escaping () -> UIApplication.State, backgroundTasks: any BackgroundTasking,
-    clock: any Clock<Duration>, idle: any IdleMode, launchID: UUID = UUID()
-  ) {
-    self.source = source
-    self.audioSession = audioSession
-    self.appState = appState
-    self.backgroundTasks = backgroundTasks
-    self.clock = clock
-    self.idle = idle
-    self.launchID = launchID
-    machine = Machine(
-      launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: SyncSTTLimits.maxAudioSeconds)
-    let (inputs, continuation) = AsyncStream<Input>.makeStream()
-    inbox = continuation
-    idle.report = { [weak self] report, generation in self?.idleReported(report, generation: generation) }
-    loop = Task { [weak self] in
-      for await input in inputs {
-        guard let self else { return }
-        await self.take(input)
-      }
-    }
-    readers = [readSourceEvents(), readSessionEvents()]
-  }
-
-  /// The phone's window: its capture source (the simulator's in the
-  /// simulator), the system audio session, the application's own state, and
-  /// the idle mode the device supports.
-  convenience init() {
-    #if targetEnvironment(simulator)
-      // The simulator's capture session carries no audio; see SimulatorAudioSource.
-      let source: any ListeningSource = SimulatorAudioSource()
-    #else
-      let source: any ListeningSource = WindowedAudioSource()
-    #endif
-    let appState = { UIApplication.shared.applicationState }
-    self.init(
-      source: source, audioSession: SystemAudioSession(), appState: appState,
-      backgroundTasks: SystemBackgroundTasks(), clock: ContinuousClock(),
-      idle: IdleModes.production(appState: appState))
-  }
-
-  deinit {
-    loop?.cancel()
-    for reader in readers { reader.cancel() }
-    expiry?.cancel()
-    heartbeat?.cancel()
-  }
-
-  // MARK: What the app asks
-
-  /// The app is up: the record says so — a fresh launch, no window, the
-  /// session off — and the heartbeat runs from here for as long as the
-  /// process does, in every state of the window, so the keyboard reads an app
-  /// that is alive as off, never as suspended. Once per process; a second
-  /// call changes nothing.
-  func start() {
-    guard heartbeat == nil else { return }
-    publish(.launched(launchID))
-    startHeartbeat()
-  }
-
   /// A window exists — opening, open, paused or closing — as the session
   /// switch shows it.
   var isOn: Bool {
@@ -167,6 +105,75 @@ final class ListeningWindow {
   /// The Picture in Picture keeper, when that is the idle mode: its source
   /// layer has to be in the view hierarchy for the window to start.
   var pictureInPictureKeeper: PictureInPictureKeeper? { (idle as? PictureInPictureIdle)?.keeper }
+
+  init(
+    source: any ListeningSource,
+    audioSession: any AudioSessionControlling,
+    appState: @escaping () -> UIApplication.State,
+    backgroundTasks: any BackgroundTasking,
+    clock: any Clock<Duration>,
+    idle: any IdleMode,
+    launchID: UUID = UUID()
+  ) {
+    self.source = source
+    self.audioSession = audioSession
+    self.appState = appState
+    self.backgroundTasks = backgroundTasks
+    self.clock = clock
+    self.idle = idle
+    self.launchID = launchID
+    machine = Machine(
+      launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: SyncSTTLimits.maxAudioSeconds
+    )
+    let (inputs, continuation) = AsyncStream<Input>.makeStream()
+    inbox = continuation
+    idle.report = { [weak self] report, generation in self?.idleReported(report, generation: generation) }
+    loop = Task { [weak self] in
+      for await input in inputs {
+        guard let self else {
+          return
+        }
+        await take(input)
+      }
+    }
+    readers = [readSourceEvents(), readSessionEvents()]
+  }
+
+  /// The phone's window: its capture source (the simulator's in the
+  /// simulator), the system audio session, the application's own state, and
+  /// the idle mode the device supports.
+  convenience init() {
+    #if targetEnvironment(simulator)
+      // The simulator's capture session carries no audio; see SimulatorAudioSource.
+      let captureSource: any ListeningSource = SimulatorAudioSource()
+    #else
+      let captureSource: any ListeningSource = WindowedAudioSource()
+    #endif
+    let applicationState = { UIApplication.shared.applicationState }
+    self.init(
+      source: captureSource,
+      audioSession: SystemAudioSession(),
+      appState: applicationState,
+      backgroundTasks: SystemBackgroundTasks(),
+      clock: ContinuousClock(),
+      idle: IdleModes.production(appState: applicationState)
+    )
+  }
+
+  // MARK: What the app asks
+
+  /// The app is up: the record says so — a fresh launch, no window, the
+  /// session off — and the heartbeat runs from here for as long as the
+  /// process does, in every state of the window, so the keyboard reads an app
+  /// that is alive as off, never as suspended. Once per process; a second
+  /// call changes nothing.
+  func start() {
+    guard heartbeat == nil else {
+      return
+    }
+    publish(.launched(launchID))
+    startHeartbeat()
+  }
 
   /// Asks for a window. The machine refuses an ask from the background (iOS
   /// would refuse the capture), refreshes a window that is open, and reopens
@@ -206,7 +213,9 @@ final class ListeningWindow {
   /// resumes (a refused background start, a dead or silent mic). The session
   /// being off is no news to the window.
   func captureFailed(reason: FailureReason) {
-    guard reason != .sessionOff else { return }
+    guard reason != .sessionOff else {
+      return
+    }
     withGeneration { .sourceDied($0, reason) }
   }
 
@@ -223,7 +232,9 @@ final class ListeningWindow {
 
   /// An event about the source carries the generation it is about; none, no event.
   private func withGeneration(_ make: (Machine.Generation) -> Machine.Event) {
-    guard let generation = machine.state.generation else { return }
+    guard let generation = machine.state.generation else {
+      return
+    }
     feed(make(generation))
   }
 
@@ -238,6 +249,7 @@ final class ListeningWindow {
       // next one is news again.
       if case .resumed = event, from.window == .interrupted, machine.state.isOpen { sessionInterrupted = false }
       await run(effects)
+
     case .heartbeat:
       await run(heartbeatEffects(now: Date()))
     }
@@ -287,16 +299,24 @@ final class ListeningWindow {
   private func sourceEvent(_ event: SourceEvent) {
     switch event {
     case .interrupted(let reason):
-      guard !sessionInterrupted else { return }
+      guard !sessionInterrupted else {
+        return
+      }
       Self.log.notice("source interrupted (\(reason, privacy: .public)) with no audio session interruption")
       withGeneration { .interruptionBegan($0, .interrupted) }
+
     case .interruptionEnded:
-      guard !sessionInterrupted else { return }
+      guard !sessionInterrupted else {
+        return
+      }
       withGeneration { .interruptionEnded($0, shouldResume: true) }
+
     case .runtimeError:
       withGeneration { .sourceDied($0, .micBusy) }
+
     case .silent:
       withGeneration { .sourceDied($0, .micSilent) }
+
     case .routeChanged(_, let input):
       Self.log.notice("route changed; input=\(input ?? "none", privacy: .public); preferred input re-applied")
       audioSession.applyPreferredInput()
@@ -308,9 +328,11 @@ final class ListeningWindow {
     case .interruptionBegan:
       sessionInterrupted = true
       withGeneration { .interruptionBegan($0, .interrupted) }
+
     case .interruptionEnded(let shouldResume):
       sessionInterrupted = false
       withGeneration { .interruptionEnded($0, shouldResume: shouldResume) }
+
     case .mediaReset:
       sessionInterrupted = false
       withGeneration { .mediaReset($0) }
@@ -324,37 +346,23 @@ final class ListeningWindow {
     guard generation == machine.state.generation else {
       let current = machine.state.generation.map(String.init) ?? "none"
       Self.log.notice(
-        "\(Self.staleIdleReportLog) \(generation, privacy: .public) (current \(current, privacy: .public))")
+        "\(Self.staleIdleReportLog) \(generation, privacy: .public) (current \(current, privacy: .public))"
+      )
       return
     }
     switch report {
-    case .idleChanged(let idle): feed(.idleChanged(generation, idle))
-    case .sourceDied(let reason): feed(.sourceDied(generation, reason))
+    case .idleChanged(let idle):
+      feed(.idleChanged(generation, idle))
+
+    case .sourceDied(let reason):
+      feed(.sourceDied(generation, reason))
     }
   }
-}
 
-extension ListeningWindowMachine.Event {
-  /// The event's name for the transition log: the case, and the reason where one rides along.
-  var name: String {
-    switch self {
-    case .openRequested(let inForeground): inForeground ? "openRequested" : "openRequested(background)"
-    case .opened: "opened"
-    case .openFailed(_, let reason): "openFailed(\(reason.rawValue))"
-    case .utteranceStarted: "utteranceStarted"
-    case .utteranceEnded: "utteranceEnded"
-    case .interruptionBegan(_, let reason): "interruptionBegan(\(reason.rawValue))"
-    case .interruptionEnded(_, let shouldResume): shouldResume ? "interruptionEnded" : "interruptionEnded(noResume)"
-    case .foregrounded(let turnedOff): turnedOff ? "foregrounded(turnedOff)" : "foregrounded"
-    case .resumed: "resumed"
-    case .resumeFailed(_, let reason): "resumeFailed(\(reason.rawValue))"
-    case .sourceDied(_, let reason): "sourceDied(\(reason.rawValue))"
-    case .mediaReset: "mediaReset"
-    case .expired: "expired"
-    case .closeRequested: "closeRequested"
-    case .closed: "closed"
-    case .idleChanged(_, let idle): "idleChanged(\(idle.rawValue))"
-    case .windowMinutesChanged(let minutes): "windowMinutesChanged(\(minutes))"
-    }
+  deinit {
+    loop?.cancel()
+    for reader in readers { reader.cancel() }
+    expiry?.cancel()
+    heartbeat?.cancel()
   }
 }

@@ -7,12 +7,16 @@ public struct TriggerKeyStore {
   /// UserDefaults key holding the trigger keycode. Public so SwiftUI views can
   /// observe it directly (e.g. `@AppStorage`) and re-render on change.
   public static var defaultsKey: String { DefaultsKey.triggerKeyCode.key }
+
+  /// Marks that `migrateStaleFunctionBinding()` has run. Outside `DefaultsKey` on
+  /// purpose, like `SigningIdentityMigration.lastSigningIdentityDefaultsKey`: it
+  /// records what a migration already did, and a settings reset forgetting it
+  /// would turn the user's next deliberate `fn` pick back into right ⌘.
+  static let staleFunctionMigrationKey = "hotkey.staleFunctionBindingMigrated"
+
   private let defaults: UserDefaults
 
-  public init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
-
+  /// The dictation key: right ⌘ when unset or unknown.
   public var triggerKey: TriggerKey {
     get {
       // Unset reads as 0, which isn't a curated keycode, so `fromPersisted`'s
@@ -24,11 +28,10 @@ public struct TriggerKeyStore {
     }
   }
 
-  /// Marks that `migrateStaleFunctionBinding()` has run. Outside `DefaultsKey` on
-  /// purpose, like `SigningIdentityMigration.lastSigningIdentityDefaultsKey`: it
-  /// records what a migration already did, and a settings reset forgetting it
-  /// would turn the user's next deliberate `fn` pick back into right ⌘.
-  static let staleFunctionMigrationKey = "hotkey.staleFunctionBindingMigrated"
+  /// A store over `defaults` (a suite of its own in tests).
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
 
   /// Rewrites an `fn` binding saved before `fn` was removed (#146) to right ⌘.
   ///
@@ -38,7 +41,9 @@ public struct TriggerKeyStore {
   /// `GlobeKeyOverride` switch their 🌐 key off. Runs once, before anything reads
   /// the binding: any 63 written after it is a deliberate choice.
   public func migrateStaleFunctionBinding() {
-    guard !defaults.bool(forKey: Self.staleFunctionMigrationKey) else { return }
+    guard !defaults.bool(forKey: Self.staleFunctionMigrationKey) else {
+      return
+    }
     if defaults.integer(forKey: Self.defaultsKey) == TriggerKey.function.rawValue {
       triggerKey = .rightCommand
     }

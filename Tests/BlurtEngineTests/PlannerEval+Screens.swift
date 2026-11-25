@@ -11,15 +11,15 @@ import Testing
 /// name ("click on Lorem 47"): both ask the planner to find one element
 /// among everything a real window lists. Seeded, so a run asks the same.
 extension PlannerEval {
-  static func screenCases() throws -> [Case] {
-    try RecordedNode.names.flatMap { name in try screenCases(for: name) }
-  }
-
   /// The kinds a "click" means a press or a select of.
   static let clickable: Set<String> = [
     "button", "link", "checkbox", "tab or option", "clickable", "menu button", "pop-up menu", "row", "menu item",
     "disclosure triangle",
   ]
+
+  static func screenCases() throws -> [Case] {
+    try RecordedNode.names.flatMap { name in try screenCases(for: name) }
+  }
 
   static func screenCases(for name: String) throws -> [Case] {
     let context = try RecordedNode.context(name)
@@ -32,8 +32,12 @@ extension PlannerEval {
       let refused = DestructiveGuard.isDestructive(label: element.label)
       cases.append(
         Case(
-          id: "\(name)-click-\(element.label)", said: "Click \(element.label)", context: context,
-          expect: refused ? [[]] : clickExpectation(element)))
+          id: "\(name)-click-\(element.label)",
+          said: "Click \(element.label)",
+          context: context,
+          expect: refused ? [[]] : clickExpectation(element)
+        )
+      )
     }
 
     // Three elements by their fake names, picked the same way every run.
@@ -42,8 +46,12 @@ extension PlannerEval {
     for element in named.shuffled(using: &rng).prefix(3) {
       cases.append(
         Case(
-          id: "\(name)-click-\(element.id)", said: "Click on \(element.label)", context: context,
-          expect: clickExpectation(element)))
+          id: "\(name)-click-\(element.id)",
+          said: "Click on \(element.label)",
+          context: context,
+          expect: clickExpectation(element)
+        )
+      )
     }
 
     // Its search field, if it lists one: focused (or pressed open), then
@@ -72,22 +80,5 @@ extension PlannerEval {
   /// that isn't a row is carried out as a press.
   static func clickExpectation(_ element: ScreenContext.Element) -> [[String]] {
     [["press #\(element.id) *"], ["select #\(element.id) *"]]
-  }
-}
-
-@Suite("Planner eval · recorded screens")
-struct PlannerScreenEvalTests {
-  @Test("every recording yields cases, each naming an element its screen lists")
-  func generated() throws {
-    let cases = try PlannerEval.screenCases()
-    #expect(Set(cases.map(\.id)).count == cases.count)
-    for name in RecordedNode.names {
-      #expect(cases.filter { $0.id.hasPrefix("\(name)-") }.count >= 3, "\(name) yields too few cases")
-    }
-    for item in cases {
-      #expect(item.unlistedLines.isEmpty, "\(item.id): \(item.unlistedLines)")
-    }
-    // The same cases every run: the seed is the recording's name.
-    #expect(try PlannerEval.screenCases().map(\.id) == cases.map(\.id))
   }
 }

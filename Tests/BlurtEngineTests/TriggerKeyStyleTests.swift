@@ -9,6 +9,17 @@ import Testing
 /// over `StyleProfileStore.profile(for:)`).
 @Suite("TriggerKeyBindings")
 struct TriggerKeyStyleTests {
+  /// Raw `CGEventFlags` as macOS reports a lone press of each key: the generic
+  /// modifier bit, the key's own device bit, and the non-coalesced bit (0x100).
+  private static let pressedFlags: [TriggerKey: UInt64] = [
+    .rightCommand: 0x10_0000 | 0x10 | 0x100,
+    .rightOption: 0x8_0000 | 0x40 | 0x100,
+    .function: 0x80_0000 | 0x100,
+    .leftCommand: 0x10_0000 | 0x08 | 0x100,
+    .leftOption: 0x8_0000 | 0x20 | 0x100,
+    .leftControl: 0x4_0000 | 0x01 | 0x100,
+  ]
+
   private let defaults = freshDefaults()
   private let casual = StyleProfile(name: "Casual", instructions: "keep it breezy")
   private let formal = StyleProfile(name: "Formal", instructions: "no contractions")
@@ -66,7 +77,8 @@ struct TriggerKeyStyleTests {
   @Test("the bound key does what its entry says; with nothing dictating there is no dictation key")
   func boundKeyFollowsItsEntry() {
     let reading = TriggerKeyBindings(
-      boundKeyCode: TriggerKey.rightCommand.keyCode, choicesRaw: #"{"54":"read-aloud"}"#, activationRaw: "")
+      boundKeyCode: TriggerKey.rightCommand.keyCode, choicesRaw: #"{"54":"read-aloud"}"#, activationRaw: ""
+    )
     #expect(reading.choice(for: .rightCommand) == .readAloud)
     #expect(reading.dictationKey == nil)
     #expect(reading.dictatingKeys.isEmpty)
@@ -180,7 +192,7 @@ struct TriggerKeyStyleTests {
     // A long press of the tap key still latches; a short press of the hold key stops.
     #expect(router.handle(.flagsChanged(keyCode: left, triggerFlagIsOn: true), at: .zero) == .start)
     #expect(router.handle(.flagsChanged(keyCode: left, triggerFlagIsOn: false), at: .seconds(3)) == .latch)
-    #expect(router.handle(.flagsChanged(keyCode: left, triggerFlagIsOn: true), at: .seconds(4)) == .none)
+    #expect(router.handle(.flagsChanged(keyCode: left, triggerFlagIsOn: true), at: .seconds(4)) == .ignore)
     #expect(router.handle(.flagsChanged(keyCode: left, triggerFlagIsOn: false), at: .seconds(5)) == .stop)
     #expect(router.handle(.flagsChanged(keyCode: command, triggerFlagIsOn: true), at: .seconds(6)) == .start)
     #expect(
@@ -200,17 +212,6 @@ struct TriggerKeyStyleTests {
     let active = router.rebind(activations: [command: .hold, left: .hold])
     #expect(active)
   }
-
-  /// Raw `CGEventFlags` as macOS reports a lone press of each key: the generic
-  /// modifier bit, the key's own device bit, and the non-coalesced bit (0x100).
-  private static let pressedFlags: [TriggerKey: UInt64] = [
-    .rightCommand: 0x10_0000 | 0x10 | 0x100,
-    .rightOption: 0x8_0000 | 0x40 | 0x100,
-    .function: 0x80_0000 | 0x100,
-    .leftCommand: 0x10_0000 | 0x08 | 0x100,
-    .leftOption: 0x8_0000 | 0x20 | 0x100,
-    .leftControl: 0x4_0000 | 0x01 | 0x100,
-  ]
 
   @Test("each trigger key's own flag bit reads as down, and another key's doesn't")
   func flagsReadPerKey() throws {
@@ -233,7 +234,8 @@ struct TriggerKeyStyleTests {
     choices.setChoice(.dictate(style: casual.id.uuidString), for: .rightOption)
     choices.setChoice(.dictate, for: .function)
     var router = DictationKeyRouter(
-      activations: Dictionary(uniqueKeysWithValues: bindings.activations.map { ($0.key.keyCode, $0.value) }))
+      activations: Dictionary(uniqueKeysWithValues: bindings.activations.map { ($0.key.keyCode, $0.value) })
+    )
     for (index, key) in [TriggerKey.rightOption, .function, .rightCommand].enumerated() {
       let start = Duration.seconds(index * 10)
       let flags = try #require(Self.pressedFlags[key])
@@ -257,7 +259,7 @@ struct TriggerKeyStyleTests {
       PressStyle(key: .rightOption, defaults: defaults)
         == PressStyle(instructions: "keep it breezy", name: "Casual"))
     #expect(store.profile(for: nil) == formal)
-    #expect(PressStyle(key: .function, defaults: defaults) == .none)
+    #expect(PressStyle(key: .function, defaults: defaults) == .base)
   }
 
   @Test("with enhanced transcripts off a style still rides the request but names no row")

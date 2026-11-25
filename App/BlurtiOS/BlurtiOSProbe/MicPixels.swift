@@ -19,20 +19,25 @@ enum MicPixels {
   /// The share of pixels inside `frame` (points, screen coordinates) that are
   /// not the material's colour.
   static func inkFraction(in shot: XCUIScreenshot, frame: CGRect) -> Double {
-    guard let image = shot.image.cgImage, frame.width > 4, frame.height > 4 else { return 0 }
+    guard let image = shot.image.cgImage, frame.width > 4, frame.height > 4 else {
+      return 0
+    }
     let scale = CGFloat(image.width) / UIScreen.main.bounds.width
     let rect = CGRect(
       x: frame.minX * scale, y: frame.minY * scale, width: frame.width * scale, height: frame.height * scale
     ).integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data), rect.width > 4, rect.height > 4
-    else { return 0 }
+    else {
+      return 0
+    }
     let bytesPerPixel = image.bitsPerPixel / 8
     let bytesPerRow = image.bytesPerRow
     struct RGB {
       let r: Int
       let g: Int
       let b: Int
-      func distance(to other: RGB) -> Int { abs(r - other.r) + abs(g - other.g) + abs(b - other.b) }
+
+      func distance(to other: Self) -> Int { abs(r - other.r) + abs(g - other.g) + abs(b - other.b) }
     }
     func pixel(_ x: Int, _ y: Int) -> RGB {
       let offset = y * bytesPerRow + x * bytesPerPixel
@@ -57,7 +62,9 @@ enum MicPixels {
 
   /// The mic element's share of ink, or nil when the key is not there.
   static func ink(_ app: XCUIApplication, mic: XCUIElement) -> Double? {
-    guard mic.exists else { return nil }
+    guard mic.exists else {
+      return nil
+    }
     return inkFraction(in: app.screenshot(), frame: mic.frame)
   }
 

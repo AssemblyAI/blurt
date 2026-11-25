@@ -2,16 +2,6 @@
   import Foundation
   import os
 
-  /// What reads text aloud for `SelectionSpeechRouter`: `SelectionSpeaker` in
-  /// production, a stand-in under UI testing (no network, no audio). Both calls
-  /// run until the speech has played; cancelling the task stops it.
-  public protocol ReadAloudSpeaker: Sendable {
-    func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws
-    func answer(
-      _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
-    ) async throws
-  }
-
   /// Reads text aloud with AssemblyAI's streaming TTS. This is the engine half of
   /// the read-aloud and ask keys (`SelectionSpeechRouting`); the app decides when
   /// to call it.
@@ -47,7 +37,9 @@
     /// `makeSink` is the playback seam, handed the style's rate. There is one
     /// sink per `speak`, so a cancelled read can't bleed into the next one.
     init(
-      synthesizer: AssemblyAISpeechSynthesizer, llm: ReadAloudLLM, clips: ReadClipSink? = nil,
+      synthesizer: AssemblyAISpeechSynthesizer,
+      llm: ReadAloudLLM,
+      clips: ReadClipSink? = nil,
       makeSink: @escaping @Sendable (_ rate: Double) -> any PCMSink
     ) {
       self.synthesizer = synthesizer
@@ -72,9 +64,14 @@
     /// Split from `focusedSelection` so the fallback rule is testable without AX.
     static func resolve(_ read: FocusCapture.SelectionRead, copy: SelectionCopy) async -> String? {
       switch read {
-      case .text(let text): text
-      case .none: nil
-      case .unreadable: await copy.copySelection(maxCharacters: maxCharacters)
+      case .text(let text):
+        text
+
+      case .noSelection:
+        nil
+
+      case .unreadable:
+        await copy.copySelection(maxCharacters: maxCharacters)
       }
     }
 
@@ -102,7 +99,9 @@
       _ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?, request: String?
     ) async throws {
       let pieces = ListeningChunks.chunks(of: text)
-      guard !pieces.isEmpty else { return }
+      guard !pieces.isEmpty else {
+        return
+      }
       let writer = makeClipWriter()
       let base = makeSink(style.rate)
       let player: any PCMSink = writer.map { ClipRecordingSink(base: base, writer: $0) } ?? base
@@ -154,7 +153,9 @@
     /// listening rewrite. No fallback: when the answer fails, there is nothing
     /// else to read.
     func answer(
-      _ request: String, about selection: String, style: ReadAloudStyle,
+      _ request: String,
+      about selection: String,
+      style: ReadAloudStyle,
       onLevel: (@Sendable (Float) -> Void)? = nil
     ) async throws {
       let reply = try await llm.answer(request, about: selection.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -167,13 +168,16 @@
       clips.flatMap { clips in
         try? WAVWriter(
           url: clips.directory.appending(path: "Read \(TranscriptStore.fileStamp(.now)).wav"),
-          sampleRate: AssemblyAISpeechSynthesizer.sampleRate)
+          sampleRate: AssemblyAISpeechSynthesizer.sampleRate
+        )
       }
     }
 
     /// Closes the clip and reports it, or drops the file if nothing was heard.
     private func finishClip(_ writer: WAVWriter?, text: String, request: String?) {
-      guard let writer, let clips else { return }
+      guard let writer, let clips else {
+        return
+      }
       if writer.finish() > 0 {
         clips.onClip(ReadClip(text: text, audioURL: writer.url, request: request))
       } else {
@@ -201,7 +205,8 @@
       } catch {
         try Task.checkCancellation()
         Self.logger.error(
-          "read-aloud rewrite failed, reading verbatim: \(error.localizedDescription, privacy: .public)")
+          "read-aloud rewrite failed, reading verbatim: \(error.localizedDescription, privacy: .public)"
+        )
         return text
       }
     }

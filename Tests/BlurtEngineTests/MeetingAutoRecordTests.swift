@@ -13,33 +13,33 @@ struct MeetingAutoRecordTests {
   @Test("starts on the first probe that sees a meeting")
   func startsAtOnce() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(0)) == .noChange)
     #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(5)) == .start)
   }
 
   @Test("a browser call starts a recording only once it's been on thirty seconds straight")
   func browserStartsLate() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .none)
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(25)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .noChange)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(25)) == .noChange)
     #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(30)) == .start)
   }
 
   @Test("a browser that lets go of the mic before then starts nothing, and starts the clock over")
   func briefBrowserMicIgnored() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .none)
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(5)) == .none)
-    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(10)) == .none)
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(35)) == .none)
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(64)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .noChange)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(5)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(10)) == .noChange)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(35)) == .noChange)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(64)) == .noChange)
     #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(65)) == .start)
   }
 
   @Test("a conferencing app taking over from a browser starts at once")
   func appOverridesBrowserWait() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .noChange)
     #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(5)) == .start)
   }
 
@@ -47,10 +47,10 @@ struct MeetingAutoRecordTests {
   func hysteresis() {
     var policy = MeetingAutoRecord(browserStartAfter: .zero)
     #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .start)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(10)) == .none)
-    #expect(policy.probe(meeting: .browser, recording: true, autoStart: true, now: at(30)) == .none)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(40)) == .none)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(99)) == .none)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(10)) == .noChange)
+    #expect(policy.probe(meeting: .browser, recording: true, autoStart: true, now: at(30)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(40)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(99)) == .noChange)
     #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(100)) == .stop)
   }
 
@@ -58,16 +58,16 @@ struct MeetingAutoRecordTests {
   func appStopsSooner() {
     var policy = MeetingAutoRecord()
     #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(0)) == .start)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(10)) == .none)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(24)) == .none)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(10)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(24)) == .noChange)
     #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(25)) == .stop)
   }
 
   @Test("never stops a recording the user started")
   func leavesManualRecordings() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(0)) == .none)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(120)) == .none)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(0)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(120)) == .noChange)
   }
 
   @Test("a user stop mid-meeting holds off until that meeting ends")
@@ -75,8 +75,8 @@ struct MeetingAutoRecordTests {
     var policy = MeetingAutoRecord()
     #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(0)) == .start)
     policy.userStopped(meetingActive: true)
-    #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(5)) == .none)
-    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(10)) == .none)
+    #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(5)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(10)) == .noChange)
     #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(15)) == .start)
   }
 
@@ -85,8 +85,8 @@ struct MeetingAutoRecordTests {
     for autoStart in [true, false] {
       var policy = MeetingAutoRecord()
       policy.userStarted()
-      #expect(policy.probe(meeting: .app, recording: true, autoStart: autoStart, now: at(0)) == .none)
-      #expect(policy.probe(meeting: nil, recording: true, autoStart: autoStart, now: at(10)) == .none)
+      #expect(policy.probe(meeting: .app, recording: true, autoStart: autoStart, now: at(0)) == .noChange)
+      #expect(policy.probe(meeting: nil, recording: true, autoStart: autoStart, now: at(10)) == .noChange)
       #expect(policy.probe(meeting: nil, recording: true, autoStart: autoStart, now: at(70)) == .stop)
     }
   }
@@ -95,16 +95,16 @@ struct MeetingAutoRecordTests {
   func userStartWithoutMeetingStaysUnbound() {
     var policy = MeetingAutoRecord()
     policy.userStarted()
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(0)) == .none)
-    #expect(policy.probe(meeting: .app, recording: true, autoStart: true, now: at(10)) == .none)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(20)) == .none)
-    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(200)) == .none)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(0)) == .noChange)
+    #expect(policy.probe(meeting: .app, recording: true, autoStart: true, now: at(10)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(20)) == .noChange)
+    #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(200)) == .noChange)
   }
 
   @Test("with the switch off it never starts a recording")
   func switchOffNeverStarts() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meeting: .app, recording: false, autoStart: false, now: at(0)) == .none)
+    #expect(policy.probe(meeting: .app, recording: false, autoStart: false, now: at(0)) == .noChange)
   }
 
   @Test("meeting apps and two-way browser audio count; other mic users and Blurt don't")

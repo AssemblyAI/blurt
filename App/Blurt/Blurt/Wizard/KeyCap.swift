@@ -30,7 +30,9 @@ extension TriggerKey {
   /// window's legend, the menu bar, and every Settings row — and what VoiceOver
   /// hears, without the symbol read as the name a second time.
   var spokenName: String {
-    guard let symbol = fullName.range(of: " (") else { return fullName }
+    guard let symbol = fullName.range(of: " (") else {
+      return fullName
+    }
     return String(fullName[..<symbol.lowerBound])
   }
 }
@@ -40,12 +42,23 @@ extension TriggerKeyAction {
   /// action rows, so an action looks the same in both.
   var systemImage: String {
     switch self {
-    case .readAloud: LibraryKind.readAloud.systemImage
-    case .ask: LibraryKind.ask.systemImage
-    case .rewrite: "pencil.line"
-    case .compose: "square.and.pencil"
-    case .command: "command"
-    case .dictate, .off: "keyboard"
+    case .readAloud:
+      LibraryKind.readAloud.systemImage
+
+    case .ask:
+      LibraryKind.ask.systemImage
+
+    case .rewrite:
+      "pencil.line"
+
+    case .compose:
+      "square.and.pencil"
+
+    case .command:
+      "command"
+
+    case .dictate, .off:
+      "keyboard"
     }
   }
 }

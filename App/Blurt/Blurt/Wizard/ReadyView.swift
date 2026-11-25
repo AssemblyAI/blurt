@@ -14,8 +14,17 @@ import SwiftUI
 /// dark mode, Increase Contrast and vibrancy — instead of several custom greys
 /// that each nearly matched.
 struct ReadyView: View {
+  /// The one page the window pushes: whatever the model has open.
+  private enum Route: Hashable { case openItem }
+
+  /// The window's height: free between these, as its content scrolls; an
+  /// open item takes the same, so the window doesn't jump as it comes and goes.
+  private static let minHeight: CGFloat = 420
+  private static let idealHeight: CGFloat = 640
+
   var coordinator: AppCoordinator
-  @Environment(\.openSettings) private var openSettings
+  @Environment(\.openSettings)
+  private var openSettings
   // Observed (not read once) so a change in the separate Settings window —
   // the dictation key, any key's action or mode — re-renders this window's
   // rows live (`ObservedKeyBindings`).
@@ -39,10 +48,8 @@ struct ReadyView: View {
   @FocusState private var searchFocused: Bool
   /// The toolbar's Browse open panel.
   @State private var isImporting = false
-  @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
-
-  /// The one page the window pushes: whatever the model has open.
-  private enum Route: Hashable { case openItem }
+  @AppStorage(StyleProfileStore.activeDefaultsKey)
+  private var rawActiveID = ""
 
   /// The navigation path, bound to the model: a page while it has something
   /// open — an item, a recording, a file going up, which open themselves as
@@ -51,12 +58,17 @@ struct ReadyView: View {
   private var path: Binding<[Route]> {
     Binding(
       get: { coordinator.transcripts.state == .idle ? [] : [.openItem] },
-      set: { if $0.isEmpty { coordinator.transcripts.dismiss() } })
+      set: { if $0.isEmpty { coordinator.transcripts.dismiss() } }
+    )
   }
 
   var body: some View {
     // The system's push and back, as Journal's entries open.
     NavigationStack(path: path) {
+      // Not a button: the window-wide tap below only lets go of the search field, alongside
+      // whatever the click does. The button trait would have VoiceOver call
+      // the whole window a button.
+      // swiftlint:disable:next accessibility_trait_for_button
       home
         .frame(minHeight: Self.minHeight, idealHeight: Self.idealHeight, maxHeight: .infinity)
         .toolbar { toolbarItems }
@@ -119,11 +131,6 @@ struct ReadyView: View {
     }
   }
 
-  /// The window's height: free between these, as its content scrolls; an
-  /// open item takes the same, so the window doesn't jump as it comes and goes.
-  private static let minHeight: CGFloat = 420
-  private static let idealHeight: CGFloat = 640
-
   /// The keys over the Library, as white cards on the brand gradient: what
   /// the window shows with nothing open.
   @ViewBuilder private var home: some View {
@@ -153,26 +160,27 @@ struct ReadyView: View {
         // see-through, so it reads as a legend rather than another card to
         // click.
         VStack(alignment: .leading, spacing: 0) {
-          shortcutRow.keyRow()
+          shortcutRow.keyLegendRow()
           // Every other key given an action in the Keys tab, in its order,
           // each under a faint hairline across the row, pairing each action
           // with its key.
           ForEach(bindings.extraKeys, id: \.self) { key in
             KeyDivider()
-            extraKeyRow(key, profiles: profiles).keyRow()
+            extraKeyRow(key, profiles: profiles).keyLegendRow()
           }
         }
         .padding(.vertical, 6)
         .background(
           Color(nsColor: .textBackgroundColor).opacity(0.55),
-          in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+          in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         // Only once there is a custom style: with none, every dictation is
         // Default and the row would offer no choice. Never locked during a
         // dictation: each one's style is fixed as its key goes down
         // (`PressStyle`), so a pick mid-utterance applies to the next.
         if !profiles.isEmpty {
           StyleRow(profiles: profiles, activeID: active?.id)
-            .keyRow()
+            .keyLegendRow()
           // The caveat is about styles, so it goes with the row.
           StylesInertNotice()
             .font(.caption)
@@ -210,32 +218,6 @@ struct ReadyView: View {
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Dictate: None")
     }
-  }
-
-  /// One extra key's row: what it does — with the style a dictating key uses
-  /// when it isn't the main window's — leading, its keycap trailing, and how
-  /// its gesture works in the tooltip.
-  private func extraKeyRow(_ key: TriggerKey, profiles: [StyleProfile]) -> some View {
-    let choice = bindings.choice(for: key, profiles: profiles)
-    let title: String =
-      switch choice {
-      case .readAloud: LibraryKind.readAloud.name
-      case .ask: LibraryKind.ask.name
-      case .rewrite: KeyActionName.rewrite
-      case .compose: KeyActionName.compose
-      case .command: KeyActionName.command
-      case .dictate(TriggerKeyChoice.mainWindowStyle), .off: "Dictate"
-      case .dictate(let style):
-        "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)"
-      }
-    let symbol = choice.action.systemImage
-    let hint = bindings.activation.hint(for: choice.action)
-    return SettingRow(title: title, systemImage: symbol) {
-      KeyCap(label: key.spokenName)
-    }
-    .help(hint)
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(title): \(key.spokenName). \(hint)")
   }
 
   /// The toolbar: Record and Browse leading, as a window's own actions are;
@@ -282,7 +264,8 @@ struct ReadyView: View {
         Label(
           "Filter",
           systemImage: filter == .all
-            ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+            ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
+        )
       }
       .help(filter == .all ? "Show one kind of entry" : "Showing \(filter.title.lowercased())")
       // Named outright, as the View menu is: the toolbar shows only the icon,
@@ -305,85 +288,49 @@ struct ReadyView: View {
       ToolbarSpacer(.fixed)
     }
   }
-}
 
-/// The app's outbound links, in the Help menu (`BlurtCommands`). Failable
-/// construction throughout, so a caller omits its link rather than
-/// force-unwrapping.
-enum BlurtLinks {
-  /// The repo's GitHub issues.
-  static let reportBug = URL(string: "https://github.com/AssemblyAI/blurt/issues")
+  /// One extra key's row: what it does — with the style a dictating key uses
+  /// when it isn't the main window's — leading, its keycap trailing, and how
+  /// its gesture works in the tooltip.
+  private func extraKeyRow(_ key: TriggerKey, profiles: [StyleProfile]) -> some View {
+    let choice = bindings.choice(for: key, profiles: profiles)
+    let title: String =
+      switch choice {
+      case .readAloud:
+        LibraryKind.readAloud.name
 
-  /// LinkedIn's share intent. It takes only a URL to share, so this one
-  /// carries no message.
-  static let shareOnLinkedIn: URL? = {
-    var components = URLComponents(string: "https://www.linkedin.com/sharing/share-offsite/")
-    components?.queryItems = [URLQueryItem(name: "url", value: "https://www.assemblyai.com/blurt")]
-    return components?.url
-  }()
-}
+      case .ask:
+        LibraryKind.ask.name
 
-/// The `blurt` wordmark over the setup screen's form (`WizardView`; the ready
-/// screen goes without, its toolbar holding the search): the brand-green mark
-/// (`Design/brand/blurt-ready-logo.png`, a 720×180 rasterization of the design's
-/// vector wordmark, so its 72×18 pt slot is fed nearly 7× the pixels it needs and
-/// stays crisp at any display scale). Smoothly interpolated — it's curved
-/// letterforms now, not the pixel-art mark it replaced, which needed
-/// nearest-neighbor to keep its pixels square. A header mark, not the window's
-/// identity — the standard titlebar names the app — which is why it simply
-/// omits itself if the PNG can't load rather than swapping in a fallback
-/// identity view.
-struct MainWindowBranding: View {
-  /// Loaded once for the process rather than per `body` evaluation: a bundle
-  /// lookup plus a PNG decode is not something to re-do on the main thread
-  /// each time the setup screen re-renders.
-  ///
-  /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
-  /// rather than spelled `nonisolated(unsafe)`: `body` reads it on the main actor
-  /// either way, and this can't then break if a future SDK marks `NSImage`
-  /// `Sendable` (which would make the attribute an "unnecessary" warning, and the
-  /// app target builds with warnings-as-errors).
-  private static let logo: NSImage? = Bundle.main
-    .url(forResource: "blurt-ready-logo", withExtension: "png")
-    .flatMap(NSImage.init(contentsOf:))
+      case .rewrite:
+        KeyActionName.rewrite
 
-  var body: some View {
-    if let image = Self.logo {
-      Image(nsImage: image)
-        // Drawn as a template tinted with the accent rather than shipped in its
-        // own color. The design draws the wordmark in two shades — `#01762F` on
-        // light, `#67AD82` on dark (its `Logo_Dark` / `Logo_Light` pair) — and
-        // those are precisely the accent's two appearances, so tinting gets the
-        // dark-mode variant for free from one asset. A fixed-color PNG kept the
-        // dark green on a dark window, where it goes muddy. It also means the
-        // mark and the accent-filled buttons beside it can't drift apart: they
-        // now resolve the same color, rather than agreeing by coincidence.
-        .renderingMode(.template)
-        .interpolation(.high)
-        .resizable()
-        .scaledToFit()
-        .frame(maxWidth: 64)
-        .foregroundStyle(BlurtBrand.accent)
-        .accessibilityLabel("Blurt logo")
+      case .compose:
+        KeyActionName.compose
+
+      case .command:
+        KeyActionName.command
+
+      case .dictate(TriggerKeyChoice.mainWindowStyle), .off:
+        "Dictate"
+
+      case .dictate(let style):
+        "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)"
+      }
+    let symbol = choice.action.systemImage
+    let hint = bindings.activation.hint(for: choice.action)
+    return SettingRow(title: title, systemImage: symbol) {
+      KeyCap(label: key.spokenName)
     }
+    .help(hint)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(title): \(key.spokenName). \(hint)")
   }
 }
 
 extension View {
   /// A key legend row's padding: room for the hairline between rows.
-  fileprivate func keyRow() -> some View {
+  func keyLegendRow() -> some View {
     padding(.horizontal, 10).padding(.vertical, 6)
-  }
-}
-
-/// The hairline between key rows: the separator colour, faint on the pale
-/// panel, across the whole row — icon and all — inset as the rows are.
-private struct KeyDivider: View {
-  var body: some View {
-    Rectangle()
-      .fill(Color(nsColor: .separatorColor).opacity(0.6))
-      .frame(height: 0.5)
-      .padding(.horizontal, 10)
-      .accessibilityHidden(true)
   }
 }

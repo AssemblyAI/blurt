@@ -22,7 +22,9 @@ enum TriggerKeyMap {
   /// Writes `map` to `slot` in `defaults`. A string map always encodes.
   static func write(_ map: [TriggerKey: String], to slot: String, in defaults: UserDefaults) {
     let raw = Dictionary(uniqueKeysWithValues: map.map { (String($0.key.rawValue), $0.value) })
-    guard let data = try? JSONEncoder().encode(raw), let json = String(data: data, encoding: .utf8) else { return }
+    guard let data = try? JSONEncoder().encode(raw), let json = String(data: data, encoding: .utf8) else {
+      return
+    }
     defaults.set(json, forKey: slot)
   }
 }

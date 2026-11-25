@@ -4,6 +4,8 @@
   import ApplicationServices
   import Foundation
 
+  /// Reads and requests the two grants Blurt runs on — the microphone and
+  /// Accessibility — and opens System Settings where only the user can grant one.
   public enum PermissionsChecker {
     /// The current grant state, read without prompting.
     public static func check() -> PermissionStatus {
@@ -27,6 +29,8 @@
       AVAudioApplication.shared.recordPermission == .granted
     }
 
+    /// Shows the system's microphone prompt (once: the status is fixed after
+    /// it), answering whether access is granted.
     public static func requestMicrophone() async -> Bool {
       await AVAudioApplication.requestRecordPermission()
     }
@@ -36,13 +40,17 @@
     /// the system won't re-present it once the status is determined — so the
     /// Microphone row still has a way forward, mirroring the Accessibility row's
     /// "open Settings" flow rather than being a dead-end button.
+    @preconcurrency
     @MainActor
     public static func openMicrophoneSettings() {
       guard
         let url = URL(
           string:
-            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone")
-      else { return }
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone"
+        )
+      else {
+        return
+      }
       NSWorkspace.shared.open(url)
     }
 
@@ -52,6 +60,7 @@
     ///    `AXIsProcessTrustedWithOptions` and the system-wide query don't
     ///    appear to count as "activity" for registration purposes.
     /// 2. Show the trust prompt with an "Open System Settings" button.
+    @preconcurrency
     @MainActor
     public static func openAccessibilitySettings() {
       forceAccessibilityActivity()
@@ -60,7 +69,7 @@
       // imports into Swift as a global `var` that strict concurrency refuses to
       // reference ("shared mutable state") — the framework constant cannot be
       // used here.
-      let prompt: NSDictionary = ["AXTrustedCheckOptionPrompt": true]
+      let prompt = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
       _ = AXIsProcessTrustedWithOptions(prompt)
     }
 
@@ -77,19 +86,21 @@
       // `frontmostApplication` is Blurt itself when this runs from a
       // button in our own window, which is why prior versions never worked.
       let myPid = ProcessInfo.processInfo.processIdentifier
-      let others = NSWorkspace.shared.runningApplications.filter {
-        $0.processIdentifier > 0 && $0.processIdentifier != myPid
+      let others = NSWorkspace.shared.runningApplications.filter { app in
+        app.processIdentifier > 0 && app.processIdentifier != myPid
       }
       let target =
-        others.first(where: { $0.bundleIdentifier == "com.apple.finder" })
-        ?? others.first(where: { $0.activationPolicy == .regular })
+        others.first { $0.bundleIdentifier == "com.apple.finder" }
+        ?? others.first { $0.activationPolicy == .regular }
         ?? others.first
-      guard let pid = target?.processIdentifier else { return }
+      guard let pid = target?.processIdentifier else {
+        return
+      }
       let element = AXUIElementCreateApplication(pid)
       var value: CFTypeRef?
       _ = unsafe AXUIElementCopyAttributeValue(
-        element, kAXFocusedUIElementAttribute as CFString, &value)
+        element, kAXFocusedUIElementAttribute as CFString, &value
+      )
     }
-
   }
 #endif

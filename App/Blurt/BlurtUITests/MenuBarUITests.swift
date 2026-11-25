@@ -14,12 +14,14 @@ final class MenuBarUITests: BlurtUITestCase {
     let statusItem = app.menuBars.statusItems.firstMatch
     XCTAssertTrue(
       statusItem.waitForExistence(timeout: 15),
-      "Blurt menu bar status item never appeared")
+      "Blurt menu bar status item never appeared"
+    )
     statusItem.click()
 
     XCTAssertTrue(
       app.menuItems["Open Blurt"].waitForExistence(timeout: 5),
-      "Status menu should offer 'Open Blurt'")
+      "Status menu should offer 'Open Blurt'"
+    )
     XCTAssertTrue(app.menuItems["Settings…"].exists)
     XCTAssertTrue(app.menuItems["Quit Blurt"].exists)
 

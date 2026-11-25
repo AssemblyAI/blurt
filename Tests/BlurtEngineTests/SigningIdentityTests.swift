@@ -7,13 +7,14 @@
 
   @Suite("SigningIdentity")
   struct SigningIdentityTests {
-
     // The value the migration compares must be a property of the *binary*, not of
     // the moment it was read — an identity that varied per call would reset the
     // Accessibility grant on every launch.
     @Test("current() is stable across reads")
     func currentIsStable() {
-      #expect(SigningIdentity.current() == SigningIdentity.current())
+      let identity = SigningIdentity.current()
+      let nextRead = SigningIdentity.current()
+      #expect(identity == nextRead)
     }
 
     // What the test host reports depends on how it was signed (ad-hoc under
@@ -44,7 +45,8 @@
     func designatedRequirementIsReadable() throws {
       var code: SecStaticCode?
       let status = unsafe SecStaticCodeCreateWithPath(
-        URL(fileURLWithPath: "/bin/ls") as CFURL, SecCSFlags(), &code)
+        URL(fileURLWithPath: "/bin/ls") as CFURL, SecCSFlags(), &code
+      )
       #expect(status == errSecSuccess)
       let staticCode = try #require(code)
       let requirement = try #require(SigningIdentity.designatedRequirement(of: staticCode))

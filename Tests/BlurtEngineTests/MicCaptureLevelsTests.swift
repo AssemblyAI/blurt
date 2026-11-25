@@ -20,7 +20,7 @@ struct MicCaptureLevelsTests {
     await LiveAudioDevice.acquire()
     defer { LiveAudioDevice.release() }
 
-    let mic = MicCapture(deviceSelection: { .systemDefault })
+    let mic = MicCapture { .systemDefault }
 
     let collector = Task { () -> [Float] in
       var collected: [Float] = []
@@ -35,7 +35,7 @@ struct MicCaptureLevelsTests {
     // The meter is what this asserts, not the frame feed.
     _ = try await mic.start()
     try await Task.sleep(for: .milliseconds(500))
-    _ = try await mic.stop()
+    _ = await mic.stop()
     collector.cancel()
 
     let levels = await collector.value

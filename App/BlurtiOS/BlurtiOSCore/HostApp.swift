@@ -18,7 +18,9 @@ package enum HostApp {
   package static func bundleID(of controller: UIInputViewController) -> String? {
     for object in holders(of: controller) {
       for key in keys {
-        if let id = read(key, from: object) { return id }
+        if let id = read(key, from: object) {
+          return id
+        }
       }
     }
     return nil
@@ -59,7 +61,9 @@ package enum HostApp {
   }
 
   private static func usable(_ value: Any?) -> String? {
-    guard let id = (value as? String).trimmedNonEmpty(), id != "<null>" else { return nil }
+    guard let id = (value as? String).trimmedNonEmpty(), id != "<null>" else {
+      return nil
+    }
     return id
   }
 }

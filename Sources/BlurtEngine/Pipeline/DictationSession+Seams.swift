@@ -23,6 +23,11 @@ extension DictationSession {
   /// substitute one. Each `Seams` value is still immutable in practice — the
   /// session stores one and never writes to it.
   struct Seams: Sendable {
+    /// The real focus capture and the real log — what the public initializer
+    /// passes when the host supplies no `HostFocusCapture`, and the only value
+    /// production on macOS ever uses.
+    static let production = Self()
+
     /// Captures the frontmost application — the paste target, and the context's
     /// app name. On the main actor because it's an AppKit read. Off macOS there
     /// is no frontmost app to read (a keyboard cannot see its host), so the
@@ -54,20 +59,15 @@ extension DictationSession {
     /// off this actor.
     /// The third argument: the phase the dictation ended in, which the log
     /// names (`DictationLog.outcomeName`).
-    var logTranscript: @Sendable (String, TranscriptionContext?, PipelinePhase) -> Void = {
-      DictationLog.append(transcript: $0, context: $1, outcome: $2)
+    var logTranscript: @Sendable (String, TranscriptionContext?, PipelinePhase) -> Void = { text, context, outcome in
+      DictationLog.append(transcript: text, context: context, outcome: outcome)
     }
 
     /// Records a failure in the sibling error log, from the one place every
     /// failure route funnels through (`setPhase`).
-    var logFailure: @Sendable (BlurtError, TranscriptionContext?) -> Void = {
-      DictationLog.appendError($0, context: $1)
+    var logFailure: @Sendable (BlurtError, TranscriptionContext?) -> Void = { error, context in
+      DictationLog.appendError(error, context: context)
     }
-
-    /// The real focus capture and the real log — what the public initializer
-    /// passes when the host supplies no `HostFocusCapture`, and the only value
-    /// production on macOS ever uses.
-    static let production = Seams()
   }
 
   // periphery:ignore - public for hosts outside this repo (the iOS app); the Mac app relies on the defaults.
@@ -86,6 +86,7 @@ extension DictationSession {
     public var frontmost: @Sendable () async -> CapturedFocus?
     public var field: @Sendable () -> FocusedFieldContext
 
+    @preconcurrency
     public init(
       frontmost: @escaping @Sendable () async -> CapturedFocus?,
       field: @escaping @Sendable () -> FocusedFieldContext

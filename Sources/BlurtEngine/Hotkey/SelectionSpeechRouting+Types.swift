@@ -4,12 +4,6 @@
 // outside the routing uses the state types.
 
 extension SelectionSpeechRouting {
-  /// How long a read or ask key must stay down, in a mode that holds, before
-  /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
-  /// asker waits this long (plus the mic bring-up) for the start chime before
-  /// speaking; a deliberate tap is over long before it.
-  static let holdDelay = Duration.milliseconds(350)
-
   enum Action: Sendable, Equatable {
     case forward(DictationSession.Command)
     /// Start the Accessibility read. Its result comes back through `selectionResolved`.
@@ -46,17 +40,6 @@ extension SelectionSpeechRouting {
   enum Intent: Sendable, Equatable {
     case read, ask, rewrite, compose, command
 
-    /// The request a key's action makes; every non-request key reads.
-    init(_ action: TriggerKeyAction) {
-      switch action {
-      case .ask: self = .ask
-      case .rewrite: self = .rewrite
-      case .compose: self = .compose
-      case .command: self = .command
-      case .readAloud, .dictate, .off: self = .read
-      }
-    }
-
     /// Whether the press records a spoken request (`.asking`) rather than reading.
     var records: Bool { self != .read }
 
@@ -67,6 +50,26 @@ extension SelectionSpeechRouting {
     /// nothing said, a press while it transcribed, or an Escape. Nothing for
     /// any other request, and nothing before `.asking`, which prepared nothing.
     var abandoned: [Action] { self == .command ? [.stopJob] : [] }
+
+    /// The request a key's action makes; every non-request key reads.
+    init(_ action: TriggerKeyAction) {
+      switch action {
+      case .ask:
+        self = .ask
+
+      case .rewrite:
+        self = .rewrite
+
+      case .compose:
+        self = .compose
+
+      case .command:
+        self = .command
+
+      case .readAloud, .dictate, .off:
+        self = .read
+      }
+    }
   }
 
   /// How a read or ask press proved itself: a tap (the gate latched), or a
@@ -99,4 +102,10 @@ extension SelectionSpeechRouting {
     /// `.speaking`, the gate is free under it, and any press abandons it.
     case working
   }
+
+  /// How long a read or ask key must stay down, in a mode that holds, before
+  /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
+  /// asker waits this long (plus the mic bring-up) for the start chime before
+  /// speaking; a deliberate tap is over long before it.
+  static let holdDelay = Duration.milliseconds(350)
 }

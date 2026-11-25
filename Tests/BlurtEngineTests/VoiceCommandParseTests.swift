@@ -92,12 +92,14 @@ struct VoiceCommandParseTests {
     #expect(
       try self.steps(
         #"{"action": "press_button", "name": "ruff.toml, Modified"}"#,
-        listed: [.init(id: 9, kind: "row", label: "ruff.toml, Modified")]) == [.pressElement(9)])
+        listed: [.init(id: 9, kind: "row", label: "ruff.toml, Modified")]
+      ) == [.pressElement(9)])
     // A name a listed label starts with means that label.
     #expect(
       try self.steps(
         #"{"action": "press_button", "name": "Marketing"}"#,
-        listed: [.init(id: 2, kind: "row", label: "Marketing (has unread messages)")]) == [.pressElement(2)])
+        listed: [.init(id: 2, kind: "row", label: "Marketing (has unread messages)")]
+      ) == [.pressElement(2)])
     // A field of that name is no button: left for the search to find one.
     #expect(try steps(#"{"action": "press_button", "name": "Search"}"#) == [.pressButton("Search")])
     // After a step that may bring another window or sheet forward, the old
@@ -220,7 +222,8 @@ struct VoiceCommandParseTests {
     // The schema makes it an integer: a string is a reply off-schema, refused.
     #expect(throws: VoiceCommandError.malformedReply) {
       try VoiceCommandStep.steps(
-        fromReply: #"{"steps": [{"action": "press", "element": "12"}]}"#, maxSteps: 10, listed: [button(12)])
+        fromReply: #"{"steps": [{"action": "press", "element": "12"}]}"#, maxSteps: 10, listed: [button(12)]
+      )
     }
     #expect(throws: VoiceCommandError.unknownElement(2)) {
       try VoiceCommandStep.steps(fromReply: reply, maxSteps: 10, listed: [button(1)])

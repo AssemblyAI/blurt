@@ -37,10 +37,12 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
 
     let reopened = selectSettingsTab(
       selectSettingsTab(sounds, named: UITestIdentifiers.readAloudSettingsTab),
-      named: UITestIdentifiers.soundsSettingsTab)
+      named: UITestIdentifiers.soundsSettingsTab
+    )
     XCTAssertEqual(
       reopened.popUpButtons[UITestIdentifiers.keySoundPicker(58)].value as? String,
-      "Clav 1")
+      "Clav 1"
+    )
   }
 
   // MARK: - U2: the Read Aloud tab
@@ -55,7 +57,8 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
     choose("1.5×", in: tab.popUpButtons[UITestIdentifiers.readAloudSpeedPicker])
     let reopened = selectSettingsTab(
       selectSettingsTab(tab, named: UITestIdentifiers.generalSettingsTab),
-      named: UITestIdentifiers.readAloudSettingsTab)
+      named: UITestIdentifiers.readAloudSettingsTab
+    )
     XCTAssertEqual(reopened.popUpButtons[UITestIdentifiers.readAloudSpeedPicker].value as? String, "1.5×")
   }
 

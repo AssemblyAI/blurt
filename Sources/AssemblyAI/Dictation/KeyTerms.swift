@@ -24,12 +24,38 @@
 /// list) into clean terms, and `fitted` keeps a list within the field's two
 /// caps, which the user's list is the one unbounded input able to breach.
 public enum KeyTerms {
+  /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
+  /// across every term. Measured here in **UTF-8 bytes**, the conservative reading — the
+  /// documented unit is "characters", which is unmeasured against the endpoint,
+  /// and bytes can only overestimate a multi-byte term's cost.
+  ///
+  /// Note this is the *boost* cap and a different number from the 4096 on
+  /// `config.stt_prompt`. Reusing
+  /// one cap's figure for the other field is how a whole-request 400 shipped once
+  /// before.
+  public static let characterCap = 2_048
+
+  /// The *other* cap on the same field, and the one the byte budget above does
+  /// not imply: at most **100 terms**, however short they are
+  /// (`keyterms_prompt: maxItems: 100` in the reference, alongside its "Maximum
+  /// 100 terms and 8000 characters in total"). Exceeding either is a 400 on the
+  /// whole request, before the audio is read.
+  ///
+  /// Reachable, which is why it is here: terms comma-split from one free-text
+  /// field (`parse`) are uncounted, so 150 short ones cost ~1500 bytes and sail under
+  /// `characterCap` while being half again over this. That shape failed *every*
+  /// dictation until the user shortened the list — the same outage a 3057-character
+  /// cleanup instruction caused once, by the same mechanism.
+  public static let termCap = 100
+
   /// A comma-separated list as clean terms: split on commas (only commas, so
   /// "San Francisco" stays one term), trimmed, blanks dropped, and duplicates
   /// removed case-insensitively, keeping the first spelling and the user's
   /// order. `fitted` assumes terms arrive this way.
   public static func parse(_ text: String?) -> [String] {
-    guard let text else { return [] }
+    guard let text else {
+      return []
+    }
     return normalized(text.split(separator: ",").map(String.init))
   }
 
@@ -55,30 +81,6 @@ public enum KeyTerms {
     terms.joined(separator: ", ")
   }
 
-  /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
-  /// across every term. Measured here in **UTF-8 bytes**, the conservative reading — the
-  /// documented unit is "characters", which is unmeasured against the endpoint,
-  /// and bytes can only overestimate a multi-byte term's cost.
-  ///
-  /// Note this is the *boost* cap and a different number from the 4096 on
-  /// `config.stt_prompt`. Reusing
-  /// one cap's figure for the other field is how a whole-request 400 shipped once
-  /// before.
-  public static let characterCap = 2048
-
-  /// The *other* cap on the same field, and the one the byte budget above does
-  /// not imply: at most **100 terms**, however short they are
-  /// (`keyterms_prompt: maxItems: 100` in the reference, alongside its "Maximum
-  /// 100 terms and 8000 characters in total"). Exceeding either is a 400 on the
-  /// whole request, before the audio is read.
-  ///
-  /// Reachable, which is why it is here: terms comma-split from one free-text
-  /// field (`parse`) are uncounted, so 150 short ones cost ~1500 bytes and sail under
-  /// `characterCap` while being half again over this. That shape failed *every*
-  /// dictation until the user shortened the list — the same outage a 3057-character
-  /// cleanup instruction caused once, by the same mechanism.
-  public static let termCap = 100
-
   /// The terms to send for `terms` — empty when there are none to send, which
   /// the encoders read as "omit the field", so the request asks for no boosting
   /// at all. One empty state, not two: an `[String]?` here would make "no terms"
@@ -99,10 +101,10 @@ public enum KeyTerms {
     var remaining = characterCap
     for term in terms {
       guard included.count < termCap else { break }
-      guard let term = term.trimmedNonEmpty() else { continue }
-      let cost = term.utf8.count
+      guard let trimmed = term.trimmedNonEmpty() else { continue }
+      let cost = trimmed.utf8.count
       guard cost <= remaining else { break }
-      included.append(term)
+      included.append(trimmed)
       remaining -= cost
     }
     return included

@@ -21,6 +21,16 @@ final class FakeSpeechTransport: SpeechTransport, Sendable {
   private let failure: (any Error & Sendable)?
   private let recorded = Mutex<[URLRequest]>([])
 
+  var requests: [URLRequest] { recorded.withLock { $0 } }
+
+  /// The `text` of every request, in order.
+  var spoken: [String] {
+    requests.compactMap { request in
+      let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+      return body?["text"] as? String
+    }
+  }
+
   init(
     end: End = .finish, respond: @escaping @Sendable (URLRequest) -> (Int, [Data]) = FakeSpeechTransport.speaking()
   ) {
@@ -36,17 +46,14 @@ final class FakeSpeechTransport: SpeechTransport, Sendable {
     self.failure = error
   }
 
-  var requests: [URLRequest] { recorded.withLock { $0 } }
-
-  /// The `text` of every request, in order.
-  var spoken: [String] {
-    requests.compactMap { request in
-      let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
-      return body?["text"] as? String
-    }
+  /// The live service's answer: 200 and one PCM chunk per request, numbered by
+  /// request, so a test can tell the pieces' audio apart.
+  static func speaking() -> @Sendable (URLRequest) -> (Int, [Data]) {
+    let count = Counter()
+    return { _ in (200, [Data([UInt8(count.next()), 0])]) }
   }
 
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
+  func stream(_ request: URLRequest) throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
     recorded.withLock { $0.append(request) }
     if let failure { throw failure }
     let (status, chunks) = respond(request)
@@ -54,69 +61,22 @@ final class FakeSpeechTransport: SpeechTransport, Sendable {
     guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else {
       throw URLError(.badServerResponse)
     }
-    let end = end
+    let ending = end
     return (
       response,
       AsyncThrowingStream { continuation in
         for chunk in chunks { continuation.yield(chunk) }
-        switch end {
-        case .finish: continuation.finish()
-        case .fail(let error): continuation.finish(throwing: error)
-        case .hang: break
+        switch ending {
+        case .finish:
+          continuation.finish()
+
+        case .fail(let error):
+          continuation.finish(throwing: error)
+
+        case .hang:
+          break
         }
       }
     )
-  }
-
-  /// The live service's answer: 200 and one PCM chunk per request, numbered by
-  /// request, so a test can tell the pieces' audio apart.
-  static func speaking() -> @Sendable (URLRequest) -> (Int, [Data]) {
-    let count = Counter()
-    return { _ in (200, [Data([UInt8(count.next()), 0])]) }
-  }
-}
-
-/// A `PCMSink` that records what it's asked to do instead of playing it. For
-/// the pacing tests, `bufferedSeconds` can be set, and `bufferedAfterEnqueue`
-/// makes each enqueue report that much audio queued, as a real player would;
-/// `roomChecks` counts the speaker asking, so a test can wait for the check
-/// that holds the next piece back rather than sleeping past it.
-final class RecordingSink: PCMSink {
-  struct Record {
-    var chunks: [Data] = []
-    var drained = false
-    var stopped = false
-    var buffered: Double = 0
-    var bufferedAfterEnqueue: Double?
-    var roomChecks = 0
-  }
-
-  let record = Mutex(Record())
-
-  func enqueue(_ pcm: Data) {
-    record.withLock { record in
-      record.chunks.append(pcm)
-      if let queued = record.bufferedAfterEnqueue { record.buffered = queued }
-    }
-  }
-  func drain() async { record.withLock { $0.drained = true } }
-  func stop() { record.withLock { $0.stopped = true } }
-
-  var chunks: [Data] { record.withLock(\.chunks) }
-  var drained: Bool { record.withLock(\.drained) }
-  var stopped: Bool { record.withLock(\.stopped) }
-  var roomChecks: Int { record.withLock(\.roomChecks) }
-  var bufferedSeconds: Double {
-    get {
-      record.withLock { record in
-        record.roomChecks += 1
-        return record.buffered
-      }
-    }
-    set { record.withLock { $0.buffered = newValue } }
-  }
-  var bufferedAfterEnqueue: Double? {
-    get { record.withLock(\.bufferedAfterEnqueue) }
-    set { record.withLock { $0.bufferedAfterEnqueue = newValue } }
   }
 }

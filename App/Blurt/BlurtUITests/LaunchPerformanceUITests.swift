@@ -21,13 +21,16 @@ final class LaunchPerformanceUITests: XCTestCase {
       let elapsed = ContinuousClock().measure { app.launch() }
       XCTAssertTrue(
         app.windows[UITestIdentifiers.harnessWindowTitle].waitForExistence(timeout: 15),
-        "app did not present its window after launch")
+        "app did not present its window after launch"
+      )
       if i > 0 { samples.append(elapsed) }  // drop warm-up
       app.terminate()
     }
     let median = samples.sorted()[samples.count / 2]
     XCTAssertLessThan(
-      median, .seconds(5),
-      "cold launch regressed: median \(median) over budget")
+      median,
+      .seconds(5),
+      "cold launch regressed: median \(median) over budget"
+    )
   }
 }

@@ -14,12 +14,12 @@ struct KeyRejectionReporterTests {
     let warmUps: Counter
 
     func transcribe(
-      frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
-    ) async throws -> String {
+      frames _: AsyncStream<Data>, sampleRate _: Int, context _: TranscriptionContext?
+    ) throws -> String {
       try outcome.get()
     }
 
-    func warmUp() async { _ = warmUps.next() }
+    func warmUp() { _ = warmUps.next() }
   }
 
   private func run(_ outcome: Result<String, AssemblyAIError>) async -> (reported: Int, error: (any Error)?) {
@@ -59,7 +59,10 @@ struct KeyRejectionReporterTests {
   @Test("warm-up goes to the wrapped transcriber")
   func warmUp() async {
     let warmUps = Counter()
-    await KeyRejectionReporter(Answering(outcome: .success(""), warmUps: warmUps)) {}.warmUp()
+    let reporter = KeyRejectionReporter(Answering(outcome: .success(""), warmUps: warmUps)) {
+      // A warm-up rejects no key, so there is nothing to report.
+    }
+    await reporter.warmUp()
     #expect(warmUps.value == 1)
   }
 }

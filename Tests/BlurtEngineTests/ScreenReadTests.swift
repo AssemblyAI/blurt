@@ -3,41 +3,6 @@ import Testing
 
 @testable import BlurtEngine
 
-/// A hand-built element: the attributes `ScreenNode` asks for, set directly,
-/// so a test builds the three-node tree a rule is about rather than replaying
-/// a recorded app. A class, so a tree can hold itself and two compare by `===`.
-private final class TinyNode: ScreenNode {
-  let role: String?
-  let subrole: String? = nil
-  let title: String?
-  let nodeDescription: String?
-  let placeholder: String?
-  let frame: CGRect?
-  let isPressable: Bool
-  let rawValue: String?
-  let children: [TinyNode]
-  let titleElement: TinyNode?
-
-  init(
-    _ role: String?, title: String? = nil, description: String? = nil, value: String? = nil,
-    placeholder: String? = nil, frame: CGRect? = nil, pressable: Bool = false, label: TinyNode? = nil,
-    children: [TinyNode] = []
-  ) {
-    self.role = role
-    self.title = title
-    nodeDescription = description
-    self.placeholder = placeholder
-    self.frame = frame
-    isPressable = pressable
-    rawValue = value
-    self.children = children
-    titleElement = label
-  }
-
-  static func button(_ title: String) -> TinyNode { TinyNode("AXButton", title: title) }
-  static func text(_ words: String) -> TinyNode { TinyNode("AXStaticText", value: words) }
-}
-
 /// `ScreenRead`'s decisions over a tree — how a node is named, how a walk
 /// reports stopping short, how the slots are shared with a page — and the
 /// `ScreenSnapshot` naming rules under them.
@@ -79,7 +44,8 @@ struct ScreenReadTests {
     let small = TinyNode("AXWebArea", frame: CGRect(x: 0, y: 0, width: 10, height: 10))
     let big = TinyNode("AXWebArea", frame: CGRect(x: 0, y: 0, width: 100, height: 50))
     let window = TinyNode(
-      "AXWindow", children: [small, TinyNode("AXWebArea"), TinyNode("AXGroup", children: [big])])
+      "AXWindow", children: [small, TinyNode("AXWebArea"), TinyNode("AXGroup", children: [big])]
+    )
     #expect(ScreenRead.largest(role: "AXWebArea", in: window) === big)
     #expect(ScreenRead.largest(role: "AXWebArea", in: TinyNode("AXWindow", children: [TinyNode("AXWebArea")])) == nil)
   }
@@ -105,7 +71,8 @@ struct ScreenReadTests {
   func listingCompleteWithoutPage() {
     let window = TinyNode("AXWindow", children: [.button("Back"), .button("Forward")])
     let listing = ScreenRead.listing(
-      window: window, webArea: nil, page: ([], false), same: { $0 === $1 }, shouldStop: { false })
+      window: window, webArea: nil, page: ([], false), same: { $0 === $1 }, shouldStop: { false }
+    )
     #expect(listing.entries.map(\.label) == ["Back", "Forward"])
     #expect(!listing.incomplete)
   }
@@ -114,8 +81,12 @@ struct ScreenReadTests {
   func listingWindowTakesEverySlotWithoutPage() {
     let buttons = (1...60).map { TinyNode.button("B\($0)") }
     let listing = ScreenRead.listing(
-      window: TinyNode("AXWindow", children: buttons), webArea: nil, page: ([], false), same: { $0 === $1 },
-      shouldStop: { false })
+      window: TinyNode("AXWindow", children: buttons),
+      webArea: nil,
+      page: ([], false),
+      same: { $0 === $1 },
+      shouldStop: { false }
+    )
     #expect(listing.entries.count == 60)
     #expect(!listing.incomplete)
   }
@@ -124,7 +95,8 @@ struct ScreenReadTests {
   func listingCarriesThePagesStop() {
     let window = TinyNode("AXWindow", children: [.button("Reload")])
     let listing = ScreenRead.listing(
-      window: window, webArea: nil, page: (entries(["Sign in"]), true), same: { $0 === $1 }, shouldStop: { false })
+      window: window, webArea: nil, page: (entries(["Sign in"]), true), same: { $0 === $1 }, shouldStop: { false }
+    )
     #expect(listing.entries.map(\.label) == ["Reload", "Sign in"])
     #expect(listing.incomplete)
   }
@@ -135,7 +107,8 @@ struct ScreenReadTests {
     let window = TinyNode("AXWindow", children: (1...20).map { TinyNode.button("Tab \($0)") } + [page])
     let pageEntries = entries((1...140).map { "Link \($0)" })
     let listing = ScreenRead.listing(
-      window: window, webArea: page, page: (pageEntries, false), same: { $0 === $1 }, shouldStop: { false })
+      window: window, webArea: page, page: (pageEntries, false), same: { $0 === $1 }, shouldStop: { false }
+    )
     #expect(listing.entries.count == ScreenContext.maxElements)
     #expect(listing.entries.prefix(20).allSatisfy { $0.label.hasPrefix("Tab ") })
     #expect(!listing.entries.contains { $0.label == "Inside" })
@@ -145,7 +118,8 @@ struct ScreenReadTests {
   @Test("a listed node goes by its first own label, its title before its description")
   func labelTakesTheFirstOwn() {
     let label = ScreenSnapshot.label(
-      role: "AXButton", own: ["Reply", "Reply to sender"], placeholder: nil, borrowed: { nil }, inner: { nil })
+      role: "AXButton", own: ["Reply", "Reply to sender"], placeholder: nil, borrowed: { nil }, inner: { nil }
+    )
     #expect(label == "Reply")
   }
 
@@ -153,7 +127,8 @@ struct ScreenReadTests {
   func firstTextFindsStaticText() {
     let row = TinyNode("AXRow", children: [TinyNode("AXImage", description: "radio"), .text("Radio")])
     let found = ScreenSnapshot.firstText(
-      under: row, children: \.children, role: \.role, text: \.rawValue, title: { $0.title ?? $0.nodeDescription })
+      under: row, children: \.children, role: \.role, text: \.rawValue
+    ) { $0.title ?? $0.nodeDescription }
     #expect(found == "Radio")
   }
 }

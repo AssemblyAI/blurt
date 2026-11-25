@@ -33,10 +33,6 @@ public struct KeyTermsStore {
 
   private let defaults: UserDefaults
 
-  init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
-
   /// The raw comma-separated string exactly as the user entered it (preserving
   /// their spacing/order for round-tripping in the editor), or `nil` if unset.
   var raw: String? {
@@ -48,5 +44,9 @@ public struct KeyTermsStore {
   /// keeping first spelling).
   var terms: [String] {
     KeyTerms.parse(raw)
+  }
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 }

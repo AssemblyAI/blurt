@@ -37,10 +37,10 @@ public struct SoundPackCatalog: Sendable {
   private let voicesByGroup: [String: [SoundPack]]
 
   /// Builds a catalog from `voices`, resolving `defaultVoiceID` to the voice an
-  /// unset setting means — falling back to `SoundPack.none` when nothing in
+  /// unset setting means — falling back to `SoundPack.silent` when nothing in
   /// `voices` carries that id, so a typo silences the cues rather than trapping.
   ///
-  /// `SoundPack.none` is added to the lookup **after** the voices, so a voice
+  /// `SoundPack.silent` is added to the lookup **after** the voices, so a voice
   /// that (wrongly) claims the reserved id `none` loses to the silent pack rather
   /// than making "no sound" unselectable. `check.sh`'s catalog check flags that
   /// collision in this repo; the ordering is what keeps a host that has no such
@@ -48,7 +48,9 @@ public struct SoundPackCatalog: Sendable {
   public init(voices: [SoundPack], defaultVoiceID: String) {
     var seenGroups = Set<String>()
     groups = voices.compactMap { voice -> String? in
-      guard let group = voice.group, seenGroups.insert(group).inserted else { return nil }
+      guard let group = voice.group, seenGroups.insert(group).inserted else {
+        return nil
+      }
       return group
     }
 
@@ -59,22 +61,12 @@ public struct SoundPackCatalog: Sendable {
       guard let group = voice.group else { continue }
       byGroup[group, default: []].append(voice)
     }
-    // Spelled `SoundPack.none`, never `.none`: the expected type here is
-    // `SoundPack?`, where a leading-dot `.none` is `Optional.none` — i.e. it would
-    // *remove* the silent pack rather than install it.
-    index[SoundPack.none.id] = SoundPack.none
+    // Last, so the silent pack wins its reserved id over any voice claiming it.
+    index[SoundPack.silent.id] = SoundPack.silent
     byID = index
     voicesByGroup = byGroup
 
-    defaultPack = index[defaultVoiceID] ?? SoundPack.none
-  }
-
-  /// The same voices with a different default — a second setting drawn from
-  /// one catalog, such as read-aloud's cues beside dictation's. An id naming no
-  /// voice falls back to `SoundPack.none`, as in `init`.
-  public func defaulting(to voiceID: String) -> SoundPackCatalog {
-    SoundPackCatalog(
-      groups: groups, defaultPack: byID[voiceID] ?? SoundPack.none, byID: byID, voicesByGroup: voicesByGroup)
+    defaultPack = index[defaultVoiceID] ?? SoundPack.silent
   }
 
   private init(
@@ -84,6 +76,15 @@ public struct SoundPackCatalog: Sendable {
     self.defaultPack = defaultPack
     self.byID = byID
     self.voicesByGroup = voicesByGroup
+  }
+
+  /// The same voices with a different default — a second setting drawn from
+  /// one catalog, such as read-aloud's cues beside dictation's. An id naming no
+  /// voice falls back to `SoundPack.silent`, as in `init`.
+  public func defaulting(to voiceID: String) -> Self {
+    Self(
+      groups: groups, defaultPack: byID[voiceID] ?? SoundPack.silent, byID: byID, voicesByGroup: voicesByGroup
+    )
   }
 
   /// The voices belonging to one group, in catalog order.
@@ -100,7 +101,9 @@ public struct SoundPackCatalog: Sendable {
   /// directly (so they re-render live on a Settings change) — mirroring
   /// `TriggerKey.fromPersisted`.
   public func fromPersisted(_ id: String?) -> SoundPack {
-    guard let id, let pack = find(id: id) else { return defaultPack }
+    guard let id, let pack = find(id: id) else {
+      return defaultPack
+    }
     return pack
   }
 }

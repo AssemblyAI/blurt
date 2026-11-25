@@ -114,7 +114,8 @@ struct VoiceCommandPlannerTests {
     }
     await #expect(throws: VoiceCommandError.notUnderstood) {
       try await planner(transport).plan(
-        "empty the trash", context: ScreenContext(appName: "Finder"), trace: PlanTrace())
+        "empty the trash", context: ScreenContext(appName: "Finder"), trace: PlanTrace()
+      )
     }
     #expect(calls.value == 1)
   }
@@ -125,8 +126,8 @@ struct VoiceCommandPlannerTests {
       (200, completion(#"{"steps": [{"action": "open_url", "url": "https://slack.com"}]}"#))
     }
     let planner = VoiceCommandPlanner(
-      gateway: GatewayConnection(apiKeyProvider: { "raw-key" }, transport: transport),
-      apps: { $0.lowercased() == "slack" ? "Slack" : nil })
+      gateway: GatewayConnection(apiKeyProvider: { "raw-key" }, transport: transport)
+    ) { $0.lowercased() == "slack" ? "Slack" : nil }
     let chrome = ScreenContext(appName: "Google Chrome")
     #expect(try await planner.plan("Switch to Slack", context: chrome, trace: PlanTrace()) == [.openApp("Slack")])
     #expect(
@@ -144,8 +145,10 @@ struct VoiceCommandPlannerTests {
   @Test("the window's elements go before the command, numbered, and a plan may name only those numbers")
   func windowElements() async throws {
     let screen = ScreenContext(
-      appName: "Calculator", windowTitle: "Inbox",
-      elements: [.init(id: 1, kind: "button", label: "Reply"), .init(id: 2, kind: "search field", label: "Search")])
+      appName: "Calculator",
+      windowTitle: "Inbox",
+      elements: [.init(id: 1, kind: "button", label: "Reply"), .init(id: 2, kind: "search field", label: "Search")]
+    )
     #expect(
       VoiceCommandPlanner.prompt("reply", context: screen, fence: "c0de")
         == "<frontmost_app>\nCalculator\n</frontmost_app>\n\n<window fence=\"c0de\" title=\"Inbox\">\n"

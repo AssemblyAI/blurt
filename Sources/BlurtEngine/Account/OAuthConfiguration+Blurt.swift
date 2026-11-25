@@ -33,7 +33,9 @@ extension OAuthConfiguration {
   public static func blurtDictationOrigin(infoDictionary: [String: Any]) -> URL? {
     guard let value = (infoDictionary[InfoKey.dictationOrigin] as? String)?.trimmedNonEmpty(),
       let url = URL(string: value), isAllowed(url)
-    else { return nil }
+    else {
+      return nil
+    }
     return url
   }
 
@@ -42,9 +44,14 @@ extension OAuthConfiguration {
   /// loopback interface leaves the Mac.
   static func isAllowed(_ url: URL) -> Bool {
     switch url.scheme {
-    case "https": true
-    case "http": ["localhost", "127.0.0.1", "::1"].contains(url.host() ?? "")
-    default: false
+    case "https":
+      true
+
+    case "http":
+      ["localhost", "127.0.0.1", "::1"].contains(url.host() ?? "")
+
+    default:
+      false
     }
   }
 
@@ -57,13 +64,16 @@ extension OAuthConfiguration {
       let authorizeURL = value(InfoKey.authorizeURL).flatMap(URL.init(string:)),
       let origin = value(InfoKey.apiOrigin).flatMap(URL.init(string:)),
       [tokenURL, authorizeURL, origin].allSatisfy(isAllowed)
-    else { return nil }
+    else {
+      return nil
+    }
     return OAuthConfiguration(
       clientID: clientID,
       authorizeURL: authorizeURL,
       tokenURL: tokenURL,
       apiKeyURL: origin.appending(path: "api/v2/oauth/api-key"),
       revokeURL: origin.appending(path: "api/v2/oauth/api-key/revoke"),
-      redirectURI: blurtRedirectURI)
+      redirectURI: blurtRedirectURI
+    )
   }
 }

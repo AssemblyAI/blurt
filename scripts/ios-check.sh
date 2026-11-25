@@ -12,7 +12,7 @@
 #   2. The accessibility audits (BlurtiOSUITests, ios-uitest.sh):
 #      `performAccessibilityAudit()` on every screen of the app, on the same
 #      simulator and over the same build.
-#   3. `swiftlint analyze` — unused imports — over that build's compiler log,
+#   3. `swiftlint analyze` — every analyzer rule — over that build's compiler log,
 #      as check.sh runs it over the Mac app's.
 #   4. periphery over the iPhone project — unused declarations.
 #   5. The probe's XCUITest bundle (BlurtiOSProbe), compiled: its own scheme,
@@ -50,7 +50,7 @@ BLURT_IOS_BUILD_LOG="$BUILD_LOG" "$REPO_ROOT/scripts/ios-test.sh" || FAILED+=("i
 echo "==> ios-uitest (BlurtiOSUITests: accessibility audits)"
 "$REPO_ROOT/scripts/ios-uitest.sh" || FAILED+=("ios-uitest")
 
-echo "==> swiftlint analyze (unused imports, App/BlurtiOS)"
+echo "==> swiftlint analyze (App/BlurtiOS)"
 if [ -s "$BUILD_LOG" ]; then
   # The iPhone modules' compile commands only. The build also compiles the
   # engine — for iOS, where its `#if os(macOS)` files are inactive and

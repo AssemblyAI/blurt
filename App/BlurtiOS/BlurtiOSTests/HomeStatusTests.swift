@@ -14,12 +14,23 @@ struct HomeStatusTests {
   }
 
   private func status(
-    _ state: ListeningState?, minutes: Int = 15, error: String? = nil, denied: Bool = false, key: Bool = true,
-    mic: Bool = true, keyboard: Bool = true
+    _ state: ListeningState?,
+    minutes: Int = 15,
+    error: String? = nil,
+    denied: Bool = false,
+    key: Bool = true,
+    mic: Bool = true,
+    keyboard: Bool = true
   ) -> HomeStatus {
     HomeStatus(
-      state: state, windowMinutes: minutes, error: error, micDenied: denied, hasKey: key, micGranted: mic,
-      keyboardSeen: keyboard)
+      state: state,
+      windowMinutes: minutes,
+      error: error,
+      micDenied: denied,
+      hasKey: key,
+      micGranted: mic,
+      keyboardSeen: keyboard
+    )
   }
 
   @Test("the session is on while the record says a window exists — opening, open or paused — and off otherwise")

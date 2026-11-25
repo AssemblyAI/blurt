@@ -13,11 +13,13 @@ import Synchronization
 public final class DictationOrigin: Sendable {
   private let url = Mutex<URL?>(nil)
 
-  public init() {}
-
   /// The signed-in key's host, or nil while signed out or when the sign-in
   /// configures none.
   public var current: URL? { url.withLock { $0 } }
+
+  public init() {
+    // Starts with no host: production, until a sign-in sets one.
+  }
 
   func set(_ newValue: URL?) {
     url.withLock { $0 = newValue }

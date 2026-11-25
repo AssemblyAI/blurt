@@ -8,6 +8,7 @@ import Testing
 @Suite("Press handshake: the hold")
 struct PressHandshakeHoldTests {
   typealias Fixture = HandshakeFixture
+
   let epoch = Fixture.epoch
 
   @Test("a hold's lift is the stop at once: owned, latched from busy, or unanswered; over words being made, nothing")
@@ -23,7 +24,7 @@ struct PressHandshakeHoldTests {
     var pressing = PressHandshake()
     let id = Fixture.pressed(&pressing)
     let early = pressing.handle(Fixture.holdLift, now: Fixture.at(0.5))
-    #expect(early == [.none])
+    #expect(early == [.nothing])
     #expect(pressing.state == .pressing(id: id, sentAt: epoch, resent: false, stopWanted: true))
     let named = UUID()
     let answer = pressing.handle(Fixture.ack(.started(named), for: id), now: Fixture.at(0.6))
@@ -31,6 +32,6 @@ struct PressHandshakeHoldTests {
     var made = PressHandshake()
     _ = Fixture.owned(&made, phase: .processing)
     let nothing = made.handle(Fixture.holdLift, now: Fixture.at(3))
-    #expect(nothing == [.none])
+    #expect(nothing == [.nothing])
   }
 }

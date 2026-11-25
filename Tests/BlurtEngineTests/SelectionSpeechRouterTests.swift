@@ -19,13 +19,14 @@ struct SelectionSpeechRouterTests {
     let fixture = makeSession()
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: transport),
-      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut))),
-      makeSink: { played in
-        rate.value = played
-        return RecordingSink()
-      })
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
+    ) { played in
+      rate.value = played
+      return RecordingSink()
+    }
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: speaker, readSelection: { selection }, defaults: defaults)
+      session: fixture.session, speaker: speaker, readSelection: { selection }, defaults: defaults
+    )
     return (router, fixture)
   }
 

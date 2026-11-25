@@ -18,6 +18,7 @@ struct DictationKeyGateTests {
   struct Step: Sendable {
     let event: Event
     let expect: DictationKeyGate.Action?
+
     init(_ event: Event, _ expect: DictationKeyGate.Action? = nil) {
       self.event = event
       self.expect = expect
@@ -48,95 +49,112 @@ struct DictationKeyGateTests {
       name: "quick tap latches on — release does not stop (a later solo tap does)",
       steps: [
         .init(.down(.seconds(0))), .init(.up(.milliseconds(200)), .latch),
-        .init(.down(.seconds(5))), .init(.up(.milliseconds(5100)), .stop),
-      ]),
+        .init(.down(.seconds(5))), .init(.up(.milliseconds(5_100)), .stop),
+      ]
+    ),
     Scenario(
       name: "a second tap while latched stops recording",
       steps: [
         .init(.down(.seconds(0))), .init(.up(.milliseconds(200))),
-        .init(.down(.seconds(5)), DictationKeyGate.Action.none), .init(.up(.milliseconds(5100)), .stop),
-      ]),
+        .init(.down(.seconds(5)), DictationKeyGate.Action.ignore), .init(.up(.milliseconds(5_100)), .stop),
+      ]
+    ),
     Scenario(
       name: "hold past threshold then release stops (push-to-talk)",
-      steps: [.init(.down(.seconds(0))), .init(.up(.milliseconds(1200)), .stop)]),
+      steps: [.init(.down(.seconds(0))), .init(.up(.milliseconds(1_200)), .stop)]
+    ),
     Scenario(
       name: "after a hold stops, the next press starts fresh",
       steps: [
-        .init(.down(.seconds(0))), .init(.up(.milliseconds(1200))), .init(.down(.seconds(2)), .start),
-      ]),
+        .init(.down(.seconds(0))), .init(.up(.milliseconds(1_200))), .init(.down(.seconds(2)), .start),
+      ]
+    ),
     Scenario(
       name: "release exactly at threshold counts as a hold (stop)",
-      steps: [.init(.down(.seconds(0))), .init(.up(.seconds(1)), .stop)]),
+      steps: [.init(.down(.seconds(0))), .init(.up(.seconds(1)), .stop)]
+    ),
     Scenario(
       name: "release just under threshold is a tap (latch, not stop)",
       steps: [
         .init(.down(.seconds(0))), .init(.up(.milliseconds(999)), .latch),
-        .init(.down(.seconds(5))), .init(.up(.milliseconds(5100)), .stop),
-      ]),
+        .init(.down(.seconds(5))), .init(.up(.milliseconds(5_100)), .stop),
+      ]
+    ),
     Scenario(
       name: "a combo from idle cancels the just-started capture",
       steps: [
         .init(.down(.seconds(0))), .init(.other, .cancel),
-        .init(.up(.milliseconds(100)), DictationKeyGate.Action.none), .init(.down(.seconds(2)), .start),
-      ]),
+        .init(.up(.milliseconds(100)), DictationKeyGate.Action.ignore), .init(.down(.seconds(2)), .start),
+      ]
+    ),
     Scenario(
       name: "a combo while latched keeps recording (does not cancel)",
       steps: [
         .init(.down(.seconds(0))), .init(.up(.milliseconds(200))),
-        .init(.down(.seconds(5))), .init(.other, DictationKeyGate.Action.none),
-        .init(.up(.milliseconds(5100)), DictationKeyGate.Action.none),
-        .init(.down(.seconds(10))), .init(.up(.milliseconds(10100)), .stop),
-      ]),
+        .init(.down(.seconds(5))), .init(.other, DictationKeyGate.Action.ignore),
+        .init(.up(.milliseconds(5_100)), DictationKeyGate.Action.ignore),
+        .init(.down(.seconds(10))), .init(.up(.milliseconds(10_100)), .stop),
+      ]
+    ),
     Scenario(
       name: "otherKeyDown while idle is ignored",
-      steps: [.init(.other, DictationKeyGate.Action.none), .init(.down(.seconds(1)), .start)]),
+      steps: [.init(.other, DictationKeyGate.Action.ignore), .init(.down(.seconds(1)), .start)]
+    ),
     Scenario(
       name: "modifier up without a prior down is ignored",
-      steps: [.init(.up(.seconds(1)), DictationKeyGate.Action.none)]),
+      steps: [.init(.up(.seconds(1)), DictationKeyGate.Action.ignore)]
+    ),
     Scenario(
       name: "reset clears state so the next press starts fresh",
-      steps: [.init(.down(.seconds(0))), .init(.reset), .init(.down(.seconds(2)), .start)]),
+      steps: [.init(.down(.seconds(0))), .init(.reset), .init(.down(.seconds(2)), .start)]
+    ),
     Scenario(
       name: "a repeated modifier down while armed is ignored (no double start)",
       steps: [
-        .init(.down(.seconds(0)), .start), .init(.down(.milliseconds(100)), DictationKeyGate.Action.none),
-        .init(.up(.milliseconds(1200)), .stop),
-      ]),
+        .init(.down(.seconds(0)), .start), .init(.down(.milliseconds(100)), DictationKeyGate.Action.ignore),
+        .init(.up(.milliseconds(1_200)), .stop),
+      ]
+    ),
     Scenario(
       name: "a rapid second tap while latched still stops (no multi-tap gesture)",
       steps: [
         .init(.down(.milliseconds(0)), .start), .init(.up(.milliseconds(80))),
-        .init(.down(.milliseconds(200)), DictationKeyGate.Action.none), .init(.up(.milliseconds(280)), .stop),
+        .init(.down(.milliseconds(200)), DictationKeyGate.Action.ignore), .init(.up(.milliseconds(280)), .stop),
         .init(.down(.seconds(5)), .start),
-      ]),
+      ]
+    ),
     Scenario(
       name: "tap mode: a release past the hold threshold still latches (no push-to-talk)",
       steps: [
-        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(1200)), .latch),
-        .init(.down(.seconds(5)), DictationKeyGate.Action.none), .init(.up(.milliseconds(5100)), .stop),
+        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(1_200)), .latch),
+        .init(.down(.seconds(5)), DictationKeyGate.Action.ignore), .init(.up(.milliseconds(5_100)), .stop),
       ],
-      activation: .tap),
+      activation: .tap
+    ),
     Scenario(
       name: "tap mode: a quick tap latches and the next tap stops, as in tap-or-hold",
       steps: [
         .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(200)), .latch),
-        .init(.down(.seconds(2)), DictationKeyGate.Action.none), .init(.up(.milliseconds(2100)), .stop),
+        .init(.down(.seconds(2)), DictationKeyGate.Action.ignore), .init(.up(.milliseconds(2_100)), .stop),
       ],
-      activation: .tap),
+      activation: .tap
+    ),
     Scenario(
       name: "hold mode: a release under the threshold stops instead of latching",
       steps: [
         .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(200)), .stop),
-        .init(.down(.seconds(2)), .start), .init(.up(.milliseconds(3500)), .stop),
+        .init(.down(.seconds(2)), .start), .init(.up(.milliseconds(3_500)), .stop),
       ],
-      activation: .hold),
+      activation: .hold
+    ),
     Scenario(
       name: "hold mode: a combo from idle still cancels the fresh capture",
       steps: [
         .init(.down(.seconds(0)), .start), .init(.other, .cancel),
-        .init(.up(.milliseconds(100)), DictationKeyGate.Action.none), .init(.down(.seconds(2)), .start),
+        .init(.up(.milliseconds(100)), DictationKeyGate.Action.ignore), .init(.down(.seconds(2)), .start),
       ],
-      activation: .hold),
+      activation: .hold
+    ),
   ]
 
   @Test("tap/hold/latch/combo state machine", arguments: scenarios)
@@ -145,9 +163,15 @@ struct DictationKeyGateTests {
     for (i, step) in scenario.steps.enumerated() {
       let action: DictationKeyGate.Action?
       switch step.event {
-      case .down(let t): action = g.modifierDown(at: t)
-      case .up(let t): action = g.modifierUp(at: t)
-      case .other: action = g.otherKeyDown()
+      case .down(let t):
+        action = g.modifierDown(at: t)
+
+      case .up(let t):
+        action = g.modifierUp(at: t)
+
+      case .other:
+        action = g.otherKeyDown()
+
       case .reset:
         g.reset()
         action = nil
@@ -173,7 +197,7 @@ struct DictationKeyGateTests {
     g.reset()
     #expect(g.isIdle)
     _ = g.modifierDown(at: .seconds(2))
-    _ = g.modifierUp(at: .milliseconds(3500))  // hold → stop
+    _ = g.modifierUp(at: .milliseconds(3_500))  // hold → stop
     #expect(g.isIdle)
   }
 }

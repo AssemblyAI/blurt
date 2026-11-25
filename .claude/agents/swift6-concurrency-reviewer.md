@@ -62,7 +62,7 @@ Look at the changes (default to the working diff via `git diff` and
   Capture lives only in the app (`WindowedAudioSource`, `SimulatorAudioSource`).
 - **Payloads that cross processes or the capture path are `nonisolated`** —
   `SharedStore`, `PhaseSnapshot`, `KeyboardCommand`, `DictationResult` and the
-  rest in `SharedState.swift`. Flag one that drifts back to the main-actor default.
+  rest in `BlurtShared.swift`. Flag one that drifts back to the main-actor default.
 - **System callbacks arrive off the main actor:** a `DarwinObserver` handler and
   `requestSupplementaryLexicon`'s callback (an XPC queue) are `@Sendable` and hop
   with `Task { @MainActor in … }`; a main-actor closure there traps at runtime.

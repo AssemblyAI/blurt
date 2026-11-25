@@ -1,12 +1,16 @@
 # SwiftLint config for Blurt.
 #
 # swift-format (.swift-format) remains the FORMATTING authority — 120-col lines,
-# 2-space indent, brace placement, commas. SwiftLint covers what swift-format
-# does NOT: correctness smells and structural/complexity limits.
+# 2-space indent, brace placement, commas, import order. SwiftLint covers
+# everything else, and runs every opt-in rule it has (`opt_in_rules: [all]`):
+# correctness smells, idioms, structure and complexity limits, plus the layout
+# rules that agree with swift-format's output.
 #
 # check.sh runs this with --strict: any violation (warning OR error) fails the
-# build, so the tree must stay lint-clean. Fix violations in code, or — when a
-# rule genuinely doesn't apply — disable it here with a comment explaining why.
+# build, so the tree must stay lint-clean. Fix violations in code. A rule is
+# disabled below only when it contradicts another enabled rule, fights
+# swift-format's output, or conflicts with a documented repo convention, and
+# each entry says which.
 
 included:
   - Sources
@@ -19,27 +23,38 @@ excluded:
   - .build
   - App/Blurt/Blurt.xcodeproj
 
-disabled_rules:
-  # Owned by swift-format — don't let the two tools fight over formatting.
-  - line_length
-  - trailing_comma
-  - trailing_whitespace
-  - opening_brace
-  - statement_position
-
-# Zero-tolerance correctness opt-ins (off by default in SwiftLint). The tree is
-# clean of every one of these, and --strict keeps it that way. Constant URLs use
-# URL(staticString:) (URL+StaticString.swift) instead of `URL(string:)!`; tests
-# use `try #require(...)` instead of `!`. NOT enabled: weak_delegate (would
-# false-positive on the strong SwiftUI `appDelegate` properties, which are
-# correct — SwiftUI scenes/views are structs, no retain cycle to break).
 opt_in_rules:
-  - discouraged_optional_collection
-  - empty_count
-  - fatal_error_message
-  - force_unwrapping
-  - implicitly_unwrapped_optional
-  - unowned_variable_capture
+  - all
+
+disabled_rules:
+  # --- Fights swift-format's output (swift-format owns layout; CI runs
+  # `swift-format lint --strict`). Each was checked by fixing the tree with
+  # `swiftlint --fix` and re-running swift-format over it.
+  - line_length # swift-format wraps code at 120 but never wraps comments or string literals.
+  - trailing_comma # swift-format adds the trailing comma to multi-line collection literals.
+  - opening_brace # swift-format breaks before `{` after a wrapped condition or signature.
+  - contrasted_opening_brace # the opposite brace style: swift-format puts `{` on the declaration's line.
+  - sorted_imports # swift-format's OrderedImports sorts case-sensitively (`Synchronization` before `os`).
+
+  # --- Contradicts another enabled rule; the side kept is the codebase's.
+  - explicit_type_interface # vs redundant_type_annotation: the codebase lets inference type locals and properties.
+  - explicit_acl # vs no_extension_access_modifier: `internal` stays implicit, and members inherit an extension's level.
+  - explicit_top_level_acl # same: the codebase never spells `internal`.
+  - extension_access_modifier # vs no_extension_access_modifier and swift-format's NoAccessLevelOnExtensionDeclaration.
+  - explicit_enum_raw_value # vs redundant_string_enum_value: String raw values come from the case names.
+  - raw_value_for_camel_cased_codable_enum # same: the value it demands is the case name, which redundant_string_enum_value flags.
+  - prefixed_toplevel_constant # vs identifier_name / the Swift API guidelines: constants are lowerCamelCase, no `k` prefix.
+  - no_grouping_extension # vs the codebase's one-extension-per-conformance layout, which file_types_order orders.
+  - required_deinit # vs no_empty_block: it demands an empty `deinit {}` in every class.
+
+  # --- Conflicts with a documented repo convention or settled decision.
+  - prefer_nimble # Nimble is a third-party package; unit tests use Swift Testing (`#expect`), with no dependencies.
+  - nimble_operator # same.
+  - sorted_enum_cases # case order is behaviour: CaseIterable picker order, persisted implicit Int raw values, phase order.
+  - no_magic_numbers # flags the named constants themselves (`static let budget = .milliseconds(500)`,
+    # `Color(hex: 0xC7C3B2)` design tokens); the repo names literals by its own `literal-ok` gate.
+  - discouraged_default_parameter # defaulted parameters are the repo's injection seams
+    # (`init(defaults: UserDefaults = .standard)`): production takes the default, tests pass a double.
 
 implicitly_unwrapped_optional:
   # The default mode exempts IUO *properties* (an IBOutlet accommodation).
@@ -51,6 +66,12 @@ empty_count:
   # bare-identifier form would false-positive on plain integer tallies named
   # `count` (e.g. the stream-element counter in MicCaptureProtocolDefaultsTests).
   only_after_dot: true
+
+indentation_width:
+  # swift-format's 2-space indent. A multi-line string's content is data, not
+  # code — its indentation is whatever the literal needs.
+  indentation_width: 2
+  include_multiline_strings: false
 
 # Production code spells names out (`panel`, `encoder`, `pasteboard`) per the
 # Swift API Design Guidelines' clarity-over-brevity rule. What still needs a
@@ -68,8 +89,16 @@ nesting:
 # fails, so prefer `try?` with a fallback even in test fixtures.
 
 # Analyzer rules need a compiler log (see check.sh's `swiftlint analyze` step);
-# they don't run under plain `swiftlint lint`.
+# they don't run under plain `swiftlint lint`. Every analyzer rule is on except:
+#   explicit_self      — contradicts redundant_self.
+#   unused_declaration — periphery already gates unused code, over the app *and*
+#                        the test target (this analyzer reads only the app build's
+#                        log, so it flags test-only helpers); and the extra
+#                        analyzer pass made SourceKit segfault expanding Swift
+#                        Testing macros in a majority of ios-check runs.
 analyzer_rules:
+  - capture_variable
+  - typesafe_array_init
   - unused_import
 
 unused_import:

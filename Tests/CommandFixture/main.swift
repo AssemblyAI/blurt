@@ -20,8 +20,11 @@
     private let statePath: String
     private var state: [String: Any] = ["pressed": [String](), "menu": [String]()]
     private let window = NSWindow(
-      contentRect: NSRect(x: 200, y: 200, width: 520, height: 420), styleMask: [.titled, .resizable],
-      backing: .buffered, defer: false)
+      contentRect: NSRect(x: 200, y: 200, width: 520, height: 420),
+      styleMask: [.titled, .resizable],
+      backing: .buffered,
+      defer: false
+    )
     private let field = NSTextField(string: "old search text")
     private let slider = NSSlider(value: 50, minValue: 0, maxValue: 100, target: nil, action: nil)
     private let table = NSTableView()
@@ -32,7 +35,7 @@
       self.statePath = statePath
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
       window.title = "Blurt Command Fixture"
       let reply = NSButton(title: "Reply", target: self, action: #selector(pressed(_:)))
       let delete = NSButton(title: "Delete", target: self, action: #selector(pressed(_:)))
@@ -61,7 +64,8 @@
       scroll.setAccessibilityLabel("Notes")
       scroll.contentView.postsBoundsChangedNotifications = true
       NotificationCenter.default.addObserver(
-        self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
+        self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView
+      )
       tall.scroll(NSPoint(x: 0, y: 2_000))
 
       let stack = NSStackView(views: [reply, delete, send, field, slider, list, scroll])
@@ -76,7 +80,8 @@
       installMenu()
 
       NotificationCenter.default.addObserver(
-        self, selector: #selector(scrolled), name: NSTextView.didChangeSelectionNotification, object: nil)
+        self, selector: #selector(scrolled), name: NSTextView.didChangeSelectionNotification, object: nil
+      )
       for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: name, object: window)
       }
@@ -101,32 +106,36 @@
 
     /// Reply visibly answers — the window's title changes, as a press that
     /// opens something does — so one press is the whole step.
-    @objc private func pressed(_ sender: NSButton) {
+    @objc
+    private func pressed(_ sender: NSButton) {
       let pressed = (state["pressed"] as? [String] ?? []) + [sender.title]
       state["pressed"] = pressed
       if sender.title == "Reply" { window.title = "Replied \(pressed.count { $0 == "Reply" })" }
       record()
     }
 
-    @objc private func chose(_ sender: NSMenuItem) {
+    @objc
+    private func chose(_ sender: NSMenuItem) {
       state["menu"] = (state["menu"] as? [String] ?? []) + [sender.title]
       record()
     }
 
-    @objc private func slid() { record() }
+    @objc
+    private func slid() { record() }
     /// A scroll, a move, a resize or a selection: anything the state reads off the views.
-    @objc private func scrolled() { record() }
+    @objc
+    private func scrolled() { record() }
 
-    func controlTextDidBeginEditing(_ obj: Notification) { record() }
-    func controlTextDidChange(_ obj: Notification) { record() }
+    func controlTextDidBeginEditing(_: Notification) { record() }
+    func controlTextDidChange(_: Notification) { record() }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+    func numberOfRows(in _: NSTableView) -> Int { rows.count }
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+    func tableView(_: NSTableView, viewFor _: NSTableColumn?, row: Int) -> NSView? {
       NSTextField(labelWithString: rows[row])
     }
 
-    func tableViewSelectionDidChange(_ notification: Notification) { record() }
+    func tableViewSelectionDidChange(_: Notification) { record() }
 
     /// The whole state, written after every change; the field's selection is
     /// read from its editor, which exists only while it's focused.
@@ -141,15 +150,20 @@
       state["scrollY"] = scroll.contentView.bounds.origin.y
       state["windowX"] = window.frame.origin.x
       state["windowWidth"] = window.frame.width
-      guard let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) else { return }
+      guard let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) else {
+        return
+      }
       try? data.write(to: URL(fileURLWithPath: statePath), options: .atomic)
     }
   }
 
   let path = CommandLine.arguments.dropFirst().first ?? "/tmp/blurt-command-fixture.json"
   let app = NSApplication.shared
+
   app.setActivationPolicy(.regular)
+
   let fixture = MainActor.assumeIsolated { Fixture(statePath: path) }
+
   app.delegate = fixture
   app.run()
 #endif

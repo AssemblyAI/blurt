@@ -27,13 +27,15 @@
       // Its contents are never read and what's dictated into it never kept,
       // yet it still takes the paste, as any password field does.
       #expect(secure.map(\.name) == ["1password-unlock"])
-      #expect(secure.allSatisfy { $0.pastes })
+      let allPaste = secure.allSatisfy(\.pastes)
+      #expect(allPaste)
     }
 
     @Test("both outcomes are covered: places to paste, and places with nowhere to paste")
     func bothOutcomes() throws {
       let fixtures = try PasteFixture.loadAll()
-      #expect(fixtures.contains { $0.pastes })
+      let somePaste = fixtures.contains(where: \.pastes)
+      #expect(somePaste)
       #expect(fixtures.contains { !$0.pastes })
     }
 
@@ -48,10 +50,11 @@
     func noText() throws {
       let raw = try String(contentsOf: PasteFixture.url, encoding: .utf8)
       let found = try TestFixtures.audit(
-        raw, shapes: TestFixtures.personalShapes + TestFixtures.webShapes, allowedKeys: PasteFixture.keys)
+        raw, shapes: TestFixtures.personalShapes + TestFixtures.webShapes, allowedKeys: PasteFixture.keys
+      )
       #expect(found.isEmpty, "\(found)")
       for fixture in try PasteFixture.loadAll() {
-        for name in [fixture.facts.role, fixture.facts.subrole].compactMap({ $0 }) {
+        for name in [fixture.facts.role, fixture.facts.subrole].compactMap(\.self) {
           #expect(name.range(of: #"^AX[A-Za-z]+$"#, options: .regularExpression) != nil, "\(fixture.name): \(name)")
         }
         if let bundle = fixture.facts.bundleID {
@@ -61,36 +64,4 @@
     }
   }
 
-  /// One recorded paste situation.
-  struct PasteFixture: Codable, Equatable {
-    let name: String
-    /// The app opened for it, as `open_app` names it.
-    let app: String
-    /// Whether a dictation there should be pasted (else left on the clipboard).
-    let pastes: Bool
-    let facts: PasteFacts
-
-    static let url = TestFixtures.url("Tests/PasteFixtures/pastes.json")
-
-    /// Every key a fixture is written with, read off one with every field set.
-    static var keys: Set<String> {
-      let full = PasteFixture(
-        name: "", app: "", pastes: true,
-        facts: PasteFacts(focused: true, role: "", subrole: "", bundleID: ""))
-      let object = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(full))) as? [String: Any] ?? [:]
-      return Set(object.keys).union((object["facts"] as? [String: Any] ?? [:]).keys)
-    }
-
-    static func loadAll() throws -> [PasteFixture] {
-      try JSONDecoder().decode([PasteFixture].self, from: Data(contentsOf: url))
-    }
-
-    static func save(_ fixtures: [PasteFixture]) throws {
-      try FileManager.default.createDirectory(
-        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      try encoder.encode(fixtures).write(to: url)
-    }
-  }
 #endif

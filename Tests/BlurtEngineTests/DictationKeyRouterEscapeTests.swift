@@ -23,7 +23,7 @@ struct DictationKeyRouterEscapeTests {
     var router = router()
     #expect(router.handle(.down(trigger), at: .zero) == .start)
     #expect(router.handle(escapeOverRightCommand, at: .milliseconds(100)) == .discard)
-    #expect(router.handle(.up(trigger), at: .seconds(2)) == .none)
+    #expect(router.handle(.up(trigger), at: .seconds(2)) == .ignore)
     #expect(router.handle(.down(trigger), at: .seconds(3)) == .start)
   }
 
@@ -43,8 +43,8 @@ struct DictationKeyRouterEscapeTests {
       let discardedAgain = router.reset()
       #expect(!discardedAgain)
     }
-    #expect(router.handle(.down(trigger), at: .milliseconds(200)) == .none)
-    #expect(router.handle(.up(trigger), at: .seconds(1)) == .none)
+    #expect(router.handle(.down(trigger), at: .milliseconds(200)) == .ignore)
+    #expect(router.handle(.up(trigger), at: .seconds(1)) == .ignore)
     #expect(router.handle(.down(trigger), at: .seconds(2)) == .start)
   }
 
@@ -107,7 +107,7 @@ struct DictationKeyRouterEscapeTests {
     // The tap is listen-only and sees every escape pressed anywhere on the
     // system, so an idle host must not turn each one into a discard.
     var router = router()
-    #expect(router.handle(escape, at: .zero) { false } == .none)
+    #expect(router.handle(escape, at: .zero) { false } == .ignore)
     #expect(router.handle(.down(trigger), at: .seconds(1)) == .start)
   }
 
@@ -116,7 +116,7 @@ struct DictationKeyRouterEscapeTests {
     var router = router()
     #expect(router.handle(.down(trigger), at: .zero) == .start)
     #expect(router.handle(.up(trigger), at: .milliseconds(200)) == .latch)
-    #expect(router.handle(.keyDown(keyCode: 8), at: .seconds(1)) == .none)  // ⌘C passes through
+    #expect(router.handle(.keyDown(keyCode: 8), at: .seconds(1)) == .ignore)  // ⌘C passes through
     #expect(router.handle(escape, at: .seconds(2)) == .discard)
   }
 
@@ -144,7 +144,8 @@ struct DictationKeyRouterEscapeTests {
       return value
     }
     let event = DictationKeyRouter.Event.fromKeyDown(
-      keyCode: 8, isAutorepeat: touched(false), escapeCancels: touched(true), rawFlags: touched(0))
+      keyCode: 8, isAutorepeat: touched(false), escapeCancels: touched(true), rawFlags: touched(0)
+    )
     #expect(event == .keyDown(keyCode: 8))
     #expect(!read.value)
   }

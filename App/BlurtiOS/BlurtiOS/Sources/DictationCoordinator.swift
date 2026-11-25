@@ -21,6 +21,18 @@ import UIKit
 @MainActor
 @Observable
 final class DictationCoordinator {
+  /// Who pressed last and what their field held, until the session accepts
+  /// the press (`claimPress`). A press the session refuses — one arriving while
+  /// a dictation is still in flight — must not take over that dictation's words.
+  nonisolated struct Press: Sendable {
+    /// The field the press came from.
+    var address = ResultAddress()
+    var context = FocusedFieldContext.empty
+    /// The field whose accepted stop ended the dictation, which is where the
+    /// words go. The dictation itself and its owner are `inFlight`.
+    var stopAddress: ResultAddress?
+  }
+
   static let log = HostIdentity.current.logger("Commands")
   /// The background task held from a release to the dictation's end, so the
   /// words land after the keyboard's host put Blurt in the background.
@@ -30,6 +42,19 @@ final class DictationCoordinator {
   /// most this long after `BlurtShared.ownerWatchdog` has passed since its
   /// last beat (DESIGN.md). The `keyboard` signal asks at once besides.
   static let watchdogTick: Duration = .seconds(2)
+  nonisolated static let pendingPress = Mutex(Press())
+  /// The press that started the dictation in flight: its keyboard, for the
+  /// words to go back to, and what that keyboard saw around the cursor, read
+  /// by the engine's context seam — and cleared once used, so nothing from
+  /// another app's field primes a later request.
+  nonisolated static let claimedPress = Mutex(Press())
+  /// Contact names, parsed once per lexicon refresh rather than on the press.
+  nonisolated private static let lexiconNames = Mutex<[String]>([])
+  /// The words the session just delivered, waiting to be counted. The stats are
+  /// recorded on the main actor when the dictation's terminal phase renders —
+  /// after its recording has been timed, and in the same place a reset runs —
+  /// rather than on the session's actor, where neither ordering holds.
+  nonisolated private static let deliveredText = Mutex<String?>(nil)
 
   let window: ListeningWindow
   let apiKey: APIKeyModel
@@ -59,8 +84,9 @@ final class DictationCoordinator {
   /// one mean the open failed, rather than the launch record before it.
   @ObservationIgnored var returnSawWindow = false
   /// Whether a Picture in Picture keeper has to be up before the app may
-  /// leave; nil reads the window's idle mode (a test sets it).
-  @ObservationIgnored var expectsKeeper: Bool?
+  /// leave; nil reads the window's idle mode (a test sets it), so it is a
+  /// tri-state rather than a flag.
+  @ObservationIgnored var expectsKeeper: Bool?  // swiftlint:disable:this discouraged_optional_boolean
   /// How many contact names the keyboard last read off the phone — the key
   /// terms that come for free, so the home screen can say so.
   private(set) var lexiconNameCount = 0
@@ -111,31 +137,6 @@ final class DictationCoordinator {
   /// A recording is in flight, as the window was told.
   @ObservationIgnored private var utteranceOpen = false
   @ObservationIgnored private var lastLevelPublish = ContinuousClock.now
-
-  /// Who pressed last and what their field held, until the session accepts
-  /// the press (`claimPress`). A press the session refuses — one arriving while
-  /// a dictation is still in flight — must not take over that dictation's words.
-  nonisolated struct Press: Sendable {
-    /// The field the press came from.
-    var address = ResultAddress()
-    var context = FocusedFieldContext.empty
-    /// The field whose accepted stop ended the dictation, which is where the
-    /// words go. The dictation itself and its owner are `inFlight`.
-    var stopAddress: ResultAddress?
-  }
-  nonisolated static let pendingPress = Mutex(Press())
-  /// The press that started the dictation in flight: its keyboard, for the
-  /// words to go back to, and what that keyboard saw around the cursor, read
-  /// by the engine's context seam — and cleared once used, so nothing from
-  /// another app's field primes a later request.
-  nonisolated static let claimedPress = Mutex(Press())
-  /// Contact names, parsed once per lexicon refresh rather than on the press.
-  nonisolated private static let lexiconNames = Mutex<[String]>([])
-  /// The words the session just delivered, waiting to be counted. The stats are
-  /// recorded on the main actor when the dictation's terminal phase renders —
-  /// after its recording has been timed, and in the same place a reset runs —
-  /// rather than on the session's actor, where neither ordering holds.
-  nonisolated private static let deliveredText = Mutex<String?>(nil)
   /// When the recording in progress started (the keyboard's countdown reads
   /// it off the phase), and how long the last one ran.
   @ObservationIgnored private(set) var recordingSince: Date?
@@ -153,9 +154,21 @@ final class DictationCoordinator {
   /// Brings the host app back (`HostReturn.open`); a test's capture.
   @ObservationIgnored let hostReturner: @MainActor (String) -> Bool
 
+  /// The phase as the home screen and the keyboard show it: the engine's own
+  /// wording, except a capture failure, which is said as the source's own
+  /// sentence (`CaptureFailure`) rather than as "Audio capture failed: …".
+  var overlay: OverlayUIState {
+    if case .failed(.audioCaptureFailed(let underlying)) = phase {
+      return .error(message: CaptureFailure.sentence(for: underlying))
+    }
+    return phase.overlayState
+  }
+
   init(
-    apiKey: APIKeyModel = APIKeyModel(), window: ListeningWindow = ListeningWindow(),
-    transcriber: any TranscriberProtocol = AssemblyAITranscriber(), clock: any Clock<Duration> = ContinuousClock(),
+    apiKey: APIKeyModel = APIKeyModel(),
+    window: ListeningWindow = ListeningWindow(),
+    transcriber: any TranscriberProtocol = AssemblyAITranscriber(),
+    clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { Date() },
     appState: @escaping @MainActor () -> UIApplication.State = { UIApplication.shared.applicationState },
     hostReturner: @escaping @MainActor (String) -> Bool = HostReturn.open(bundleID:)
@@ -166,9 +179,10 @@ final class DictationCoordinator {
     self.now = now
     self.appState = appState
     self.hostReturner = hostReturner
-    let (recents, continuation) = AsyncStream.makeStream(
-      of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1))
-    self.recents = recents
+    let (recentStream, continuation) = AsyncStream.makeStream(
+      of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1)
+    )
+    self.recents = recentStream
     session = DictationSession(
       mic: window.source,
       transcriber: transcriber,
@@ -177,7 +191,10 @@ final class DictationCoordinator {
       // coordinator's clock and judges presence by its `now`, as the
       // watchdog does.
       injector: KeyboardRelayInjector(
-        presser: { Self.claimedPress.withLock { $0.stopAddress ?? $0.address } }, clock: clock, now: now),
+        presser: { Self.claimedPress.withLock { $0.stopAddress ?? $0.address } },
+        clock: clock,
+        now: now
+      ),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { text, ring in
@@ -190,23 +207,31 @@ final class DictationCoordinator {
       // `frontmost` runs only for a press the session accepts, first thing, so
       // that is where the press's keyboard and field text become the dictation's.
       hostFocusCapture: DictationSession.HostFocusCapture(
-        frontmost: { Self.claimPress() }, field: { Self.fieldContext() }))
+        frontmost: { Self.claimPress() }, field: { Self.fieldContext() }
+      )
+    )
     window.onEndingUtterance = { [weak self] keepWords in await self?.endUtterance(keepWords: keepWords) }
     window.onStateChanged = { [weak self] _ in self?.clearError() }
     window.onRecord = { [weak self] record in self?.recordPublished(record) }
   }
 
-  deinit {
-    watchdog?.cancel()
-    errorDwell?.cancel()
-    returnCap?.cancel()
-    for task in tasks { task.cancel() }
+  /// The user's own key terms (from the App Group, where the keyboard adds
+  /// them on the spot), then the contact names the keyboard read off the
+  /// phone, deduplicated case-insensitively. `KeyTerms` fits the list
+  /// to the request's caps (100 terms, 2048 bytes), first entries first, which
+  /// is why the typed terms lead.
+  nonisolated static func keyTerms() -> [String] {
+    // Not through the comma-separated form: a contact called "Smith, John"
+    // is one name, and the engine takes an array.
+    KeyTerms.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
   }
 
   func start() {
     // `.task` on the root view runs this once; a scene reconnect must not
     // start a second set of observers publishing every phase twice.
-    guard tasks.isEmpty else { return }
+    guard tasks.isEmpty else {
+      return
+    }
     // Whatever the last run left in the App Group is over: a fresh launch,
     // no window, and the phase idle under it. The window's heartbeat runs
     // from here for as long as the process does.
@@ -236,25 +261,16 @@ final class DictationCoordinator {
     lexiconNameCount = names.count
   }
 
-  /// The user's own key terms (from the App Group, where the keyboard adds
-  /// them on the spot), then the contact names the keyboard read off the
-  /// phone, deduplicated case-insensitively. `KeyTerms` fits the list
-  /// to the request's caps (100 terms, 2048 bytes), first entries first, which
-  /// is why the typed terms lead.
-  nonisolated static func keyTerms() -> [String] {
-    // Not through the comma-separated form: a contact called "Smith, John"
-    // is one name, and the engine takes an array.
-    KeyTerms.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
-  }
-
   // MARK: - Phase, level and results out to the keyboard
 
   private func observePhases() -> Task<Void, Never> {
-    let session = session
+    let pipeline = session
     return Task { [weak self] in
-      for await phase in await session.phaseStream() {
-        guard let self else { return }
-        self.render(phase)
+      for await nextPhase in await pipeline.phaseStream() {
+        guard let self else {
+          return
+        }
+        render(nextPhase)
       }
     }
   }
@@ -310,67 +326,49 @@ final class DictationCoordinator {
     let levels = window.source.levels
     return Task { [weak self] in
       for await value in levels {
-        guard let self else { return }
+        guard let self else {
+          return
+        }
         // Only while recording: the feed reports levels only for an open
         // utterance, and the home screen's hero shouldn't redraw for a
         // window sitting idle in the background.
-        guard self.phase == .recording else { continue }
-        self.level = value
+        guard phase == .recording else { continue }
+        level = value
         // The keyboard redraws its meter from these; ~12 Hz is plenty for a pill
         // and keeps the shared-defaults writes off the capture path's back.
-        guard self.lastLevelPublish.duration(to: ContinuousClock.now) > .milliseconds(80) else { continue }
-        self.lastLevelPublish = ContinuousClock.now
-        self.publish(.recording)
+        guard lastLevelPublish.duration(to: ContinuousClock.now) > .milliseconds(80) else { continue }
+        lastLevelPublish = ContinuousClock.now
+        publish(.recording)
       }
     }
   }
 
   private func observeRecents() -> Task<Void, Never> {
-    let recents = recents
+    let recentStream = recents
     return Task { [weak self] in
-      for await ring in recents {
-        guard let self else { return }
-        self.recent = ring
+      for await ring in recentStream {
+        guard let self else {
+          return
+        }
+        recent = ring
       }
     }
-  }
-
-  /// The phase as the home screen and the keyboard show it: the engine's own
-  /// wording, except a capture failure, which is said as the source's own
-  /// sentence (`CaptureFailure`) rather than as "Audio capture failed: …".
-  var overlay: OverlayUIState {
-    if case .failed(.audioCaptureFailed(let underlying)) = phase {
-      return .error(message: CaptureFailure.sentence(for: underlying))
-    }
-    return phase.overlayState
-  }
-
-  /// Why the phase is an error, typed, for the keyboard's line: a capture
-  /// failure's reason; nothing for a failure the engine words itself.
-  private func reason(for phase: PipelinePhase) -> FailureReason? {
-    guard case .failed(.audioCaptureFailed(let underlying)) = phase else { return nil }
-    return CaptureFailure.reason(for: underlying)
-  }
-
-  private func publish(_ state: OverlayUIState, reason: FailureReason? = nil) {
-    let snapshot = PhaseSnapshot(
-      state: PhaseSnapshot.State(state), message: PhaseSnapshot.message(for: state), level: Double(level),
-      at: Date(), command: lastCommandID, reason: reason, answers: answers, dictation: inFlight,
-      launchID: window.launchID, recordingSince: recordingSince)
-    SharedStore.write(snapshot, forKey: BlurtShared.Key.phase)
-    SharedStore.post(BlurtShared.Signal.phase)
   }
 
   // MARK: - The home card's error
 
   /// A failed dictation, said on the home card for `HomeStatus.errorDwell`.
   private func note(_ overlay: OverlayUIState) {
-    guard case .error(let message, _) = overlay else { return }
+    guard case .error(let message, _) = overlay else {
+      return
+    }
     error = message
     errorDwell?.cancel()
     errorDwell = Task { [weak self] in
       try? await Task.sleep(for: .seconds(HomeStatus.errorDwell))
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled else {
+        return
+      }
       self?.error = nil
     }
   }
@@ -381,5 +379,12 @@ final class DictationCoordinator {
     errorDwell?.cancel()
     errorDwell = nil
     error = nil
+  }
+
+  deinit {
+    watchdog?.cancel()
+    errorDwell?.cancel()
+    returnCap?.cancel()
+    for task in tasks { task.cancel() }
   }
 }

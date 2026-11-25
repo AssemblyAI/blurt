@@ -32,13 +32,14 @@
   ///
   /// `@safe`: the IOProc ID it stores is a raw Core Audio handle, but it is
   /// created, run and destroyed entirely inside this class, never handed out.
-  @safe public final class SystemAudioRecorder {
+  @safe
+  public final class SystemAudioRecorder {
     public enum RecorderError: Error, LocalizedError {
       case coreAudio(String, OSStatus)
 
       public var errorDescription: String? {
         switch self {
-        case .coreAudio(let step, let status):
+        case let .coreAudio(step, status):
           "Couldn't start recording (\(step), error \(status))."
         }
       }
@@ -46,6 +47,7 @@
 
     /// The rate everything leaves at: the realtime API's, and plenty for speech.
     public static let outputSampleRate = Double(RealtimeTranscriber.sampleRate)
+    static let log = HostIdentity.current.logger("Recorder")
 
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var tapUUID = UUID()
@@ -53,16 +55,17 @@
     private var procID: AudioDeviceIOProcID?
     private var writer: MixWriter?
     private let queue = DispatchQueue(label: "Blurt.SystemAudioRecorder")
-    static let log = HostIdentity.current.logger("Recorder")
 
-    public init() {}
-
-    deinit { teardown() }
+    /// An idle recorder: nothing is created until `start`.
+    public init() {
+      // Nothing to set up: the tap and aggregate device are built by `start`.
+    }
 
     /// Starts recording to `url` (an `.m4a`), handing each slice of the 16 kHz
     /// mix to `onPCM` as S16LE bytes, on the recorder's queue. Throws — with
     /// everything it created torn down, the empty file included — if any Core
     /// Audio step fails.
+    @preconcurrency
     public func start(to url: URL, onPCM: @escaping @Sendable (Data) -> Void) throws {
       do {
         try createTap()
@@ -72,16 +75,17 @@
         Self.log.notice(
           "recorder starting: aggregate \(self.aggregateID, privacy: .public) at \(rate, privacy: .public) Hz, \(frames, privacy: .public)-frame buffers"
         )
-        let writer = try MixWriter(url: url, inputRate: rate, maxFrames: Int(frames), onPCM: onPCM)
-        self.writer = writer
+        let mixWriter = try MixWriter(url: url, inputRate: rate, maxFrames: Int(frames), onPCM: onPCM)
+        self.writer = mixWriter
         var proc: AudioDeviceIOProcID?
         try unsafe check(
           "IOProc",
           AudioDeviceCreateIOProcIDWithBlock(&proc, aggregateID, queue) { _, input, _, _, _ in
-            unsafe writer.write(input)
-          })
+            unsafe mixWriter.write(input)
+          }
+        )
         unsafe procID = unsafe proc
-        try unsafe check("start", AudioDeviceStart(aggregateID, proc))
+        unsafe try check("start", AudioDeviceStart(aggregateID, proc))
         Self.log.notice("recorder started")
       } catch {
         Self.log.error("recorder failed to start: \(error.localizedDescription, privacy: .public)")
@@ -95,15 +99,19 @@
     /// and its indicator goes out — while the tap, the aggregate and the file
     /// stay, for `resume` to carry on into.
     public func pause() {
-      guard let procID = unsafe procID else { return }
-      unsafe AudioDeviceStop(aggregateID, procID)
+      guard let runningID = unsafe procID else {
+        return
+      }
+      unsafe AudioDeviceStop(aggregateID, runningID)
       Self.log.notice("recorder paused")
     }
 
     /// Resumes capture into the same file after `pause`.
     public func resume() throws {
-      guard let procID = unsafe procID else { return }
-      try unsafe check("resume", AudioDeviceStart(aggregateID, procID))
+      guard let runningID = unsafe procID else {
+        return
+      }
+      unsafe try check("resume", AudioDeviceStart(aggregateID, runningID))
       Self.log.notice("recorder resumed")
     }
 
@@ -113,9 +121,9 @@
     }
 
     private func teardown() {
-      if let procID = unsafe procID {
-        unsafe AudioDeviceStop(aggregateID, procID)
-        unsafe AudioDeviceDestroyIOProcID(aggregateID, procID)
+      if let runningID = unsafe procID {
+        unsafe AudioDeviceStop(aggregateID, runningID)
+        unsafe AudioDeviceDestroyIOProcID(aggregateID, runningID)
         unsafe self.procID = nil
       }
       // Every callback already queued has run once this returns, so the file
@@ -123,7 +131,9 @@
       // the IOProc stops: `MixWriter` is confined to `queue`, and its counters
       // are written by every callback.
       queue.sync {
-        guard let writer else { return }
+        guard let writer else {
+          return
+        }
         Self.log.notice("recorder stopping: \(writer.summary, privacy: .public)")
         writer.close()
       }
@@ -208,13 +218,16 @@
       var object = AudioObjectID(kAudioObjectUnknown)
       var size = UInt32(MemoryLayout<AudioObjectID>.size)
       let status = unsafe AudioObjectGetPropertyData(
-        AudioRoute.systemObject, &address, UInt32(MemoryLayout<pid_t>.size), &pid, &size, &object)
+        AudioRoute.systemObject, &address, UInt32(MemoryLayout<pid_t>.size), &pid, &size, &object
+      )
       return status == noErr && object != kAudioObjectUnknown ? object : nil
     }
 
     private func check(_ step: String, _ status: OSStatus) throws {
       guard status == noErr else { throw RecorderError.coreAudio(step, status) }
     }
+
+    deinit { teardown() }
   }
 
 #endif

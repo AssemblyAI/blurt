@@ -24,14 +24,15 @@ import UIKit
 /// every await, and a window closing cancels the work outright.
 @MainActor
 final class PictureInPictureIdle: IdleMode {
+  /// Thrown by `windowOpened` where the device has no Picture in Picture.
+  struct Unsupported: Error {}
+
   private static let log = HostIdentity.current.logger("ListeningWindow")
   /// How long a closing window waits for the keeper to stop before the next
   /// window opens under it (DESIGN.md): a hop over an interrupted window
   /// closes this one and opens another at once, and the new window must not
   /// park under a keeper that is on its way out.
   static let keeperStopWait: Duration = .seconds(1)
-  /// Thrown by `windowOpened` where the device has no Picture in Picture.
-  struct Unsupported: Error {}
 
   let kind = ListeningState.Idle.pip
   let keeper = PictureInPictureKeeper()
@@ -48,19 +49,21 @@ final class PictureInPictureIdle: IdleMode {
   /// cancel it rather than have it report for the window that follows.
   private var keeperTask: Task<Void, Never>?
 
+  /// Held: the source open. Parked: the keeper alive over an open source.
+  var isLive: Bool {
+    guard let source, source.isOpen else {
+      return false
+    }
+    return !parked || keeper.isActive
+  }
+
   init(appState: @escaping () -> UIApplication.State) {
     self.appState = appState
     keeper.onStart = { [weak self] in self?.keeperStarted() }
     keeper.onStop = { [weak self] in self?.keeperStopped() }
   }
 
-  /// Held: the source open. Parked: the keeper alive over an open source.
-  var isLive: Bool {
-    guard let source, source.isOpen else { return false }
-    return !parked || keeper.isActive
-  }
-
-  func windowOpened(source: any ListeningSource, generation: ListeningWindowMachine.Generation) async throws {
+  func windowOpened(source: any ListeningSource, generation: ListeningWindowMachine.Generation) throws {
     self.source = source
     self.generation = generation
     closing = false
@@ -77,9 +80,13 @@ final class PictureInPictureIdle: IdleMode {
     keeper.start()
   }
 
-  func utteranceWillBegin() {}
+  func utteranceWillBegin() {
+    // Nothing to do: the mic stays parked or held by the keeper across utterances.
+  }
 
-  func utteranceDidEnd() {}
+  func utteranceDidEnd() {
+    // Nothing to do: the mic stays parked or held by the keeper across utterances.
+  }
 
   /// Lets go of the keeper and waits for it to stop — `keeperStopWait` at
   /// most — so the window that opens next never parks under one on its way out.
@@ -95,14 +102,18 @@ final class PictureInPictureIdle: IdleMode {
 
   /// The keeper is up: the mic can close between dictations now.
   private func keeperStarted() {
-    guard let source, !closing else { return }
-    let generation = generation
+    guard let source, !closing else {
+      return
+    }
+    let armedGeneration = generation
     keeperTask = Task {
       await source.park()
-      guard stillArmed(for: generation) else { return }
+      guard stillArmed(for: armedGeneration) else {
+        return
+      }
       parked = true
       Self.log.notice("picture in picture up; the mic is parked")
-      report?(.idleChanged(.pip), generation)
+      report?(.idleChanged(.pip), armedGeneration)
     }
   }
 
@@ -110,24 +121,30 @@ final class PictureInPictureIdle: IdleMode {
   /// window still works; in the background nothing can start it until the
   /// next foreground, which the window waits for.
   private func keeperStopped() {
-    guard !closing, let source else { return }
+    guard !closing, let source else {
+      return
+    }
     parked = false
-    let generation = generation
+    let armedGeneration = generation
     if appState() == .background {
       Self.log.notice("picture in picture stopped in the background; the mic waits for the next foreground")
-      report?(.sourceDied(.needsForeground), generation)
+      report?(.sourceDied(.needsForeground), armedGeneration)
       return
     }
     keeperTask = Task {
       do {
         try await source.hold()
-        guard stillArmed(for: generation) else { return }
+        guard stillArmed(for: armedGeneration) else {
+          return
+        }
         Self.log.notice("picture in picture stopped in front; the mic is held")
-        report?(.idleChanged(.held), generation)
+        report?(.idleChanged(.held), armedGeneration)
       } catch {
-        guard stillArmed(for: generation) else { return }
+        guard stillArmed(for: armedGeneration) else {
+          return
+        }
         Self.log.error("picture in picture stopped; hold failed: \(error.localizedDescription, privacy: .public)")
-        report?(.sourceDied(CaptureFailure.reason(for: error)), generation)
+        report?(.sourceDied(CaptureFailure.reason(for: error)), armedGeneration)
       }
     }
   }

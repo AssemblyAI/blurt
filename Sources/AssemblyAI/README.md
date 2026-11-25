@@ -19,6 +19,6 @@ a standalone Swift SDK. Foundation (plus CryptoKit for the PKCE challenge); macO
 What it deliberately doesn't hold: which prompt, cleanup instruction or key terms to send, where the
 key or the key terms are stored, the `User-Agent`, or anything done to the text on the device (text
 shortcuts, `TextShortcutExpander`). Those are the app's choices and live in `BlurtEngine`
-(`AssemblyAITranscriber`, `KeyTermsStore`, `TextShortcuts.swift`, `APIKeyValidator.blurt()`).
+(`AssemblyAITranscriber`, `KeyTermsStore`, `TextShortcut.swift`, `APIKeyValidator.blurt()`).
 
 Tests run with the engine's: `swift test` from the repo root.

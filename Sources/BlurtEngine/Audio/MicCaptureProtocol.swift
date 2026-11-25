@@ -1,6 +1,12 @@
 public import Foundation
 
 public protocol MicCaptureProtocol: Sendable {
+  /// Loudness feed for a meter UI: `0…1`, emitted while recording. Declared on
+  /// the protocol (with an empty-stream default below) so hosts read the meter
+  /// through the same seam they inject — a stub without a meter satisfies it
+  /// for free instead of every composition threading a side-channel stream.
+  var levels: AsyncStream<Float> { get }
+
   /// Begin capturing 16 kHz mono 16-bit PCM. Throws on permission/device failure.
   ///
   /// **May hold until the input device actually delivers frames.** A Bluetooth
@@ -45,11 +51,6 @@ public protocol MicCaptureProtocol: Sendable {
   /// has nothing to preserve. Declared here (not only in the default extension)
   /// so it dispatches dynamically through `any MicCaptureProtocol`.
   func cancelCapture() async throws
-  /// Loudness feed for a meter UI: `0…1`, emitted while recording. Declared on
-  /// the protocol (with an empty-stream default below) so hosts read the meter
-  /// through the same seam they inject — a stub without a meter satisfies it
-  /// for free instead of every composition threading a side-channel stream.
-  var levels: AsyncStream<Float> { get }
   /// Optionally pay whatever set-up cost the first `start()` would otherwise
   /// pay on the hot path. Must **not** open the input device — no capture, no
   /// mic indicator, nothing held between presses — and must not throw; a failure
@@ -67,7 +68,9 @@ extension MicCaptureProtocol {
 
   /// No-op default: a capture with nothing to pre-open inherits this, mirroring
   /// `TranscriberProtocol.warmUp`.
-  public func warmUp() async {}
+  public func warmUp() {
+    // Nothing to pre-open: see the doc comment above.
+  }
 
   /// Stop-and-discard default, so a capture with no cancel-specific teardown
   /// (every stub) conforms for free and still records the stop the way it always

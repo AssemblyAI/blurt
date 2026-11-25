@@ -5,24 +5,6 @@
 
   @testable import BlurtEngine
 
-  extension Tag {
-    /// Marks suites that drive this Mac's real apps — clicking, typing keys,
-    /// opening windows. Never on CI; `--filter-tag drivesThisMac` picks them.
-    @Tag static var drivesThisMac: Self
-  }
-
-  extension Trait where Self == ConditionTrait {
-    /// The two gates every suite that drives this Mac needs, in one place: the
-    /// variable that asks for it, and Accessibility trust for the process
-    /// running the tests (the terminal, or Xcode). Like `requiresLiveAudio`,
-    /// a normal run reports these suites as skipped, never as a silent pass.
-    static func drivesThisMac(_ variable: String, to purpose: String) -> Self {
-      .enabled(
-        if: ProcessInfo.processInfo.environment[variable] == "1" && AXIsProcessTrusted(),
-        "set \(variable)=1 to \(purpose), with Accessibility trust for the process running the tests")
-    }
-  }
-
   /// What the suites that drive this Mac share.
   enum MacDriver {
     /// Makes the test process a registered app — an accessory, no Dock icon —
@@ -34,7 +16,9 @@
     /// Whether a name is among those a comma-separated variable picks
     /// ("Slack,Mail") — every name when it's unset.
     static func picks(_ variable: String) -> (String) -> Bool {
-      guard let list = ProcessInfo.processInfo.environment[variable] else { return { _ in true } }
+      guard let list = ProcessInfo.processInfo.environment[variable] else {
+        return { _ in true }
+      }
       let picked = Set(list.split(separator: ",").map(String.init))
       return picked.contains
     }
@@ -50,10 +34,10 @@
     /// The first element the screen read lists whose label starts with
     /// `label`, of one of `kinds` — of any kind when that's empty.
     static func first(
-      labelled label: String, kinds: Set<String> = [], with performer: SystemVoiceCommandPerformer
+      labelled label: String, with performer: SystemVoiceCommandPerformer, kinds: Set<String> = []
     ) async -> ScreenContext.Element? {
-      await performer.screenContext().elements.first {
-        (kinds.isEmpty || kinds.contains($0.kind)) && $0.label.hasPrefix(label)
+      await performer.screenContext().elements.first { element in
+        (kinds.isEmpty || kinds.contains(element.kind)) && element.label.hasPrefix(label)
       }
     }
 
@@ -61,15 +45,38 @@
     /// there is one, and says whether it did.
     @discardableResult
     static func press(labelled label: String, with performer: SystemVoiceCommandPerformer) async -> Bool {
-      guard let element = await first(labelled: label, with: performer) else { return false }
+      guard let element = await first(labelled: label, with: performer) else {
+        return false
+      }
       return (try? await performer.perform(.pressElement(element.id))) != nil
     }
 
     /// Presses a shortcut ("cmd+n"); false when `keys` names no chord.
     static func shortcut(_ keys: String, with performer: SystemVoiceCommandPerformer) async throws -> Bool {
-      guard let chord = KeyChord(keys) else { return false }
+      guard let chord = KeyChord(keys) else {
+        return false
+      }
       _ = try await performer.perform(.shortcut(chord))
       return true
+    }
+  }
+
+  extension Tag {
+    /// Marks suites that drive this Mac's real apps — clicking, typing keys,
+    /// opening windows. Never on CI; `--filter-tag drivesThisMac` picks them.
+    @Tag static var drivesThisMac: Self
+  }
+
+  extension Trait where Self == ConditionTrait {
+    /// The two gates every suite that drives this Mac needs, in one place: the
+    /// variable that asks for it, and Accessibility trust for the process
+    /// running the tests (the terminal, or Xcode). Like `requiresLiveAudio`,
+    /// a normal run reports these suites as skipped, never as a silent pass.
+    static func drivesThisMac(_ variable: String, to purpose: String) -> Self {
+      .enabled(
+        if: ProcessInfo.processInfo.environment[variable] == "1" && AXIsProcessTrusted(),
+        "set \(variable)=1 to \(purpose), with Accessibility trust for the process running the tests"
+      )
     }
   }
 #endif

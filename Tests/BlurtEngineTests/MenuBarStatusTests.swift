@@ -34,64 +34,12 @@ struct MenuBarStatusTests {
     #expect(phase.menuBarStatus == expected)
   }
 
-  @Test func failedMapsToIdle() {
+  @Test
+  func failedMapsToIdle() {
     // Unlike the overlay pill (which flashes red), the menu bar deliberately
     // doesn't surface the transient error — so a handled failure reads as idle,
     // and the icon can't get stranded on a state nothing transitions out of (the
     // pill's error revert is timer-driven, not a follow-up phase).
     #expect(PipelinePhase.failed(.targetAppLost).menuBarStatus == .idle)
-  }
-}
-
-/// The status item's glyph and VoiceOver label per state. Owned in the engine
-/// (mirroring `OverlayUIState.accessibilityLabel`) so the wording lives in one
-/// unit-tested place; the SwiftUI shell reads these verbatim, so a silent edit
-/// would otherwise ship an unannounced regression.
-@Suite("MenuBarStatus presentation")
-struct MenuBarStatusPresentationTests {
-  @Test func symbolNames() {
-    // A stylized "B" at rest, filling in while recording — the same idle→fill
-    // idiom the mic glyphs used — and the waveform while transcribing.
-    #expect(MenuBarStatus.idle.symbolName == "b.circle")
-    #expect(MenuBarStatus.recording.symbolName == "b.circle.fill")
-    #expect(MenuBarStatus.transcribing.symbolName == "waveform")
-    #expect(MenuBarStatus.recordingAudio.symbolName == "record.circle")
-  }
-
-  @Test func accessibilityLabels() {
-    #expect(MenuBarStatus.idle.accessibilityLabel == "Blurt — idle")
-    #expect(MenuBarStatus.recording.accessibilityLabel == "Blurt — recording")
-    #expect(MenuBarStatus.transcribing.accessibilityLabel == "Blurt — transcribing")
-    #expect(MenuBarStatus.recordingAudio.accessibilityLabel == "Blurt — recording mic and Mac audio")
-  }
-
-  @Test("a Record-button recording shows when no dictation is on, and only while capturing (#345)")
-  func recordingAudioFoldsIn() {
-    #expect(MenuBarStatus.idle.showing(recordingAudio: true) == .recordingAudio)
-    #expect(MenuBarStatus.idle.showing(recordingAudio: false) == .idle)
-    // A dictation during the recording is what the glyph shows until it ends.
-    #expect(MenuBarStatus.recording.showing(recordingAudio: true) == .recording)
-    #expect(MenuBarStatus.transcribing.showing(recordingAudio: true) == .transcribing)
-  }
-}
-
-/// `PipelinePhase.isCapturing` gates the ready screen's style-switch lock (and,
-/// through `menuBarStatus`, its listening state), so the boundary cases carry
-/// the meaning: `.connecting` counts — a style switched during the mic bring-up
-/// would still disagree with the request — while `.transcribing` does not, the
-/// audio being already sealed.
-@Suite("PipelinePhase.isCapturing")
-struct PipelinePhaseIsCapturingTests {
-  @Test("exactly the bring-up and recording phases count as capturing")
-  func capturingCoversBringUpAndRecording() {
-    #expect(PipelinePhase.connecting.isCapturing)
-    #expect(PipelinePhase.recording.isCapturing)
-    #expect(!PipelinePhase.idle.isCapturing)
-    #expect(!PipelinePhase.transcribing.isCapturing)
-    #expect(!PipelinePhase.injecting.isCapturing)
-    #expect(!PipelinePhase.cancelled.isCapturing)
-    #expect(!PipelinePhase.pasted.isCapturing)
-    #expect(!PipelinePhase.noTarget.isCapturing)
-    #expect(!PipelinePhase.failed(.apiKeyMissing).isCapturing)
   }
 }

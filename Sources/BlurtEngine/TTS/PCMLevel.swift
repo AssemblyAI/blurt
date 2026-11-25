@@ -10,7 +10,9 @@ enum PCMLevel {
   /// needn't start on an `Int16` boundary.
   static func levels(of pcm: Data, windowFrames: Int) -> [Float] {
     let frames = pcm.count / 2
-    guard frames > 0, windowFrames > 0 else { return [] }
+    guard frames > 0, windowFrames > 0 else {
+      return []
+    }
     return unsafe pcm.withUnsafeBytes { raw in
       stride(from: 0, to: frames, by: windowFrames).map { start in
         let end = min(start + windowFrames, frames)

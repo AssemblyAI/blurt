@@ -5,9 +5,8 @@ import Testing
 
 @Suite("Chunked upload", .timeLimit(.minutes(1)))
 struct ChunkedUploadTests {
-
   @Test("the request opens at press and streams, rather than waiting for release")
-  func requestOpensAtPress() async throws {
+  func requestOpensAtPress() async {
     // The entire point of the change: if the request only opened at release, the
     // upload would sit on the wait the user feels. Reaching `waitUntilEntered()`
     // at all is the assertion — the transcriber was called while the session is
@@ -21,7 +20,7 @@ struct ChunkedUploadTests {
   }
 
   @Test("the frame feed ends at release, which is what completes the body")
-  func framesEndAtRelease() async throws {
+  func framesEndAtRelease() async {
     let probe = UploadProbe(transcript: "Hello world.")
     let session = makeSession(transcriber: probe)
 
@@ -41,7 +40,7 @@ struct ChunkedUploadTests {
   }
 
   @Test("a cancel while recording abandons the in-flight request")
-  func cancelWhileRecordingAbandonsUpload() async throws {
+  func cancelWhileRecordingAbandonsUpload() async {
     let probe = UploadProbe(transcript: "Hello world.")
     let injector = StubInjector()
     let session = makeSession(transcriber: probe, injector: injector)
@@ -59,7 +58,7 @@ struct ChunkedUploadTests {
   }
 
   @Test("a cancel during transcribing cancels the request, not just the wait")
-  func cancelDuringTranscribingCancelsUpload() async throws {
+  func cancelDuringTranscribingCancelsUpload() async {
     // The window after release and before the response: the feed has ended and
     // the request is waiting on inference. Cancelling the pipeline only abandons
     // the *wait* — awaiting a `Task`'s value is not cancellation-aware — so the
@@ -82,7 +81,7 @@ struct ChunkedUploadTests {
   }
 
   @Test("a too-short clip abandons the request instead of completing it")
-  func tooShortClipAbandonsUpload() async throws {
+  func tooShortClipAbandonsUpload() async {
     let mic = StubMicCapture()
     // Below `minPCMBytes` — an accidental tap. The request is already open and
     // carrying those bytes, so the guard has to abandon it rather than let it
@@ -100,7 +99,7 @@ struct ChunkedUploadTests {
   }
 
   @Test("a cancel during the context wait stays cancelled, not repainted as a failure")
-  func cancelDuringContextWaitStaysCancelled() async throws {
+  func cancelDuringContextWaitStaysCancelled() async {
     // `setPhase` clears `upload` on any terminal phase, so a cancel landing
     // while the pipeline is waiting on the request leaves that task to resume,
     // find no handle, and — before this guard — repaint the user's own cancel as
@@ -139,84 +138,15 @@ struct ChunkedUploadTests {
       transcriber: FailsBeforeContext(),
       seams: testSeams(
         field: FocusedFieldContext(
-          priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil),
-        log: log))
+          priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil
+        ),
+        log: log
+      )
+    )
 
     await session.dictate()
 
     let failure = try #require(log.failures.first)
     #expect(failure.context?.priorText == "Dear Sam,")
   }
-}
-
-// MARK: - Fixtures
-
-/// Transcriber double that fails without ever using the context — an
-/// authorization failure that lands before the body is finished. Still pins that
-/// the session recorded the press-time context for the log: `startUpload` adopts
-/// it before it opens the request, so a request that fails immediately cannot
-/// take the context down with it.
-private struct FailsBeforeContext: TranscriberProtocol {
-  func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
-  ) async throws -> String {
-    for await _ in frames {}
-    throw AssemblyAIError.http(status: 401, message: "Invalid API key")
-  }
-}
-
-/// Transcriber double that reports *when* it was called and, optionally, parks
-/// after the feed ends — the two facts the chunked upload turns on and that a
-/// return-value-only stub cannot show.
-///
-/// One type rather than two: "parks on entry" and "parks after resolving" are
-/// the same double with the hold in a different place.
-private final class UploadProbe: TranscriberProtocol, Sendable {
-  private let transcript: String
-  /// Opened the moment `transcribe` is entered, so a test can wait for the
-  /// request to be in flight without polling a phase that never changes. A bare
-  /// `AsyncGate`, not `Gate`: the probe must *not* block on entry — it parks on
-  /// the frame feed instead, which is where the production producer waits.
-  private let entered = AsyncGate()
-  /// Where a real request waits for inference. Only armed when the test needs to
-  /// land something while the session is `.transcribing`.
-  private let holding: Gate?
-  private let framesDone = ValueBox(false)
-  private let cancelled = ValueBox(false)
-  private let completed = Counter()
-
-  init(transcript: String, holdsBeforeReturning: Bool = false) {
-    self.transcript = transcript
-    holding = holdsBeforeReturning ? Gate() : nil
-  }
-
-  func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
-  ) async throws -> String {
-    entered.open()
-    // The session has to keep feeding the stream for the request to complete,
-    // and a probe that returned early would hide one that stopped. Spelled out
-    // rather than using `drainUntilAbandoned`, because the flag has to be set
-    // between the two halves: this probe reports *when* the feed ended, and a
-    // cancelled run must not report a feed that did end as unfinished.
-    for await _ in frames {}
-    framesDone.value = true
-    try Task.checkCancellation()
-    if let holding {
-      await holding.enter()
-      // Sampled after the gate so the test controls when it is read; a real
-      // request would have been torn down by the cancellation itself.
-      cancelled.value = Task.isCancelled
-    }
-    _ = completed.next()
-    return transcript
-  }
-
-  func waitUntilEntered() async { await entered.wait() }
-  func waitUntilHolding() async { await holding?.waitUntilEntered() }
-  func allowToFinish() { holding?.allowToFinish() }
-
-  var framesFinished: Bool { framesDone.value }
-  var sawCancellation: Bool { cancelled.value }
-  var completions: Int { completed.value }
 }

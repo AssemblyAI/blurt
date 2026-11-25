@@ -41,6 +41,14 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     var levels: [LevelWindow] = []
   }
 
+  /// Internal, not private, so `StreamingPCMPlayerTests` can bound the drain by it
+  /// rather than restate it.
+  static let drainSlack = Duration.seconds(2)
+
+  /// The longest one poll of `drain` sleeps, so the drain can overrun its
+  /// deadline by at most this much. Internal for the same reason.
+  static let drainPollCeiling = Duration.milliseconds(100)
+
   private let renderer = AVSampleBufferAudioRenderer()
   private let synchronizer = AVSampleBufferRenderSynchronizer()
   private let format: CMAudioFormatDescription?
@@ -50,6 +58,33 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   /// `TestClock` steps it, so the bound is checked exactly rather than timed.
   private let clock: any Clock<Duration>
   private let state: Mutex<State>
+
+  /// Seconds of audio queued ahead of what's playing, in listening time (the
+  /// rate applied), or 0 once stopped — how far ahead of the listener the
+  /// reading has got.
+  var bufferedSeconds: Double { (remaining() ?? 0) / rate }
+
+  /// The loudness of what's playing right now, 0...1, or 0 between words,
+  /// before the first chunk, and once stopped. Reads the media clock, so it
+  /// follows the audio coming out of the speakers, not the audio arriving.
+  var currentLevel: Float {
+    state.withLock { state in
+      guard !state.stopped else {
+        return 0
+      }
+      let now = CMTimeGetSeconds(synchronizer.currentTime())
+      // Windows are in time order, so only the head can have expired.
+      if let live = state.levels.firstIndex(where: { $0.end > now }) {
+        state.levels.removeFirst(live)
+      } else {
+        state.levels.removeAll()
+      }
+      guard let window = state.levels.first, window.start <= now else {
+        return 0
+      }
+      return window.level
+    }
+  }
 
   init(sampleRate: Int, rate: Double = 1, clock: any Clock<Duration> = ContinuousClock()) {
     self.sampleRate = Int32(sampleRate)
@@ -62,26 +97,91 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
       mSampleRate: Float64(sampleRate),
       mFormatID: kAudioFormatLinearPCM,
       mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
-      mBytesPerPacket: 2, mFramesPerPacket: 1, mBytesPerFrame: 2,
-      mChannelsPerFrame: 1, mBitsPerChannel: 16, mReserved: 0)
-    var format: CMAudioFormatDescription?
+      mBytesPerPacket: 2,
+      mFramesPerPacket: 1,
+      mBytesPerFrame: 2,
+      mChannelsPerFrame: 1,
+      mBitsPerChannel: 16,
+      mReserved: 0
+    )
+    var formatDescription: CMAudioFormatDescription?
     unsafe CMAudioFormatDescriptionCreate(
-      allocator: kCFAllocatorDefault, asbd: &description, layoutSize: 0, layout: nil,
-      magicCookieSize: 0, magicCookie: nil, extensions: nil, formatDescriptionOut: &format)
-    self.format = format
+      allocator: kCFAllocatorDefault,
+      asbd: &description,
+      layoutSize: 0,
+      layout: nil,
+      magicCookieSize: 0,
+      magicCookie: nil,
+      extensions: nil,
+      formatDescriptionOut: &formatDescription
+    )
+    self.format = formatDescription
     renderer.audioTimePitchAlgorithm = .timeDomain
     synchronizer.addRenderer(renderer)
   }
 
+  private static func sampleBuffer(
+    _ pcm: Data, frames: Int, format: CMAudioFormatDescription, at time: CMTime
+  ) -> CMSampleBuffer? {
+    let length = frames * 2
+    var block: CMBlockBuffer?
+    guard
+      unsafe CMBlockBufferCreateWithMemoryBlock(
+        allocator: kCFAllocatorDefault,
+        memoryBlock: nil,
+        blockLength: length,
+        blockAllocator: kCFAllocatorDefault,
+        customBlockSource: nil,
+        offsetToData: 0,
+        dataLength: length,
+        flags: kCMBlockBufferAssureMemoryNowFlag,
+        blockBufferOut: &block
+      ) == noErr,
+      let block
+    else {
+      return nil
+    }
+    let copied = unsafe pcm.withUnsafeBytes { raw -> OSStatus in
+      guard let base = raw.baseAddress else {
+        return -1
+      }
+      return unsafe CMBlockBufferReplaceDataBytes(
+        with: base, blockBuffer: block, offsetIntoDestination: 0, dataLength: length
+      )
+    }
+    guard copied == noErr else {
+      return nil
+    }
+    var buffer: CMSampleBuffer?
+    guard
+      unsafe CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+        allocator: kCFAllocatorDefault,
+        dataBuffer: block,
+        formatDescription: format,
+        sampleCount: frames,
+        presentationTimeStamp: time,
+        packetDescriptions: nil,
+        sampleBufferOut: &buffer
+      ) == noErr
+    else {
+      return nil
+    }
+    return buffer
+  }
+
   func enqueue(_ pcm: Data) {
     let frames = pcm.count / 2
-    guard frames > 0, let format else { return }
+    guard frames > 0, let format else {
+      return
+    }
     // Loudness per meter tick, measured before taking the lock the meter and
     // the pacing both wait on; only the placement needs it.
     let window = Int(Double(sampleRate) * MicCapture.meterIntervalSeconds)
     let levels = PCMLevel.levels(of: pcm, windowFrames: window)
     state.withLock { state in
-      guard !state.stopped else { return }
+      guard !state.stopped else {
+        return
+      }
       let first = !state.schedule.started
       let at = state.schedule.place(frames: frames, now: CMTimeGetSeconds(synchronizer.currentTime()))
       for (index, level) in levels.enumerated() {
@@ -90,7 +190,9 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
         state.levels.append(LevelWindow(start: start, end: end, level: level))
       }
       let time = CMTime(seconds: at, preferredTimescale: sampleRate)
-      guard let buffer = Self.sampleBuffer(pcm, frames: frames, format: format, at: time) else { return }
+      guard let buffer = Self.sampleBuffer(pcm, frames: frames, format: format, at: time) else {
+        return
+      }
       renderer.enqueue(buffer)
       if first { synchronizer.setRate(Float(rate), time: .zero) }
     }
@@ -107,8 +209,8 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   func drain() async {
     // Copied to a local first: the compiler opens an existential local at a
     // generic call, but not a class's stored property.
-    let clock = clock
-    await drain(on: clock)
+    let opened = clock
+    await drain(on: opened)
   }
 
   /// Generic over the clock so its instants compare; `clock`, an existential,
@@ -118,24 +220,12 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     let deadline = clock.now.advanced(by: .seconds(queued / rate) + Self.drainSlack)
     while clock.now < deadline {
       guard let remaining = remaining(), remaining > 0 else { break }
-      try? await clock.sleep(for: min(Self.drainPollCeiling, .milliseconds(Int(remaining / rate * 1000) + 10)))
+      let poll = min(Self.drainPollCeiling, .milliseconds(Int(remaining / rate * 1_000) + 10))
+      try? await clock.sleep(for: poll)
       if Task.isCancelled { break }
     }
     stop()
   }
-
-  /// Internal, not private, so `StreamingPCMPlayerTests` can bound the drain by it
-  /// rather than restate it.
-  static let drainSlack = Duration.seconds(2)
-
-  /// The longest one poll of `drain` sleeps, so the drain can overrun its
-  /// deadline by at most this much. Internal for the same reason.
-  static let drainPollCeiling = Duration.milliseconds(100)
-
-  /// Seconds of audio queued ahead of what's playing, in listening time (the
-  /// rate applied), or 0 once stopped — how far ahead of the listener the
-  /// reading has got.
-  var bufferedSeconds: Double { (remaining() ?? 0) / rate }
 
   /// Seconds of audio still ahead of the clock, or nil once stopped.
   private func remaining() -> Double? {
@@ -144,80 +234,16 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     }
   }
 
-  /// The loudness of what's playing right now, 0...1, or 0 between words,
-  /// before the first chunk, and once stopped. Reads the media clock, so it
-  /// follows the audio coming out of the speakers, not the audio arriving.
-  var currentLevel: Float {
-    state.withLock { state in
-      guard !state.stopped else { return 0 }
-      let now = CMTimeGetSeconds(synchronizer.currentTime())
-      // Windows are in time order, so only the head can have expired.
-      if let live = state.levels.firstIndex(where: { $0.end > now }) {
-        state.levels.removeFirst(live)
-      } else {
-        state.levels.removeAll()
-      }
-      guard let window = state.levels.first, window.start <= now else { return 0 }
-      return window.level
-    }
-  }
-
   /// Silences playback at once and discards anything queued. Idempotent.
   func stop() {
     state.withLock { state in
-      guard !state.stopped else { return }
+      guard !state.stopped else {
+        return
+      }
       state.stopped = true
       synchronizer.setRate(0, time: synchronizer.currentTime())
       renderer.flush()
       state.levels.removeAll()
     }
   }
-
-  private static func sampleBuffer(
-    _ pcm: Data, frames: Int, format: CMAudioFormatDescription, at time: CMTime
-  ) -> CMSampleBuffer? {
-    let length = frames * 2
-    var block: CMBlockBuffer?
-    guard
-      unsafe CMBlockBufferCreateWithMemoryBlock(
-        allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: length,
-        blockAllocator: kCFAllocatorDefault, customBlockSource: nil, offsetToData: 0,
-        dataLength: length, flags: kCMBlockBufferAssureMemoryNowFlag, blockBufferOut: &block) == noErr,
-      let block
-    else { return nil }
-    let copied = unsafe pcm.withUnsafeBytes { raw -> OSStatus in
-      guard let base = raw.baseAddress else { return -1 }
-      return unsafe CMBlockBufferReplaceDataBytes(
-        with: base, blockBuffer: block, offsetIntoDestination: 0, dataLength: length)
-    }
-    guard copied == noErr else { return nil }
-    var buffer: CMSampleBuffer?
-    guard
-      unsafe CMAudioSampleBufferCreateReadyWithPacketDescriptions(
-        allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: format,
-        sampleCount: frames, presentationTimeStamp: time, packetDescriptions: nil,
-        sampleBufferOut: &buffer) == noErr
-    else { return nil }
-    return buffer
-  }
-}
-
-/// Where `SelectionSpeaker` sends audio. `StreamingPCMPlayer` is the production
-/// conformance. The tests substitute a recorder, since a real sink needs an
-/// output device.
-protocol PCMSink: Sendable {
-  func enqueue(_ pcm: Data)
-  /// Returns once everything enqueued has played, or `stop()` was called.
-  func drain() async
-  /// Silences at once. Idempotent.
-  func stop()
-  /// The loudness of what's playing now, 0...1, for the pill's meter.
-  var currentLevel: Float { get }
-  /// Seconds of audio queued ahead of what's playing, in listening time.
-  var bufferedSeconds: Double { get }
-}
-
-extension PCMSink {
-  var currentLevel: Float { 0 }
-  var bufferedSeconds: Double { 0 }
 }

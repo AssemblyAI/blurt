@@ -56,9 +56,6 @@ import XCTest
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
   private static let auditedTypes = XCUIAccessibilityAuditType.all.subtracting(.contrast)
-  /// How far below a navigation bar iOS 26's scroll-edge effect softens the
-  /// content scrolling under it.
-  private static let scrollEdge: CGFloat = 44
   private static let largestTextSize = [
     "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
   ]
@@ -112,7 +109,9 @@ final class AccessibilityAuditTests: XCTestCase {
       scrollTo(box)
       box.tap()
       XCTAssertTrue(
-        app.keyboards.firstMatch.waitForExistence(timeout: 10), "The try-it box should bring a keyboard up")
+        app.keyboards.firstMatch.waitForExistence(timeout: 10),
+        "The try-it box should bring a keyboard up"
+      )
       box.typeText("Hello")
       try audit("home, try-it box focused")
     }
@@ -297,12 +296,14 @@ final class AccessibilityAuditTests: XCTestCase {
     // takes half as long again as a Mac) can still be settling the last page
     // after 0.6 s, and an audit of rows in motion reads their Dynamic Type
     // wrong (`audit`).
-    var last = textsOnScreen()
+    var last = Self.textsOnScreen(of: app)
     for _ in 0..<20 {
       Thread.sleep(forTimeInterval: 0.3)
-      let now = textsOnScreen()
-      if now == last { return now }
-      last = now
+      let current = Self.textsOnScreen(of: app)
+      if current == last {
+        return current
+      }
+      last = current
     }
     return last
   }
@@ -321,13 +322,15 @@ final class AccessibilityAuditTests: XCTestCase {
       .map(\.frame)
     let screenArea = app.windows.firstMatch.frame
     let pass = { [app] () throws -> [String] in
-      var issues: [String] = []
+      var raised: [String] = []
       try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
-        if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) { return true }
-        issues.append(Self.describe(issue))
+        if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
+          return true
+        }
+        raised.append(Self.describe(issue))
         return true
       }
-      return issues
+      return raised
     }
     var issues = try pass()
     // A finding has to hold on a second audit of the same, untouched screen:
@@ -340,56 +343,5 @@ final class AccessibilityAuditTests: XCTestCase {
       issues = issues.filter(again.contains)
     }
     found += issues.map { "[\(name)] \($0)" }
-  }
-
-  /// The audit findings the type's comment explains, and nothing broader.
-  private static func isKnownArtifact(
-    _ issue: XCUIAccessibilityAuditIssue, atDefaultSize: Bool, bars: [CGRect], screen: CGRect
-  ) -> Bool {
-    let partialDynamicType = issue.auditType == .dynamicType && issue.compactDescription.contains("partially")
-    if atDefaultSize, partialDynamicType || issue.auditType == .textClipped { return true }
-    guard let element = issue.element else { return true }
-    guard element.exists else { return false }
-    let frame = element.frame
-    if partialDynamicType, bars.contains(where: { $0.contains(frame) }) {
-      return true
-    }
-    // The bar's own frame, and the soft edge iOS 26 blurs under it.
-    let underBar = bars.contains { bar in
-      let edge = bar.insetBy(dx: 0, dy: -scrollEdge)
-      return edge.intersects(frame) && !bar.contains(frame)
-    }
-    if partialDynamicType || issue.auditType == .textClipped, underBar || !screen.contains(frame) {
-      return true
-    }
-    let isTextField = [.textField, .secureTextField].contains(element.elementType)
-    let isProfessionalChip = element.elementType == .staticText && element.label == "Professional"
-    return issue.auditType == .textClipped && (isTextField || isProfessionalChip)
-  }
-
-  /// One line: what the audit says, and the element it says it about.
-  private static func describe(_ issue: XCUIAccessibilityAuditIssue) -> String {
-    var line = "\(issue.compactDescription) (\(issue.detailedDescription))"
-    if let element = issue.element, element.exists {
-      line += " on \(element.elementType) \"\(element.label)\" at \(element.frame)"
-    }
-    return line
-  }
-}
-
-extension AccessibilityAuditTests {
-  /// One snapshot's texts and where they are (`screenTexts`).
-  fileprivate func textsOnScreen() -> String {
-    guard let root = try? app.snapshot() else { return "" }
-    let screen = root.frame
-    var texts: [String] = []
-    var pending = [root]
-    while let node = pending.popLast() {
-      if node.elementType == .staticText, screen.intersects(node.frame) {
-        texts.append("\(node.label)@\(Int(node.frame.minY))")
-      }
-      pending += node.children
-    }
-    return texts.joined(separator: "|")
   }
 }

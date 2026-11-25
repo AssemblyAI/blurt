@@ -16,41 +16,6 @@ extension DictationSession {
     case cancelRecording
   }
 
-  /// Synchronous, fire-and-forget command submission for callback-shaped hosts
-  /// (an event tap, a UI action) that can't `await` — and, crucially, can't
-  /// spawn a `Task` per callback without losing ordering: independently created
-  /// tasks carry no FIFO guarantee, so a recovery cancel could overtake the
-  /// press it was meant to cancel, no-op on a still-idle session, and strand
-  /// the eventual recording with no key-up ever arriving. Commands submitted
-  /// from one thread run in exactly the order they were submitted (they feed a
-  /// single serial consumer — see `init`). Hosts that can `await` may call the
-  /// async methods directly instead; the two styles hit the same serial queue.
-  public nonisolated func submit(_ command: Command) {
-    // A cancel acts *now*, not when its turn comes up. The consumer below is
-    // serial by design, so a `.cancel` submitted during a press waits for that
-    // press to finish before `cancel()` even runs — and since `MicCapture.start()`
-    // holds until the mic is delivering audio, on a Bluetooth route that is
-    // seconds of an Escape that appears to do nothing. Recording the intent and
-    // preempting the press here is what `cancel()` does for a live pipeline;
-    // this gives the submitted door the same reach. The command is still yielded
-    // in order, and still executes in order — `performCancel` is idempotent
-    // against a cancel already consumed.
-    if command == .cancel { requestCancel() }
-    commandFeed.yield(command)
-  }
-
-  /// Executes one submitted command by delegating to the public method it
-  /// mirrors, so `submit` and direct calls share every guard and race rule.
-  func run(_ command: Command) async {
-    switch command {
-    case .press(let key): await press(key: key)
-    case .pressHandingBack(let key): await press(handingBack: true, key: key)
-    case .release: await release()
-    case .cancel: await cancel()
-    case .cancelRecording: await cancelRecording()
-    }
-  }
-
   /// Set synchronously by either entry point — `cancel()` or `submit(.cancel)` —
   /// before taking a queue turn, so a cancel arriving while a queued release
   /// hasn't yet claimed `.transcribing` deterministically wins: `performRelease`
@@ -85,6 +50,50 @@ extension DictationSession {
     set { cancelState.withLock { $0.press = newValue } }
   }
 
+  /// Synchronous, fire-and-forget command submission for callback-shaped hosts
+  /// (an event tap, a UI action) that can't `await` — and, crucially, can't
+  /// spawn a `Task` per callback without losing ordering: independently created
+  /// tasks carry no FIFO guarantee, so a recovery cancel could overtake the
+  /// press it was meant to cancel, no-op on a still-idle session, and strand
+  /// the eventual recording with no key-up ever arriving. Commands submitted
+  /// from one thread run in exactly the order they were submitted (they feed a
+  /// single serial consumer — see `init`). Hosts that can `await` may call the
+  /// async methods directly instead; the two styles hit the same serial queue.
+  nonisolated public func submit(_ command: Command) {
+    // A cancel acts *now*, not when its turn comes up. The consumer below is
+    // serial by design, so a `.cancel` submitted during a press waits for that
+    // press to finish before `cancel()` even runs — and since `MicCapture.start()`
+    // holds until the mic is delivering audio, on a Bluetooth route that is
+    // seconds of an Escape that appears to do nothing. Recording the intent and
+    // preempting the press here is what `cancel()` does for a live pipeline;
+    // this gives the submitted door the same reach. The command is still yielded
+    // in order, and still executes in order — `performCancel` is idempotent
+    // against a cancel already consumed.
+    if command == .cancel { requestCancel() }
+    commandFeed.yield(command)
+  }
+
+  /// Executes one submitted command by delegating to the public method it
+  /// mirrors, so `submit` and direct calls share every guard and race rule.
+  func run(_ command: Command) async {
+    switch command {
+    case .press(let key):
+      await press(key: key)
+
+    case .pressHandingBack(let key):
+      await press(handingBack: true, key: key)
+
+    case .release:
+      await release()
+
+    case .cancel:
+      await cancel()
+
+    case .cancelRecording:
+      await cancelRecording()
+    }
+  }
+
   /// Records the cancel intent and preempts an in-flight press, synchronously
   /// and from any isolation. The one place both doors funnel through, so
   /// `submit(.cancel)` and `cancel()` can't drift apart.
@@ -103,6 +112,7 @@ extension DictationSession {
     cancelState.withLock { if $0.press == task { $0.press = nil } }
   }
 
+  /// Abandons the dictation in progress, whatever phase it has reached.
   public func cancel() async {
     // A cancel that lands once `.transcribing` is claimed — while the release
     // is still inside mic.stop(), or later with the transcribe→inject task in
@@ -151,7 +161,9 @@ extension DictationSession {
     // Our turn is the cancel — clear the request whether or not an earlier
     // release already consumed it.
     cancelRequested = false
-    guard phase == .recording else { return }
+    guard phase == .recording else {
+      return
+    }
     await stopAndCancel()
   }
 
@@ -168,7 +180,35 @@ extension DictationSession {
   }
 
   private func performCancelRecording() async {
-    guard phase == .recording else { return }
+    guard phase == .recording else {
+      return
+    }
     await stopAndCancel()
+  }
+
+  /// Shared tail of the cancel ops once the guards agree there is a live
+  /// recording to tear down.
+  func stopAndCancel() async {
+    cancelAutoRelease()
+    // Before the mic teardown, not after: `cancelCapture()` finishes the frame
+    // stream, and a still-live upload would read that as "the utterance ended",
+    // write its config part and transcribe audio the user just discarded.
+    cancelUpload()
+    do {
+      // `cancelCapture`, not `stop`: the audio is being thrown away, so
+      // preserving it (the Bluetooth tail linger) is not worth delaying the
+      // user's cancel for.
+      try await mic.cancelCapture()
+    } catch {
+      // Stays out of the UI: the user asked for nothing to happen, and a cancel
+      // must not flash red (same rule as `performRelease`'s "a cancel wins over
+      // surfacing the audio error"). But a mic teardown that genuinely failed was
+      // reported nowhere at all, which made a recorder stuck mid-cancel
+      // indistinguishable from a clean one. Record it for developer mode without
+      // touching the phase — the log is exactly the channel for a fault the user
+      // shouldn't be shown.
+      seams.logFailure(.audioCaptureFailed(underlying: error), capturedContext)
+    }
+    setPhase(.cancelled)
   }
 }

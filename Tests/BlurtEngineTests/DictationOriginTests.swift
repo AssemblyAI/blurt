@@ -9,8 +9,6 @@ import Testing
 /// else goes to production.
 @Suite("Dictation origin")
 struct DictationOriginTests {
-  private static let sandbox = URL(literal: "https://dictation.sandbox.example.com")
-
   /// Records the host of every request it answers.
   private final class Hosts: Sendable {
     let seen = Mutex<[String]>([])
@@ -22,14 +20,19 @@ struct DictationOriginTests {
     }
   }
 
+  private static let sandbox = URL(literal: "https://dictation.sandbox.example.com")
+
   @Test("the transcriber reads its host per request: the origin while it holds one, else the default")
   func transcriberFollowsTheOrigin() async throws {
     let hosts = Hosts()
     let origin = DictationOrigin()
     let transcriber = AssemblyAITranscriber(
-      apiKeyProvider: { "key" }, baseURL: { origin.current ?? AssemblyAITranscriber.defaultBaseURL },
+      apiKeyProvider: { "key" },
+      baseURL: { origin.current ?? AssemblyAITranscriber.defaultBaseURL },
       transport: hosts.transport,
-      enhancedTranscripts: { false }, rewriteMode: { .fast })
+      enhancedTranscripts: { false },
+      rewriteMode: { .fast }
+    )
 
     _ = try await collectTranscript(transcriber)
     origin.set(Self.sandbox)
@@ -66,9 +69,12 @@ extension AssemblyAIAccountTests {
     let clock = clock
     func account() -> AssemblyAIAccount {
       AssemblyAIAccount(
-        configuration: testOAuthConfiguration, dictationHost: host,
+        configuration: testOAuthConfiguration,
         apiKey: APIKeyModel(keyStore: keyStore) { _ in .valid },
-        store: sessions, transport: server.transport, now: { clock.now })
+        dictationHost: host,
+        store: sessions,
+        transport: server.transport
+      ) { clock.now }
     }
     let first = account()
     #expect(first.dictationOrigin.current == nil)

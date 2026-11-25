@@ -32,22 +32,46 @@ nonisolated final class PCMConverter {
   init?() {
     guard
       let format = AVAudioFormat(
-        commonFormat: .pcmFormatInt16, sampleRate: Double(SyncSTTLimits.sampleRate), channels: 1,
-        interleaved: true)
-    else { return nil }
+        commonFormat: .pcmFormatInt16,
+        sampleRate: Double(SyncSTTLimits.sampleRate),
+        channels: 1,
+        interleaved: true
+      )
+    else {
+      return nil
+    }
     outputFormat = format
+  }
+
+  private static func matches(_ format: AVAudioFormat?, _ description: AudioStreamBasicDescription) -> Bool {
+    guard let format else {
+      return false
+    }
+    let current = format.streamDescription.pointee
+    return current.mSampleRate == description.mSampleRate
+      && current.mChannelsPerFrame == description.mChannelsPerFrame
+      && current.mFormatID == description.mFormatID
+      && current.mFormatFlags == description.mFormatFlags
+      && current.mBitsPerChannel == description.mBitsPerChannel
   }
 
   func convert(_ sampleBuffer: CMSampleBuffer) -> Data? {
     guard let description = CMSampleBufferGetFormatDescription(sampleBuffer),
       let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(description)
-    else { return nil }
+    else {
+      return nil
+    }
     let frames = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
-    guard frames > 0, let input = inputBuffer(matching: streamDescription, frames: frames) else { return nil }
+    guard frames > 0, let input = inputBuffer(matching: streamDescription, frames: frames) else {
+      return nil
+    }
     input.frameLength = frames
     let copied = CMSampleBufferCopyPCMDataIntoAudioBufferList(
-      sampleBuffer, at: 0, frameCount: Int32(frames), into: input.mutableAudioBufferList)
-    guard copied == noErr, let converter, let inputFormat else { return nil }
+      sampleBuffer, at: 0, frameCount: Int32(frames), into: input.mutableAudioBufferList
+    )
+    guard copied == noErr, let converter, let inputFormat else {
+      return nil
+    }
     let ratio = outputFormat.sampleRate / inputFormat.sampleRate
     let capacity = AVAudioFrameCount((Double(frames) * ratio).rounded(.up)) + 64
     guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else {
@@ -65,7 +89,9 @@ nonisolated final class PCMConverter {
     }
     guard status != .error, conversionError == nil, outputBuffer.frameLength > 0,
       let channels = outputBuffer.int16ChannelData
-    else { return nil }
+    else {
+      return nil
+    }
     return Data(bytes: channels[0], count: Int(outputBuffer.frameLength) * MemoryLayout<Int16>.size)
   }
 
@@ -75,21 +101,15 @@ nonisolated final class PCMConverter {
     matching streamDescription: UnsafePointer<AudioStreamBasicDescription>, frames: AVAudioFrameCount
   ) -> AVAudioPCMBuffer? {
     if inputFormat == nil || !Self.matches(inputFormat, streamDescription.pointee) {
-      guard let format = AVAudioFormat(streamDescription: streamDescription) else { return nil }
+      guard let format = AVAudioFormat(streamDescription: streamDescription) else {
+        return nil
+      }
       inputFormat = format
       converter = AVAudioConverter(from: format, to: outputFormat)
     }
-    guard let inputFormat else { return nil }
+    guard let inputFormat else {
+      return nil
+    }
     return AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: frames)
-  }
-
-  private static func matches(_ format: AVAudioFormat?, _ description: AudioStreamBasicDescription) -> Bool {
-    guard let format else { return false }
-    let current = format.streamDescription.pointee
-    return current.mSampleRate == description.mSampleRate
-      && current.mChannelsPerFrame == description.mChannelsPerFrame
-      && current.mFormatID == description.mFormatID
-      && current.mFormatFlags == description.mFormatFlags
-      && current.mBitsPerChannel == description.mBitsPerChannel
   }
 }

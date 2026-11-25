@@ -9,11 +9,8 @@ public struct DeveloperModeStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
   /// it directly (e.g. `@AppStorage`) and re-render on change.
   public static var defaultsKey: String { DefaultsKey.developerMode.key }
-  private let defaults: UserDefaults
 
-  init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
+  private let defaults: UserDefaults
 
   /// `bool(forKey:)` returns false for a missing key, so unset means off.
   ///
@@ -24,5 +21,9 @@ public struct DeveloperModeStore {
   /// none; seed the slot to change the switch.
   var isEnabled: Bool {
     defaults.bool(forKey: Self.defaultsKey)
+  }
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 }

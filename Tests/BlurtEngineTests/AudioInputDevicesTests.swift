@@ -25,6 +25,62 @@
     .serialized,
     .timeLimit(.minutes(1)))
   struct AudioInputDevicesTests {
+    /// Polls `condition` on a short tick until it holds or `timeout` elapses,
+    /// answering whether it ever held. The suite's own miniature of
+    /// `MicLiveness.waitUntilLive`, for the same reason that exists: nothing about
+    /// a capture device is synchronous just because the call that started it
+    /// returned.
+    private static func poll(
+      upTo timeout: Duration, _ condition: @Sendable () -> Bool
+    ) async -> Bool {
+      let deadline = ContinuousClock().now.advanced(by: timeout)
+      while ContinuousClock().now < deadline {
+        if condition() {
+          return true
+        }
+        try? await Task.sleep(for: .milliseconds(20))
+      }
+      return condition()
+    }
+
+    /// Whether the device carrying `uid` comes up as capturing within the
+    /// Bluetooth cap — the widest the product itself ever waits.
+    private static func waitForRunning(uid: String) async -> Bool {
+      await poll(upTo: MicLiveness.bluetoothTimeout) { isRunningSomewhere(uid: uid) }
+    }
+
+    /// CoreAudio's own answer to "is this device capturing right now" — the bit
+    /// behind the system input indicator. Test-local rather than a production
+    /// helper: nothing in the app needs to ask, and the point of the assertions
+    /// above is to check the *device*, not our bookkeeping about it.
+    private static func isRunningSomewhere(uid: String) -> Bool {
+      var translate = AudioRoute.globalAddress(kAudioHardwarePropertyTranslateUIDToDevice)
+      var cfUID = uid as CFString
+      var deviceID = AudioDeviceID(0)
+      var idSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+      let translated = unsafe withUnsafeMutablePointer(to: &cfUID) { qualifier in
+        unsafe AudioObjectGetPropertyData(
+          AudioRoute.systemObject,
+          &translate,
+          UInt32(MemoryLayout<CFString>.size),
+          qualifier,
+          &idSize,
+          &deviceID
+        )
+      }
+      guard translated == noErr, deviceID != 0 else {
+        return false
+      }
+
+      var address = AudioRoute.globalAddress(kAudioDevicePropertyDeviceIsRunningSomewhere)
+      var running = UInt32(0)
+      var size = UInt32(MemoryLayout<UInt32>.size)
+      guard unsafe AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &running) == noErr else {
+        return false
+      }
+      return running != 0
+    }
+
     @Test("enumeration lists named, uniquely-identified input devices")
     func enumerationListsInputDevices() throws {
       let devices = AudioInputDevices.all()
@@ -34,7 +90,7 @@
       // Closures rather than key paths inside the macros — the rethrows + key-path
       // combination is the documented `#expect` trap (see AGENTS.md's testing notes).
       #expect(devices.allSatisfy { !$0.uid.isEmpty && !$0.name.isEmpty })
-      let uids = devices.map { $0.uid }
+      let uids = devices.map(\.uid)
       #expect(Set(uids).count == uids.count, "device UIDs must be unique")
 
       // The default input has a name for the "Same as system (…)" label.
@@ -79,7 +135,7 @@
       let recorder = try await CaptureSessionRecorder.make(pinnedUID: device.uniqueID)
       #expect(Self.isRunningSomewhere(uid: device.uniqueID) == false, "building must not open the device")
 
-      await MicCapture(deviceSelection: { .systemDefault }).warmUp()
+      await MicCapture { .systemDefault }.warmUp()
       #expect(Self.isRunningSomewhere(uid: device.uniqueID) == false, "warm-up must not open the device")
 
       // And the same recorder still opens it on demand, so "closed" isn't just a
@@ -135,54 +191,7 @@
       let byteCount = recorder.stopAndReadByteCount()
       #expect(byteCount > 0, "half a second of capture should deliver samples")
       #expect(
-        byteCount % SyncSTTLimits.bytesPerSample == 0, "the capture must be whole S16LE samples")
-    }
-
-    /// Polls `condition` on a short tick until it holds or `timeout` elapses,
-    /// answering whether it ever held. The suite's own miniature of
-    /// `MicLiveness.waitUntilLive`, for the same reason that exists: nothing about
-    /// a capture device is synchronous just because the call that started it
-    /// returned.
-    private static func poll(
-      upTo timeout: Duration, _ condition: @Sendable () -> Bool
-    ) async -> Bool {
-      let deadline = ContinuousClock().now.advanced(by: timeout)
-      while ContinuousClock().now < deadline {
-        if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(20))
-      }
-      return condition()
-    }
-
-    /// Whether the device carrying `uid` comes up as capturing within the
-    /// Bluetooth cap — the widest the product itself ever waits.
-    private static func waitForRunning(uid: String) async -> Bool {
-      await poll(upTo: MicLiveness.bluetoothTimeout) { isRunningSomewhere(uid: uid) }
-    }
-
-    /// CoreAudio's own answer to "is this device capturing right now" — the bit
-    /// behind the system input indicator. Test-local rather than a production
-    /// helper: nothing in the app needs to ask, and the point of the assertions
-    /// above is to check the *device*, not our bookkeeping about it.
-    private static func isRunningSomewhere(uid: String) -> Bool {
-      var translate = AudioRoute.globalAddress(kAudioHardwarePropertyTranslateUIDToDevice)
-      var cfUID = uid as CFString
-      var deviceID = AudioDeviceID(0)
-      var idSize = UInt32(MemoryLayout<AudioDeviceID>.size)
-      let translated = unsafe withUnsafeMutablePointer(to: &cfUID) { qualifier in
-        unsafe AudioObjectGetPropertyData(
-          AudioRoute.systemObject, &translate, UInt32(MemoryLayout<CFString>.size), qualifier,
-          &idSize, &deviceID)
-      }
-      guard translated == noErr, deviceID != 0 else { return false }
-
-      var address = AudioRoute.globalAddress(kAudioDevicePropertyDeviceIsRunningSomewhere)
-      var running = UInt32(0)
-      var size = UInt32(MemoryLayout<UInt32>.size)
-      guard unsafe AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &running) == noErr else {
-        return false
-      }
-      return running != 0
+        byteCount.isMultiple(of: SyncSTTLimits.bytesPerSample), "the capture must be whole S16LE samples")
     }
   }
 #endif

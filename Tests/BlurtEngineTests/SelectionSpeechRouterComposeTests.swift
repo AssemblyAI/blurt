@@ -9,31 +9,6 @@ import Testing
 @MainActor
 @Suite("SelectionSpeechRouter · Compose", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterComposeTests {
-  private let defaults = freshDefaults()
-
-  /// Runs one held compose press of right ⌥, the session transcribing the
-  /// instructions as "Tell Dan we should ship it.", the press pinning Slack.
-  private func compose(
-    _ composer: StubComposer, injectorError: (any Error & Sendable)? = nil
-  ) async throws -> Rig {
-    let fixture = makeSession(
-      mode: .transcript("Tell Dan we should ship it."), frontmost: CapturedFocus(pid: 42, processName: "Slack"))
-    let clock = TestClock()
-    await fixture.injector.setError(injectorError)
-    let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: GatedSpeaker(), composer: composer,
-      // A compose press never reads the selection: this would fail it if it did.
-      readSelection: {
-        Issue.record("a compose press read the selection")
-        return nil
-      }, defaults: defaults, clock: clock)
-    TriggerKeyStyleStore(defaults: defaults).setChoice(.compose, for: .rightOption)
-    let events = JobEvents(watching: router)
-    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
-    try await waitUntil { !composer.calls.isEmpty }
-    return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
-  }
-
   /// A compose press's router, what it reported, and the injector it pasted through.
   @MainActor
   private struct Rig {
@@ -46,6 +21,37 @@ struct SelectionSpeechRouterComposeTests {
     func outcomes() async throws -> [OverlayUIState?] {
       try await events.outcomes(after: .composing, stopping: phases)
     }
+  }
+
+  private let defaults = freshDefaults()
+
+  /// Runs one held compose press of right ⌥, the session transcribing the
+  /// instructions as "Tell Dan we should ship it.", the press pinning Slack.
+  private func compose(
+    _ composer: StubComposer, injectorError: (any Error & Sendable)? = nil
+  ) async throws -> Rig {
+    let fixture = makeSession(
+      mode: .transcript("Tell Dan we should ship it."), frontmost: CapturedFocus(pid: 42, processName: "Slack")
+    )
+    let clock = TestClock()
+    await fixture.injector.setError(injectorError)
+    let router = SelectionSpeechRouter(
+      session: fixture.session,
+      speaker: GatedSpeaker(),
+      composer: composer,
+      // A compose press never reads the selection: this would fail it if it did.
+      readSelection: {
+        Issue.record("a compose press read the selection")
+        return nil
+      },
+      defaults: defaults,
+      clock: clock
+    )
+    TriggerKeyStyleStore(defaults: defaults).setChoice(.compose, for: .rightOption)
+    let events = JobEvents(watching: router)
+    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
+    try await waitUntil { !composer.calls.isEmpty }
+    return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
   }
 
   @Test("the spoken instructions are written for the app the press pinned and pasted there with no separator")

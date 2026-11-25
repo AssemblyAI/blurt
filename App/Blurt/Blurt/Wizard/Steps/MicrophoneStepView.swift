@@ -12,7 +12,8 @@ struct MicrophoneStepView: View {
   // Empty means "no device pinned" — the unset default belongs to
   // `MicDeviceSelection.fromPersisted`, which reads it as "same as system". See
   // `KeysSettingsTab` for why the view must not restate it.
-  @AppStorage(MicDeviceStore.defaultsKey) private var micDeviceUID = ""
+  @AppStorage(MicDeviceStore.defaultsKey)
+  private var micDeviceUID = ""
 
   /// The input devices present when the pane appeared, re-read each time it
   /// does. A snapshot rather than a live listener: the picker's menu is built
@@ -39,7 +40,8 @@ struct MicrophoneStepView: View {
       get: { MicDeviceSelection.fromPersisted(micDeviceUID) },
       // Write through the store (see `KeysSettingsTab` for why): the store owns
       // the encoding, `@AppStorage` observes the key to re-render.
-      set: { MicDeviceStore().selection = $0 })
+      set: { MicDeviceStore().selection = $0 }
+    )
   }
 
   /// The stored pin when no connected device carries it — kept selectable so
@@ -48,7 +50,9 @@ struct MicrophoneStepView: View {
   private var missingPin: MicDeviceSelection? {
     guard devicesLoaded, !micDeviceUID.isEmpty,
       !devices.contains(where: { $0.uid == micDeviceUID })
-    else { return nil }
+    else {
+      return nil
+    }
     return .pinned(uid: micDeviceUID)
   }
 
@@ -62,8 +66,11 @@ struct MicrophoneStepView: View {
   var body: some View {
     Section {
       PickerSettingRow(
-        title: "Input device", systemImage: "mic",
-        accessibilityID: UITestIdentifiers.micPicker, subtitle: deviceDescription, selection: selection
+        title: "Input device",
+        systemImage: "mic",
+        accessibilityID: UITestIdentifiers.micPicker,
+        subtitle: deviceDescription,
+        selection: selection
       ) {
         Text("Same as system").tag(MicDeviceSelection.systemDefault)
         ForEach(devices) { device in

@@ -11,9 +11,14 @@
       guard let window = await frontmostApp().flatMap(AXRead.window)
       else { throw VoiceCommandError.couldNotPerform("find a window to arrange") }
       switch operation {
-      case .minimize: try set(window, kAXMinimizedAttribute, kCFBooleanTrue)
-      case .fullScreen: try set(window, "AXFullScreen", kCFBooleanTrue)
-      default: return try await move(window, operation)
+      case .minimize:
+        try set(window, kAXMinimizedAttribute, kCFBooleanTrue)
+
+      case .fullScreen:
+        try set(window, "AXFullScreen", kCFBooleanTrue)
+
+      default:
+        return try await move(window, operation)
       }
       return nil
     }

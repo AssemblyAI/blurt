@@ -12,6 +12,9 @@ import SwiftUI
 /// Esc) returns to the Library. The same page shows a recording as it runs, a
 /// file's progress, and why one failed.
 struct TranscriptPage: View {
+  /// The play button's icon slot: wide enough for the widest of its glyphs.
+  private static let playIconSize: CGFloat = 22
+
   var model: TranscriptsModel
   @State private var copied = false
   @State private var pendingDelete: SavedTranscript?
@@ -54,10 +57,17 @@ struct TranscriptPage: View {
     // The page's replacement is silent otherwise.
     .onChange(of: model.state) { _, state in
       switch state {
-      case .finished: AccessibilityNotification.Announcement("Transcript ready").post()
-      case .failed(_, let message, _): AccessibilityNotification.Announcement(message).post()
-      case .recording: AccessibilityNotification.Announcement("Recording").post()
-      case .idle, .transcribing, .finishingRecording: break
+      case .finished:
+        AccessibilityNotification.Announcement("Transcript ready").post()
+
+      case .failed(_, let message, _):
+        AccessibilityNotification.Announcement(message).post()
+
+      case .recording:
+        AccessibilityNotification.Announcement("Recording").post()
+
+      case .idle, .transcribing, .finishingRecording:
+        break
       }
     }
     // "Copied" belongs to the text that was copied, not the next view's.
@@ -86,16 +96,21 @@ struct TranscriptPage: View {
     switch model.state {
     case .idle:
       EmptyView()
+
     case .recording:
       LiveRecordingView(model: model)
+
     case .finishingRecording:
       ProgressLine("Finishing…").frame(maxWidth: .infinity, maxHeight: .infinity)
+
     case .transcribing(_, let phase):
       ProgressLine(phase == .uploading ? "Uploading…" : "Transcribing…")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+
     case .finished:
       facetContent
-    case .failed(_, let message, let retry):
+
+    case let .failed(_, message, retry):
       Label(message, systemImage: "exclamationmark.triangle")
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -110,9 +125,14 @@ struct TranscriptPage: View {
   /// says so.
   private var showsTitle: Bool {
     switch model.state {
-    case .finished: model.openEntry?.isTranscript == true
-    case .recording, .finishingRecording, .idle: false
-    case .transcribing, .failed: true
+    case .finished:
+      model.openEntry?.isTranscript == true
+
+    case .recording, .finishingRecording, .idle:
+      false
+
+    case .transcribing, .failed:
+      true
     }
   }
 
@@ -120,10 +140,17 @@ struct TranscriptPage: View {
   /// it lands), the file going up, or the recording.
   private var title: String {
     switch model.state {
-    case .finished: model.openEntry?.title ?? ""
-    case .transcribing(let fileName, _), .failed(let fileName, _, _): fileName
-    case .recording, .finishingRecording: "Recording"
-    case .idle: ""
+    case .finished:
+      model.openEntry?.title ?? ""
+
+    case .transcribing(let fileName, _), .failed(let fileName, _, _):
+      fileName
+
+    case .recording, .finishingRecording:
+      "Recording"
+
+    case .idle:
+      ""
     }
   }
 
@@ -203,9 +230,6 @@ struct TranscriptPage: View {
     .help(original ? "Play the audio" : "Read \(readingName) aloud")
   }
 
-  /// The play button's icon slot: wide enough for the widest of its glyphs.
-  private static let playIconSize: CGFloat = 22
-
   /// What Listen reads, mid-sentence: "it" for the transcript, else the view.
   private var readingName: String {
     model.selection == .full ? "it" : model.selection.title.lowercased()
@@ -213,8 +237,7 @@ struct TranscriptPage: View {
 
   /// The selected facet's text area: the text, or its progress, or why it
   /// failed with a way to try again.
-  @ViewBuilder
-  private var facetContent: some View {
+  @ViewBuilder private var facetContent: some View {
     let content = model.contents[model.selection]
     Group {
       switch content {
@@ -230,6 +253,7 @@ struct TranscriptPage: View {
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+
       case .failed(let message):
         VStack(spacing: 8) {
           Label(message, systemImage: "exclamationmark.triangle")
@@ -238,8 +262,10 @@ struct TranscriptPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+
       case .loading:
         ProgressLine(model.selection.progressTitle).frame(maxWidth: .infinity, maxHeight: .infinity)
+
       case nil:
         // Custom before a request: the popover is asking for one.
         Text("Describe what to do with the transcript.")
@@ -258,140 +284,10 @@ struct TranscriptPage: View {
   }
 }
 
-/// The view over the transcript, as a toolbar menu under an AI icon — the
-/// transcript itself (Full, and Plain text where it differs), then the stock
-/// transforms, then Custom, which asks for its request in a popover. The
-/// current view is checked here and named in the window's subtitle.
-private struct TranscriptFacetMenu: View {
-  var model: TranscriptsModel
-  @State private var isEditingCustom = false
-  @State private var customDraft = ""
-
-  /// Custom is selected only once it has a request: choosing it without one
-  /// asks first, and Cancel leaves the selection where it was.
-  private var selection: Binding<TranscriptFacet> {
-    Binding(
-      get: { model.selection },
-      set: { facet in
-        if facet == .custom, model.customRequest.isEmpty {
-          editCustom()
-        } else {
-          model.select(facet)
-        }
-      })
-  }
-
-  var body: some View {
-    let facets = model.availableFacets
-    Menu {
-      Picker("View", selection: selection) {
-        ForEach(facets.filter { $0 == .full || $0 == .plain }, id: \.self, content: item)
-        Divider()
-        ForEach(facets.filter { ![.full, .plain, .custom].contains($0) }, id: \.self, content: item)
-        Divider()
-        item(.custom)
-      }
-      .pickerStyle(.inline)
-      // Re-choosing the selected item doesn't reach the binding, so a
-      // request already applied is changed from here.
-      if model.selection == .custom {
-        Button("Edit Custom Request…", action: editCustom)
-      }
-    } label: {
-      Label("View", systemImage: "sparkles")
-    }
-    .help("Show the transcript or a task on it")
-    // In the toolbar only the icon shows, and AppKit names the button after
-    // it ("Sparkle") rather than the label's title.
-    .accessibilityLabel("View")
-    .accessibilityValue(model.selection.title)
-    .accessibilityIdentifier(UITestIdentifiers.facetPicker)
-    .popover(isPresented: $isEditingCustom, arrowEdge: .bottom) { customEditor }
-  }
-
-  /// One view in the menu. Custom reads "Custom…" until it has a request,
-  /// since choosing it asks for one first.
-  private func item(_ facet: TranscriptFacet) -> some View {
-    let title = facet == .custom && model.customRequest.isEmpty ? "Custom…" : facet.title
-    return Label(title, systemImage: facet.systemImage).tag(facet)
-  }
-
-  private func editCustom() {
-    customDraft = model.customRequest
-    isEditingCustom = true
-  }
-
-  /// Custom's request, asked for under the toolbar's View menu.
-  private var customEditor: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("What should Blurt do with this transcript?")
-        .font(.headline)
-      TextField(
-        "Custom request", text: $customDraft, prompt: Text("e.g. Write it up as a blog post"), axis: .vertical
-      )
-      .lineLimit(2...4)
-      .textFieldStyle(.roundedBorder)
-      .onSubmit(apply)
-      HStack {
-        Spacer()
-        Button("Cancel", role: .cancel) { isEditingCustom = false }
-          .keyboardShortcut(.cancelAction)
-        Button("Apply", action: apply)
-          .keyboardShortcut(.defaultAction)
-          .disabled(customDraft.trimmedNonEmpty() == nil)
-      }
-    }
-    .padding(14)
-    .frame(width: 320)
-  }
-
-  private func apply() {
-    model.applyCustom(customDraft)
-    isEditingCustom = false
-  }
-}
-
-/// A spinner beside a word on what it's waiting for: every progress state in
-/// the page, spelled once.
-struct ProgressLine: View {
-  let title: String
-  init(_ title: String) { self.title = title }
-
-  var body: some View {
-    HStack(spacing: 8) {
-      ProgressView().controlSize(.small)
-      Text(title).foregroundStyle(.secondary)
-    }
-  }
-}
-
 extension View {
   /// The page's read-only text area: the rest of its height, the text right
   /// on the window under the title, as a Journal entry's is — no box or edge.
   func textAreaSurface() -> some View {
     frame(maxHeight: .infinity)
-  }
-}
-
-/// A recording whose transcription failed: it's kept in the Library, and
-/// here it can be tried again or found in Finder.
-private struct RetryRecording: View {
-  let entry: SavedTranscript
-  let model: TranscriptsModel
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("The recording is saved in your Library, so you can try again later.")
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      HStack {
-        Button("Try Again") { model.retranscribe(entry) }
-        if let url = entry.audioURL {
-          Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-            .disabled(!FileManager.default.fileExists(atPath: url.path))
-        }
-      }
-    }
   }
 }

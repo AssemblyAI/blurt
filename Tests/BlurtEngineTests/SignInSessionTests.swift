@@ -6,63 +6,6 @@ import Testing
 @testable import AssemblyAI
 @testable import BlurtEngine
 
-// The renewal races: a sign-out or a forget landing while a renewal is parked
-// on the network must win.
-extension AssemblyAIAccountTests {
-  @Test("a sign-out during a renewal wins: the renewal wakes and writes nothing back")
-  func signOutDuringRenewal() async throws {
-    let parked = try await renewalParkedOnTheNetwork()
-    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
-    let signOut = Task { await account.signOut() }
-    gate.allowToFinish()
-    await renewal.value
-    #expect(await signOut.value == nil)
-
-    #expect(account.status == .signedOut)
-    #expect(sessions.session == nil)
-    #expect(keyStore.current == nil)
-    // Sign-out waited for the renewal and refreshed with the rotated token.
-    #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1", "rt-2"])
-  }
-
-  /// A signed-in account whose renewal is parked at the token endpoint until
-  /// the test releases `gate`.
-  private struct ParkedRenewal {
-    let account: AssemblyAIAccount
-    let gate: Gate
-    let renewal: Task<Void, Never>
-  }
-
-  private func renewalParkedOnTheNetwork() async throws -> ParkedRenewal {
-    let gate = Gate()
-    let gated = GatedTransport(inner: server.transport, gate: gate)
-    let clock = clock
-    let account = AssemblyAIAccount(
-      configuration: testOAuthConfiguration, apiKey: APIKeyModel(keyStore: keyStore) { _ in .valid },
-      store: sessions, transport: gated, now: { clock.now })
-    let auth = try #require(account.beginSignIn())
-    let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))
-    #expect(await account.completeSignIn(auth, callback: callback) == .signedIn)
-
-    advanceToRenewal()
-    gated.armed.withLock { $0 = true }
-    let renewal = Task { _ = await account.renewIfDue() }
-    await gate.waitUntilEntered()
-    return ParkedRenewal(account: account, gate: gate, renewal: renewal)
-  }
-
-  @Test("a forget during a renewal (the reset, an ended connection) also wins")
-  func forgetDuringRenewal() async throws {
-    let parked = try await renewalParkedOnTheNetwork()
-    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
-    account.forget()
-    gate.allowToFinish()
-    await renewal.value
-    #expect(account.status == .signedOut)
-    #expect(sessions.session == nil)
-  }
-}
-
 @Suite("Sign-in session")
 struct SignInSessionTests {
   private let start = Date(timeIntervalSince1970: 1_790_000_000)
@@ -82,8 +25,12 @@ struct SignInSessionTests {
   func rotatesAtWins() {
     let rotates = start.addingTimeInterval(10 * 86_400)
     let session = SignInSession(
-      refreshToken: "rt", email: nil, keyExpiresAt: start.addingTimeInterval(14 * 86_400),
-      keyRotatesAt: rotates, renewedAt: start)
+      refreshToken: "rt",
+      email: nil,
+      keyExpiresAt: start.addingTimeInterval(14 * 86_400),
+      renewedAt: start,
+      keyRotatesAt: rotates
+    )
     #expect(session.renewalDue == rotates)
   }
 
@@ -112,7 +59,7 @@ struct SignInSessionTests {
     #expect(store.session == nil)
 
     let garbage = SignInStore(read: { .value("{not json") }, write: { _ in true })
-    #expect(garbage.load == .none)
+    #expect(garbage.load == .empty)
     let locked = SignInStore(read: { .unavailable(errSecInteractionNotAllowed) }, write: { _ in true })
     #expect(locked.load == .unavailable)
   }
@@ -138,83 +85,62 @@ struct SignInSessionTests {
   }
 }
 
-@Suite("OAuth configuration from Info.plist")
-struct OAuthConfigurationInfoTests {
-  private let info: [String: Any] = [
-    OAuthConfiguration.InfoKey.clientID: "client",
-    OAuthConfiguration.InfoKey.tokenURL: "https://auth.example.com/v1/oauth2/token",
-    OAuthConfiguration.InfoKey.authorizeURL: "https://dashboard.example.com/dashboard/oauth/authorize",
-    OAuthConfiguration.InfoKey.apiOrigin: "https://www.example.com",
-  ]
-
-  @Test("all four keys set: the consent page as given, the key routes under the API origin")
-  func configured() throws {
-    let config = try #require(OAuthConfiguration.blurt(infoDictionary: info))
-    #expect(config.clientID == "client")
-    #expect(config.authorizeURL.absoluteString == "https://dashboard.example.com/dashboard/oauth/authorize")
-    #expect(config.apiKeyURL.absoluteString == "https://www.example.com/api/v2/oauth/api-key")
-    #expect(config.revokeURL.absoluteString == "https://www.example.com/api/v2/oauth/api-key/revoke")
-    #expect(config.redirectURI.absoluteString == "com.assemblyai.blurt://oauth/callback")
+// The renewal races: a sign-out or a forget landing while a renewal is parked
+// on the network must win.
+extension AssemblyAIAccountTests {
+  /// A signed-in account whose renewal is parked at the token endpoint until
+  /// the test releases `gate`.
+  private struct ParkedRenewal {
+    let account: AssemblyAIAccount
+    let gate: Gate
+    let renewal: Task<Void, Never>
   }
 
-  @Test("a missing, blank or non-https value turns sign-in off")
-  func unconfigured() {
-    #expect(OAuthConfiguration.blurt(infoDictionary: [:]) == nil)
-    for key in info.keys {
-      var blank = info
-      blank[key] = " "
-      #expect(OAuthConfiguration.blurt(infoDictionary: blank) == nil)
-    }
-    for key in info.keys where key != OAuthConfiguration.InfoKey.clientID {
-      var http = info
-      http[key] = "http://www.example.com"
-      #expect(OAuthConfiguration.blurt(infoDictionary: http) == nil)
-    }
+  @Test("a sign-out during a renewal wins: the renewal wakes and writes nothing back")
+  func signOutDuringRenewal() async throws {
+    let parked = try await renewalParkedOnTheNetwork()
+    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
+    let signOut = Task { await account.signOut() }
+    gate.allowToFinish()
+    await renewal.value
+    #expect(await signOut.value == nil)
+
+    #expect(account.status == .signedOut)
+    #expect(sessions.session == nil)
+    #expect(keyStore.current == nil)
+    // Sign-out waited for the renewal and refreshed with the rotated token.
+    #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1", "rt-2"])
   }
 
-  @Test("plain http is allowed to this machine only, for a dev build on a local dashboard or site")
-  func loopback() {
-    for host in ["localhost:3000", "127.0.0.1:3000", "[::1]:3000"] {
-      var local = info
-      local[OAuthConfiguration.InfoKey.authorizeURL] = "http://\(host)/dashboard/oauth/authorize"
-      #expect(OAuthConfiguration.blurt(infoDictionary: local) != nil, "\(host)")
-    }
-    var lookalike = info
-    lookalike[OAuthConfiguration.InfoKey.apiOrigin] = "http://localhost.example.com"
-    #expect(OAuthConfiguration.blurt(infoDictionary: lookalike) == nil)
-  }
-}
+  private func renewalParkedOnTheNetwork() async throws -> ParkedRenewal {
+    let gate = Gate()
+    let gated = GatedTransport(inner: server.transport, gate: gate)
+    let clock = clock
+    let account = AssemblyAIAccount(
+      configuration: testOAuthConfiguration,
+      apiKey: APIKeyModel(keyStore: keyStore) { _ in .valid },
+      store: sessions,
+      transport: gated
+    ) { clock.now }
+    let auth = try #require(account.beginSignIn())
+    let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))
+    #expect(await account.completeSignIn(auth, callback: callback) == .signedIn)
 
-@Suite("Credential rows")
-struct CredentialRowsTests {
-  @Test("a new install with sign-in configured: one row offering both ways in")
-  func newInstallChooses() {
-    #expect(CredentialRows.resolve(isKeyStored: false, isSignInAvailable: true, status: .signedOut) == .choice)
-  }
-
-  @Test("a pasted key is the whole connection: just the key row, no Sign In beside it to read as a step")
-  func pastedKeyStandsAlone() {
-    #expect(
-      CredentialRows.resolve(isKeyStored: true, isSignInAvailable: true, status: .signedOut)
-        == .keyRow(connectIsPrimary: false))
+    advanceToRenewal()
+    gated.armed.withLock { $0 = true }
+    let renewal = Task { _ = await account.renewIfDue() }
+    await gate.waitUntilEntered()
+    return ParkedRenewal(account: account, gate: gate, renewal: renewal)
   }
 
-  @Test("no sign-in configured: just the key row, Connect filled until a key is stored")
-  func withoutSignIn() {
-    #expect(
-      CredentialRows.resolve(isKeyStored: false, isSignInAvailable: false, status: .signedOut)
-        == .keyRow(connectIsPrimary: true))
-    #expect(
-      CredentialRows.resolve(isKeyStored: true, isSignInAvailable: false, status: .signedOut)
-        == .keyRow(connectIsPrimary: false))
-  }
-
-  @Test("signed in: the account row alone, even where sign-in isn't configured")
-  func signedIn() {
-    for available in [true, false] {
-      #expect(
-        CredentialRows.resolve(isKeyStored: true, isSignInAvailable: available, status: .signedIn(email: nil))
-          == .accountRow)
-    }
+  @Test("a forget during a renewal (the reset, an ended connection) also wins")
+  func forgetDuringRenewal() async throws {
+    let parked = try await renewalParkedOnTheNetwork()
+    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
+    account.forget()
+    gate.allowToFinish()
+    await renewal.value
+    #expect(account.status == .signedOut)
+    #expect(sessions.session == nil)
   }
 }

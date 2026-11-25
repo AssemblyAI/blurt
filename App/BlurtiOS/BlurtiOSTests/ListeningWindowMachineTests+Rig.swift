@@ -57,8 +57,12 @@ extension ListeningWindowMachineTests {
   /// One row: where the event lands the machine and what it asks for, answering the record it publishes.
   @discardableResult
   func row(
-    _ machine: inout Machine, _ event: Machine.Event, at now: Date, lands state: Machine.State,
-    asks expected: [Effect], location: SourceLocation = #_sourceLocation
+    _ machine: inout Machine,
+    _ event: Machine.Event,
+    at now: Date,
+    lands state: Machine.State,
+    asks expected: [Effect],
+    location: SourceLocation = #_sourceLocation
   ) throws -> ListeningState {
     let effects = machine.handle(event, now: now)
     #expect(machine.state == state, sourceLocation: location)

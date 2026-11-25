@@ -43,21 +43,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   ///
   /// Type-scoped like every other logger in the engine (`MicCapture`,
   /// `DictationLog`, `AudioRouteMonitor`) rather than a module-global, and
-  /// internal so `DictationUploadDelegate` in `DictationUploadMetrics.swift`
+  /// internal so `DictationUploadDelegate` in `DictationUploadDelegate.swift`
   /// writes the same category — one category, two files.
   static let log = HostIdentity.current.logger("Transcriber")
   public static let defaultBaseURL = URL(staticString: "https://dictation.assemblyai.com")
-  private let apiKeyProvider: @Sendable () -> String?
-  /// Read per request, so the host can change while the app runs. Internal for `warmUp()`.
-  var baseURL: URL { baseURLProvider() }
-  private let baseURLProvider: @Sendable () -> URL
-  let transport: any HTTPTransport
-  private let enhancedTranscriptsEnabled: @Sendable () -> Bool
-  private let rewriteMode: @Sendable () -> RewriteMode
-  /// The most audio the over-cap fallback's copy may hold before it is dropped
-  /// and the fallback fails cleanly instead. Internal and settable so tests can
-  /// trip the guard with a few bytes; production never changes it.
-  var bufferedAudioByteCap = SyncSTTLimits.maxBufferedAudioBytes
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -82,6 +71,18 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// every dictation under two minutes is still this route's alone.
   private static let transcribePath = "v1/transcribe/live"
 
+  private let apiKeyProvider: @Sendable () -> String?
+  /// Read per request, so the host can change while the app runs. Internal for `warmUp()`.
+  var baseURL: URL { baseURLProvider() }
+  private let baseURLProvider: @Sendable () -> URL
+  let transport: any HTTPTransport
+  private let enhancedTranscriptsEnabled: @Sendable () -> Bool
+  private let rewriteMode: @Sendable () -> RewriteMode
+  /// The most audio the over-cap fallback's copy may hold before it is dropped
+  /// and the fallback fails cleanly instead. Internal and settable so tests can
+  /// trip the guard with a few bytes; production never changes it.
+  var bufferedAudioByteCap = SyncSTTLimits.maxBufferedAudioBytes
+
   /// `enhancedTranscripts` decides, per response, which of the two transcripts
   /// the route returns gets pasted — it no longer shapes the request, which
   /// always asks for the rewrite; `rewriteMode` picks the rewrite's model
@@ -94,9 +95,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// the corresponding store — spelled as optionals rather than default
   /// closures because a public default argument can't reference a store's
   /// internal member.
+  @preconcurrency
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
-    baseURL: @escaping @Sendable () -> URL = { AssemblyAITranscriber.defaultBaseURL },
+    baseURL: @escaping @Sendable () -> URL = { Self.defaultBaseURL },
     transport: any HTTPTransport = URLSession.shared,
     enhancedTranscripts: (@Sendable () -> Bool)? = nil,
     rewriteMode: (@Sendable () -> RewriteMode)? = nil
@@ -136,7 +138,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []),
       customStyle: context?.styleInstructions,
       enhanced: enhanced,
-      mode: mode)
+      mode: mode
+    )
     let request = makeRequest(path: Self.transcribePath, apiKey: apiKey, boundary: boundary)
 
     // The capture feed goes through `relay` on its way to the upload, which keeps
@@ -153,9 +156,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     do {
       // Scoped to the streaming request: nothing after it may keep the body alive.
       let body = streamedBody(
-        frames: liveFrames, config: config, boundary: boundary, progress: progress)
+        frames: liveFrames, config: config, boundary: boundary, progress: progress
+      )
       data = try await send(
-        request, streaming: body, sampleRate: sampleRate, progress: progress)
+        request, streaming: body, sampleRate: sampleRate, progress: progress
+      )
     } catch is LiveCapExceeded {
       // The streaming request is over, so end its view of the audio now. Left
       // open, `relay` would go on feeding the body's producer, which would
@@ -168,17 +173,21 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         live route refused the recording past its cap (413 audio_too_large) after \
         \(SyncSTTLimits.durationMs(ofPCMBytes: progress.audioBytes, rate: sampleRate), privacy: .public) ms; \
         recording on for the buffered route
-        """)
+        """
+      )
       data = try await sendBuffered(
-        await recording, config: config, apiKey: apiKey, boundary: boundary, sampleRate: sampleRate)
+        await recording, config: config, apiKey: apiKey, boundary: boundary, sampleRate: sampleRate
+      )
     }
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
     Self.logServerMetrics(response)
     return transcript(
-      from: response, enhanced: enhanced,
-      instruction: cleanupInstruction(appending: context?.styleInstructions, mode: mode))
+      from: response,
+      enhanced: enhanced,
+      instruction: cleanupInstruction(appending: context?.styleInstructions, mode: mode)
+    )
   }
 
   /// The multipart body, in the order the streaming route requires: the whole
@@ -265,19 +274,23 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// picks the instruction; nil reads it now, for callers with no paste to keep in
   /// step.
   func makeConfigData(
-    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], customStyle: String?, enhanced: Bool,
+    sampleRate: Int,
+    sttPrompt: String,
+    keytermsPrompt: [String],
+    customStyle: String?,
+    enhanced: Bool,
     mode: RewriteMode? = nil
   ) throws -> Data {
-    let mode = mode ?? instructionMode(enhanced: enhanced)
+    let resolvedMode = mode ?? instructionMode(enhanced: enhanced)
     return try JSONEncoder().encode(
       DictationConfig(
         sampleRate: sampleRate,
         channels: 1,
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
-        llmInstruction: cleanupInstruction(appending: customStyle, mode: mode),
+        llmInstruction: cleanupInstruction(appending: customStyle, mode: resolvedMode),
         // Only while the rewrite is pasted: off, a slower model only adds latency.
-        rewriteMode: enhanced ? mode.wireValue : nil
+        rewriteMode: enhanced ? resolvedMode.wireValue : nil
       )
     )
   }
@@ -314,7 +327,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     request.timeoutInterval = Self.requestTimeoutSeconds
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
     request.setValue(
-      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type"
+    )
     // Names the client and its release to the service (`Blurt/<version>`) in place
     // of `URLSession`'s default agent, which reports the opaque build counter.
     // The one header here the reference does not describe, and the exception is
@@ -324,8 +338,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   }
 
   private func send(
-    _ request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
-    sampleRate: Int, progress: UploadProgress
+    _ request: URLRequest,
+    streaming body: AsyncThrowingStream<Data, any Error>,
+    sampleRate: Int,
+    progress: UploadProgress
   ) async throws -> Data {
     // Per-task delegate (not a session delegate) so this rides along on whatever
     // transport was injected — `URLSession.shared` in production, a fake in
@@ -339,7 +355,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let clock = ContinuousClock()
     let start = clock.now
     let (data, response) = try await transport.upload(
-      for: request, streaming: body, delegate: metrics)
+      for: request, streaming: body, delegate: metrics
+    )
     let finished = clock.now
     let audioMs = SyncSTTLimits.durationMs(ofPCMBytes: progress.audioBytes, rate: sampleRate)
     // `wallMs` now spans the recording too, because the request opens at press
@@ -354,16 +371,17 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       dictation round-trip audioMs=\(audioMs, privacy: .public) \
       postSpeechMs=\(postSpeechMs ?? -1, format: .fixed(precision: 0), privacy: .public) \
       wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)
-      """)
+      """
+    )
     if Self.isLiveCapRefusal(response, body: data) { throw LiveCapExceeded() }
     try Self.requireSuccess(response, body: data)
     return data
   }
 
   // The request/response types this encodes and decodes — `DictationConfig`,
-  // `DictationResponse`, `ErrorResponse` — live in `DictationWireTypes.swift`,
+  // `DictationResponse`, `ErrorResponse` — live in the `AssemblyAI` module's `Dictation/` files,
   // and the upload's instrumentation — `UploadProgress`,
-  // `DictationUploadDelegate` — in `DictationUploadMetrics.swift`. Both split
+  // `DictationUploadDelegate` — in `UploadProgress.swift` and `DictationUploadDelegate.swift`. Both split
   // out to stay within the lint file-length budget. They are the JSON contract
   // and the measurement; everything here is the transport.
 }

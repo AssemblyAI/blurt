@@ -8,7 +8,31 @@
 //
 // Deliberately importless: this is all Swift stdlib (String/Unicode.Scalar), so
 // even `Foundation` would be an unused import.
+
+/// The press-time focus capture. The Accessibility-backed reads live in
+/// `FocusCapture.swift` and `FocusCapture+Editability.swift`, which exist on
+/// macOS only; the decisions that need no Accessibility call (this file) build
+/// on every platform, which is why the type itself is declared here rather than
+/// beside the reads.
+enum FocusCapture {}
+
 extension FocusCapture {
+  /// What an Accessibility read of the selection found.
+  enum SelectionRead: Equatable {
+    case text(String)
+    /// A readable focused element with no selection (a bare caret), or a secure
+    /// field. A definite answer: the press should dictate.
+    case noSelection
+    /// AX can't say what is selected: no focused element could be reached, or
+    /// the one it reached answers neither a selected range's text nor
+    /// `kAXSelectedText`. Electron apps such as Claude.app answer the
+    /// system-wide focus query with `cannotComplete`; once a voice command has
+    /// set `AXManualAccessibility` they answer it with a web area instead, which
+    /// still exposes no selected text (nor do Sublime Text and Zed). Only here
+    /// may the caller fall back to copying (`SelectionCopy`).
+    case unreadable
+  }
+
   /// The AX role password inputs report. `captureFieldContext` never reads the
   /// prior/selected text of a field with this role into the STT request, so a
   /// typed password can't leak. Independent of editability: the same role is in
@@ -71,36 +95,24 @@ extension FocusCapture {
     return visibleTextOrNil(clipped.trimmedNonEmpty()) == nil ? nil : clipped
   }
 
-  /// What an Accessibility read of the selection found.
-  enum SelectionRead: Equatable {
-    case text(String)
-    /// A readable focused element with no selection (a bare caret), or a secure
-    /// field. A definite answer: the press should dictate.
-    case none
-    /// AX can't say what is selected: no focused element could be reached, or
-    /// the one it reached answers neither a selected range's text nor
-    /// `kAXSelectedText`. Electron apps such as Claude.app answer the
-    /// system-wide focus query with `cannotComplete`; once a voice command has
-    /// set `AXManualAccessibility` they answer it with a web area instead, which
-    /// still exposes no selected text (nor do Sublime Text and Zed). Only here
-    /// may the caller fall back to copying (`SelectionCopy`).
-    case unreadable
-  }
-
   /// How `captureSelectedText` reads what the focused element answered for its
   /// selection, once a bare caret has been ruled out. `raw` nil means the element
   /// answered nothing at all — not an empty selection but an unreadable one, so
   /// the copy fallback gets its chance (#342). A read that holds nothing visible
   /// is a definite "no selection".
   static func selectionRead(_ raw: String?, maxChars: Int) -> SelectionRead {
-    guard let raw else { return .unreadable }
-    return selectionText(raw, maxChars: maxChars).map(SelectionRead.text) ?? .none
+    guard let raw else {
+      return .unreadable
+    }
+    return selectionText(raw, maxChars: maxChars).map(SelectionRead.text) ?? .noSelection
   }
 
   static func visibleTextOrNil(_ text: String?) -> String? {
-    guard let text else { return nil }
+    guard let text else {
+      return nil
+    }
     let hasVisible = text.contains { character in
-      !character.unicodeScalars.allSatisfy { $0.properties.isDefaultIgnorableCodePoint }
+      !character.unicodeScalars.allSatisfy(\.properties.isDefaultIgnorableCodePoint)
     }
     return hasVisible ? text : nil
   }
@@ -123,9 +135,15 @@ extension FocusCapture {
     title: @autoclosure () -> String?,
     roleDescription: @autoclosure () -> String?
   ) -> String? {
-    if let value = placeholder().trimmedNonEmpty() { return value }
-    if let value = description().trimmedNonEmpty() { return value }
-    if let value = title().trimmedNonEmpty() { return value }
+    if let value = placeholder().trimmedNonEmpty() {
+      return value
+    }
+    if let value = description().trimmedNonEmpty() {
+      return value
+    }
+    if let value = title().trimmedNonEmpty() {
+      return value
+    }
     return roleDescription().trimmedNonEmpty()
   }
 
@@ -137,12 +155,15 @@ extension FocusCapture {
   /// land on a character boundary — falls back to the tail of the whole value.
   /// Returns `nil` when the resulting slice is empty.
   static func priorSlice(full: String, caret: Int, maxChars: Int) -> String? {
-    guard !full.isEmpty else { return nil }
+    guard !full.isEmpty else {
+      return nil
+    }
     let upto: Substring
     if caret >= 0, caret <= full.utf16.count,
       let index = full.utf16.index(
-        full.utf16.startIndex, offsetBy: caret, limitedBy: full.utf16.endIndex)?
-        .samePosition(in: full)
+        full.utf16.startIndex, offsetBy: caret, limitedBy: full.utf16.endIndex
+      )?
+      .samePosition(in: full)
     {
       upto = full[..<index]
     } else {
@@ -155,7 +176,9 @@ extension FocusCapture {
   /// Caps `text` at `maxChars` characters (used to bound window titles / labels
   /// so an oddly long one can't dominate the context budget).
   static func clip(_ text: String?, to maxChars: Int) -> String? {
-    guard let text, text.count > maxChars else { return text }
+    guard let text, text.count > maxChars else {
+      return text
+    }
     return String(text.prefix(maxChars))
   }
 }

@@ -10,6 +10,25 @@ import Testing
 /// fixture carries an app's structure, never its content.
 @Suite("Recorded screens")
 struct RecordedScreenTests {
+  /// The recorder's fake text, "Lorem 12" — checked without a regex, which
+  /// would be compiled again for each of a few thousand strings.
+  private static func isFake(_ text: String) -> Bool {
+    let number = text.dropFirst("Lorem ".count)
+    return text.hasPrefix("Lorem ") && !number.isEmpty && number.allSatisfy(\.isASCII) && number.allSatisfy(\.isNumber)
+  }
+
+  private static func audit(_ node: RecordedNode, into problems: inout [String]) {
+    for text in [node.title, node.nodeDescription, node.placeholder, node.rawValue].compactMap(\.self)
+    where !isFake(text) && !RecordedNode.keptWords.contains(text) {
+      problems.append("real text: \(text)")
+    }
+    if node.rawValue != nil, !RecordedNode.valueRoles.contains(node.role ?? "") {
+      problems.append("a value on \(node.role ?? "no role")")
+    }
+    for child in node.children { audit(child, into: &problems) }
+    if let label = node.label { audit(label, into: &problems) }
+  }
+
   /// One recording's listing, as a command over that window would see it.
   private func listing(_ name: String) throws -> [(kind: String, label: String)] {
     try RecordedNode.context(name).elements.map { ($0.kind, $0.label) }
@@ -49,7 +68,8 @@ struct RecordedScreenTests {
   @Test("the recordings on disk are exactly the ones listed: none unlisted, none missing")
   func everyRecordingOnDisk() throws {
     let files = try FileManager.default.contentsOfDirectory(atPath: RecordedNode.directory.path)
-      .filter { $0.hasSuffix(".json") }.map { String($0.dropLast(5)) }
+      .filter { $0.hasSuffix(".json") }
+      .map { String($0.dropLast(5)) }
     #expect(Set(files) == Set(RecordedNode.names))
   }
 
@@ -60,31 +80,13 @@ struct RecordedScreenTests {
       let raw = try String(contentsOf: url, encoding: .utf8)
       // No personal shapes, and only the fields the recorder writes.
       let found = try TestFixtures.audit(
-        raw, shapes: TestFixtures.personalShapes + TestFixtures.webShapes, allowedKeys: RecordedNode.keys)
+        raw, shapes: TestFixtures.personalShapes + TestFixtures.webShapes, allowedKeys: RecordedNode.keys
+      )
       #expect(found.isEmpty, "\(name): \(found)")
       var problems: [String] = []
       Self.audit(try RecordedNode.load(name), into: &problems)
       #expect(problems.isEmpty, "\(name): \(problems.prefix(5))")
     }
-  }
-
-  /// The recorder's fake text, "Lorem 12" — checked without a regex, which
-  /// would be compiled again for each of a few thousand strings.
-  private static func isFake(_ text: String) -> Bool {
-    let number = text.dropFirst("Lorem ".count)
-    return text.hasPrefix("Lorem ") && !number.isEmpty && number.allSatisfy(\.isASCII) && number.allSatisfy(\.isNumber)
-  }
-
-  private static func audit(_ node: RecordedNode, into problems: inout [String]) {
-    for text in [node.title, node.nodeDescription, node.placeholder, node.rawValue].compactMap({ $0 })
-    where !isFake(text) && !RecordedNode.keptWords.contains(text) {
-      problems.append("real text: \(text)")
-    }
-    if node.rawValue != nil, !RecordedNode.valueRoles.contains(node.role ?? "") {
-      problems.append("a value on \(node.role ?? "no role")")
-    }
-    for child in node.children { audit(child, into: &problems) }
-    if let label = node.label { audit(label, into: &problems) }
   }
 
   @Test("1Password's items — menu items named only by their value — are listed")

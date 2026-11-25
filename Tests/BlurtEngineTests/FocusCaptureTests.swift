@@ -13,21 +13,24 @@ struct FocusCaptureTests {
   @Test("selectLabel prefers placeholder when present")
   func labelPrefersPlaceholder() {
     let label = FocusCapture.selectLabel(
-      placeholder: "Search", description: "desc", title: "title", roleDescription: "text field")
+      placeholder: "Search", description: "desc", title: "title", roleDescription: "text field"
+    )
     #expect(label == "Search")
   }
 
   @Test("selectLabel falls through blanks in priority order")
   func labelFallsThrough() {
     let label = FocusCapture.selectLabel(
-      placeholder: "  ", description: nil, title: "Subject", roleDescription: "text field")
+      placeholder: "  ", description: nil, title: "Subject", roleDescription: "text field"
+    )
     #expect(label == "Subject")
   }
 
   @Test("selectLabel uses role description only as a last resort")
   func labelRoleDescriptionLast() {
     let label = FocusCapture.selectLabel(
-      placeholder: nil, description: nil, title: nil, roleDescription: "text entry area")
+      placeholder: nil, description: nil, title: nil, roleDescription: "text entry area"
+    )
     #expect(label == "text entry area")
   }
 
@@ -39,7 +42,8 @@ struct FocusCaptureTests {
   @Test("selectLabel trims the chosen candidate")
   func labelTrims() {
     let label = FocusCapture.selectLabel(
-      placeholder: "  To  ", description: nil, title: nil, roleDescription: nil)
+      placeholder: "  To  ", description: nil, title: nil, roleDescription: nil
+    )
     #expect(label == "To")
   }
 
@@ -59,7 +63,8 @@ struct FocusCaptureTests {
       placeholder: read("placeholder", "Search"),
       description: read("description", "desc"),
       title: read("title", "title"),
-      roleDescription: read("roleDescription", "text field"))
+      roleDescription: read("roleDescription", "text field")
+    )
     #expect(label == "Search")
     #expect(reads == ["placeholder"])
   }
@@ -165,8 +170,8 @@ struct FocusCaptureTests {
 
   @Test("a selection read holding nothing visible is a definite no selection")
   func selectionReadEmpty() {
-    #expect(FocusCapture.selectionRead("", maxChars: 100) == FocusCapture.SelectionRead.none)
-    #expect(FocusCapture.selectionRead(" \n\u{200B}", maxChars: 100) == FocusCapture.SelectionRead.none)
+    #expect(FocusCapture.selectionRead("", maxChars: 100) == FocusCapture.SelectionRead.noSelection)
+    #expect(FocusCapture.selectionRead(" \n\u{200B}", maxChars: 100) == FocusCapture.SelectionRead.noSelection)
   }
 
   /// An Electron web area (once `AXManualAccessibility` is on), Sublime Text and

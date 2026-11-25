@@ -24,12 +24,14 @@ struct LaunchFlagsTests {
     defaults.set(true, forKey: "BlurtDeviceTrace")
 
     LaunchFlags.persist(
-      ["BlurtDeveloperMode", "BlurtDeviceTrace"], arguments: ["-BlurtDeveloperMode", "YES"], into: defaults)
+      ["BlurtDeveloperMode", "BlurtDeviceTrace"], arguments: ["-BlurtDeveloperMode", "YES"], into: defaults
+    )
     #expect(defaults.bool(forKey: "BlurtDeveloperMode"))
     #expect(defaults.bool(forKey: "BlurtDeviceTrace"))
 
     LaunchFlags.persist(
-      ["BlurtDeveloperMode", "BlurtDeviceTrace"], arguments: ["-BlurtDeviceTrace", "NO"], into: defaults)
+      ["BlurtDeveloperMode", "BlurtDeviceTrace"], arguments: ["-BlurtDeviceTrace", "NO"], into: defaults
+    )
     #expect(defaults.bool(forKey: "BlurtDeveloperMode"))
     #expect(!defaults.bool(forKey: "BlurtDeviceTrace"))
   }

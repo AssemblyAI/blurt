@@ -11,20 +11,28 @@
   // ApplicationServices at all. `static`, not `private`, so the initializers in
   // `KeyInjector.swift` can wire them as the defaults across the file boundary.
   extension KeyInjector {
-    static func activate(_ app: NSRunningApplication) -> Bool {
-      app.activate()
-    }
-
     /// How long a paste waits for its target to come frontmost, and how often it
     /// looks. On the press→paste path, so the budget is what bounds the freeze.
     static let frontmostWaitBudget: Duration = .milliseconds(350)
     static let frontmostPollInterval: Duration = .milliseconds(10)
 
+    /// The US-ANSI positions of V and C (`kVK_ANSI_V`, `kVK_ANSI_C`): only the
+    /// fallback for when the user's layout can't be read. Spelled as literals
+    /// because the Carbon constants aren't importable in the tests that pin them.
+    static let ansiV: CGKeyCode = 0x09
+    static let ansiC: CGKeyCode = 0x08
+
+    static func activate(_ app: NSRunningApplication) -> Bool {
+      app.activate()
+    }
+
     static func waitUntilFrontmost(_ app: NSRunningApplication) async -> Bool {
       let pid = app.processIdentifier
       return await poll(
-        for: frontmostWaitBudget, every: frontmostPollInterval, clock: ContinuousClock(),
-        until: { await isFrontmost(pid) })
+        for: frontmostWaitBudget,
+        every: frontmostPollInterval,
+        clock: ContinuousClock()
+      ) { await isFrontmost(pid) }
     }
 
     /// The frontmost-wait's loop on an injected clock (as `MicLiveness`'s wait
@@ -33,12 +41,16 @@
     /// the real one the test measured the machine (a main-actor hop on a loaded
     /// CI box took seconds), not the loop.
     static func poll(
-      for budget: Duration, every interval: Duration, clock: some Clock<Duration>,
+      for budget: Duration,
+      every interval: Duration,
+      clock: some Clock<Duration>,
       until check: @Sendable () async -> Bool
     ) async -> Bool {
       let deadline = clock.now.advanced(by: budget)
       while clock.now < deadline {
-        if await check() { return true }
+        if await check() {
+          return true
+        }
         // Cancelled, the sleep returns at once: without this the loop would
         // spin on `check` (a main-actor hop) for the rest of the budget.
         do { try await clock.sleep(for: interval) } catch { return false }
@@ -78,12 +90,6 @@
         .min() ?? .infinity
     }
 
-    /// The US-ANSI positions of V and C (`kVK_ANSI_V`, `kVK_ANSI_C`): only the
-    /// fallback for when the user's layout can't be read. Spelled as literals
-    /// because the Carbon constants aren't importable in the tests that pin them.
-    static let ansiV: CGKeyCode = 0x09
-    static let ansiC: CGKeyCode = 0x08
-
     /// The Cmd-V key-down/key-up pair on `virtualKey`, or `nil` when CoreGraphics
     /// refuses to build them. Split from `postCmdV` because only the *posting* is
     /// untestable: building an event needs no Accessibility trust, while posting
@@ -107,7 +113,9 @@
       guard let source = CGEventSource(stateID: .combinedSessionState),
         let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
         let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
-      else { return nil }
+      else {
+        return nil
+      }
       // Set on both: a key-up carrying no ⌘ reads as the modifier having been
       // released mid-chord, which some apps treat as cancelling the shortcut.
       down.flags = flags
@@ -143,7 +151,9 @@
     }
 
     static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
-      guard let (down, up) = events else { return false }
+      guard let (down, up) = events else {
+        return false
+      }
       // Post to the annotated session tap rather than the HID tap: the session tap
       // honors exactly the flags set above instead of OR-ing in the live hardware
       // modifier state, so a still-held hotkey modifier can't corrupt Cmd-V into a

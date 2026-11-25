@@ -12,15 +12,11 @@ import UIKit
 @Suite("Keyboard model: lifecycle and the app's signals", .serialized)
 @MainActor
 struct KeyboardLifecycleTests {
-
-  /// Polls until `condition` holds or `timeout` passes; true when it held.
+  /// Polls until `condition` holds or `timeout` passes; true when it held. The
+  /// suite's shorter default over the shared `until` poll: these tests wait on
+  /// the model, which answers within a tick.
   func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-      if condition() { return true }
-      try? await Task.sleep(for: .milliseconds(20))
-    }
-    return condition()
+    await until(timeout, condition)
   }
 
   @Test("on screen, the keyboard writes its presence record and the older keys, and beats; gone, it says so")
@@ -58,7 +54,8 @@ struct KeyboardLifecycleTests {
     #expect(SharedStore.keyboardPresence?.onScreen == true)
     #expect(SharedStore.keyboardSeenAt != nil, "the older key is the record's, and the record is theirs")
     let sibling = KeyboardPresenceRecord(
-      processID: KeyboardProcess.id, controllerID: "the-next-field", pid: KeyboardModel.pid, onScreen: true)
+      processID: KeyboardProcess.id, controllerID: "the-next-field", pid: KeyboardModel.pid, onScreen: true
+    )
     SharedStore.writeKeyboardPresence(sibling)
     model.disappeared()
     #expect(SharedStore.keyboardPresence?.controllerID == "the-next-field")
@@ -83,7 +80,8 @@ struct KeyboardLifecycleTests {
     SharedStore.post(BlurtShared.Signal.phase)
     #expect(await eventually { model.snapshot.state == .recording })
     SharedStore.write(
-      DictationResult(id: UUID(), text: "there", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result)
+      DictationResult(id: UUID(), text: "there", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result
+    )
     SharedStore.post(BlurtShared.Signal.result)
     #expect(await eventually { proxy.before == "Hi there" })
     // The record closing reaches the model and the line.
@@ -96,7 +94,9 @@ struct KeyboardLifecycleTests {
     // A press answered over the ack signal.
     model.apply(snapshot(.idle))
     model.tapMic()
-    guard let press = rig.lastPress else { return }
+    guard let press = rig.lastPress else {
+      return
+    }
     let dictation = UUID()
     SharedStore.acknowledge(CommandAck(commandID: press.id, launchID: KeyboardRig.launch, outcome: .started(dictation)))
     #expect(await eventually { model.handshake.dictationID == dictation })

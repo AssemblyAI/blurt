@@ -1,5 +1,4 @@
-#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/BlurtDesign/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run  // through scripts/design-sync.sh, which also formats the output and, with
-// --check, fails on drift the way check.sh fails on a stale .pbxproj.
+#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/BlurtDesign/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run  // through scripts/design-sync.sh, which also formats the output and, with  // --check, fails on drift the way check.sh fails on a stale .pbxproj.
 //
 //   swift scripts/design-tokens.swift [--root <dir>]
 //
@@ -205,12 +204,14 @@ func swiftLiteral(_ token: Token) -> (type: String, literal: String) {
     let n = numbers.map(format)
     return (
       "UnitCurve",
-      "UnitCurve.bezier(startControlPoint: UnitPoint(x: \(n[0]), y: \(n[1])), "
-        + "endControlPoint: UnitPoint(x: \(n[2]), y: \(n[3])))"
+      "UnitCurve.bezier(\n      startControlPoint: UnitPoint(x: \(n[0]), y: \(n[1])), "
+        + "endControlPoint: UnitPoint(x: \(n[2]), y: \(n[3]))\n    )"
     )
   case .alias(let target):
     guard let other = byQualified[target] else { fail("\(target) does not exist") }
-    return (swiftLiteral(other).type, "\(typeName(other.group)).\(other.swiftName)")
+    // `Self.` within its own enum, as prefer_self_in_static_references asks.
+    let owner = other.group == token.group ? "Self" : typeName(other.group)
+    return (swiftLiteral(other).type, "\(owner).\(other.swiftName)")
   }
 }
 
@@ -253,7 +254,10 @@ for group in groups {
     let (type, literal) = swiftLiteral(token)
     let use = token.use.map { $0 } ?? (token.value.isAlias ? "`\(aliasTarget(token))`" : nil)
     swift += docComment(use, indent: "    ")
-    swift += "    package nonisolated static let \(token.swiftName): \(type) = \(literal)\n"
+    // A literal that already names its type (`Color(hex:)`, `UnitCurve.bezier`) takes no
+    // annotation: SwiftLint's redundant_type_annotation rejects one.
+    let annotation = literal.hasPrefix("\(type)(") || literal.hasPrefix("\(type).") ? "" : ": \(type)"
+    swift += "    package nonisolated static let \(token.swiftName)\(annotation) = \(literal)\n"
   }
   swift += "  }\n\n"
 }

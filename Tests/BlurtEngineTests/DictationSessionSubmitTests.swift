@@ -9,9 +9,8 @@ import Testing
 /// the fire-and-forget commands can be observed to completion.
 @Suite("DictationSession submit", .timeLimit(.minutes(1)))
 struct DictationSessionSubmitTests {
-
   @Test("submit runs press → release in emit order through the full pipeline")
-  func submitHappyPath() async throws {
+  func submitHappyPath() async {
     let fixture = makeSession()
 
     let stream = await fixture.session.phaseStream()
@@ -23,7 +22,7 @@ struct DictationSessionSubmitTests {
       seen.append(phase)
       // The initial yield is .idle (terminal); stop on the first terminal
       // phase the submitted commands produce.
-      if phase.isTerminal && phase != .idle { break }
+      if phase.isTerminal, phase != .idle { break }
     }
 
     #expect(seen.contains(.recording))
@@ -32,7 +31,7 @@ struct DictationSessionSubmitTests {
   }
 
   @Test("submit(.cancel) after submit(.press) discards the capture in order")
-  func submitCancelHonoredInOrder() async throws {
+  func submitCancelHonoredInOrder() async {
     let fixture = makeSession(mode: .transcript("never"))
 
     let stream = await fixture.session.phaseStream()
@@ -50,7 +49,7 @@ struct DictationSessionSubmitTests {
   }
 
   @Test("submit(.cancelRecording) tears down a live recording")
-  func submitCancelRecording() async throws {
+  func submitCancelRecording() async {
     let fixture = makeSession(mode: .transcript("never"))
 
     let stream = await fixture.session.phaseStream()

@@ -12,23 +12,31 @@ import Testing
 @Suite("DictationSession captured context", .timeLimit(.minutes(1)))
 struct DictationSessionContextTests {
   private static let field = FocusedFieldContext(
-    priorText: "Hi Sam,", selectedText: "the old plan", windowTitle: "Re: Q3 pricing",
-    fieldLabel: "Body")
+    priorText: "Hi Sam,",
+    selectedText: "the old plan",
+    windowTitle: "Re: Q3 pricing",
+    fieldLabel: "Body"
+  )
 
   /// The secure-target fixture, shared by the two tests that assert a password
   /// is never remembered — one where the read lands in time, one where it lands
   /// after the upload's budget.
   private static let secureField = FocusedFieldContext(
-    priorText: nil, selectedText: nil, windowTitle: "1Password", fieldLabel: "Password",
-    isSecure: true)
+    priorText: nil,
+    selectedText: nil,
+    windowTitle: "1Password",
+    fieldLabel: "Password",
+    isSecure: true
+  )
 
   @Test("the press-time capture reaches the transcriber, the injector, and the log")
-  func contextThreadsThroughThePipeline() async throws {
+  func contextThreadsThroughThePipeline() async {
     let fixture = makeSession(
       mode: .transcript("Hello world."),
       field: Self.field,
       frontmost: CapturedFocus(pid: 501, processName: "Mail"),
-      keyTerms: ["AssemblyAI"])
+      keyTerms: ["AssemblyAI"]
+    )
 
     await fixture.session.dictate()
 
@@ -36,8 +44,13 @@ struct DictationSessionContextTests {
     // key terms — and it must be the *same* one everywhere downstream, which is
     // why the session stores it rather than re-reading per consumer.
     let expected = TranscriptionContext(
-      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-      priorText: "Hi Sam,", selectedText: "the old plan", keyTerms: ["AssemblyAI"])
+      appName: "Mail",
+      priorText: "Hi Sam,",
+      windowTitle: "Re: Q3 pricing",
+      fieldLabel: "Body",
+      selectedText: "the old plan",
+      keyTerms: ["AssemblyAI"]
+    )
     #expect(await fixture.transcriber.receivedContexts == [expected])
     // The injector gets the two fields its separator decision runs on.
     #expect(await fixture.injector.insertedPrior == ["Hi Sam,"])
@@ -50,10 +63,11 @@ struct DictationSessionContextTests {
   }
 
   @Test("a press's trigger key style rides its request and names its Recent row")
-  func pressKeyStyleRidesTheDictation() async throws {
+  func pressKeyStyleRidesTheDictation() async {
     let casual = PressStyle(instructions: "keep it breezy", name: "Casual")
     let fixture = makeSession(
-      mode: .transcript("Hello world."), pressStyle: { $0 == .rightOption ? casual : PressStyle.none })
+      mode: .transcript("Hello world.")
+    ) { $0 == .rightOption ? casual : PressStyle.base }
 
     await fixture.session.dictate(key: .rightOption)
     await fixture.session.dictate()
@@ -66,7 +80,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("an empty capture transcribes with no context rather than an empty one")
-  func emptyCaptureYieldsNilContext() async throws {
+  func emptyCaptureYieldsNilContext() async {
     // `TranscriptionContext.isEmpty` collapses a capture with nothing usable in
     // it: passing the empty value on would put an empty turn list on the wire
     // instead of omitting the field.
@@ -79,7 +93,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("each press captures afresh, so a second dictation carries its own context")
-  func eachPressCapturesAfresh() async throws {
+  func eachPressCapturesAfresh() async {
     let fixture = makeSession(mode: .transcript("Second."), field: Self.field)
 
     await fixture.session.dictate()
@@ -93,7 +107,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("each dictation becomes the next one's conversation-context history")
-  func historyCarriesForward() async throws {
+  func historyCarriesForward() async {
     let fixture = makeSession(mode: .transcript("First thought."), field: Self.field)
 
     for _ in 1...3 {
@@ -107,7 +121,7 @@ struct DictationSessionContextTests {
     // double-sending: the prior chunk here ("Hi Sam,") is a field the dictations
     // never landed in, so there is nothing to dedupe. The case where the chunk *is*
     // the last transcript is `dedupesHistoryAlreadyInThePriorChunk`.
-    #expect(contexts[0]?.recentTranscripts == [])
+    #expect(contexts[0]?.recentTranscripts.isEmpty == true)
     #expect(contexts[1]?.recentTranscripts == ["First thought."])
     #expect(contexts[2]?.recentTranscripts == ["First thought.", "First thought."])
     // And that history is what the wire prompt is built from, with the cursor's
@@ -118,7 +132,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("a dictation into a secure field is never remembered as history")
-  func secureTargetIsNotRecorded() async throws {
+  func secureTargetIsNotRecorded() async {
     // The outgoing half of `FocusCapture`'s read guard. A password dictated into a
     // secure field must not become part of `stt_prompt` on every later
     // dictation — including in other apps — so it is transcribed, pasted, and
@@ -150,8 +164,12 @@ struct DictationSessionContextTests {
     let transcriber = StubTranscriber(mode: .transcript("spoken"))
     let (seams, hung) = hungFieldSeams()
     let session = makeSession(
-      transcriber: transcriber, injector: StubInjector(), clock: clock,
-      keyTerms: ["Kubernetes"], seams: seams)
+      transcriber: transcriber,
+      injector: StubInjector(),
+      clock: clock,
+      keyTerms: ["Kubernetes"],
+      seams: seams
+    )
 
     // Twice, so the second press has history to carry — `recentDictations` is
     // actor state and this is how the sibling tests seed it. Each read is let
@@ -174,7 +192,8 @@ struct DictationSessionContextTests {
     // Both requests carried the key terms despite neither read landing.
     #expect(contexts.allSatisfy { $0?.keyTerms == ["Kubernetes"] })
     // And the second carried the first's transcript as a context turn.
-    let second = try #require(contexts.last.flatMap { $0 })
+    let lastContext = contexts.last.flatMap(\.self)
+    let second = try #require(lastContext)
     #expect(second.recentTranscripts == ["spoken"])
     #expect(STTPrompt.text(context: second) == "spoken")
     // None of the focus signals, which are the part that genuinely timed out.
@@ -183,7 +202,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("a secure capture that lands after the upload's budget is still honored")
-  func lateSecureCaptureStillSuppressesHistory() async throws {
+  func lateSecureCaptureStillSuppressesHistory() async {
     // The regression the config-first switch opened. `startUpload` cannot wait
     // past `contextWaitBudget` for the AX read without holding the audio back,
     // and that budget now runs against a read that has only had the mic
@@ -201,7 +220,8 @@ struct DictationSessionContextTests {
     let injector = StubInjector()
     let (seams, gate) = hungFieldSeams(field: Self.secureField)
     let session = makeSession(
-      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams
+    )
 
     await session.press()
     // Cross the upload's deadline while the capture is still blocked, so the
@@ -234,12 +254,13 @@ struct DictationSessionContextTests {
   }
 
   @Test("a secure capture with no readable text is still carried, not collapsed to nil")
-  func secureCaptureSurvivesTheEmptyCollapse() async throws {
+  func secureCaptureSurvivesTheEmptyCollapse() async {
     // `isEmpty` has to count `targetIsSecure`: a secure field yields no prior or
     // selected text, so without that the snapshot would collapse to `nil` on the
     // way through `contextStream` and the guard above would never see the flag.
     let secure = FocusedFieldContext(
-      priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, isSecure: true)
+      priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, isSecure: true
+    )
     #expect(!TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true).isEmpty)
     let fixture = makeSession(mode: .transcript("hunter2"), field: secure, frontmost: nil)
 
@@ -251,7 +272,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("history alone keeps the context worth carrying when the capture is empty")
-  func historySurvivesAnEmptyCapture() async throws {
+  func historySurvivesAnEmptyCapture() async {
     // `emptyCaptureYieldsNilContext` above holds only until something has been
     // dictated: with no focus signal at all, the history is now the one thing that
     // makes the snapshot non-empty, and dropping it to nil would silently lose the
@@ -272,7 +293,7 @@ struct DictationSessionContextTests {
   /// `firstValue` in isolation: a capture that never returns costs the transcript
   /// its priming and nothing else.
   @Test("a context read that never completes is abandoned once the budget elapses")
-  func hungCaptureStillTranscribes() async throws {
+  func hungCaptureStillTranscribes() async {
     let clock = TestClock()
     let transcriber = StubTranscriber(mode: .transcript("Spoken anyway."))
     let injector = StubInjector()
@@ -280,7 +301,8 @@ struct DictationSessionContextTests {
     // thread for the whole test, so `PressContext` never resolves.
     let (seams, hung) = hungFieldSeams()
     let session = makeSession(
-      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams
+    )
 
     await session.press()
     await session.release()
@@ -309,8 +331,10 @@ struct DictationSessionContextTests {
   func productionSeamsCompose() async {
     let mic = StubMicCapture()
     let session = DictationSession(
-      mic: mic, transcriber: StubTranscriber(mode: .transcript("never")),
-      injector: StubInjector())
+      mic: mic,
+      transcriber: StubTranscriber(mode: .transcript("never")),
+      injector: StubInjector()
+    )
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -318,83 +342,5 @@ struct DictationSessionContextTests {
 
     #expect(await session.phase == .cancelled)
     #expect(await mic.startCalls == 1)
-  }
-}
-
-/// Which outcomes reach the developer-mode error log. The rule lives in
-/// `setPhase` — every `.failed` route funnels through it, and the quiet outcomes
-/// deliberately don't — and it had no test at all: the log suites cover the
-/// writer, and the session wrote to the real one.
-@Suite("DictationSession failure logging", .timeLimit(.minutes(1)))
-struct DictationSessionFailureLogTests {
-  @Test("a failure is logged once, with the captured context")
-  func failureIsLogged() async throws {
-    let fixture = makeSession(
-      mode: .throwError(BlurtError.apiKeyMissing),
-      field: FocusedFieldContext(
-        priorText: nil, selectedText: nil, windowTitle: "Vault", fieldLabel: "Password"))
-
-    await fixture.session.dictate()
-
-    #expect(fixture.log.failureNames == ["apiKeyMissing"])
-    #expect(fixture.log.failures.first?.context?.windowTitle == "Vault")
-    // A dictation that failed produced no transcript to record.
-    #expect(fixture.log.transcripts.isEmpty)
-  }
-
-  @Test("a press refused at the readiness check is logged before anything is captured")
-  func refusedPressIsLogged() async throws {
-    let mic = StubMicCapture()
-    let log = RecordedLog()
-    let session = makeSession(
-      transcriber: StubTranscriber(mode: .transcript("never")), mic: mic,
-      readinessCheck: { .apiKeyMissing }, seams: testSeams(log: log))
-
-    await session.press()
-
-    #expect(await session.phase == .failed(.apiKeyMissing))
-    #expect(await mic.startCalls == 0)
-    #expect(log.failureNames == ["apiKeyMissing"])
-  }
-
-  @Test("the quiet copied notice is not a failure, so nothing is logged")
-  func noTargetIsNotLogged() async throws {
-    // `.noTarget` is explicitly "don't report it": transcription worked, the
-    // words just went to the clipboard. It must not show up in errors.jsonl.
-    let fixture = makeSession(mode: .transcript("Copied text."))
-    await fixture.injector.setError(BlurtError.noEditableTarget)
-
-    await fixture.session.dictate()
-
-    #expect(await fixture.session.phase == .noTarget)
-    #expect(fixture.log.failures.isEmpty)
-    // The transcript still counts — it was produced and left on the clipboard.
-    #expect(fixture.log.transcripts.map(\.text) == ["Copied text."])
-  }
-
-  @Test("a cancelled dictation logs neither a failure nor a transcript")
-  func cancelIsNotLogged() async throws {
-    let fixture = makeSession(mode: .transcript("Hello world."))
-
-    await fixture.session.press()
-    await fixture.session.cancel()
-
-    #expect(await fixture.session.phase == .cancelled)
-    #expect(fixture.log.failures.isEmpty)
-    #expect(fixture.log.transcripts.isEmpty)
-  }
-
-  /// The one route that logs *without* a phase change: a cancel whose `mic.stop()`
-  /// fails must not flash red, but the fault can't just vanish either.
-  @Test("a failing mic.stop during cancel is logged without repainting the phase")
-  func failingCancelStopIsLoggedQuietly() async throws {
-    let fixture = makeSession(mode: .transcript("Hello world."))
-    await fixture.mic.setStopError(URLError(.unknown))
-
-    await fixture.session.press()
-    await fixture.session.cancel()
-
-    #expect(await fixture.session.phase == .cancelled)
-    #expect(fixture.log.failureNames == ["audioCaptureFailed"])
   }
 }

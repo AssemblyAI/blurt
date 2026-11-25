@@ -7,7 +7,7 @@ import XCTest
 /// system's backdrop above our surface) can be measured.
 final class MessagesKeyboardShot: XCTestCase {
   @MainActor
-  func testShots() throws {
+  func testShots() {
     let messages = XCUIApplication(bundleIdentifier: "com.apple.MobileSMS")
     messages.launch()
     // A conversation if there is one, else a new message.
@@ -22,8 +22,8 @@ final class MessagesKeyboardShot: XCTestCase {
       NSPredicate(format: "placeholderValue == %@ OR label == %@", "iMessage", "iMessage")
     ).firstMatch
     if !field.waitForExistence(timeout: 10) {
-      let lines = messages.debugDescription.split(separator: "\n").filter {
-        $0.contains("Message") || $0.contains("TextView") || $0.contains("TextField")
+      let lines = messages.debugDescription.split(separator: "\n").filter { line in
+        line.contains("Message") || line.contains("TextView") || line.contains("TextField")
       }
       XCTFail("no message field; candidates:\n" + lines.prefix(30).joined(separator: "\n"))
       return

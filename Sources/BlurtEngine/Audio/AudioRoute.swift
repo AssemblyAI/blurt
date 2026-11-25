@@ -24,16 +24,16 @@
   /// `retain_public: false`, so a `public` symbol only the engine reaches fails
   /// the unused-code scan.
   enum AudioRoute {
+    // MARK: - CoreAudio addressing
+
+    /// The system-wide audio object, which owns the default-device properties.
+    static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
+
     /// The system's current default *output* device — what `AudioRouteMonitor`
     /// hangs its format listener on. Nil when there is none, or the read failed.
     static func defaultOutputDeviceID() -> AudioDeviceID? {
       defaultDeviceID(for: kAudioHardwarePropertyDefaultOutputDevice)
     }
-
-    // MARK: - CoreAudio addressing
-
-    /// The system-wide audio object, which owns the default-device properties.
-    static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
 
     /// A global-scope address for `selector`. Returned fresh per call rather than
     /// stored, because every caller needs its own copy to pass `inout` to
@@ -43,7 +43,8 @@
       AudioObjectPropertyAddress(
         mSelector: selector,
         mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain)
+        mElement: kAudioObjectPropertyElementMain
+      )
     }
 
     // MARK: - CoreAudio reads
@@ -58,8 +59,8 @@
     ) -> OSStatus {
       var address = globalAddress(selector)
       var size = UInt32(MemoryLayout<Value>.size)
-      return unsafe withUnsafeMutablePointer(to: &value) {
-        unsafe AudioObjectGetPropertyData(object, &address, 0, nil, &size, UnsafeMutableRawPointer($0))
+      return unsafe withUnsafeMutablePointer(to: &value) { valuePointer in
+        unsafe AudioObjectGetPropertyData(object, &address, 0, nil, &size, UnsafeMutableRawPointer(valuePointer))
       }
     }
 
@@ -71,7 +72,9 @@
       let status = read(selector, of: systemObject, into: &deviceID)
       // 0 is `kAudioObjectUnknown` — "there is no such device" — spelled as the
       // literal so this doesn't depend on how the constant imports.
-      guard status == noErr, deviceID != 0 else { return nil }
+      guard status == noErr, deviceID != 0 else {
+        return nil
+      }
       return deviceID
     }
   }

@@ -9,40 +9,83 @@ enum TranscriptFacet: String, Hashable, CaseIterable {
 
   var title: String {
     switch self {
-    case .full: "Full"
-    case .plain: "Plain text"
-    case .meetingNotes: "Meeting notes"
-    case .summary: "Summary"
-    case .keyPoints: "Key points"
-    case .actionItems: "To-do list"
-    case .namedEntities: "Named entities"
-    case .speakerSummary: "Speaker summary"
-    case .speakerQuotes: "Speaker quotes"
-    case .custom: "Custom"
+    case .full:
+      "Full"
+
+    case .plain:
+      "Plain text"
+
+    case .meetingNotes:
+      "Meeting notes"
+
+    case .summary:
+      "Summary"
+
+    case .keyPoints:
+      "Key points"
+
+    case .actionItems:
+      "To-do list"
+
+    case .namedEntities:
+      "Named entities"
+
+    case .speakerSummary:
+      "Speaker summary"
+
+    case .speakerQuotes:
+      "Speaker quotes"
+
+    case .custom:
+      "Custom"
     }
   }
 
   var systemImage: String {
     switch self {
-    case .full: "text.alignleft"
-    case .plain: "text.justify.leading"
-    case .meetingNotes: "note.text"
-    case .summary: "doc.text"
-    case .keyPoints: "list.bullet"
-    case .actionItems: "checklist"
-    case .namedEntities: "person.text.rectangle"
-    case .speakerSummary: "person.2"
-    case .speakerQuotes: "quote.bubble"
-    case .custom: "cube"
+    case .full:
+      "text.alignleft"
+
+    case .plain:
+      "text.justify.leading"
+
+    case .meetingNotes:
+      "note.text"
+
+    case .summary:
+      "doc.text"
+
+    case .keyPoints:
+      "list.bullet"
+
+    case .actionItems:
+      "checklist"
+
+    case .namedEntities:
+      "person.text.rectangle"
+
+    case .speakerSummary:
+      "person.2"
+
+    case .speakerQuotes:
+      "quote.bubble"
+
+    case .custom:
+      "cube"
     }
   }
 
   /// What the text area says while this facet is on its way.
   var progressTitle: String {
     switch self {
-    case .full, .plain: "Transcribing…"
-    case .custom: "Working on it…"
-    default: "Writing \(title.lowercased())…"
+    case .full, .plain:
+      "Transcribing…"
+
+    case .custom:
+      "Working on it…"
+
+    default:
+      "Writing \(title.lowercased())…"
     }
   }
 
@@ -50,15 +93,32 @@ enum TranscriptFacet: String, Hashable, CaseIterable {
   /// until there is a request.
   func transform(custom: String) -> TranscriptTransform? {
     switch self {
-    case .full, .plain: nil
-    case .meetingNotes: .meetingNotes
-    case .summary: .summary
-    case .keyPoints: .keyPoints
-    case .actionItems: .actionItems
-    case .namedEntities: .namedEntities
-    case .speakerSummary: .speakerSummary
-    case .speakerQuotes: .speakerQuotes
-    case .custom: custom.isEmpty ? nil : .custom(custom)
+    case .full, .plain:
+      nil
+
+    case .meetingNotes:
+      .meetingNotes
+
+    case .summary:
+      .summary
+
+    case .keyPoints:
+      .keyPoints
+
+    case .actionItems:
+      .actionItems
+
+    case .namedEntities:
+      .namedEntities
+
+    case .speakerSummary:
+      .speakerSummary
+
+    case .speakerQuotes:
+      .speakerQuotes
+
+    case .custom:
+      custom.isEmpty ? nil : .custom(custom)
     }
   }
 }

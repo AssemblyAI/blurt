@@ -3,7 +3,8 @@
 
   @testable import BlurtEngine
 
-  @Suite struct SigningIdentityMigrationTests {
+  @Suite
+  struct SigningIdentityMigrationTests {
     private typealias Migration = SigningIdentityMigration
 
     // The identities `SigningIdentity.current()` produces, one per way Blurt is
@@ -23,33 +24,39 @@
       "\(prefix)\(anchor) and certificate leaf[subject.CN] = \"Dev ID 2029\""
 
     // decide(): unsigned builds never act.
-    @Test func unsignedNeverActs() {
+    @Test
+    func unsignedNeverActs() {
       #expect(Migration.decide(lastIdentity: nil, currentIdentity: nil, isTrusted: false) == .noAction)
       #expect(Migration.decide(lastIdentity: "OLD", currentIdentity: nil, isTrusted: true) == .noAction)
     }
 
     // decide(): same identity as last launch is steady state, regardless of trust.
-    @Test func steadyStateIsNoAction() {
+    @Test
+    func steadyStateIsNoAction() {
       #expect(Migration.decide(lastIdentity: "NEW", currentIdentity: "NEW", isTrusted: false) == .noAction)
       #expect(Migration.decide(lastIdentity: "NEW", currentIdentity: "NEW", isTrusted: true) == .noAction)
     }
 
     // decide(): no marker (every build predating it) is treated as changed.
-    @Test func firstSeenUntrustedResets() {
+    @Test
+    func firstSeenUntrustedResets() {
       let decision = Migration.decide(lastIdentity: nil, currentIdentity: "NEW", isTrusted: false)
       #expect(decision == .resetThenRecord("NEW"))
     }
-    @Test func firstSeenTrustedRecordsOnly() {
+    @Test
+    func firstSeenTrustedRecordsOnly() {
       let decision = Migration.decide(lastIdentity: nil, currentIdentity: "NEW", isTrusted: true)
       #expect(decision == .record("NEW"))
     }
 
     // decide(): any identity change at all.
-    @Test func identityChangedUntrustedResets() {
+    @Test
+    func identityChangedUntrustedResets() {
       let decision = Migration.decide(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: false)
       #expect(decision == .resetThenRecord("NEW"))
     }
-    @Test func identityChangedTrustedRecordsOnly() {
+    @Test
+    func identityChangedTrustedRecordsOnly() {
       let decision = Migration.decide(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: true)
       #expect(decision == .record("NEW"))
     }
@@ -61,9 +68,11 @@
     // switched on in System Settings, denied by `AXIsProcessTrusted()`, with no way
     // past the wizard. Nothing at signing time can pre-empt it: the requirement was
     // handed to `tccd` before the rotation existed.
-    @Test func reissuedReleaseCertificateResets() {
+    @Test
+    func reissuedReleaseCertificateResets() {
       let decision = Migration.decide(
-        lastIdentity: Self.release, currentIdentity: Self.reissuedRelease, isTrusted: false)
+        lastIdentity: Self.release, currentIdentity: Self.reissuedRelease, isTrusted: false
+      )
       #expect(decision == .resetThenRecord(Self.reissuedRelease))
     }
 
@@ -71,7 +80,8 @@
     // rebuilds the same way over and over. Two `dev-build.sh` runs pin the same
     // team-based requirement, so a working grant survives a rebuild; nothing here
     // may reset on every launch.
-    @Test func rebuildingTheSameWayIsNoAction() {
+    @Test
+    func rebuildingTheSameWayIsNoAction() {
       #expect(
         Migration.decide(lastIdentity: Self.devBuild, currentIdentity: Self.devBuild, isTrusted: true)
           == .noAction)
@@ -81,7 +91,8 @@
     }
 
     // run(): steady state / unsigned persist nothing and never reset.
-    @Test func runNoActionPersistsNothingAndSkipsReset() {
+    @Test
+    func runNoActionPersistsNothingAndSkipsReset() {
       let out = Migration.run(lastIdentity: "NEW", currentIdentity: "NEW", isTrusted: false) {
         Issue.record("reset must not run for .noAction")
         return true
@@ -90,7 +101,8 @@
     }
 
     // run(): a trusted identity change records without resetting.
-    @Test func runRecordsWithoutResetting() {
+    @Test
+    func runRecordsWithoutResetting() {
       var didReset = false
       let out = Migration.run(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: true) {
         didReset = true
@@ -101,11 +113,13 @@
     }
 
     // run(): an untrusted identity change resets, then persists only on success.
-    @Test func runResetsThenPersistsOnSuccess() {
+    @Test
+    func runResetsThenPersistsOnSuccess() {
       let out = Migration.run(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: false) { true }
       #expect(out == "NEW")
     }
-    @Test func runDoesNotPersistWhenResetFails() {
+    @Test
+    func runDoesNotPersistWhenResetFails() {
       let out = Migration.run(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: false) { false }
       #expect(out == nil)
     }

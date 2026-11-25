@@ -1,6 +1,6 @@
 /// A selectable record-start/stop cue voice: an `id`, a display `label`, and the
 /// picker `group` it belongs to. `id` doubles as the cue stem the host resolves
-/// against its own bundle: `<id>-start` / `<id>-stop`. The `.none` pack plays
+/// against its own bundle: `<id>-start` / `<id>-stop`. The `.silent` pack plays
 /// nothing.
 ///
 /// **The engine ships no voices and no audio.** A `SoundPack` is a descriptor the
@@ -12,27 +12,20 @@
 /// `SoundPackCatalog` to get the picker sections, lookup, and the
 /// decode-with-default rule.
 public struct SoundPack: Sendable, Hashable, Identifiable {
+  /// The "no sound" choice. Not part of any catalog — `SoundPackCatalog` keeps it
+  /// reachable no matter what voices it was handed, so "silence the cues" is
+  /// never a choice a host's catalog can take away. Its id stays `"none"`: that
+  /// is the value persisted for it under `SoundPackStore`'s key.
+  public static let silent = Self(id: "none", label: "None", group: nil)
+
   public let id: String
   /// The voice's name, e.g. "Orchestra" or "A11 Brass" — shown in the picker.
   public let label: String
   /// The picker section this voice belongs to, e.g. "Yamaha DX7 · ROM1A" or
-  /// "Roland Juno-106 · A". nil for `.none`.
+  /// "Roland Juno-106 · A". nil for `.silent`.
   public let group: String?
 
-  /// Public because a host builds its own catalog: this is how voices are
-  /// declared from outside the module.
-  public init(id: String, label: String, group: String?) {
-    self.id = id
-    self.label = label
-    self.group = group
-  }
-
-  /// The "no sound" choice. Not part of any catalog — `SoundPackCatalog` keeps it
-  /// reachable no matter what voices it was handed, so "silence the cues" is
-  /// never a choice a host's catalog can take away.
-  public static let none = SoundPack(id: "none", label: "None", group: nil)
-
-  /// True for the `.none` pack — the one voice with no cue files and no synth
+  /// True for the `.silent` pack — the one voice with no cue files and no synth
   /// credit. A catalog entry always carries a `group` (its picker section), so its
   /// absence is what marks the silent pack. Internal: the app asks via
   /// `startFileName`/`stopFileName`, so exporting this would only trip
@@ -44,4 +37,12 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
 
   /// Cue stem for the stop cue, or nil when no sound plays.
   public var stopFileName: String? { isSilent ? nil : "\(id)-stop" }
+
+  /// Public because a host builds its own catalog: this is how voices are
+  /// declared from outside the module.
+  public init(id: String, label: String, group: String?) {
+    self.id = id
+    self.label = label
+    self.group = group
+  }
 }

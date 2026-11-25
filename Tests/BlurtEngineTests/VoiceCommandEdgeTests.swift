@@ -31,7 +31,8 @@ struct VoiceCommandEdgeTests {
   func logLineTakesTheFirstListed() {
     let context = ScreenContext(
       appName: "Mail",
-      elements: [.init(id: 3, kind: "button", label: "Send"), .init(id: 3, kind: "link", label: "Inbox")])
+      elements: [.init(id: 3, kind: "button", label: "Send"), .init(id: 3, kind: "link", label: "Inbox")]
+    )
     #expect(VoiceCommandStep.pressElement(3).logLine(in: context).contains(#"(button "Send")"#))
   }
 

@@ -17,95 +17,13 @@
 /// - If the user stops a recording while the meeting is still on, it won't
 ///   start another until that meeting ends.
 public struct MeetingAutoRecord: Sendable {
-  public enum Action: Equatable, Sendable { case none, start, stop }
+  public enum Action: Equatable, Sendable { case noChange, start, stop }
 
   /// What a probe saw holding the mic: a conferencing app, or only a browser.
   public enum Meeting: Equatable, Sendable { case app, browser }
 
   /// How often the app probes.
   public static let probeInterval: Duration = .seconds(5)
-
-  public var appStopAfter: Duration
-  public var browserStopAfter: Duration
-  /// How long a browser call must be on, probe after probe, before it starts
-  /// a recording. A conferencing app starts one at once.
-  public var browserStartAfter: Duration
-  /// When the browser call on now was first seen, while not recording.
-  private var browserSince: ContinuousClock.Instant?
-  /// Whether the recording on now ends with the meeting.
-  private var meetingBound = false
-  /// The grace the meeting last seen earns once it's gone.
-  private var stopAfter: Duration
-  /// The user just started a recording: the next probe binds it to the
-  /// meeting if one is on.
-  private var bindOnNextProbe = false
-  private var suppressed = false
-  private var meetingGoneSince: ContinuousClock.Instant?
-
-  public init(
-    appStopAfter: Duration = .seconds(15), browserStopAfter: Duration = .seconds(60),
-    browserStartAfter: Duration = .seconds(30)
-  ) {
-    self.appStopAfter = appStopAfter
-    self.browserStopAfter = browserStopAfter
-    self.browserStartAfter = browserStartAfter
-    stopAfter = browserStopAfter
-  }
-
-  /// One probe: what meeting is on (nil for none), whether Blurt is
-  /// recording, and whether the switch lets it start a recording.
-  public mutating func probe(
-    meeting: Meeting?, recording: Bool, autoStart: Bool, now: ContinuousClock.Instant
-  ) -> Action {
-    let meetingActive = meeting != nil
-    if let meeting { stopAfter = meeting == .app ? appStopAfter : browserStopAfter }
-    if !meetingActive { suppressed = false }
-    if meeting != .browser || recording { browserSince = nil }
-    guard recording else {
-      meetingBound = false
-      bindOnNextProbe = false
-      meetingGoneSince = nil
-      guard autoStart, let meeting, !suppressed else { return .none }
-      if meeting == .browser {
-        let since = browserSince ?? now
-        browserSince = since
-        guard now - since >= browserStartAfter else { return .none }
-        browserSince = nil
-      }
-      meetingBound = true
-      return .start
-    }
-    if bindOnNextProbe {
-      bindOnNextProbe = false
-      meetingBound = meetingActive
-    }
-    guard meetingBound, !meetingActive else {
-      meetingGoneSince = nil
-      return .none
-    }
-    let since = meetingGoneSince ?? now
-    meetingGoneSince = since
-    guard now - since >= stopAfter else { return .none }
-    meetingBound = false
-    meetingGoneSince = nil
-    return .stop
-  }
-
-  /// The user started a recording: it ends with the meeting if one is on.
-  public mutating func userStarted() {
-    meetingBound = false
-    bindOnNextProbe = true
-    meetingGoneSince = nil
-  }
-
-  /// The user stopped (or a start failed): no auto-stop to do, and no restart
-  /// until the meeting that's on — if one is — ends.
-  public mutating func userStopped(meetingActive: Bool) {
-    meetingBound = false
-    bindOnNextProbe = false
-    meetingGoneSince = nil
-    suppressed = meetingActive
-  }
 
   // MARK: - What counts as a meeting
 
@@ -127,6 +45,34 @@ public struct MeetingAutoRecord: Sendable {
     "company.thebrowser.Browser",
   ]
 
+  public var appStopAfter: Duration
+  public var browserStopAfter: Duration
+  /// How long a browser call must be on, probe after probe, before it starts
+  /// a recording. A conferencing app starts one at once.
+  public var browserStartAfter: Duration
+  /// When the browser call on now was first seen, while not recording.
+  private var browserSince: ContinuousClock.Instant?
+  /// Whether the recording on now ends with the meeting.
+  private var meetingBound = false
+  /// The grace the meeting last seen earns once it's gone.
+  private var stopAfter: Duration
+  /// The user just started a recording: the next probe binds it to the
+  /// meeting if one is on.
+  private var bindOnNextProbe = false
+  private var suppressed = false
+  private var meetingGoneSince: ContinuousClock.Instant?
+
+  public init(
+    appStopAfter: Duration = .seconds(15),
+    browserStopAfter: Duration = .seconds(60),
+    browserStartAfter: Duration = .seconds(30)
+  ) {
+    self.appStopAfter = appStopAfter
+    self.browserStopAfter = browserStopAfter
+    self.browserStartAfter = browserStartAfter
+    stopAfter = browserStopAfter
+  }
+
   /// What meeting these microphone users mean, if any — an app over a
   /// browser when both hold the mic. `playing` is who's running audio output:
   /// a browser counts only if it's in both. Blurt's own capture is in neither
@@ -136,5 +82,66 @@ public struct MeetingAutoRecord: Sendable {
       return .app
     }
     return bundleIDs.intersection(playing).isDisjoint(with: browserBundleIDs) ? nil : .browser
+  }
+
+  /// One probe: what meeting is on (nil for none), whether Blurt is
+  /// recording, and whether the switch lets it start a recording.
+  public mutating func probe(
+    meeting: Meeting?, recording: Bool, autoStart: Bool, now: ContinuousClock.Instant
+  ) -> Action {
+    let meetingActive = meeting != nil
+    if let meeting { stopAfter = meeting == .app ? appStopAfter : browserStopAfter }
+    if !meetingActive { suppressed = false }
+    if meeting != .browser || recording { browserSince = nil }
+    guard recording else {
+      meetingBound = false
+      bindOnNextProbe = false
+      meetingGoneSince = nil
+      guard autoStart, let meeting, !suppressed else {
+        return .noChange
+      }
+      if meeting == .browser {
+        let since = browserSince ?? now
+        browserSince = since
+        guard now - since >= browserStartAfter else {
+          return .noChange
+        }
+        browserSince = nil
+      }
+      meetingBound = true
+      return .start
+    }
+    if bindOnNextProbe {
+      bindOnNextProbe = false
+      meetingBound = meetingActive
+    }
+    guard meetingBound, !meetingActive else {
+      meetingGoneSince = nil
+      return .noChange
+    }
+    let since = meetingGoneSince ?? now
+    meetingGoneSince = since
+    guard now - since >= stopAfter else {
+      return .noChange
+    }
+    meetingBound = false
+    meetingGoneSince = nil
+    return .stop
+  }
+
+  /// The user started a recording: it ends with the meeting if one is on.
+  public mutating func userStarted() {
+    meetingBound = false
+    bindOnNextProbe = true
+    meetingGoneSince = nil
+  }
+
+  /// The user stopped (or a start failed): no auto-stop to do, and no restart
+  /// until the meeting that's on — if one is — ends.
+  public mutating func userStopped(meetingActive: Bool) {
+    meetingBound = false
+    bindOnNextProbe = false
+    meetingGoneSince = nil
+    suppressed = meetingActive
   }
 }

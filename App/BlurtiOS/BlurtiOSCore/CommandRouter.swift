@@ -62,8 +62,14 @@ package nonisolated enum CommandRouter {
     package let newDictationID: UUID
 
     package init(
-      command: KeyboardCommand, state: ListeningState?, phase: PhaseSnapshot.State, inFlight: DictationRef?,
-      onScreen: String?, answered: [UUID: CommandAck.Outcome], now: Date = Date(), launchID: UUID,
+      command: KeyboardCommand,
+      state: ListeningState?,
+      phase: PhaseSnapshot.State,
+      inFlight: DictationRef?,
+      onScreen: String?,
+      answered: [UUID: CommandAck.Outcome],
+      launchID: UUID,
+      now: Date = Date(),
       newDictationID: UUID = UUID()
     ) {
       self.command = command
@@ -101,12 +107,21 @@ package nonisolated enum CommandRouter {
 
   package static func route(_ input: Input) -> Decision {
     let command = input.command
-    if let before = input.answered[command.id] { return answer(input, before, remember: false) }
-    guard command.isFresh(now: input.now) else { return answer(input, .stale) }
+    if let before = input.answered[command.id] {
+      return answer(input, before, remember: false)
+    }
+    guard command.isFresh(now: input.now) else {
+      return answer(input, .stale)
+    }
     switch command.kind {
-    case .press: return press(input)
-    case .release: return ending(input, submit: .release, outcome: CommandAck.Outcome.stopped)
-    case .cancel: return ending(input, submit: .cancel, outcome: CommandAck.Outcome.cancelled)
+    case .press:
+      return press(input)
+
+    case .release:
+      return ending(input, submit: .release, outcome: CommandAck.Outcome.stopped)
+
+    case .cancel:
+      return ending(input, submit: .cancel, outcome: CommandAck.Outcome.cancelled)
     }
   }
 
@@ -115,19 +130,32 @@ package nonisolated enum CommandRouter {
   /// `suspended`, which a lapsed lease yields and which the app, answering,
   /// plainly is not: that is answered from the window instead.
   package static func reasonForPress(state: ListeningState?, now: Date) -> FailureReason? {
-    guard let state else { return .sessionOff }
-    if state.window == .open { return state.micLive ? nil : .micBusy }
-    guard let reason = state.notReady(now: now), reason != .suspended else { return windowReason(state.window) }
+    guard let state else {
+      return .sessionOff
+    }
+    if state.window == .open {
+      return state.micLive ? nil : .micBusy
+    }
+    guard let reason = state.notReady(now: now), reason != .suspended else {
+      return windowReason(state.window)
+    }
     return reason
   }
 
   /// The reason a window that is not recording stands for, with nothing else known.
   private static func windowReason(_ window: ListeningState.Window) -> FailureReason {
     switch window {
-    case .closed, .closing: .sessionOff
-    case .opening: .opening
-    case .interrupted: .interrupted
-    case .open: .micBusy
+    case .closed, .closing:
+      .sessionOff
+
+    case .opening:
+      .opening
+
+    case .interrupted:
+      .interrupted
+
+    case .open:
+      .micBusy
     }
   }
 
@@ -138,19 +166,26 @@ package nonisolated enum CommandRouter {
     guard isTerminal(input.phase) else {
       // A dictation is running that no press of the keyboard's started, so
       // there is no id to latch onto: the microphone is simply taken.
-      guard let current = input.inFlight else { return answer(input, .notListening(.micBusy)) }
+      guard let current = input.inFlight else {
+        return answer(input, .notListening(.micBusy))
+      }
       return answer(input, .busy(current.id))
     }
     let dictationID = input.newDictationID
     return answer(
-      input, .started(dictationID), submit: .press(newDictation: dictationID, owner: input.command.keyboard))
+      input, .started(dictationID), submit: .press(newDictation: dictationID, owner: input.command.keyboard)
+    )
   }
 
   private static func ending(
     _ input: Input, submit: Submit, outcome: (UUID) -> CommandAck.Outcome
   ) -> Decision {
-    guard !isTerminal(input.phase), let current = input.inFlight else { return answer(input, .nothingInFlight) }
-    guard mayEnd(input.command, current, onScreen: input.onScreen) else { return answer(input, .notOwner) }
+    guard !isTerminal(input.phase), let current = input.inFlight else {
+      return answer(input, .nothingInFlight)
+    }
+    guard mayEnd(input.command, current, onScreen: input.onScreen) else {
+      return answer(input, .notOwner)
+    }
     return answer(input, outcome(current.id), submit: submit, recipient: input.command.keyboard)
   }
 
@@ -161,9 +196,15 @@ package nonisolated enum CommandRouter {
   /// owns, ended the old way — but never stands in for the keyboard on
   /// screen: that match needs both sides named.
   private static func mayEnd(_ command: KeyboardCommand, _ current: DictationRef, onScreen: String?) -> Bool {
-    guard command.dictationID == nil || command.dictationID == current.id else { return false }
-    if command.keyboard == current.ownerProcessID { return true }
-    guard let sender = command.keyboard, let onScreen else { return false }
+    guard command.dictationID == nil || command.dictationID == current.id else {
+      return false
+    }
+    if command.keyboard == current.ownerProcessID {
+      return true
+    }
+    guard let sender = command.keyboard, let onScreen else {
+      return false
+    }
     return sender == onScreen
   }
 
@@ -171,13 +212,19 @@ package nonisolated enum CommandRouter {
   /// is nothing for a release or cancel to end.
   private static func isTerminal(_ phase: PhaseSnapshot.State) -> Bool {
     switch phase {
-    case .idle, .pasted, .copied, .error: true
-    case .connecting, .recording, .processing: false
+    case .idle, .pasted, .copied, .error:
+      true
+
+    case .connecting, .recording, .processing:
+      false
     }
   }
 
   private static func answer(
-    _ input: Input, _ outcome: CommandAck.Outcome, submit: Submit? = nil, remember: Bool = true,
+    _ input: Input,
+    _ outcome: CommandAck.Outcome,
+    submit: Submit? = nil,
+    remember: Bool = true,
     recipient: String? = nil
   ) -> Decision {
     let ack = CommandAck(commandID: input.command.id, launchID: input.launchID, outcome: outcome, at: input.now)

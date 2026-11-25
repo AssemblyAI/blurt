@@ -37,8 +37,12 @@ struct DesignTokensTests {
     func render(_ qualified: String, depth: Int = 0) throws -> String {
       let value = try #require(raw[qualified], "\(qualified) is not a token")
       try #require(depth < 8, "alias cycle at \(qualified)")
-      if let number = value as? NSNumber { return format(number.doubleValue) }
-      if let curve = value as? [NSNumber] { return curve.map { format($0.doubleValue) }.joined(separator: ",") }
+      if let number = value as? Double {
+        return format(number)
+      }
+      if let curve = value as? [Double] {
+        return curve.map { format($0) }.joined(separator: ",")
+      }
       let string = try #require(value as? String)
       if string.hasPrefix("{"), string.hasSuffix("}") {
         return try render(String(string.dropFirst().dropLast()), depth: depth + 1)
@@ -53,16 +57,25 @@ struct DesignTokensTests {
       let stops = try #require(gradient["stops"] as? [[String: Any]])
       let rendered = try stops.map { stop -> String in
         let color = try #require(stop["color"] as? String)
-        let location = try #require(stop["location"] as? NSNumber)
+        let location = try #require(stop["location"] as? Double)
         let hex =
           color.hasPrefix("{") ? try render(String(color.dropFirst().dropLast())) : color.uppercased()
-        return "\(hex)@\(format(location.doubleValue))"
+        return "\(hex)@\(format(location))"
       }
       let start = try #require(gradient["start"] as? String)
       let end = try #require(gradient["end"] as? String)
       manifest["gradients.\(name)"] = "\(rendered.joined(separator: " ")) \(start)>\(end)"
     }
     return manifest
+  }
+
+  private static func rgba(_ colour: UIColor) -> [Int] {
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    colour.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+    return [red, green, blue, alpha].map { Int(($0 * 255).rounded()) }
   }
 
   @Test("every compiled token equals tokens.json (run scripts/design-sync.sh)")
@@ -111,14 +124,5 @@ struct DesignTokensTests {
   func ctaIsTheAccent() {
     #expect(DesignTokens.Keyboard.appCtaLight == DesignTokens.Keyboard.appAccentLight)
     #expect(DesignTokens.Keyboard.appCtaDark == DesignTokens.Keyboard.appAccentDark)
-  }
-
-  private static func rgba(_ colour: UIColor) -> [Int] {
-    var red: CGFloat = 0
-    var green: CGFloat = 0
-    var blue: CGFloat = 0
-    var alpha: CGFloat = 0
-    colour.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-    return [red, green, blue, alpha].map { Int(($0 * 255).rounded()) }
   }
 }

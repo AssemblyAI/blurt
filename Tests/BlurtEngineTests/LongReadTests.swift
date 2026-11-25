@@ -19,14 +19,16 @@ struct LongReadTests {
   }
 
   private func speaker(
-    _ transport: FakeSpeechTransport, sink: RecordingSink,
+    _ transport: FakeSpeechTransport,
+    sink: RecordingSink,
     gateway: any HTTPTransport = FakeHTTPTransport.failing(
-      with: URLError(.notConnectedToInternet))
+      with: URLError(.notConnectedToInternet)
+    )
   ) -> SelectionSpeaker {
     SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: transport),
-      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
-      makeSink: { _ in sink })
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway)
+    ) { _ in sink }
   }
 
   @Test("selections up to 100,000 characters are read, so a long article isn't cut off")
@@ -99,28 +101,5 @@ struct LongReadTests {
         == text.split(whereSeparator: \.isWhitespace))
     #expect(ListeningChunks.chunks(of: "Short.") == ["Short."])
     #expect(ListeningChunks.chunks(of: "  \n\n ").isEmpty)
-  }
-}
-
-/// A gateway answering rewrite requests only as the test releases them, each
-/// answer naming its request: "Rewritten 1.", "Rewritten 2.", …
-private final class GatedRewrites: GatewayStub, Sendable {
-  private let state = Mutex((asked: 0, released: 0))
-
-  var asked: Int { state.withLock(\.asked) }
-
-  func release(_ count: Int) {
-    state.withLock { $0.released = count == .max ? .max : $0.released + count }
-  }
-
-  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    let number = state.withLock { state -> Int in
-      state.asked += 1
-      return state.asked
-    }
-    while state.withLock({ $0.released < number }) {
-      try await Task.sleep(for: .milliseconds(5))
-    }
-    return try ok(request, completion("Rewritten \(number). The words read aloud."))
   }
 }

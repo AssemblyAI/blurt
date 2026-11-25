@@ -3,60 +3,6 @@
   import Foundation
   import Synchronization
 
-  /// A thread-safe, value-type representation of a pasteboard item containing its data
-  /// keyed by pasteboard types, allowing it to cross concurrency boundaries safely.
-  struct SendablePasteboardItem: Sendable {
-    let dataMap: [NSPasteboard.PasteboardType: Data]
-  }
-
-  /// A best-effort snapshot of the whole pasteboard, taken before a paste so the
-  /// user's contents can be put back afterwards.
-  ///
-  /// The distinction that matters: this type is only ever produced when the
-  /// pasteboard was *readable*. `SystemClipboard.snapshot()` returns `nil` when the
-  /// read itself failed, so a failure can never be mistaken for "the clipboard was
-  /// empty" — conflating those two is what made the restore clear the user's
-  /// clipboard instead of restoring it.
-  ///
-  /// Known, inherent limitation: pasteboard data can be *promised* (provided lazily
-  /// by the owning app on demand). A promise cannot be copied, only materialized, and
-  /// an app may decline. Types that decline are absent from `dataMap`, so a restore
-  /// of promise-backed contents is a best-effort downgrade, not a byte-faithful
-  /// round trip — `plainText` exists to keep at least the text when that happens.
-  struct PasteboardSnapshot: Sendable {
-    /// One entry per item the pasteboard held, in order. An entry with an empty
-    /// `dataMap` means the item existed but none of its representations could be
-    /// materialized — distinct from the pasteboard having held no items at all,
-    /// which is `items.isEmpty`.
-    let items: [SendablePasteboardItem]
-    /// The pasteboard's plain-string flavor, kept separately as a restore floor for
-    /// when no item's string representation could be materialized — whether
-    /// nothing materialized at all or only types that aren't the text did.
-    let plainText: String?
-  }
-
-  /// The two clipboard operations `KeyInjector` actually performs around a paste —
-  /// a plain overwrite, or an overwrite that can later restore what it displaced —
-  /// rather than exposing NSPasteboard's raw change-count/multi-item bookkeeping.
-  /// A seam so tests substitute a trivial in-memory fake that never has to
-  /// re-derive the pasteboard's change-count semantics to stay faithful.
-  protocol ClipboardAccess: Sendable {
-    /// Overwrite the clipboard with a single plain-string item, discarding the
-    /// previous contents. The degraded paste paths call this to leave the
-    /// transcript on the clipboard for a manual paste. `concealed` is a
-    /// dictation into a password field: its words are a secret, so they are
-    /// left marked as one and only for a while (`SystemClipboard`).
-    func write(_ text: String, concealed: Bool)
-    /// Overwrite the clipboard with `text`, returning an action that restores the
-    /// previous contents — but only if nothing else has written to the clipboard
-    /// in the meantime (so a user copy during the paste-settle window survives).
-    /// Call the returned action once the paste has settled. `concealed` as above.
-    func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void
-    /// Serializes a paste against Blurt's other turns on this pasteboard
-    /// (`SelectionCopy`'s copy) — see `PasteboardLock`.
-    var lock: PasteboardLock { get }
-  }
-
   /// `ClipboardAccess` backed by the real `NSPasteboard.general`. The change-count
   /// comparison that gates the deferred restore lives here, behind the seam, so a
   /// fake never re-implements it.
@@ -65,7 +11,30 @@
     /// is cleared — a password manager's own copy window.
     static let concealedLifetime: Duration = .seconds(90)
 
+    /// Counts the writes Blurt itself makes to the pasteboard, bumped *before*
+    /// each one, so a reader that sees the pasteboard's change count move can
+    /// then tell whether Blurt made the change (`SelectionCopy`'s late-copy
+    /// watcher must never restore over a paste's transcript).
+    private static let ownWrites = Atomic<Int>(0)
+
+    /// nspasteboard.org's marker for contents that exist only for a moment.
+    /// Clipboard managers (Raycast, Maccy, Alfred) skip an item carrying it, so
+    /// the paste's transcript and the restore that follows it don't land in the
+    /// user's clipboard history as copies they never made. The data is empty:
+    /// the type's presence is the whole signal.
+    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+    /// nspasteboard.org's marker for a secret — what a password manager puts on
+    /// its copy. Clipboard managers skip it (and may hide it) even where they
+    /// keep transient items. Empty data, like `transientType`.
+    static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+
     var lock: PasteboardLock { .system }
+
+    // MARK: - NSPasteboard building blocks (also exercised directly by SystemClipboardTests)
+
+    var changeCount: Int { NSPasteboard.general.changeCount }
+
+    var ownWriteCount: Int { Self.ownWrites.load(ordering: .sequentiallyConsistent) }
 
     // Not transient: these words are meant to stay for a paste by hand, so a
     // clipboard manager keeping them is a feature here — unless they were
@@ -75,7 +44,9 @@
     // whatever reads it next.
     func write(_ text: String, concealed: Bool) {
       setString(text, transient: concealed, concealed: concealed)
-      guard concealed else { return }
+      guard concealed else {
+        return
+      }
       let ours = changeCount
       Task.detached { [self] in
         try? await Task.sleep(for: Self.concealedLifetime)
@@ -96,7 +67,9 @@
         // nothing to put back, so leave the transcript on the clipboard (the same
         // degraded-but-recoverable outcome as the `.noTarget` path) rather than
         // clearing the user's clipboard to nothing.
-        guard let saved else { return }
+        guard let saved else {
+          return
+        }
         restore(saved, ifChangeCountIs: ourChangeCount)
       }
     }
@@ -105,21 +78,11 @@
     /// `expected` was read: a newer copy by the user survives. Shared by the
     /// paste path and the read-aloud copy fallback (`SelectionCopy`).
     func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
-      guard changeCount == expected else { return }
+      guard changeCount == expected else {
+        return
+      }
       restore(saved)
     }
-
-    // MARK: - NSPasteboard building blocks (also exercised directly by SystemClipboardTests)
-
-    var changeCount: Int { NSPasteboard.general.changeCount }
-
-    /// Counts the writes Blurt itself makes to the pasteboard, bumped *before*
-    /// each one, so a reader that sees the pasteboard's change count move can
-    /// then tell whether Blurt made the change (`SelectionCopy`'s late-copy
-    /// watcher must never restore over a paste's transcript).
-    private static let ownWrites = Atomic<Int>(0)
-
-    var ownWriteCount: Int { Self.ownWrites.load(ordering: .sequentiallyConsistent) }
 
     private func noteOwnWrite() { Self.ownWrites.add(1, ordering: .sequentiallyConsistent) }
 
@@ -128,7 +91,9 @@
     /// nil as "don't restore" — never as an empty clipboard.
     func snapshot() -> PasteboardSnapshot? {
       let pasteboard = NSPasteboard.general
-      guard let items = pasteboard.pasteboardItems else { return nil }
+      guard let items = pasteboard.pasteboardItems else {
+        return nil
+      }
       let captured = items.map { item in
         var dataMap: [NSPasteboard.PasteboardType: Data] = [:]
         for type in item.types {
@@ -142,17 +107,6 @@
       }
       return PasteboardSnapshot(items: captured, plainText: pasteboard.string(forType: .string))
     }
-
-    /// nspasteboard.org's marker for contents that exist only for a moment.
-    /// Clipboard managers (Raycast, Maccy, Alfred) skip an item carrying it, so
-    /// the paste's transcript and the restore that follows it don't land in the
-    /// user's clipboard history as copies they never made. The data is empty:
-    /// the type's presence is the whole signal.
-    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
-    /// nspasteboard.org's marker for a secret — what a password manager puts on
-    /// its copy. Clipboard managers skip it (and may hide it) even where they
-    /// keep transient items. Empty data, like `transientType`.
-    static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
 
     /// `concealed` also keeps the words to this Mac: `currentHostOnly` takes
     /// them off Universal Clipboard, so a secret isn't handed to the user's
@@ -174,7 +128,9 @@
     /// was read: a concealed leave-behind expiring must not take a newer copy
     /// with it.
     func clear(ifChangeCountIs expected: Int) {
-      guard changeCount == expected else { return }
+      guard changeCount == expected else {
+        return
+      }
       noteOwnWrite()
       NSPasteboard.general.clearContents()
     }
@@ -195,7 +151,9 @@
       // is nothing to write is how the user's clipboard got destroyed whenever a
       // snapshot came back degraded.
       let rebuilt = saved.items.compactMap { item -> NSPasteboardItem? in
-        guard !item.dataMap.isEmpty else { return nil }
+        guard !item.dataMap.isEmpty else {
+          return nil
+        }
         let pasteboardItem = NSPasteboardItem()
         for (type, data) in item.dataMap {
           pasteboardItem.setData(data, forType: type)
@@ -222,7 +180,9 @@
         pasteboard.clearContents()
         // `writeObjects` can refuse the batch; fall through to the text floor
         // rather than leaving the pasteboard empty.
-        if pasteboard.writeObjects(rebuilt) { return }
+        if pasteboard.writeObjects(rebuilt) {
+          return
+        }
       }
 
       // Either nothing was materializable, or the write above was refused. Put the

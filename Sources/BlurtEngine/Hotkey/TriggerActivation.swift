@@ -15,21 +15,39 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
   /// release always stops and nothing ever latches.
   case hold = "Hold"
 
+  /// Menu-picker title, e.g. "Tap or hold".
+  public var label: String {
+    switch self {
+    case .tapOrHold:
+      return "Tap or hold"
+
+    case .tap:
+      return "Tap"
+
+    case .hold:
+      return "Hold"
+    }
+  }
+
+  /// The verb for pressing the key to start, lowercase for mid-sentence use:
+  /// "Click into any text field, tap ⌘ …". Tap-or-hold says "tap" — the
+  /// quicker of its two gestures, and the one a first try reaches for.
+  public var startVerb: String {
+    switch self {
+    case .tapOrHold, .tap:
+      return "tap"
+
+    case .hold:
+      return "hold"
+    }
+  }
+
   /// Decodes a persisted raw value, falling back to the shipped tap-or-hold
   /// behavior for unset ("") or unknown values. The single decode-with-default
   /// rule shared by `TriggerActivationStore` and the `@AppStorage` view that
   /// reads the raw slot directly (so it re-renders live on a Settings change).
-  public static func fromPersisted(_ raw: String) -> TriggerActivation {
-    TriggerActivation(rawValue: raw) ?? .tapOrHold
-  }
-
-  /// Menu-picker title, e.g. "Tap or hold".
-  public var label: String {
-    switch self {
-    case .tapOrHold: return "Tap or hold"
-    case .tap: return "Tap"
-    case .hold: return "Hold"
-    }
+  public static func fromPersisted(_ raw: String) -> Self {
+    Self(rawValue: raw) ?? .tapOrHold
   }
 
   /// How to use a key under this mode, for what it does: the ready screen's
@@ -39,27 +57,33 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
   public func hint(for action: TriggerKeyAction) -> String {
     let verb =
       switch action {
-      case .readAloud: "listen"
-      case .ask: "ask"
-      case .rewrite: "rewrite"
-      case .compose: "give instructions"
-      case .command: "give a command"
-      case .dictate, .off: "talk"
+      case .readAloud:
+        "listen"
+
+      case .ask:
+        "ask"
+
+      case .rewrite:
+        "rewrite"
+
+      case .compose:
+        "give instructions"
+
+      case .command:
+        "give a command"
+
+      case .dictate, .off:
+        "talk"
       }
     switch self {
-    case .tapOrHold: return "Tap to start and stop. Hold to \(verb)."
-    case .tap: return "Tap to start and stop."
-    case .hold: return "Hold to \(verb). Release to stop."
-    }
-  }
+    case .tapOrHold:
+      return "Tap to start and stop. Hold to \(verb)."
 
-  /// The verb for pressing the key to start, lowercase for mid-sentence use:
-  /// "Click into any text field, tap ⌘ …". Tap-or-hold says "tap" — the
-  /// quicker of its two gestures, and the one a first try reaches for.
-  public var startVerb: String {
-    switch self {
-    case .tapOrHold, .tap: return "tap"
-    case .hold: return "hold"
+    case .tap:
+      return "Tap to start and stop."
+
+    case .hold:
+      return "Hold to \(verb). Release to stop."
     }
   }
 
@@ -69,9 +93,14 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
   /// recording always stops (see `DictationKeyGate.modifierUp`).
   func latchesOnRelease(heldFor held: Duration, holdThreshold: Duration) -> Bool {
     switch self {
-    case .tapOrHold: return held < holdThreshold
-    case .tap: return true
-    case .hold: return false
+    case .tapOrHold:
+      return held < holdThreshold
+
+    case .tap:
+      return true
+
+    case .hold:
+      return false
     }
   }
 }

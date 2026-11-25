@@ -11,6 +11,11 @@ import UIKit
 // a dictation has to end for it.
 
 extension DictationCoordinator {
+  /// `blurt://setup?need=<what>`: what the keyboard is missing.
+  private static func need(of url: URL) -> String? {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "need" }?.value
+  }
+
   /// Asks for a window. Foreground only — this is what `blurt://start`
   /// arrives to do; the machine refuses an ask from the background and
   /// refreshes a window already open. Not without a key: an open window
@@ -19,12 +24,16 @@ extension DictationCoordinator {
   func startListening() async {
     apiKey.refreshStatus()
     needsKey = !apiKey.hasAPIKey
-    guard !needsKey else { return }
+    guard !needsKey else {
+      return
+    }
     // Every way to the microphone comes through here — the switch, the
     // keyboard's `blurt://start`, and the app coming to the front — so this
     // one gate covers them all.
     needsConsent = !AIConsent.isGranted()
-    guard !needsConsent else { return }
+    guard !needsConsent else {
+      return
+    }
     guard await AVAudioApplication.requestRecordPermission() else {
       microphoneDenied = true
       return
@@ -42,9 +51,15 @@ extension DictationCoordinator {
     window.foregrounded(turnedOff: turnedOff)
     guard
       SessionAutoStart.shouldStart(
-        windowOpen: window.isOn, hasKey: apiKey.hasAPIKey, consented: AIConsent.isGranted(),
-        micGranted: AVAudioApplication.shared.recordPermission == .granted, turnedOff: turnedOff)
-    else { return }
+        windowOpen: window.isOn,
+        hasKey: apiKey.hasAPIKey,
+        consented: AIConsent.isGranted(),
+        micGranted: AVAudioApplication.shared.recordPermission == .granted,
+        turnedOff: turnedOff
+      )
+    else {
+      return
+    }
     await startListening()
   }
 
@@ -115,11 +130,14 @@ extension DictationCoordinator {
       needsFullAccess = need == BlurtShared.fullAccessNeed
       return
     }
-    guard BlurtShared.isStart(url) else { return }
+    guard BlurtShared.isStart(url) else {
+      return
+    }
     let reason = BlurtShared.hopReason(url)
     let host = BlurtShared.hopHost(url)
     Self.log.notice(
-      "start hop reason=\(reason?.rawValue ?? "none", privacy: .public) host=\(host ?? "none", privacy: .public)")
+      "start hop reason=\(reason?.rawValue ?? "none", privacy: .public) host=\(host ?? "none", privacy: .public)"
+    )
     DeviceTrace.record("hop", ["reason": reason?.rawValue ?? "", "host": host ?? ""])
     startedFromKeyboard = appState() != .active
     // The keyboard was in another app: go back to it once the window is
@@ -139,10 +157,13 @@ extension DictationCoordinator {
   /// mic staying live → go back; open but the keeper not up → go back at the
   /// cap; closed after a window was seen → the open failed, stay.
   func recordPublished(_ record: ListeningState) {
-    guard returnHost != nil else { return }
+    guard returnHost != nil else {
+      return
+    }
     switch record.window {
     case .opening, .open, .interrupted, .closing:
       returnSawWindow = true
+
     case .closed:
       if returnSawWindow {
         Self.log.notice("hop return dropped: the window closed")
@@ -155,9 +176,13 @@ extension DictationCoordinator {
       returnToHost()
     } else if record.window == .open, returnCap == nil {
       returnCap = Task { [weak self] in
-        guard let self else { return }
+        guard let self else {
+          return
+        }
         try? await clock.sleep(for: .seconds(BlurtShared.hopReturnCap))
-        guard !Task.isCancelled, returnHost != nil, window.isOn else { return }
+        guard !Task.isCancelled, returnHost != nil, window.isOn else {
+          return
+        }
         Self.log.notice("hop return at the cap: the keeper is not up yet")
         returnToHost()
       }
@@ -167,7 +192,9 @@ extension DictationCoordinator {
   /// Asks iOS for the host app, once. Refused (the call is not there on
   /// this iOS), the app stays in front with its "◀" hint.
   private func returnToHost() {
-    guard let host = returnHost else { return }
+    guard let host = returnHost else {
+      return
+    }
     cancelReturn()
     let opened = hostReturner(host)
     Self.log.notice("hop return host=\(host, privacy: .public) \(opened ? "opened" : "refused", privacy: .public)")
@@ -188,10 +215,5 @@ extension DictationCoordinator {
     startedFromKeyboard = false
     needsFullAccess = false
     cancelReturn()
-  }
-
-  /// `blurt://setup?need=<what>`: what the keyboard is missing.
-  private static func need(of url: URL) -> String? {
-    URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "need" }?.value
   }
 }

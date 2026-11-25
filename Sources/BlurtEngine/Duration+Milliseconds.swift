@@ -3,6 +3,6 @@ extension Duration {
   /// as a ratio of two `Duration`s rather than reassembled from `components`,
   /// which meant restating the attoseconds-per-millisecond constant by hand.
   var milliseconds: Double {
-    self / Duration.milliseconds(1)
+    self / Self.milliseconds(1)
   }
 }

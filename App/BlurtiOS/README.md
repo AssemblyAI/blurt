@@ -14,7 +14,7 @@ The iPhone app and the keyboard it ships. Same engine as the Mac app
   shows the phase the app publishes, inserts the words that come back through
   `textDocumentProxy`, and reads the phone's word list (`UILexicon`: contact names
   and text replacements) so names come back spelled right with no setup.
-- **They talk through an App Group** (`BlurtiOSCore/SharedState.swift`): payloads in the
+- **They talk through an App Group** (`BlurtiOSCore/BlurtShared.swift`): payloads in the
   shared defaults, Darwin notifications to wake each other. Full Access is what
   lets the keyboard reach the group — without it the keyboard still types, and says
   what it needs.

@@ -24,6 +24,10 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   package static let resignalAfter: TimeInterval = 1
   private static let log = HostIdentity.current.logger("Relay")
 
+  /// How long a password field's words stay on the clipboard when no keyboard
+  /// took them: the Mac's `SystemClipboard.concealedLifetime`, as an iOS expiry.
+  package static let secureClipboardLifetime: TimeInterval = 90
+
   /// The field the words are for: the one that sent the accepted stop, else
   /// the one whose press started the dictation (`DictationCoordinator`). A nil
   /// keyboard means whichever keyboard is up.
@@ -38,6 +42,16 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// the words before they are delivered.
   package let now: @Sendable () -> Date
 
+  /// The keyboard process on screen: the presence record's, or — for a
+  /// keyboard build that writes none yet — the older heartbeat keys'.
+  private var onScreen: String? {
+    let instant = now()
+    if let record = SharedStore.keyboardOnScreen(now: instant) {
+      return record.processID
+    }
+    return SharedStore.isKeyboardPresent(now: instant) ? SharedStore.keyboardInstance : nil
+  }
+
   package init(
     presser: @escaping @Sendable () -> ResultAddress = { ResultAddress() },
     clock: any Clock<Duration> & Sendable = ContinuousClock(),
@@ -48,40 +62,43 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     self.now = now
   }
 
-  package func setTarget(_ focus: CapturedFocus?) async {}
-
-  /// How long a password field's words stay on the clipboard when no keyboard
-  /// took them: the Mac's `SystemClipboard.concealedLifetime`, as an iOS expiry.
-  package static let secureClipboardLifetime: TimeInterval = 90
+  package func setTarget(_: CapturedFocus?) {
+    // Nothing to aim: the keyboard that asked is the target, read from `presser` at insert time.
+  }
 
   /// `secure` defaults to false, as `KeyInjector.insert`'s does, so a direct
   /// caller (a test) describes an ordinary field without restating it; the
   /// session always passes its real verdict through `InjectorProtocol`.
   package func insert(
-    _ text: String, after priorText: String?, windowTitle: String?, secure: Bool = false
+    _ text: String, after _: String?, windowTitle _: String?, secure: Bool = false
   ) async throws {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.
-    let onScreen = self.onScreen
+    let current = onScreen
     let address = presser()
-    let recipient = address.keyboard ?? onScreen
-    guard let onScreen, recipient == onScreen else {
+    let recipient = address.keyboard ?? current
+    guard let current, recipient == current else {
       Self.log.notice("result → copied: no keyboard on screen for \(recipient ?? "anyone", privacy: .public)")
       try await copyOut(text, secure: secure)
     }
     let result = DictationResult(
-      id: UUID(), text: text, deliveredAt: Date(), recipient: recipient, controllerID: address.controllerID,
-      documentID: address.documentID)
+      id: UUID(),
+      text: text,
+      deliveredAt: Date(),
+      recipient: recipient,
+      controllerID: address.controllerID,
+      documentID: address.documentID
+    )
     SharedStore.write(result, forKey: BlurtShared.Key.result)
     SharedStore.post(BlurtShared.Signal.result)
-    let clock: any Clock<Duration> = clock
-    if try await taken(result.id, on: clock) {
-      Self.log.notice("result \(result.id, privacy: .public) → inserted by \(onScreen, privacy: .public)")
+    let waitClock: any Clock<Duration> = clock
+    if try await taken(result.id, on: waitClock) {
+      Self.log.notice("result \(result.id, privacy: .public) → inserted by \(current, privacy: .public)")
       return
     }
     SharedStore.remove(forKey: BlurtShared.Key.result)
-    Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(onScreen, privacy: .public)")
+    Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(current, privacy: .public)")
     try await copyOut(text, secure: secure)
   }
 
@@ -105,21 +122,15 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
         throw error
       }
       guard let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result), pending.id == id
-      else { return true }
+      else {
+        return true
+      }
       if !resignalled, posted.duration(to: clock.now) >= .seconds(Self.resignalAfter) {
         resignalled = true
         SharedStore.post(BlurtShared.Signal.result)
       }
     }
     return false
-  }
-
-  /// The keyboard process on screen: the presence record's, or — for a
-  /// keyboard build that writes none yet — the older heartbeat keys'.
-  private var onScreen: String? {
-    let now = now()
-    if let record = SharedStore.keyboardOnScreen(now: now) { return record.processID }
-    return SharedStore.isKeyboardPresent(now: now) ? SharedStore.keyboardInstance : nil
   }
 
   /// The words to the clipboard, and the quiet "Copied" outcome. A password
@@ -130,7 +141,8 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
       if secure {
         UIPasteboard.general.setItems(
           [[UTType.utf8PlainText.identifier: text]],
-          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Self.secureClipboardLifetime)])
+          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Self.secureClipboardLifetime)]
+        )
       } else {
         UIPasteboard.general.string = text
       }
