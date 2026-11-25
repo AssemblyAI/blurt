@@ -111,9 +111,14 @@ extension DictationSession {
     // from. The same for a hand-back's spoken request as for a pasted dictation.
     let loggable =
       switch security {
-      case .secure: DictationLog.withheldTranscript
-      case .unknown: DictationLog.unverifiedTranscript
-      case .ordinary: text
+      case .secure:
+        DictationLog.withheldTranscript
+
+      case .unknown:
+        DictationLog.unverifiedTranscript
+
+      case .ordinary:
+        text
       }
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
