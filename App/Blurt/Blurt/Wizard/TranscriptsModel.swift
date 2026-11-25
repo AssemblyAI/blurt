@@ -55,7 +55,6 @@ final class TranscriptsModel {
 
   let transcriber: FileTranscriber
   private let llm: TranscriptLLM
-  private let store: TranscriptStore
   /// The key the model's own checks read — the same one the transcriber and
   /// the LLM are given, so a test's in-memory key is the only one consulted.
   let apiKey: @Sendable () -> String?
@@ -102,7 +101,7 @@ final class TranscriptsModel {
     self.apiKey = apiKey
     self.transcriber = transcriber ?? FileTranscriber(apiKeyProvider: apiKey)
     self.llm = llm ?? TranscriptLLM(apiKeyProvider: apiKey)
-    self.store = store
+    // The store is read once, below, and written only through `writer`.
     self.writer = TranscriptWriter(store: store)
     self.history = []
     // Read off the main actor: the history only grows, and launch shouldn't
