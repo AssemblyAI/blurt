@@ -35,7 +35,8 @@ esac
 case "$rel" in
   Tests/* | App/Blurt/BlurtUITests/* | App/BlurtiOS/BlurtiOSTests/* | App/BlurtiOS/BlurtiOSUITests/*)
     # Only this file's unmarked waits, then the advice that follows the list.
-    clock="$(bash "$root/scripts/check-test-clock.sh" 2>&1 || true)"
+    # Named, not the tracked-tree scan: a suite just written isn't tracked yet.
+    clock="$(bash "$root/scripts/check-test-clock.sh" "$rel" 2>&1 || true)"
     mine="$(grep -F "  $rel:" <<<"$clock" || true)"
     if [ -n "$mine" ]; then
       findings+="${findings:+$'\n'}error: $rel waits on the wall clock without saying why:"$'\n'"$mine"

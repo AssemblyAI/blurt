@@ -16,7 +16,10 @@
 # those pass) — so each one says why with `// wall-clock-ok: <reason>`, at the
 # end of its line or on the line above, and an unmarked one fails.
 #
-# Usage: check-test-clock.sh [--self-test]
+# Usage:
+#   check-test-clock.sh               every tracked test file
+#   check-test-clock.sh FILE...       just these (the PostToolUse hook's mode)
+#   check-test-clock.sh --self-test   the scan against known inputs
 
 set -euo pipefail
 
@@ -103,7 +106,14 @@ if [ "${1:-}" = "--self-test" ]; then
   exit $?
 fi
 
-hits="$(waits)"
+if [ "$#" -gt 0 ]; then
+  # Just these files, tracked or not — the PostToolUse hook's mode. The tracked
+  # list alone missed exactly the file the hook fires on most: a test suite just
+  # written, which git doesn't list until it is staged.
+  hits="$(unmarked "$@")"
+else
+  hits="$(waits)"
+fi
 if [ -n "$hits" ]; then
   echo "error: tests wait on the wall clock without saying why:" >&2
   printf '%s\n' "$hits" | sed 's/^/  /' >&2
