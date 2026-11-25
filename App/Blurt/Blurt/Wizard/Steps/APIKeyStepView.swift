@@ -84,7 +84,9 @@ struct APIKeyStepView: View {
       savedKey = apiKey.current ?? ""
       // Keep the readiness gate in sync with what's actually in the Keychain. If
       // a key is already saved, this flips `hasAPIKey` true so the wizard advances
-      // to the ready screen instead of stranding the user on a setup step.
+      // to the ready screen instead of stranding the user on a setup step. Not
+      // left to the account's refresh: that skips the key when the session item
+      // can't be read.
       apiKey.refreshStatus()
       account.refreshStatus()
     }
