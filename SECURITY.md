@@ -24,7 +24,15 @@ rather than on a guaranteed clock — thanks for your patience.
 
 ## Scope
 
-Blurt captures audio only during an active dictation session, sends it to
+Blurt captures audio during an active dictation session, and while the main
+window's **Record** button is recording — which captures your microphone _and_
+everything the Mac plays, streams it to AssemblyAI's realtime API, and saves an
+`.m4a` under `~/Library/Application Support`. With **Auto-record meetings** on
+(Settings › General, off by default), that recording also starts by itself when
+a meeting app takes the microphone, or when a browser has held the microphone
+while playing audio for 30 seconds — a browser tab can't be told apart from
+outside, so a non-call page doing both that long counts too. The menu bar icon
+shows whenever such a recording is capturing. Blurt sends audio to
 [AssemblyAI](https://www.assemblyai.com) to transcribe, and stores your API key
 in the macOS Keychain. Issues in
 AssemblyAI's service belong to
@@ -33,8 +41,9 @@ how Blurt handles audio, the API key, the clipboard, or the accessibility
 permissions it uses are in scope here.
 
 Blurt sends no telemetry — no crash reporting, no analytics, and no usage
-tracking. The only network traffic the app produces is the dictation audio it
-sends to AssemblyAI and the update check: Sparkle fetches `appcast.xml` from the
+tracking. The only network traffic the app produces is the audio it sends to
+AssemblyAI (dictations, and recordings as described above) and the update
+check: Sparkle fetches `appcast.xml` from the
 latest GitHub Release and, when you install an update, downloads the DMG it
 names. Sparkle verifies each update's EdDSA signature against the public key
 built into the app before installing it, on top of the Developer ID signature
