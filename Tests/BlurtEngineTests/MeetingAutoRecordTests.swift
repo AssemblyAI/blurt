@@ -17,9 +17,35 @@ struct MeetingAutoRecordTests {
     #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(5)) == .start)
   }
 
+  @Test("a browser call starts a recording only once it's been on thirty seconds straight")
+  func browserStartsLate() {
+    var policy = MeetingAutoRecord()
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(25)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(30)) == .start)
+  }
+
+  @Test("a browser that lets go of the mic before then starts nothing, and starts the clock over")
+  func briefBrowserMicIgnored() {
+    var policy = MeetingAutoRecord()
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(5)) == .none)
+    #expect(policy.probe(meeting: nil, recording: false, autoStart: true, now: at(10)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(35)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(64)) == .none)
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(65)) == .start)
+  }
+
+  @Test("a conferencing app taking over from a browser starts at once")
+  func appOverridesBrowserWait() {
+    var policy = MeetingAutoRecord()
+    #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meeting: .app, recording: false, autoStart: true, now: at(5)) == .start)
+  }
+
   @Test("a browser meeting stops only after a minute gone straight; a return resets it")
   func hysteresis() {
-    var policy = MeetingAutoRecord()
+    var policy = MeetingAutoRecord(browserStartAfter: .zero)
     #expect(policy.probe(meeting: .browser, recording: false, autoStart: true, now: at(0)) == .start)
     #expect(policy.probe(meeting: nil, recording: true, autoStart: true, now: at(10)) == .none)
     #expect(policy.probe(meeting: .browser, recording: true, autoStart: true, now: at(30)) == .none)
@@ -81,15 +107,24 @@ struct MeetingAutoRecordTests {
     #expect(policy.probe(meeting: .app, recording: false, autoStart: false, now: at(0)) == .none)
   }
 
-  @Test("meeting apps and browsers count; other mic users and Blurt don't")
+  @Test("meeting apps and two-way browser audio count; other mic users and Blurt don't")
   func whatCounts() {
-    #expect(MeetingAutoRecord.meeting(in: ["us.zoom.xos"]) == .app)
-    #expect(MeetingAutoRecord.meeting(in: ["us.zoom.CptHost"]) == .app)
-    #expect(MeetingAutoRecord.meeting(in: ["com.microsoft.teams2", "com.apple.Music"]) == .app)
-    #expect(MeetingAutoRecord.meeting(in: ["com.google.Chrome"]) == .browser)
-    #expect(MeetingAutoRecord.meeting(in: ["com.google.Chrome", "us.zoom.xos"]) == .app)
-    #expect(MeetingAutoRecord.meeting(in: ["dev.alex.blurt", "com.apple.VoiceMemos"]) == nil)
-    #expect(MeetingAutoRecord.meeting(in: []) == nil)
+    #expect(MeetingAutoRecord.meeting(in: ["us.zoom.xos"], playing: []) == .app)
+    #expect(MeetingAutoRecord.meeting(in: ["us.zoom.CptHost"], playing: []) == .app)
+    #expect(MeetingAutoRecord.meeting(in: ["com.microsoft.teams2", "com.apple.Music"], playing: []) == .app)
+    #expect(MeetingAutoRecord.meeting(in: ["com.google.Chrome"], playing: ["com.google.Chrome"]) == .browser)
+    #expect(MeetingAutoRecord.meeting(in: ["com.google.Chrome", "us.zoom.xos"], playing: []) == .app)
+    #expect(MeetingAutoRecord.meeting(in: ["dev.alex.blurt", "com.apple.VoiceMemos"], playing: []) == nil)
+    #expect(MeetingAutoRecord.meeting(in: [], playing: []) == nil)
+  }
+
+  @Test("a browser holding the mic but playing nothing isn't a call (#345)")
+  func browserMicAloneDoesNotCount() {
+    // Voice search, a getUserMedia test page, a site's mic prompt: input only.
+    #expect(MeetingAutoRecord.meeting(in: ["com.google.Chrome"], playing: []) == nil)
+    // Another app (or another browser) playing doesn't make it two-way.
+    #expect(MeetingAutoRecord.meeting(in: ["com.google.Chrome"], playing: ["com.apple.Safari"]) == nil)
+    #expect(MeetingAutoRecord.meeting(in: ["com.apple.Safari"], playing: ["com.apple.Music"]) == nil)
   }
 
   @Test("the switch is off unless set")

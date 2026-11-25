@@ -380,6 +380,9 @@
       case .idle: UITestIdentifiers.statusIdle
       case .recording: UITestIdentifiers.statusRecording
       case .transcribing: UITestIdentifiers.statusTranscribing
+      // Not a pipeline phase: the menu bar folds the Record button's
+      // recording in itself, and this mirrors only the dictation.
+      case .recordingAudio: UITestIdentifiers.statusIdle
       }
     }
   }
