@@ -2,7 +2,8 @@
   import Foundation
   import os
 
-  /// Reads text aloud with AssemblyAI's streaming TTS. This is the engine half of
+  /// Reads text aloud with the provider's streaming TTS (`SpeechSynthesizing`).
+  /// This is the engine half of
   /// the read-aloud and ask keys (`SelectionSpeechRouting`); the app decides when
   /// to call it.
   ///
@@ -22,22 +23,25 @@
 
     private static let logger = HostIdentity.current.logger("SelectionSpeech")
 
-    private let synthesizer: AssemblyAISpeechSynthesizer
+    private let synthesizer: any SpeechSynthesizing
     private let llm: ReadAloudLLM
     private let makeSink: @Sendable (_ rate: Double) -> any PCMSink
     /// Where each read's audio is kept and who hears about it; nil keeps none.
     private let clips: ReadClipSink?
 
-    init(clips: ReadClipSink? = nil) {
-      self.init(synthesizer: AssemblyAISpeechSynthesizer(), llm: ReadAloudLLM(), clips: clips) { rate in
-        StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: rate)
+    /// The speaker `services` provide: their voice, and their LLM for the
+    /// listening rewrite and the spoken answers.
+    init(services: SpeechServices, clips: ReadClipSink? = nil) {
+      let voice = services.synthesizer
+      self.init(synthesizer: voice, llm: ReadAloudLLM(gateway: services.gateway), clips: clips) { rate in
+        StreamingPCMPlayer(sampleRate: voice.sampleRate, rate: rate)
       }
     }
 
     /// `makeSink` is the playback seam, handed the style's rate. There is one
     /// sink per `speak`, so a cancelled read can't bleed into the next one.
     init(
-      synthesizer: AssemblyAISpeechSynthesizer,
+      synthesizer: any SpeechSynthesizing,
       llm: ReadAloudLLM,
       clips: ReadClipSink? = nil,
       makeSink: @escaping @Sendable (_ rate: Double) -> any PCMSink
@@ -168,7 +172,7 @@
       clips.flatMap { clips in
         try? WAVWriter(
           url: clips.directory.appending(path: "Read \(TranscriptStore.fileStamp(.now)).wav"),
-          sampleRate: AssemblyAISpeechSynthesizer.sampleRate
+          sampleRate: synthesizer.sampleRate
         )
       }
     }

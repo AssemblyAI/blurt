@@ -1,14 +1,14 @@
-import Foundation
+package import Foundation
 import Security
 
 /// Reads and writes a single string as a generic-password keychain item.
 /// `service`/`account` are injectable so tests can use an isolated namespace.
-struct KeychainStore: Sendable {
+package struct KeychainStore: Sendable {
   /// Why a read produced no value. Collapsing these to a bare `nil` is unsafe for
   /// any caller that *memoizes* the answer: `errSecItemNotFound` is a durable fact
   /// ("nothing saved"), while a locked keychain or a denied ACL prompt is a
   /// transient failure that must not be cached as "nothing saved".
-  enum ReadResult: Sendable, Equatable {
+  package enum ReadResult: Sendable, Equatable {
     /// The item is absent, or present but empty / not valid UTF-8 — a durable
     /// "there is no usable value here".
     case absent
@@ -21,11 +21,16 @@ struct KeychainStore: Sendable {
     case unavailable(OSStatus)
   }
 
-  let service: String
-  let account: String
+  package let service: String
+  package let account: String
+
+  package init(service: String, account: String) {
+    self.service = service
+    self.account = account
+  }
 
   /// Reads the item, distinguishing "nothing saved" from "couldn't read it".
-  func read() -> ReadResult {
+  package func read() -> ReadResult {
     var query = baseQuery()
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -53,7 +58,7 @@ struct KeychainStore: Sendable {
   /// Stores `value` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored value. Returns `true` on success.
   @discardableResult
-  func write(_ value: String?) -> Bool {
+  package func write(_ value: String?) -> Bool {
     guard let trimmed = value.trimmedNonEmpty() else {
       let status = SecItemDelete(baseQuery() as CFDictionary)
       return status == errSecSuccess || status == errSecItemNotFound

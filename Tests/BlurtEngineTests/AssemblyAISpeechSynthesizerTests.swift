@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("AssemblyAISpeechSynthesizer")
@@ -17,12 +18,12 @@ struct AssemblyAISpeechSynthesizerTests {
 
   @Test("posts the documented JSON to the US host's /v1/speech, with the raw key")
   func request() throws {
-    let request = try AssemblyAISpeechSynthesizer.request(for: "Hi there.", voiceID: "aai-sara", apiKey: "raw-key")
+    let request = try SpeechClient().request(for: "Hi there.", voiceID: "aai-sara", apiKey: "raw-key")
     #expect(request.url?.absoluteString == "https://tts.us.assemblyai.com/v1/speech")
     #expect(request.httpMethod == "POST")
     #expect(request.value(forHTTPHeaderField: "Authorization") == "raw-key")
     #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
-    #expect(request.timeoutInterval == AssemblyAISpeechSynthesizer.timeout)
+    #expect(request.timeoutInterval == SpeechClient.timeout)
     let fields = try body(request)
     #expect(fields["text"] as? String == "Hi there.")
     #expect(fields["voice_id"] as? String == "aai-sara")
@@ -65,7 +66,7 @@ struct AssemblyAISpeechSynthesizerTests {
         // Drained for how the stream ends; its elements don't matter.
       }
     }
-    #expect(AssemblyAISpeechSynthesizer.failure(status: 502, body: Data("<html>".utf8)) == "HTTP 502")
+    #expect(SpeechClient.failure(status: 502, body: Data("<html>".utf8)) == "HTTP 502")
   }
 
   @Test("a missing key fails before any request, and blank text makes none")

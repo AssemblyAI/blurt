@@ -1,4 +1,4 @@
-import AssemblyAI
+import BlurtAssemblyAI
 import BlurtEngine
 import BlurtiOSCore
 import Foundation
@@ -223,7 +223,7 @@ final class DictationCoordinator {
   nonisolated static func keyTerms() -> [String] {
     // Not through the comma-separated form: a contact called "Smith, John"
     // is one name, and the engine takes an array.
-    KeyTerms.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
+    KeyTermList.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
   }
 
   func start() {

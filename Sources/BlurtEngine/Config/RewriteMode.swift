@@ -1,5 +1,3 @@
-import AssemblyAI
-
 /// Which model the dictation API's server-side cleanup rewrite runs on — the
 /// request's `rewrite_mode` option. Smart, the unset default, asks for the
 /// larger model that rewrites better and takes longer; Fast opts back in to the
@@ -25,19 +23,6 @@ public enum RewriteMode: String, CaseIterable, Sendable {
 
     case .smart:
       return "Smart"
-    }
-  }
-
-  /// What goes on the wire as `rewrite_mode`, or nil to omit the key. Fast
-  /// **omits** it rather than sending `.fast`, so a Fast request stays
-  /// byte-identical to the one that shipped before this setting existed.
-  var wireValue: DictationRewriteMode? {
-    switch self {
-    case .fast:
-      return nil
-
-    case .smart:
-      return .smart
     }
   }
 

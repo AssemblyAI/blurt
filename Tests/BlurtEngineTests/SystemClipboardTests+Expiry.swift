@@ -125,5 +125,48 @@
         #expect(pb.string(forType: .string) == "user copied this")
       }
     }
+
+    /// The invariant `SystemClipboard.put` holds by construction: every path
+    /// that puts a secret down is counted as Blurt's own write, marked, and
+    /// given exactly one expiry. Each security fix before it found a path the
+    /// rule had missed. (`currentHostOnly` has no public read-back, so that
+    /// half is pinned only by `put` applying it with the markers.) The one
+    /// concealed write without an expiry is the paste whose own restore takes
+    /// it off: `restorablePasteSchedulesNothing`.
+    @Test("every concealed write path is counted, marked and given one expiry")
+    func everyConcealedWriteExpires() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let marker = [SystemClipboard.concealedType: Data()]
+        var secret = marker
+        secret[.string] = Data("hunter2".utf8)
+        let whole = PasteboardSnapshot(items: [SendablePasteboardItem(dataMap: secret)], plainText: "hunter2")
+        // The string declined to materialize: only the text floor carries it.
+        let floored = PasteboardSnapshot(items: [SendablePasteboardItem(dataMap: marker)], plainText: "hunter2")
+        let paths: [(name: String, run: (SystemClipboard) -> Void)] = [
+          ("leave-behind", { $0.write("hunter2", concealed: true) }),
+          ("unreadable-clipboard paste", { _ = $0.writeAndPrepareRestore("hunter2", concealed: true, over: nil) }),
+          ("restore", { $0.restore(whole) }),
+          ("restore if unchanged", { $0.restore(whole, ifChangeCountIs: $0.changeCount) }),
+          ("restore by the text floor", { $0.restore(floored) }),
+        ]
+        for path in paths {
+          let recorder = ExpiryRecorder()
+          let clip = SystemClipboard { recorder.schedule($0) }
+          clip.write("before", concealed: false)
+          let ownWrites = clip.ownWriteCount
+
+          path.run(clip)
+
+          #expect(clip.ownWriteCount > ownWrites, "\(path.name)")
+          #expect(pb.string(forType: .string) == "hunter2", "\(path.name)")
+          #expect(pb.types?.contains(SystemClipboard.concealedType) == true, "\(path.name)")
+          #expect(pb.types?.contains(SystemClipboard.transientType) == true, "\(path.name)")
+          #expect(recorder.count == 1, "\(path.name)")
+          recorder.runAll()
+          #expect(pb.string(forType: .string) == nil, "\(path.name)")
+        }
+      }
+    }
   }
 #endif

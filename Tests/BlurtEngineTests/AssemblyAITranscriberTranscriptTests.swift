@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// Which transcript gets pasted: `AssemblyAITranscriber.chooseTranscript`,

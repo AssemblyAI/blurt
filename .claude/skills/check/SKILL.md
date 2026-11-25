@@ -1,6 +1,6 @@
 ---
 name: check
-description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, settled-decision invariants, ruff + mypy + pytest with a 100% coverage gate over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset — run it before every push, Swift changes included. On a Mac, scripts/check.sh --lint-only runs just the read-only checks in minutes.
+description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, settled-decision invariants, ruff + mypy + pytest with a 95% coverage gate over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset — run it before every push, Swift changes included. On a Mac, scripts/check.sh --lint-only runs just the read-only checks in minutes.
 ---
 
 # check — is this green?
@@ -30,7 +30,7 @@ scripts/check.sh --portable
 It runs the repo-integrity guards — dependencies, sound catalog, shell
 portability, and settled decisions — then actionlint, zizmor, prettier, xmllint,
 markdownlint, shellcheck, shfmt, ruff (lint + format check), mypy and pytest
-(100% coverage gate) over `evals/`, and `release.test.sh`. `swift-format lint` and `swiftlint lint` join
+(95% coverage gate) over `evals/`, and `release.test.sh`. `swift-format lint` and `swiftlint lint` join
 them when Linux builds are on `PATH`; under the default web network policy they
 are not.
 
@@ -104,7 +104,7 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
 4. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
    shellcheck / shfmt --diff
 5. `ruff format --check` + `ruff check` + `mypy` over `evals/`, then `pytest`
-   under coverage.py (100% line + branch, `evals/pyproject.toml`), then `release.test.sh`
+   under coverage.py (95% line + branch, `evals/pyproject.toml`), then `release.test.sh`
 
    Steps 1–5 are the `--portable` subset. Everything below needs a macOS toolchain:
 

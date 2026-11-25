@@ -122,10 +122,10 @@ struct DictationLogEntryTests {
     #expect(entry.sttPrompt == "Said this before.")
   }
 
-  @Test("records the key terms the request boosts, fitted the same way")
+  @Test("records the key terms the request boosts, cleaned the same way")
   func logsTheKeytermsTheRequestCarries() {
-    // Through `KeyTerms.fitted`, not the raw list: the log has to show the
-    // steering the API actually saw, so a blank entry is dropped here too.
+    // Through `KeyTermList.normalized`, not the raw list: a blank entry the
+    // request would never carry is dropped here too.
     let withTerms = TranscriptionContext(
       appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "  ", "LeMUR"]
     )

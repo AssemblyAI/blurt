@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The over-cap fallback (`AssemblyAITranscriber+LiveCapFallback.swift`): a
@@ -218,7 +219,7 @@ struct LiveCapFallbackTests {
   @Test("the relay keeps the whole recording under the cap and drops it past")
   func relayKeepsOrDropsTheCopy() async {
     let (live, liveFeed) = AsyncStream.makeStream(of: Data.self)
-    let kept = await AssemblyAITranscriber.relay(
+    let kept = await DictationClient.relay(
       .oneShot(Self.before), to: liveFeed, keepingAtMost: Self.before.count
     )
     #expect(kept == Self.before)
@@ -228,7 +229,7 @@ struct LiveCapFallbackTests {
     #expect(relayed == Self.before)
 
     let (_, droppedFeed) = AsyncStream.makeStream(of: Data.self)
-    let dropped = await AssemblyAITranscriber.relay(
+    let dropped = await DictationClient.relay(
       .oneShot(Self.before), to: droppedFeed, keepingAtMost: Self.before.count - 1
     )
     #expect(dropped == nil)

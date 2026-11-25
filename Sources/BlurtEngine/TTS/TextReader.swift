@@ -11,8 +11,9 @@
   public struct TextReader: Sendable {
     private let speaker: any ReadAloudSpeaker
 
-    public init() {
-      self.init(speaker: SelectionSpeaker())
+    /// Reads with `services`' voice (`SpeechServices.synthesizer`).
+    public init(services: SpeechServices) {
+      self.init(speaker: SelectionSpeaker(services: services))
     }
 
     init(speaker: any ReadAloudSpeaker) {
