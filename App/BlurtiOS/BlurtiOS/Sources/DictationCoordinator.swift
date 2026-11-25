@@ -116,11 +116,12 @@ final class DictationCoordinator {
   /// the press (`claimPress`). A press the session refuses — one arriving while
   /// a dictation is still in flight — must not take over that dictation's words.
   nonisolated struct Press: Sendable {
-    var keyboard: String?
+    /// The field the press came from.
+    var address = ResultAddress()
     var context = FocusedFieldContext.empty
-    /// The keyboard whose accepted stop ended the dictation, which is where
-    /// the words go. The dictation itself and its owner are `inFlight`.
-    var stopRecipient: String?
+    /// The field whose accepted stop ended the dictation, which is where the
+    /// words go. The dictation itself and its owner are `inFlight`.
+    var stopAddress: ResultAddress?
   }
   nonisolated static let pendingPress = Mutex(Press())
   /// The press that started the dictation in flight: its keyboard, for the
@@ -167,7 +168,7 @@ final class DictationCoordinator {
       transcriber: transcriber,
       // The words go to the keyboard that sent the accepted stop, else to
       // the one whose press started the dictation.
-      injector: KeyboardRelayInjector(presser: { Self.claimedPress.withLock { $0.stopRecipient ?? $0.keyboard } }),
+      injector: KeyboardRelayInjector(presser: { Self.claimedPress.withLock { $0.stopAddress ?? $0.address } }),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { text, ring in

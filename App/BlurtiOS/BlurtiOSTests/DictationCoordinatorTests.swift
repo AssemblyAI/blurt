@@ -29,11 +29,12 @@ struct DictationCoordinatorTests {
   }
 
   func command(
-    _ kind: KeyboardCommand.Kind, id: UUID = UUID(), keyboard: String = "kb-1", isSecure: Bool? = nil
+    _ kind: KeyboardCommand.Kind, id: UUID = UUID(), keyboard: String = "kb-1", controllerID: String? = nil,
+    documentID: UUID? = nil, isSecure: Bool? = nil
   ) -> KeyboardCommand {
     KeyboardCommand(
       id: id, kind: kind, priorText: isSecure == true ? nil : "Hi", selectedText: nil, sentAt: Date(),
-      keyboard: keyboard, isSecure: isSecure)
+      keyboard: keyboard, controllerID: controllerID, documentID: documentID, isSecure: isSecure)
   }
 
   /// Writes the command where the keyboard would and lets the coordinator take it.

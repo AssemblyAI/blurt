@@ -89,8 +89,8 @@ extension KeyboardModel {
     let command = KeyboardCommand(
       id: UUID(), kind: kind, priorText: readsField ? proxy?.documentContextBeforeInput : nil,
       selectedText: readsField ? proxy?.selectedText : nil, sentAt: now(), keyboard: KeyboardProcess.id,
-      seq: KeyboardProcess.nextSequence(), controllerID: controllerID, dictationID: dictation,
-      stateSequence: listeningState?.sequence, isSecure: isPress ? isSecure : nil)
+      seq: KeyboardProcess.nextSequence(), controllerID: controllerID, documentID: proxy?.documentIdentifier,
+      dictationID: dictation, stateSequence: listeningState?.sequence, isSecure: isPress ? isSecure : nil)
     lastCommand = command
     transport(command)
     KeyboardLog.wrote(command, resend: false)

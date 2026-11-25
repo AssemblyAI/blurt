@@ -83,6 +83,7 @@ struct KeyboardModelGateTests {
     let sent = rig.commands.sent
     #expect(sent.map(\.kind) == [.press, .release])
     #expect(sent.allSatisfy { $0.keyboard == KeyboardProcess.id && $0.controllerID == rig.model.controllerID })
+    #expect(sent.allSatisfy { $0.documentID == rig.proxy.documentIdentifier })
     let first = try #require(sent[0].seq)
     let second = try #require(sent[1].seq)
     #expect(second == first + 1)
