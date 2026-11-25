@@ -76,10 +76,17 @@
       /// Whether an Audio Queue runs on the Mac's microphone. Tests say no:
       /// a runner has no microphone to assume, and feed `deliverForTesting`.
       private let usesMicrophone: Bool
+      /// What the timed fault sleeps on. Tests pass a `TestClock` and step it,
+      /// so a stalled runner can't push a 50 ms fault past their wait.
+      private let clock: any Clock<Duration>
 
-      init(fault: Fault? = Fault.fromEnvironment, usesMicrophone: Bool = true) {
+      init(
+        fault: Fault? = Fault.fromEnvironment, usesMicrophone: Bool = true,
+        clock: any Clock<Duration> = ContinuousClock()
+      ) {
         self.fault = fault
         self.usesMicrophone = usesMicrophone
+        self.clock = clock
         let (events, sink) = AsyncStream<SourceEvent>.makeStream()
         self.events = events
         eventSink = sink
@@ -265,10 +272,11 @@
       /// Starts the timed fault's clock, from the window opening.
       private func scheduleFault() {
         guard let fault, let delay = fault.delay else { return }
+        let clock = clock
         let task = Task { [weak self] in
-          guard (try? await Task.sleep(for: .seconds(delay))) != nil, let self else { return }
+          guard (try? await clock.sleep(for: .seconds(delay))) != nil, let self else { return }
           self.fire(fault)
-          guard case .interruptAfter = fault, (try? await Task.sleep(for: .seconds(delay))) != nil else { return }
+          guard case .interruptAfter = fault, (try? await clock.sleep(for: .seconds(delay))) != nil else { return }
           self.interrupted.store(false, ordering: .releasing)
           Self.log.notice("capture interruptionEnded (simulated)")
           self.eventSink.yield(.interruptionEnded)
