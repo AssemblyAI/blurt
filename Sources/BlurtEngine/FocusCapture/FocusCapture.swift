@@ -105,7 +105,11 @@
       if let selection, selection.length == 0 {
         return .noSelection
       }
-      return selectionRead(rawSelectedText(of: element, selection: selection, maxChars: maxChars), maxChars: maxChars)
+      return selectionRead(
+        rawSelectedText(of: element, selection: selection, maxChars: maxChars),
+        role: stringValue(element, kAXRoleAttribute),
+        maxChars: maxChars
+      )
     }
 
     /// The focused element and whether its contents must stay unread, or nil when

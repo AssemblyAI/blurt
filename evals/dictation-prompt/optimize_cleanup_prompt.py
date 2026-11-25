@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.10"
-# dependencies = ["dspy>=3.0,<3.5"]
+# requires-python = ">=3.10,<3.15"
+# dependencies = ["dspy>=3.0,<3.5", "gepa"]
 # ///
 # DSPy is capped below 3.5: 3.5.0 (2026-11-10) reworked its LM layer, and every
 # `openai/<model>` call through the LLM Gateway then fails with "Not found" — qwen and
 # gemma alike — while 3.4.1 works. Lift the cap only after re-checking a gateway call.
+# GEPA is named because program.py imports it directly: DSPy requires it only below
+# Python 3.15, and GEPA itself supports nothing newer — hence the Python cap too.
+# Unpinned, so DSPy's own exact pin picks the version.
 """Find the best cleanup instruction for Blurt's dictation request.
 
 What this optimizes

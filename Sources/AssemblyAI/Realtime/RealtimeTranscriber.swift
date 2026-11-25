@@ -142,8 +142,9 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
 
   /// Sends what's left, asks the service to end the session, and waits for
   /// `Termination` — which arrives after the last turn's final — then closes.
-  /// A session that never opened just closes; a second caller waits on the
-  /// first's `Termination` rather than asking again.
+  /// A session that never opened just closes, dropping any audio queued for
+  /// it — so a caller that has `start` in flight awaits it first; a second
+  /// caller waits on the first's `Termination` rather than asking again.
   public func finish() async {
     guard phase == .open else {
       close(error: nil)

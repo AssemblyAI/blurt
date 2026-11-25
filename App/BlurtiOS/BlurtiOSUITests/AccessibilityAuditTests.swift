@@ -36,6 +36,12 @@ import XCTest
 ///   the text sliding under the translucent navigation bar (Settings' rows
 ///   between two pages), which the audit can measure but not name; the same
 ///   text is audited, and named, on the page where it is in full view.
+/// - anything on a word-suggestion slot of Apple's keyboard
+///   (`TUIPredictionViewCell`), up for the try-it box: on CI the simulator
+///   sometimes leaves a slot empty after "Hello", and an empty slot has no
+///   label. It is the system keyboard's, which Blurt can't label, and it stays
+///   empty through the second audit. Matched by that class, so a Blurt element
+///   without a description still fails.
 /// - "text clipped" on a single-line text field: a `UITextField` scrolls its
 ///   text sideways rather than wrapping, by design, so a long placeholder at
 ///   AX XXXL runs past the edge the way it does in Apple's own apps.

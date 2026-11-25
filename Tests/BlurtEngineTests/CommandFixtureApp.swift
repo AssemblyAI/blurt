@@ -42,6 +42,8 @@
       try child.run()
       let fixture = Self(process: child, statePath: state)
       do {
+        // A first launch of a freshly built binary can take seconds (the
+        // system checks it before it runs); `state(until:)`'s bound covers it.
         _ = try await fixture.state { _ in true }
         // A process spawned from the test can't take the front by itself,
         // and only a registered app may hand it over: the test process
@@ -53,6 +55,14 @@
           try await Task.sleep(for: .milliseconds(100))
         }
         try await fixture.requireFrontmost()
+        // The menu bar fills in a moment after the app is in front, and the
+        // performer finds menu items there: "Fixture › Make Noise" was not
+        // found on a CI run whose launch was otherwise fine.
+        for _ in 0..<50 where fixture.hasFixtureMenu() == false {
+          // wall-clock-ok: a real app's menu bar, which fills in on real time
+          try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(fixture.hasFixtureMenu(), "the fixture's menu bar never listed its Fixture menu")
       } catch {
         fixture.quit()
         throw error
@@ -62,6 +72,16 @@
 
     func isFrontmost() async -> Bool {
       await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier } == process.processIdentifier
+    }
+
+    /// Whether Accessibility reads the Fixture menu in the fixture's menu bar.
+    func hasFixtureMenu() -> Bool {
+      guard let bar = AXRead.element(AXRead.app(process.processIdentifier), kAXMenuBarAttribute),
+        let menus = AXRead.value(bar, kAXChildrenAttribute) as? [AXUIElement]
+      else {
+        return false
+      }
+      return menus.contains { AXRead.string($0, kAXTitleAttribute) == "Fixture" }
     }
 
     /// Stops the test unless the fixture is in front: the guard every step passes.

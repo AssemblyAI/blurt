@@ -87,6 +87,29 @@
       }
     }
 
+    /// A password left on the clipboard, snapshotted by the next paste and put
+    /// back: its first expiry keyed on the count before that paste and skips,
+    /// so the restore must give it a fresh one.
+    @Test("a secret the restore puts back gets an expiry of its own")
+    func restoredSecretExpires() {
+      withClipboardRestored {
+        let pb = NSPasteboard.general
+        let recorder = ExpiryRecorder()
+        let clip = SystemClipboard { recorder.schedule($0) }
+        // The leave-behind, its own expiry kept aside: it would skip anyway.
+        let firstExpiry = ExpiryRecorder()
+        SystemClipboard { firstExpiry.schedule($0) }.write("hunter2", concealed: true)
+
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
+        restore()
+        #expect(pb.string(forType: .string) == "hunter2")
+        #expect(recorder.count == 1)
+        recorder.runAll()
+
+        #expect(pb.string(forType: .string) == nil)
+      }
+    }
+
     @Test("an expiry never clears a copy made after the concealed write")
     func noSnapshotExpirySparesNewerCopy() {
       withClipboardRestored {

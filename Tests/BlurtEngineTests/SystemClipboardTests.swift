@@ -223,6 +223,23 @@
       }
     }
 
+    /// What makes `restore(_:ifChangeCountIs:)` re-arm the expiry: a password
+    /// field's leave-behind snapshotted by the next paste must still be cleared.
+    @Test("a snapshot knows whether it holds a secret")
+    func snapshotKnowsConcealed() throws {
+      try withClipboardRestored {
+        let clip = SystemClipboard()
+
+        clip.write("hunter2", concealed: true)
+        let secret = try #require(clip.snapshot())
+        #expect(secret.isConcealed)
+
+        clip.write("transcript", concealed: false)
+        let ordinary = try #require(clip.snapshot())
+        #expect(!ordinary.isConcealed)
+      }
+    }
+
     @Test("a snapshot whose string did materialize isn't given a second copy of it")
     func textFloorDoesNotDuplicateMaterializedString() throws {
       try withClipboardRestored {

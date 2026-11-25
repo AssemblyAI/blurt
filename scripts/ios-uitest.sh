@@ -38,9 +38,8 @@ ios_resolve_packages "$IOS_DERIVED"
 RESULTS="$IOS_DERIVED/BlurtiOSUITests-$(date +%Y%m%d-%H%M%S).xcresult"
 pretty_xcodebuild
 XCODEBUILD_ARGS=(-project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSUITests
-  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED"
-  "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES)
-xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" 2>&1 | "${PRETTY[@]}"
+  -derivedDataPath "$IOS_DERIVED" "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES)
+xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" "${IOS_SIM_BUILD[@]}" 2>&1 | "${PRETTY[@]}"
 ios_wait_booted "$UDID"
 # One launch of the app before the suite. A simulator that has just finished
 # booting is still busy for a while, and the app's first launch on it pays for
@@ -67,7 +66,8 @@ if [ -n "${BLURT_AUDIT_TEXT_SIZE:-}" ]; then
 fi
 # Serial: every test relaunches the one app on the one simulator. Any extra
 # arguments (-only-testing:…) select tests, so they go to the run.
-xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -resultBundlePath "$RESULTS" \
+xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -destination "platform=iOS Simulator,id=$UDID" \
+  -resultBundlePath "$RESULTS" \
   -parallel-testing-enabled NO -collect-test-diagnostics never "$@" 2>&1 | "${PRETTY[@]}"
 echo "results: $RESULTS"
 # A selection that matched no test (a renamed one in a shard's -only-testing

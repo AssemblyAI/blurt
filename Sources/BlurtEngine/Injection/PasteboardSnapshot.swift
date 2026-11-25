@@ -23,5 +23,12 @@
     /// when no item's string representation could be materialized — whether
     /// nothing materialized at all or only types that aren't the text did.
     let plainText: String?
+
+    /// Whether any item carries nspasteboard.org's `ConcealedType`: a secret,
+    /// a password manager's copy or a password field's leave-behind. Putting it
+    /// back must put back its expiry too (`SystemClipboard.restore`).
+    var isConcealed: Bool {
+      items.contains { $0.dataMap[SystemClipboard.concealedType] != nil }
+    }
   }
 #endif

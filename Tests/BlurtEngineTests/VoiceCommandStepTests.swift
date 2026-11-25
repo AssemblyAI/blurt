@@ -54,13 +54,17 @@ struct VoiceCommandStepTests {
     #expect(throws: VoiceCommandError.unsupportedAction("run_script")) { try steps(reply) }
   }
 
-  @Test("only web and mail links open: a file or an app's own scheme is refused")
-  func refusesOtherSchemes() {
-    for url in ["file:///etc/passwd", "x-apple.systempreferences:com.apple.preference.security", "slack://open"] {
-      #expect(throws: VoiceCommandError.unsafeURL(url)) {
-        try steps(#"{"steps": [{"action": "open_url", "url": "\#(url)"}]}"#)
-      }
+  @Test(
+    "a file or an app's own scheme is refused",
+    arguments: ["file:///etc/passwd", "x-apple.systempreferences:com.apple.preference.security", "slack://open"])
+  func refusesOtherSchemes(url: String) {
+    #expect(throws: VoiceCommandError.unsafeURL(url)) {
+      try steps(#"{"steps": [{"action": "open_url", "url": "\#(url)"}]}"#)
     }
+  }
+
+  @Test("a mail link opens")
+  func opensMailLinks() {
     #expect(throws: Never.self) {
       try steps(#"{"steps": [{"action": "open_url", "url": "mailto:team@example.com"}]}"#)
     }

@@ -141,8 +141,14 @@ extension AssemblyAIAccountTests {
     await loop.value
   }
 
-  @Test("a sign-in over a session item that can't be read refuses, and never deletes that item")
-  func signInOverUnreadableSession() async throws {
+  /// Refusing would fail every sign-in for as long as the item stays
+  /// unreadable. A key refused afterwards rolls back to nothing: the
+  /// unreadable contents can't be put back.
+  @Test(
+    "a sign-in over a session item that can't be read replaces it",
+    arguments: [false, true]
+  )
+  func signInOverUnreadableSession(keyRefused: Bool) async throws {
     let writes = Mutex<[String?]>([])
     let store = SignInStore(
       read: { .unavailable(errSecInteractionNotAllowed) },
@@ -152,17 +158,21 @@ extension AssemblyAIAccountTests {
       }
     )
     let keys = RefusingKeyStore()
-    keys.refuse(true)
+    keys.refuse(keyRefused)
     let account = AssemblyAIAccount(
       configuration: testOAuthConfiguration,
       apiKey: APIKeyModel(keyStore: keys) { _ in .valid },
       store: store,
       transport: server.transport
     ) { [clock] in clock.now }
-    #expect(try await signIn(account) == .failed(.keychain))
-    // Neither overwritten nor rolled back to "nothing" (a delete).
-    #expect(writes.withLock { $0 }.isEmpty)
-    #expect(server.state.withLock { $0.revokes } == 1)
+    let written = writes.withLock { $0 }
+    #expect(try await signIn(account) == (keyRefused ? .failed(.keychain) : .signedIn))
+    let after = writes.withLock { $0 }
+    #expect(written.isEmpty)
+    #expect(after.first.flatMap(\.self)?.contains("rt-1") == true)
+    #expect(after.count == (keyRefused ? 2 : 1))
+    if keyRefused { #expect(after.last == .some(nil)) }
+    #expect(server.state.withLock { $0.revokes } == (keyRefused ? 1 : 0))
   }
 
   private func signOutParkedOnTheNetwork(keys: RefusingKeyStore) async throws -> ParkedSignOut {

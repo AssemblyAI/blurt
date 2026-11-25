@@ -3,12 +3,15 @@ name: check
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
   # Required for the merge queue: GitHub builds each queued PR as a temporary
   # gh-readonly-queue/ candidate and fires merge_group; the required `check`
   # status must run there or queued PRs never merge.
   merge_group:
+  # No `push` to main: main only moves through the merge queue, which advances
+  # it to the very commit its merge group just passed `check` on — a push run
+  # tested that commit a second time, on ~10 macOS runners per merge. Dispatch
+  # by hand to check main (or any branch) outside a PR; that runs every gate.
+  workflow_dispatch:
 
 concurrency:
   group: check-${{ github.ref }}
@@ -54,15 +57,20 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          QUEUE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           HEAD_SHA: ${{ github.sha }}
-          BEFORE: ${{ github.event.before }}
         run: |
+          # A merge group is its PR(s) on top of `base_sha` (main, or the group
+          # ahead in the queue), so `base..head` is exactly what the group adds.
+          # Without it every queued PR ran the full ~40 minutes, docs-only ones
+          # included, though the same PR had skipped them as a pull_request.
           if [ "$EVENT" = "pull_request" ]; then
             range="$BASE_SHA...$HEAD_SHA"
-          elif [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-            range="$BEFORE..$HEAD_SHA"
+          elif [ "$EVENT" = "merge_group" ] && [ -n "${QUEUE_BASE_SHA:-}" ] \
+            && git cat-file -e "${QUEUE_BASE_SHA}^{commit}" 2>/dev/null; then
+            range="$QUEUE_BASE_SHA..$HEAD_SHA"
           else
-            range="" # first push / unknown base: run the full check to be safe
+            range="" # a dispatch, or an unknown base: run the full check to be safe
           fi
           if [ -z "$range" ]; then
             { echo "code=true"; echo "swift=true"; } >>"$GITHUB_OUTPUT"; exit 0
@@ -131,6 +139,21 @@ jobs:
         env:
           CI: "true"
         run: scripts/check.sh --lint-only
+
+      - name: Run the evals' DSPy test
+        # test_eval.py's one test that needs DSPy, which the locked dev
+        # environment (evals/uv.lock) leaves out, so check.sh's pytest skips it
+        # on every machine. Here it runs with DSPy in the range the harness's
+        # own script declares (optimize_cleanup_prompt.py's inline metadata),
+        # and the step fails unless it passed rather than skipped. Python 3.14,
+        # not the runner's newest: GEPA, which DSPy brings and the harness
+        # imports, supports nothing past 3.14.
+        working-directory: blurt/evals
+        run: |
+          set -o pipefail
+          uv run --python 3.14 --locked --with 'dspy>=3.0,<3.5' --with gepa pytest dictation-prompt/test_eval.py \
+            -k test_a_failing_example_still_advances_the_meter 2>&1 | tee "$RUNNER_TEMP/dspy-test.log"
+          grep -q '1 passed' "$RUNNER_TEMP/dspy-test.log"
 
   # The full check.sh on macOS — engine tests, coverage, sanitizers, the app
   # build — minus the whole-app integration steps, which `ui-tests` runs in
@@ -337,6 +360,104 @@ jobs:
         # job is meant to save.
         run: swift build --build-tests -Xswiftc -warnings-as-errors
 
+  # The engine suites that need this Mac's hardware, which every other job
+  # skips: Control Your Mac's real performer against a real window
+  # (`LivePerformerTests`, on the CommandFixture app: every press, value,
+  # selection, menu item, scroll and window move judged by the state the
+  # fixture records) and the three live-audio suites (`MicCaptureLevelsTests`,
+  # `AudioInputDevicesTests`, `MicCaptureBringUpTests`: device enumeration, a
+  # real AVCaptureSession's levels, its bring-up and teardown). Everywhere else
+  # these paths are stubs, or their decisions are tested without the system
+  # calls, so this is the one gate that makes them.
+  #
+  # They drive the machine they run on, so each asks to (`BLURT_LIVE_AX_TESTS=1`,
+  # `BLURT_LIVE_AUDIO_TESTS=1`); a throwaway runner is the safe place. GitHub's
+  # macOS image grants the runner's processes Accessibility and Microphone
+  # trust, but has no live input, so a loopback device (BlackHole) is
+  # installed and fed noise first: the capture path rejects a silent input by
+  # design, so the suites need a signal. A missing gate *skips* a suite and
+  # `swift test`
+  # still exits 0, so the step passes only if every suite reports it passed.
+  # The fixture recorders (`ScreenTreeRecorder`, `PasteFixtureRecorder`) are
+  # tools that drive the user's own apps to write fixtures, not tests, and stay
+  # manual.
+  live-tests:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    # ~6 minutes: the driver, the engine's test build, then suites of seconds.
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install a virtual microphone and feed it sound
+        # BlackHole, a loopback Core Audio driver: whatever plays to its output
+        # comes back on its input. coreaudiod loads it only on a restart, which
+        # launchd does at once. It then becomes the default input and output,
+        # and 30 s of low-level white noise is written for the next step to
+        # loop into it: the capture path rejects a silent input by design (an
+        # input that never delivers, or reads below
+        # `MicLiveness.silenceFloorDB`), so the capture tests need a signal,
+        # not just a device. Noise rather than speech: speech has exact-zero
+        # gaps a short capture can land in.
+        run: |
+          brew install --cask blackhole-2ch
+          brew install switchaudio-osx
+          sudo killall coreaudiod || true
+          for _ in $(seq 1 30); do
+            SwitchAudioSource -a -t input | grep -q 'BlackHole 2ch' && break
+            sleep 1
+          done
+          SwitchAudioSource -t input -s 'BlackHole 2ch'
+          SwitchAudioSource -t output -s 'BlackHole 2ch'
+          echo "input: $(SwitchAudioSource -c -t input); output: $(SwitchAudioSource -c -t output)"
+          noise="$RUNNER_TEMP/noise.wav"
+          python3 - "$noise" <<'PY'
+          import random, struct, sys, wave
+          with wave.open(sys.argv[1], "wb") as out:
+              out.setnchannels(1); out.setsampwidth(2); out.setframerate(48000)
+              out.writeframes(b"".join(struct.pack("<h", random.randint(-2000, 2000)) for _ in range(48000 * 30)))
+          PY
+
+      - name: Run the live performer and live-audio suites
+        working-directory: blurt
+        env:
+          BLURT_LIVE_AX_TESTS: "1"
+          BLURT_LIVE_AUDIO_TESTS: "1"
+        # Two passes over one test build. BlackHole's input and output are one
+        # device, so while noise plays into it the device reads as running —
+        # exactly what "building a recorder leaves the microphone closed"
+        # asserts it is not. So the suites that need the device idle run first,
+        # in quiet, and the two that need a signal run with the noise playing.
+        run: |
+          set -euo pipefail
+          quiet="$RUNNER_TEMP/live-quiet.log"
+          signal="$RUNNER_TEMP/live-signal.log"
+          swift test --filter 'LivePerformerTests|AudioInputDevicesTests|MicCaptureBringUpTests' \
+            --skip pinnedRecorderCapturesAudio 2>&1 | tee "$quiet"
+          bash -c "while true; do afplay '$RUNNER_TEMP/noise.wav'; done" &
+          player=$!
+          trap 'kill "$player" 2>/dev/null || true; pkill -x afplay || true' EXIT
+          swift test --filter 'MicCaptureLevelsTests|pinnedRecorderCapturesAudio' 2>&1 | tee "$signal"
+          missing=0
+          check() {
+            if ! grep -qF "Suite \"$2\" passed" "$1"; then
+              echo "::error::Suite \"$2\" did not run and pass (see its skip reason above)"
+              missing=1
+            fi
+          }
+          check "$quiet" "Live performer"
+          check "$quiet" "MicCapture bring-up (live)"
+          check "$quiet" "AudioInputDevices & capture session (live)"
+          check "$signal" "MicCapture.levels (live)"
+          check "$signal" "AudioInputDevices & capture session (live)"
+          exit "$missing"
+
   # What swift-format would change, as an applicable patch. Formatting is the
   # other half of what CI is sole authority over here, and `macos` can only say
   # *that* a file is misformatted (`swift-format lint --strict`) — leaving the
@@ -460,7 +581,8 @@ jobs:
         # XCUITest bundle compiled over that build. Ad hoc signing: the
         # simulator accepts it and, unlike no signing, it embeds the App Group
         # entitlement.
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
+        # BLURT_SIM_FRESH: on a new simulator, not the image's (scripts/ios-lib.sh).
+        run: BLURT_SIM_FRESH=1 BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
 
   # The iPhone accessibility audits (BlurtiOSUITests, scripts/ios-uitest.sh):
   # every screen at the default and the largest text size, ~15 minutes of test
@@ -520,7 +642,7 @@ jobs:
           SELECTION: ${{ matrix.selection }}
         run: |
           read -ra selection <<<"$SELECTION"
-          BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-uitest.sh "${selection[@]}"
+          BLURT_SIM_FRESH=1 BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-uitest.sh "${selection[@]}"
 
       # The audits' result bundle when the job fails or times out, as ui-tests
       # keeps the Mac suite's: the log shows each failure's first line only,
@@ -592,7 +714,7 @@ jobs:
         working-directory: blurt
         env:
           BLURT_IOS_SANITIZER: ${{ matrix.sanitizer }}
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
+        run: BLURT_SIM_FRESH=1 BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
 
   # The required status: branch protection on main requires a job named `check`,
   # and this is it. It used to be `gate`, beside a `check` job that ran all of
@@ -614,12 +736,10 @@ jobs:
   # change (changes.outputs.code == 'false'), the Swift/iOS gates for a docs- or
   # evals-only one (changes.outputs.swift == 'false').
   #
-  # `!cancelled()`, not `always()`: on a push to main the concurrency group is
-  # `check-refs/heads/main`, so each merge cancels the run before it — and
-  # `always()` then ran this job over the cancelled `needs` and failed it,
-  # marking nearly every main commit red though no test had failed. A
-  # superseded run now ends cancelled, not failed. (Nothing is lost: each
-  # merge-queue commit already passed `check` as its merge group.)
+  # `!cancelled()`, not `always()`: a push to a PR cancels the run before it
+  # (as each merge once did on main, when `check` ran on push), and `always()`
+  # then ran this job over the cancelled `needs` and failed it — red though no
+  # test had failed. A superseded run ends cancelled, not failed.
   check:
     needs:
       [
@@ -628,6 +748,7 @@ jobs:
         macos,
         mac-static,
         ui-tests,
+        live-tests,
         ios-build,
         ios-audits,
         ios-static,
@@ -636,12 +757,13 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the lint, macOS, Mac-static, UI, iOS, iOS-audit, iOS-static and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, Mac-static, UI, live-hardware, iOS, iOS-audit, iOS-static and iOS-sanitizer gates ran or were intentionally skipped
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           MAC_STATIC_RESULT: ${{ needs.mac-static.result }}
           UI_RESULT: ${{ needs.ui-tests.result }}
+          LIVE_RESULT: ${{ needs.live-tests.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
           IOS_AUDITS_RESULT: ${{ needs.ios-audits.result }}
           IOS_STATIC_RESULT: ${{ needs.ios-static.result }}
@@ -650,7 +772,7 @@ jobs:
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT mac-static=$MAC_STATIC_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-audits=$IOS_AUDITS_RESULT ios-static=$IOS_STATIC_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT mac-static=$MAC_STATIC_RESULT ui-tests=$UI_RESULT live-tests=$LIVE_RESULT ios-build=$IOS_RESULT ios-audits=$IOS_AUDITS_RESULT ios-static=$IOS_STATIC_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -676,6 +798,7 @@ jobs:
           assert_gate macOS "$MACOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "Mac static" "$MAC_STATIC_RESULT" "$SWIFT_CHANGED"
           assert_gate "UI suite" "$UI_RESULT" "$SWIFT_CHANGED"
+          assert_gate "live hardware" "$LIVE_RESULT" "$SWIFT_CHANGED"
           assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS audits" "$IOS_AUDITS_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS static" "$IOS_STATIC_RESULT" "$SWIFT_CHANGED"
