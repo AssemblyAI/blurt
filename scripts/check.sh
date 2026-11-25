@@ -499,7 +499,11 @@ run_check "swift size budgets (file_length, type_body_length)" check_swift_size
 # Tests that wait on real time: the flakes behind #353, #357, #370, #379, #380,
 # #396, #399–#401, which mostly failed other PRs. Every fixed sleep or real clock
 # in a test carries a `// wall-clock-ok: <reason>`; an unmarked one fails. Pure text.
-run_check "wall-clock waits in tests say why" bash scripts/check-test-clock.sh
+check_test_clock() {
+  bash scripts/check-test-clock.sh --self-test >/dev/null || return 1
+  bash scripts/check-test-clock.sh
+}
+run_check "wall-clock waits in tests say why" check_test_clock
 
 # The Mac project's repo-root folder reference must be named `blurt`. xcodegen
 # names it after the checkout directory, so a project regenerated in a worktree

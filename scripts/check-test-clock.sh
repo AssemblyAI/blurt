@@ -16,7 +16,7 @@
 # those pass) — so each one says why with `// wall-clock-ok: <reason>`, at the
 # end of its line or on the line above, and an unmarked one fails.
 #
-# Usage: check-test-clock.sh
+# Usage: check-test-clock.sh [--self-test]
 
 set -euo pipefail
 
@@ -48,21 +48,60 @@ waits() {
     if [ -f "$f" ]; then present+=("$f"); fi
   done <<<"$files"
   [ "${#present[@]}" -gt 0 ] || return 0
+  unmarked "${present[@]}"
+}
+
+# The wall-clock waits in FILE... not marked ok, as "path:line:text".
+#
+# The line above vouches for a wait only when it is a comment line carrying the
+# marker. A marked *wait* on the line above is no reason for this one: two sleeps
+# in a row, the first marked at its end, used to pass the second unmarked.
+unmarked() {
   # The pattern goes in through the environment: `awk -v` would process its
   # backslashes, turning `\.` into "any character" on one awk and not another.
   PAT="$PATTERN" awk '
     BEGIN { pat = ENVIRON["PAT"] }
-    FNR == 1 { prev = "" }
+    FNR == 1 { above = 0 }
     {
       line = $0
-      if (line ~ pat && line !~ /wall-clock-ok:/ && prev !~ /wall-clock-ok:/ \
-        && line !~ /^[[:space:]]*(\/\/|\*|\/\*)/) {
+      comment = (line ~ /^[[:space:]]*(\/\/|\*|\/\*)/)
+      if (line ~ pat && line !~ /wall-clock-ok:/ && !above && !comment) {
         print FILENAME ":" FNR ":" line
       }
-      prev = line
+      above = (comment && line ~ /wall-clock-ok:/)
     }
-  ' "${present[@]}"
+  ' "$@"
 }
+
+self_test() {
+  local dir failed=0 got want
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/test-clock.XXXXXX")"
+  # shellcheck disable=SC2064 # expand now: $dir is local
+  trap "rm -rf '$dir'" RETURN
+  cat >"$dir/Waits.swift" <<'SWIFT'
+try await Task.sleep(for: .seconds(1))  // wall-clock-ok: marked at its end
+// wall-clock-ok: marked on the comment line above
+try await Task.sleep(for: .seconds(2))
+try await Task.sleep(for: .seconds(3))  // wall-clock-ok: marks only itself
+try await Task.sleep(for: .seconds(4))
+// try await Task.sleep(for: .seconds(5))
+let clock = ContinuousClock()
+SWIFT
+  got="$(unmarked "$dir/Waits.swift" | cut -d: -f2)"
+  want="$(printf '%s\n' 5 7)"
+  if [ "$got" = "$want" ]; then
+    echo "  ok   flags unmarked waits; a marker covers its own line or the one below a comment"
+  else
+    echo "  FAIL flagged lines '$(echo "$got" | tr '\n' ' ')', expected '$(echo "$want" | tr '\n' ' ')'" >&2
+    failed=1
+  fi
+  return "$failed"
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+  self_test
+  exit $?
+fi
 
 hits="$(waits)"
 if [ -n "$hits" ]; then
