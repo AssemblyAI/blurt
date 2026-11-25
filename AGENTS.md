@@ -479,7 +479,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
 - **The loop for Swift changes**: commit, push, open or update the PR, then watch `check.yml`
   (subscribe to PR activity where available) and fix failures as CI reports them — rather than
   stopping at "verify on a Mac". **The PR is not optional**: `check.yml` triggers on
-  `pull_request`/`push` to `main` and `merge_group` only, so pushing a feature branch runs _no_ CI
+  `pull_request` to `main`, `merge_group` and a manual dispatch only, so pushing a feature branch runs _no_ CI
   and leaves Swift changes wholly unverified. A push is not a check.
 - **Diff against `origin/main`, not `main`**: a fresh remote clone checks out only the working
   branch, so the local `main` ref lags behind the real default branch. `git diff main...HEAD` there

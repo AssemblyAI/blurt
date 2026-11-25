@@ -22,6 +22,67 @@ func unsignedJWT(_ claims: [String: String]) -> String {
 
 @Suite("OAuth client")
 struct OAuthClientTests {
+  /// One token-endpoint response and the failure a refresh must throw for it.
+  struct TokenFailureCase: Sendable, CustomTestStringConvertible {
+    let name: String
+    let status: Int
+    let body: Data
+    let expected: OAuthClient.Failure
+    var testDescription: String { "\(status): \(name)" }
+  }
+
+  static let tokenFailureCases: [TokenFailureCase] = [
+    TokenFailureCase(
+      name: "invalid_grant is a refusal",
+      status: 400,
+      body: json(["error": "invalid_grant"]),
+      expected: .rejected
+    ),
+    TokenFailureCase(
+      name: "an unauthorized invalid_grant is a refusal",
+      status: 401,
+      body: json(["error": "invalid_grant"]),
+      expected: .rejected
+    ),
+    TokenFailureCase(
+      name: "invalid_client is a refusal",
+      status: 401,
+      body: json(["error": "invalid_client"]),
+      expected: .rejected
+    ),
+    TokenFailureCase(
+      name: "a server error is unreachable",
+      status: 500,
+      body: json(["error": "invalid_grant"]),
+      expected: .unreachable
+    ),
+    TokenFailureCase(
+      name: "a garbage success body is unreachable",
+      status: 200,
+      body: Data("nope".utf8),
+      expected: .unreachable
+    ),
+    // A 400 that doesn't name a dead credential is not a refusal.
+    TokenFailureCase(
+      name: "invalid_request is not a refusal",
+      status: 400,
+      body: json(["error": "invalid_request"]),
+      expected: .unreachable
+    ),
+    TokenFailureCase(
+      name: "unsupported_grant_type is not a refusal",
+      status: 400,
+      body: json(["error": "unsupported_grant_type"]),
+      expected: .unreachable
+    ),
+    TokenFailureCase(
+      name: "an HTML error page is not a refusal",
+      status: 400,
+      body: Data("<html>".utf8),
+      expected: .unreachable
+    ),
+  ]
+
   private static func form(_ request: URLRequest) -> [String: String] {
     let body = String(bytes: request.httpBody ?? Data(), encoding: .utf8) ?? ""
     var fields: [String: String] = [:]
@@ -72,26 +133,18 @@ struct OAuthClientTests {
     #expect(tokens == OAuthClient.Tokens(accessToken: "fresh", refreshToken: nil, idToken: nil))
   }
 
-  @Test("the token endpoint's invalid_grant/invalid_client is a refusal; 5xx, garbage and offline are unreachable")
-  func tokenFailures() async {
-    for (status, expected) in [(400, OAuthClient.Failure.rejected), (401, .rejected), (500, .unreachable)] {
-      let transport = FakeHTTPTransport { _ in (status, json(["error": "invalid_grant"])) }
-      await #expect(throws: expected) { try await client(transport).refresh("rt") }
-    }
-    let garbage = FakeHTTPTransport { _ in (200, Data("nope".utf8)) }
-    await #expect(throws: OAuthClient.Failure.unreachable) { try await client(garbage).refresh("rt") }
-    let invalidClient = FakeHTTPTransport { _ in (401, json(["error": "invalid_client"])) }
-    await #expect(throws: OAuthClient.Failure.rejected) { try await client(invalidClient).refresh("rt") }
-    let offline = FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet))
-    await #expect(throws: OAuthClient.Failure.unreachable) { try await client(offline).refresh("rt") }
+  @Test(
+    "only a dead credential is a refusal; 5xx, garbage and other errors are unreachable",
+    arguments: tokenFailureCases)
+  func tokenFailures(_ c: TokenFailureCase) async {
+    let transport = FakeHTTPTransport { _ in (c.status, c.body) }
+    await #expect(throws: c.expected) { try await client(transport).refresh("rt") }
   }
 
-  @Test("a 400 that doesn't name a dead credential is not a refusal")
-  func tokenOtherClientErrors() async {
-    for data in [json(["error": "invalid_request"]), json(["error": "unsupported_grant_type"]), Data("<html>".utf8)] {
-      let transport = FakeHTTPTransport { _ in (400, data) }
-      await #expect(throws: OAuthClient.Failure.unreachable) { try await client(transport).refresh("rt") }
-    }
+  @Test("a refresh that can't reach the token endpoint is unreachable")
+  func tokenOffline() async {
+    let offline = FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet))
+    await #expect(throws: OAuthClient.Failure.unreachable) { try await client(offline).refresh("rt") }
   }
 
   @Test("the exchange sends the bearer token and reads the key and its expiry")

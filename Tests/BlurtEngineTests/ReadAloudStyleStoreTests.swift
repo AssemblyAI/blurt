@@ -47,17 +47,21 @@ struct ReadAloudStyleStoreTests {
     #expect(ReadAloudVoice.voice(id: ReadAloudStyleStore.defaultVoiceID)?.group == .builtIn)
   }
 
-  @Test("a chosen voice reads back; one the catalog doesn't list reads as the default")
+  @Test("a chosen voice reads back")
   func voice() {
     let defaults = freshDefaults()
     let store = ReadAloudStyleStore(defaults: defaults)
     defaults.set("aai-yasmin", forKey: ReadAloudStyleStore.voiceDefaultsKey)
     #expect(store.style.voiceID == "aai-yasmin")
-    // The retired bare name, and a voice the service would refuse with 3012.
-    for stale in ["jane", "aai-nonexistent", ""] {
-      defaults.set(stale, forKey: ReadAloudStyleStore.voiceDefaultsKey)
-      #expect(store.style.voiceID == ReadAloudStyleStore.defaultVoiceID)
-    }
+  }
+
+  /// The retired bare name, a voice the service would refuse with 3012, and blank.
+  @Test("a voice the catalog doesn't list reads as the default", arguments: ["jane", "aai-nonexistent", ""])
+  func staleVoice(stale: String) {
+    let defaults = freshDefaults()
+    let store = ReadAloudStyleStore(defaults: defaults)
+    defaults.set(stale, forKey: ReadAloudStyleStore.voiceDefaultsKey)
+    #expect(store.style.voiceID == ReadAloudStyleStore.defaultVoiceID)
   }
 
   @Test("the catalog: unique aai- slugs, built-ins first, every voice labelled")

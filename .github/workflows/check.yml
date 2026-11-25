@@ -3,12 +3,15 @@ name: check
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
   # Required for the merge queue: GitHub builds each queued PR as a temporary
   # gh-readonly-queue/ candidate and fires merge_group; the required `check`
   # status must run there or queued PRs never merge.
   merge_group:
+  # No `push` to main: main only moves through the merge queue, which advances
+  # it to the very commit its merge group just passed `check` on — a push run
+  # tested that commit a second time, on ~10 macOS runners per merge. Dispatch
+  # by hand to check main (or any branch) outside a PR; that runs every gate.
+  workflow_dispatch:
 
 concurrency:
   group: check-${{ github.ref }}
@@ -54,15 +57,20 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          QUEUE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           HEAD_SHA: ${{ github.sha }}
-          BEFORE: ${{ github.event.before }}
         run: |
+          # A merge group is its PR(s) on top of `base_sha` (main, or the group
+          # ahead in the queue), so `base..head` is exactly what the group adds.
+          # Without it every queued PR ran the full ~40 minutes, docs-only ones
+          # included, though the same PR had skipped them as a pull_request.
           if [ "$EVENT" = "pull_request" ]; then
             range="$BASE_SHA...$HEAD_SHA"
-          elif [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-            range="$BEFORE..$HEAD_SHA"
+          elif [ "$EVENT" = "merge_group" ] && [ -n "${QUEUE_BASE_SHA:-}" ] \
+            && git cat-file -e "${QUEUE_BASE_SHA}^{commit}" 2>/dev/null; then
+            range="$QUEUE_BASE_SHA..$HEAD_SHA"
           else
-            range="" # first push / unknown base: run the full check to be safe
+            range="" # a dispatch, or an unknown base: run the full check to be safe
           fi
           if [ -z "$range" ]; then
             { echo "code=true"; echo "swift=true"; } >>"$GITHUB_OUTPUT"; exit 0
@@ -615,12 +623,10 @@ jobs:
   # change (changes.outputs.code == 'false'), the Swift/iOS gates for a docs- or
   # evals-only one (changes.outputs.swift == 'false').
   #
-  # `!cancelled()`, not `always()`: on a push to main the concurrency group is
-  # `check-refs/heads/main`, so each merge cancels the run before it — and
-  # `always()` then ran this job over the cancelled `needs` and failed it,
-  # marking nearly every main commit red though no test had failed. A
-  # superseded run now ends cancelled, not failed. (Nothing is lost: each
-  # merge-queue commit already passed `check` as its merge group.)
+  # `!cancelled()`, not `always()`: a push to a PR cancels the run before it
+  # (as each merge once did on main, when `check` ran on push), and `always()`
+  # then ran this job over the cancelled `needs` and failed it — red though no
+  # test had failed. A superseded run ends cancelled, not failed.
   check:
     needs:
       [
