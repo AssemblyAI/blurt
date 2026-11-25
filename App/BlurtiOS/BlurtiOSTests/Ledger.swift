@@ -31,6 +31,7 @@ func until(_ timeout: Duration = .seconds(30), _ condition: () -> Bool) async ->
     if condition() {
       return true
     }
+    // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
     try? await Task.sleep(for: .milliseconds(10))
   }
   return condition()

@@ -52,9 +52,10 @@ struct MicCaptureBringUpTests {
     // went back to blocking the actor) and still land inside the open, whose
     // fastest measurement here is ~80 ms. Both ends matter, so the outcome is
     // checked below rather than assumed.
+    // wall-clock-ok: a bracket into a real device's open; where it landed is checked below
     try await Task.sleep(for: .milliseconds(30))
 
-    let cancelCost = await ContinuousClock().measure {
+    let cancelCost = await ContinuousClock().measure {  // wall-clock-ok: measuring real time is the point
       try? await mic.cancelCapture()
     }
 

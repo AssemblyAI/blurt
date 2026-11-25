@@ -486,9 +486,46 @@ check_invariants() {
 }
 run_check "settled decisions (AGENTS.md invariants)" check_invariants
 
+# SwiftLint's file_length and type_body_length, counted without SwiftLint: the
+# most common reason a PR needed another CI run (#358, #363, #364, #368, #378,
+# #380), and a line count needs no toolchain, so --portable too. It also notes
+# files near a limit, where a parallel PR growing the same file tips the merge.
+check_swift_size() {
+  bash scripts/check-swift-size.sh --self-test >/dev/null || return 1
+  bash scripts/check-swift-size.sh
+}
+run_check "swift size budgets (file_length, type_body_length)" check_swift_size
+
+# Tests that wait on real time: the flakes behind #353, #357, #370, #379, #380,
+# #396, #399–#401, which mostly failed other PRs. Every fixed sleep or real clock
+# in a test carries a `// wall-clock-ok: <reason>`; an unmarked one fails. Pure text.
+run_check "wall-clock waits in tests say why" bash scripts/check-test-clock.sh
+
+# The Mac project's repo-root folder reference must be named `blurt`. xcodegen
+# names it after the checkout directory, so a project regenerated in a worktree
+# (blurt-wt-foo/) commits that name, and CI's drift check reads it as stale (#392).
+# The drift check itself needs xcodegen; this one line doesn't.
+check_pbxproj_root_name() {
+  local ref
+  ref="$(grep -E 'lastKnownFileType = folder; name = [^;]*; path = \.\./\.\.;' \
+    App/Blurt/Blurt.xcodeproj/project.pbxproj || true)"
+  if [ -z "$ref" ]; then
+    echo "error: no repo-root folder reference (path = ../..) in the Mac pbxproj; update this check" >&2
+    return 1
+  fi
+  if ! grep -q 'name = blurt;' <<<"$ref"; then
+    echo "error: the Mac pbxproj names its repo-root folder after a worktree, not 'blurt':" >&2
+    printf '  %s\n' "$ref" >&2
+    echo "       regenerate it from a checkout named blurt (or fix the name by hand) and commit" >&2
+    return 1
+  fi
+  echo "the pbxproj's repo-root folder is named blurt"
+}
+run_check "pbxproj repo-root folder name" check_pbxproj_root_name
+
 # The design's one source (App/BlurtiOS/Design/tokens.json) and everything
-# generated from it — BlurtDesign/DesignTokens.swift, DESIGN.md's token tables, the
-# app's three colour sets — must agree, and the keyboard's views must carry no
+# generated from it — BlurtDesign/DesignTokens.swift (the Mac app compiles it too),
+# DESIGN.md's token tables, both apps' colour sets — must agree, and the keyboard's views must carry no
 # design literal that belongs in the tokens. scripts/design-sync.sh --check
 # regenerates into .build/ and diffs, the same shape as the xcodegen drift
 # check further down. It runs scripts/design-tokens.swift as a `swift` script,

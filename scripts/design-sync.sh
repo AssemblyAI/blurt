@@ -1,7 +1,7 @@
 #!/bin/bash
 # Fan the design tokens out, or prove they already are.
 #
-#   scripts/design-sync.sh          # regenerate DesignTokens.swift, DESIGN.md's tables, the colour sets
+#   scripts/design-sync.sh          # regenerate DesignTokens.swift, DESIGN.md's tables, both apps' colour sets
 #   scripts/design-sync.sh --check  # regenerate into .build/ and diff; non-zero on drift
 #
 # `App/BlurtiOS/Design/tokens.json` is the one source for the keyboard's colours
@@ -41,6 +41,7 @@ OUTPUTS=(
   App/BlurtiOS/BlurtiOS/Assets.xcassets/Muted.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CTA.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CTAText.colorset/Contents.json
+  App/Blurt/Blurt/Assets.xcassets/AccentColor.colorset/Contents.json
 )
 
 # Format the generated files the way check.sh expects the tree to be formatted,
