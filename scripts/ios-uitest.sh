@@ -3,6 +3,7 @@
 #
 #   scripts/ios-uitest.sh
 #   BLURT_SIM_DEVICE="iPhone 17 Pro" scripts/ios-uitest.sh
+#   scripts/ios-uitest.sh -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testHome
 #
 # XCUITests that launch the app onto each of its screens and run
 # `performAccessibilityAudit()` there (App/BlurtiOS/BlurtiOSUITests). Unlike the
@@ -35,5 +36,5 @@ pretty_xcodebuild
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSUITests \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED" \
   -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES \
-  -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}"
+  -parallel-testing-enabled NO -collect-test-diagnostics never "$@" 2>&1 | "${PRETTY[@]}"
 echo "results: $RESULTS"

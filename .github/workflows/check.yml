@@ -175,12 +175,12 @@ jobs:
           BLURT_UITEST_RESULTS: ${{ runner.temp }}/BlurtUITests.xcresult
         run: scripts/check.sh
 
-      # The UI suite's result bundle when the job fails: the log shows each
-      # failure's first line only, and the bundle has the rest — every
+      # The UI suite's result bundle when the job fails or times out: the log
+      # shows each failure's first line only, and the bundle has the rest — every
       # accessibility issue an audit raised, and the screenshots the test plan
       # keeps.
       - name: Upload the UI suite's results
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BlurtUITests-xcresult

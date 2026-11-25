@@ -1,26 +1,54 @@
 import XCTest
 
-// DIAGNOSTIC PASS: audits every category and reports every issue, so the CI
-// log says what each screen raises today. Replaced by the gated version once
-// the findings are triaged.
-private let auditedTypes: XCUIAccessibilityAuditType = .all
+/// What `performAccessibilityAudit()` checks on the Mac: element detection
+/// and hit regions, the two macOS audits that report on this app's own views.
+/// The macOS SDK offers six types (contrast, element detection, hit region,
+/// sufficient element description, action, parent/child); the other four are
+/// subtracted because every finding they raise is framework or system
+/// behaviour, re-tested against the whole suite below on 2026-11-24 (macOS 26
+/// runner, the audits run with each category included and every issue listed):
+///
+/// - `.contrast`: every finding is text in the system's secondary label colour
+///   (captions, row subtitles, "Not connected"), whose on-screen contrast macOS
+///   manages through vibrancy, or text in a window behind the one in front —
+///   the audit reads every window, and AppKit dims an inactive window's text by
+///   design (the wizard's "API Key", "Microphone" behind Settings). Darkening
+///   the captions would fight the native idiom.
+/// - `.sufficientElementDescription`: raised only by the hosting groups
+///   SwiftUI wraps each window's content in, and the runner's Touch Bar. Not
+///   interactive and carrying no information, so there is nothing to describe.
+/// - `.action`: raised on every SwiftUI `Picker` pop-up (Settings' key, sound,
+///   voice, speed, microphone and mode pickers), every toolbar `Menu` (the
+///   Library's Filter, a transcript's View) and the system's "emoji & symbols"
+///   control: AppKit exposes them as pop-ups that open with `AXShowMenu`, which
+///   the check doesn't count. VoiceOver opens them fine.
+/// - `.parentChild`: raised on the same hosting groups, often with no element
+///   to name — an AX-snapshot inconsistency that survives the audit's own
+///   retries, a framework bug, not this app's hierarchy.
+///
+/// Re-run with a category included when the SDK or the runner's macOS moves:
+/// drop it from the list below and read what the audit lists.
+private let auditedTypes: XCUIAccessibilityAuditType = .all.subtracting([
+  .contrast, .sufficientElementDescription, .action, .parentChild,
+])
 
 extension BlurtUITestCase {
-  /// Audits the whole app as it stands, collecting each issue into `found`
-  /// under `screen` rather than failing on the first, so one run names every
-  /// issue on every screen a test visits. Issues raised by the UI-test
-  /// harness's own window are skipped: it is test scaffolding, never shipped.
+  /// Audits the whole app as it stands — every window, the menu bar's menu
+  /// and the overlay pill included — collecting each issue into `found` under
+  /// `screen` rather than failing on the first, so one run names every issue
+  /// on every screen a test visits. Issues raised by the UI-test harness's own
+  /// window are skipped: it is test scaffolding, never shipped.
   func audit(_ screen: String, into found: inout [String]) throws {
     let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     let harnessFrame = harness.exists ? harness.frame : .null
     var issues: [String] = []
     try app.performAccessibilityAudit(for: auditedTypes) { issue in
-      let element = issue.element
-      if let element, element.exists, harnessFrame.contains(element.frame) { return true }
-      issues.append(Self.describe(issue))
+      if let element = issue.element, element.exists, harnessFrame.contains(element.frame) { return true }
+      issues.append(
+        "[\(screen)] \(issue.compactDescription): \(issue.detailedDescription) — \(Self.name(issue.element))")
       return true
     }
-    found += issues.map { "[\(screen)] \($0)" }
+    found += issues
   }
 
   /// Fails once per issue `found` holds, each on its own line, so a CI log
@@ -30,24 +58,11 @@ extension BlurtUITestCase {
     for issue in found { XCTFail(issue) }
   }
 
-  private static func describe(_ issue: XCUIAccessibilityAuditIssue) -> String {
-    let element = issue.element.map { element -> String in
-      guard element.exists else { return "gone" }
-      return
-        "type=\(element.elementType.rawValue) id='\(element.identifier)' label='\(element.label)' "
-        + "title='\(element.title)' value='\(String(describing: element.value))' frame=\(element.frame)"
-    }
-    return
-      "\(name(of: issue.auditType)): \(issue.compactDescription) | \(issue.detailedDescription) | \(element ?? "no element")"
-  }
-
-  private static func name(of type: XCUIAccessibilityAuditType) -> String {
-    let names: [(XCUIAccessibilityAuditType, String)] = [
-      (.contrast, "contrast"), (.elementDetection, "elementDetection"), (.hitRegion, "hitRegion"),
-      (.sufficientElementDescription, "sufficientElementDescription"), (.action, "action"),
-      (.parentChild, "parentChild"),
-    ]
-    return names.first { type.contains($0.0) }?.1 ?? "type(\(type.rawValue))"
+  /// The element an issue is about, as its identifier, label, title and frame.
+  private static func name(_ element: XCUIElement?) -> String {
+    guard let element else { return "no element" }
+    guard element.exists else { return "an element since gone" }
+    return "\(element.elementType) '\(element.identifier)' '\(element.label)' '\(element.title)' at \(element.frame)"
   }
 }
 
@@ -194,10 +209,15 @@ final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
     mainWindow()
     let recording = row(titled: UITestIdentifiers.seededRecordingTitle)
     XCTAssertTrue(recording.waitForExistence(timeout: 10))
+    // The toolbar's icon-only menus say what they are, not what their symbol
+    // is called (VoiceOver read the View menu as "Sparkle").
+    let filter = app.windows[UITestIdentifiers.mainWindowTitle].menuButtons[UITestIdentifiers.libraryFilterMenu]
+    XCTAssertEqual(filter.label, "Filter")
     try audit("Library, seeded", into: &found)
 
     recording.doubleClick()
     XCTAssertTrue(viewPicker.waitForExistence(timeout: 5), "The transcript page should open")
+    XCTAssertEqual(viewPicker.label, "View")
     try audit("transcript page, Full", into: &found)
     showView("Plain text")
     try audit("transcript page, Plain text", into: &found)
