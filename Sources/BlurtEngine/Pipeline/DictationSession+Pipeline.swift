@@ -98,17 +98,28 @@ extension DictationSession {
     }
     // Read once for both endings below: the remember decision, and what the
     // developer-mode log may keep (see `PressContext.TargetSecurity`).
-    let security = pressContext?.targetSecurity ?? .unknown
-    // The log withholds a known password field's transcript itself (from
-    // `targetIsSecure`); an unknown target's is withheld here, since a read that
-    // never landed leaves the log no context to decide from. The same for a
-    // hand-back's spoken request as for a pasted dictation.
-    let loggable = security == .unknown ? DictationLog.unverifiedTranscript : text
+    //
+    // This press's own context, held for the log after the paste: a cancel
+    // during the paste ends the phase without waiting for this task, so a new
+    // press can install its `pressContext` before the log line runs.
+    let press = pressContext
+    let security = press?.targetSecurity ?? .unknown
+    // What the developer-mode log may keep is decided here, before the paste,
+    // never from whichever press is current by the time it is written: a
+    // password field's transcript is withheld outright, and an unknown target's
+    // too, since a read that never landed leaves the log no context to decide
+    // from. The same for a hand-back's spoken request as for a pasted dictation.
+    let loggable =
+      switch security {
+      case .secure: DictationLog.withheldTranscript
+      case .unknown: DictationLog.unverifiedTranscript
+      case .ordinary: text
+      }
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.
     if handsBackTranscript {
-      seams.logTranscript(loggable, capturedContext, .handedBack(spoken))
+      seams.logTranscript(loggable, press?.resolved, .handedBack(spoken))
       setPhase(.handedBack(spoken))
       return
     }
@@ -139,7 +150,7 @@ extension DictationSession {
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded)
-    seams.logTranscript(loggable, capturedContext, outcome)
+    seams.logTranscript(loggable, press?.resolved, outcome)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
