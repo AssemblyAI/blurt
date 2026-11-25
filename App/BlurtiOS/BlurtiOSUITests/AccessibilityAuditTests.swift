@@ -58,7 +58,9 @@ import XCTest
 /// the system-font rows at its foot ("AssemblyAI's privacy policy",
 /// "Powered by AssemblyAI", "How fast can you type?") "Dynamic Type
 /// unsupported" while the same commit passed an hour apart. A font that
-/// doesn't scale fails both passes, so nothing real gets through.
+/// doesn't scale fails both passes, so nothing real gets through. A pass XCTest
+/// times out on, which reports nothing at all, is run again
+/// (`retryAfterTimeout`).
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
   private static let auditedTypes = XCUIAccessibilityAuditType.all.subtracting(.contrast)
@@ -341,16 +343,25 @@ final class AccessibilityAuditTests: XCTestCase {
       + [app.otherElements["brand.tabBar"]].filter(\.exists)
       .map(\.frame)
     let screenArea = app.windows.firstMatch.frame
+    // Each pass starts afresh: one XCTest timed out on reported nothing to
+    // trust, so it runs again (`retryAfterTimeout`).
     let pass = { [app] () throws -> [String] in
-      var raised: [String] = []
-      try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
-        if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
-          return true
+      var timeouts = 0
+      while true {
+        var raised: [String] = []
+        do {
+          try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
+            if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
+              return true
+            }
+            raised.append(Self.describe(issue))
+            return true
+          }
+          return raised
+        } catch {
+          try Self.retryAfterTimeout(error, timeouts: &timeouts)
         }
-        raised.append(Self.describe(issue))
-        return true
       }
-      return raised
     }
     var issues = try pass()
     // A finding has to hold on a second audit of the same, untouched screen:
