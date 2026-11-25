@@ -177,10 +177,6 @@
       }
     }
 
-    /// nspasteboard.org's marker for a secret (a password manager's copy). Like
-    /// `TransientType`, its data is empty: the type's presence is the signal.
-    private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
-
     @Test("an item holding only an empty marker type still gets the text floor back")
     func markerOnlySnapshotKeepsTextFloor() {
       // #347: the marker's empty `Data` is a successful read, so the item isn't
@@ -191,14 +187,14 @@
         let clip = SystemClipboard()
 
         let concealed = PasteboardSnapshot(
-          items: [SendablePasteboardItem(dataMap: [Self.concealedType: Data()])], plainText: "hunter2")
+          items: [SendablePasteboardItem(dataMap: [SystemClipboard.concealedType: Data()])], plainText: "hunter2")
 
         clip.setString("transcript")
         clip.restore(concealed)
 
         #expect(pb.string(forType: .string) == "hunter2")
         // Still marked as the secret it was, so a clipboard manager skips it.
-        #expect(pb.types?.contains(Self.concealedType) == true)
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
         #expect(pb.pasteboardItems?.count == 1)
       }
     }
@@ -211,16 +207,16 @@
 
         let item = NSPasteboardItem()
         item.setString("hunter2", forType: .string)
-        item.setData(Data(), forType: Self.concealedType)
+        item.setData(Data(), forType: SystemClipboard.concealedType)
         pb.clearContents()
         pb.writeObjects([item])
 
-        let restore = clip.writeAndPrepareRestore("transcript")
+        let restore = clip.writeAndPrepareRestore("transcript", concealed: false)
         #expect(pb.string(forType: .string) == "transcript")
         restore()
 
         #expect(pb.string(forType: .string) == "hunter2")
-        #expect(pb.types?.contains(Self.concealedType) == true)
+        #expect(pb.types?.contains(SystemClipboard.concealedType) == true)
       }
     }
 
@@ -306,6 +302,25 @@
       }
     }
 
+    @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
+    func restoreEmptyIsNoOp() throws {
+      try withClipboardRestored {
+        let pb = NSPasteboard.general
+        let clip = SystemClipboard()
+
+        pb.clearContents()  // an empty pasteboard has no items to snapshot
+        let empty = try #require(clip.snapshot())
+        clip.setString("temp")
+        clip.restore(empty)
+
+        #expect(pb.string(forType: .string) == nil)
+      }
+    }
+  }
+
+  /// Concealed writes (#348), apart so the suite's body stays within its length
+  /// budget; same file, so they share its private helpers.
+  extension SystemClipboardTests {
     /// #348: a password field's words left for a paste by hand carry the two
     /// markers clipboard managers skip, so they never become history.
     @Test("a concealed write is marked concealed and transient")
@@ -359,21 +374,6 @@
         pb.setString("user copied this", forType: .string)
         clip.clear(ifChangeCountIs: stale)
         #expect(pb.string(forType: .string) == "user copied this")
-      }
-    }
-
-    @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
-    func restoreEmptyIsNoOp() throws {
-      try withClipboardRestored {
-        let pb = NSPasteboard.general
-        let clip = SystemClipboard()
-
-        pb.clearContents()  // an empty pasteboard has no items to snapshot
-        let empty = try #require(clip.snapshot())
-        clip.setString("temp")
-        clip.restore(empty)
-
-        #expect(pb.string(forType: .string) == nil)
       }
     }
   }
