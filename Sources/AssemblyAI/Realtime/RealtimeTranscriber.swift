@@ -39,7 +39,9 @@ public actor RealtimeTranscriber {
   /// raises — so a `start` that loses a race with `cancel` (the recording's
   /// tasks are unstructured) must find it here and open nothing.
   private var phase = Phase.idle
-  private var pending = Data()
+  /// Audio not yet sent. Readable by tests, which check nothing is queued for
+  /// a session that has closed.
+  private(set) var pending = Data()
   private var continuation: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation?
   /// Every `finish` waiting for `Termination` — a list, not one slot, so a
   /// second caller can't overwrite (and so strand) the first.
