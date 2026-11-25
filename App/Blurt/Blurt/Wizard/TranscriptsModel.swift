@@ -41,9 +41,6 @@ final class TranscriptsModel {
     let realtime: any LiveTranscriptionSession
     let audio: AsyncStream<Data>.Continuation
     let pump: Task<Void, Never>
-    /// The socket being opened. Stopping waits for it before `finish`, which
-    /// on a session not yet open would close it and drop the queued audio.
-    let opened: Task<AsyncThrowingStream<RealtimeTurn, any Error>, Never>
     let turns: Task<Void, Never>
     var quietStop: RecordingQuietStop
   }
