@@ -21,15 +21,13 @@ struct APIKeyGatewayTests {
     #expect(store.hasKey)
   }
 
-  @Test("nil, empty, and whitespace writes all clear the stored key")
-  func blankWritesClear() {
-    for clearing in [nil, "", "   \n"] as [String?] {
-      let store = InMemoryAPIKeyStore()
-      store.save("sk-123")
-      store.save(clearing)
-      #expect(store.current == nil, "expected \(String(describing: clearing)) to clear the key")
-      #expect(!store.hasKey)
-    }
+  @Test("nil, empty, and whitespace writes all clear the stored key", arguments: [nil, "", "   \n"] as [String?])
+  func blankWritesClear(clearing: String?) {
+    let store = InMemoryAPIKeyStore()
+    store.save("sk-123")
+    store.save(clearing)
+    #expect(store.current == nil)
+    #expect(!store.hasKey)
   }
 
   @Test("hasKey is derived from `current` for any conformance")

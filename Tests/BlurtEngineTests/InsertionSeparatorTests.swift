@@ -4,51 +4,55 @@ import Testing
 
 @Suite("InsertionSeparator.withLeadingSeparator")
 struct InsertionSeparatorTests {
-  @Test("prepends a space when prior text doesn't end in whitespace")
-  func prependsSpace() {
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "First.") == " Second.")
+  /// One `withLeadingSeparator(_:after:)` expectation: the text being inserted,
+  /// the text already before the caret, and what actually gets inserted.
+  struct Case: Sendable, CustomTestStringConvertible {
+    let name: String
+    let text: String
+    let prior: String?
+    let expected: String
+    var testDescription: String { name }
   }
 
-  @Test("no separator when prior text already ends in a space")
-  func priorEndsInSpace() {
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "First. ") == "Second.")
-  }
-
-  @Test("no separator when prior text ends in a newline")
-  func priorEndsInNewline() {
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "First.\n") == "Second.")
-  }
-
-  @Test("no leading space into an empty field (nil prior text)")
-  func nilPrior() {
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: nil) == "Second.")
-  }
-
-  @Test("no leading space when prior text is empty")
-  func emptyPrior() {
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "") == "Second.")
-  }
-
-  @Test("doesn't double up when the new text already starts with whitespace")
-  func textStartsWithSpace() {
-    #expect(InsertionSeparator.withLeadingSeparator(" Second.", after: "First.") == " Second.")
-  }
-
-  @Test("returns empty text unchanged")
-  func emptyText() {
-    #expect(InsertionSeparator.withLeadingSeparator("", after: "First.").isEmpty)
-  }
-
-  @Test("every whitespace class counts, not just space and newline")
-  func otherWhitespaceClasses() {
+  static let cases: [Case] = [
+    Case(
+      name: "prepends a space when prior text doesn't end in whitespace",
+      text: "Second.", prior: "First.", expected: " Second."),
+    Case(
+      name: "no separator when prior text already ends in a space",
+      text: "Second.", prior: "First. ", expected: "Second."),
+    Case(
+      name: "no separator when prior text ends in a newline",
+      text: "Second.", prior: "First.\n", expected: "Second."),
+    Case(
+      name: "no leading space into an empty field (nil prior text)",
+      text: "Second.", prior: nil, expected: "Second."),
+    Case(name: "no leading space when prior text is empty", text: "Second.", prior: "", expected: "Second."),
+    Case(
+      name: "doesn't double up when the new text already starts with whitespace",
+      text: " Second.", prior: "First.", expected: " Second."),
+    Case(name: "returns empty text unchanged", text: "", prior: "First.", expected: ""),
     // The rules key on Character.isWhitespace: a trailing tab, carriage return,
     // or non-breaking space suppresses the separator like a plain space does…
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "First.\t") == "Second.")
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "First.\r") == "Second.")
-    #expect(InsertionSeparator.withLeadingSeparator("Second.", after: "First.\u{00A0}") == "Second.")
+    Case(name: "a trailing tab counts as whitespace", text: "Second.", prior: "First.\t", expected: "Second."),
+    Case(
+      name: "a trailing carriage return counts as whitespace",
+      text: "Second.", prior: "First.\r", expected: "Second."),
+    Case(
+      name: "a trailing non-breaking space counts as whitespace",
+      text: "Second.", prior: "First.\u{00A0}", expected: "Second."),
     // …and text already leading with a tab or non-breaking space isn't doubled.
-    #expect(InsertionSeparator.withLeadingSeparator("\tSecond.", after: "First.") == "\tSecond.")
-    #expect(InsertionSeparator.withLeadingSeparator("\u{00A0}Second.", after: "First.") == "\u{00A0}Second.")
+    Case(
+      name: "text leading with a tab isn't doubled",
+      text: "\tSecond.", prior: "First.", expected: "\tSecond."),
+    Case(
+      name: "text leading with a non-breaking space isn't doubled",
+      text: "\u{00A0}Second.", prior: "First.", expected: "\u{00A0}Second."),
+  ]
+
+  @Test("the separator depends on the prior text's end and the new text's start", arguments: cases)
+  func separator(_ c: Case) {
+    #expect(InsertionSeparator.withLeadingSeparator(c.text, after: c.prior) == c.expected)
   }
 
   @Test(

@@ -4,46 +4,41 @@ import Testing
 
 @Suite("SpeechSegmenter")
 struct SpeechSegmenterTests {
-  @Test("cuts at sentence ends, keeping the punctuation")
-  func sentences() {
-    #expect(
-      SpeechSegmenter.segments(of: "It works. Does it? Yes it does!")
-        == ["It works.", "Does it?", "Yes it does!"])
+  /// One `segments(of:)` expectation at the default length cap.
+  struct Case: Sendable, CustomTestStringConvertible {
+    let name: String
+    let text: String
+    let expected: [String]
+    var testDescription: String { name }
   }
 
-  @Test("a closing curly quote still ends the sentence")
-  func curlyCloser() {
-    #expect(
-      SpeechSegmenter.segments(of: "She said “you uploaded me.” The clock ticks.")
-        == ["She said “you uploaded me.”", "The clock ticks."])
-  }
+  static let cases: [Case] = [
+    Case(
+      name: "cuts at sentence ends, keeping the punctuation",
+      text: "It works. Does it? Yes it does!", expected: ["It works.", "Does it?", "Yes it does!"]),
+    Case(
+      name: "a closing curly quote still ends the sentence",
+      text: "She said “you uploaded me.” The clock ticks.",
+      expected: ["She said “you uploaded me.”", "The clock ticks."]),
+    Case(
+      name: "decimals and versions are not sentence ends",
+      text: "Pi is 3.14 in v1.2 today.", expected: ["Pi is 3.14 in v1.2 today."]),
+    Case(
+      name: "one-word sentences join the next — abbreviations don't flush alone",
+      text: "Dr. Smith is in. Go.", expected: ["Dr. Smith is in. Go."]),
+    Case(
+      name: "a short trailing sentence joins the previous one",
+      text: "That went well. Thanks.", expected: ["That went well. Thanks."]),
+    Case(name: "a lone short sentence is its own segment", text: "Hi.", expected: ["Hi."]),
+    Case(
+      name: "line breaks end a segment even without punctuation",
+      text: "Release notes here\n\nFixed the paste bug", expected: ["Release notes here", "Fixed the paste bug"]),
+    Case(name: "blank input yields nothing to send", text: "  \n ", expected: []),
+  ]
 
-  @Test("decimals and versions are not sentence ends")
-  func decimals() {
-    #expect(SpeechSegmenter.segments(of: "Pi is 3.14 in v1.2 today.") == ["Pi is 3.14 in v1.2 today."])
-  }
-
-  @Test("one-word sentences join the next — abbreviations don't flush alone")
-  func abbreviations() {
-    #expect(SpeechSegmenter.segments(of: "Dr. Smith is in. Go.") == ["Dr. Smith is in. Go."])
-  }
-
-  @Test("a short trailing sentence joins the previous one")
-  func shortTail() {
-    #expect(SpeechSegmenter.segments(of: "That went well. Thanks.") == ["That went well. Thanks."])
-    #expect(SpeechSegmenter.segments(of: "Hi.") == ["Hi."])
-  }
-
-  @Test("line breaks end a segment even without punctuation")
-  func lineBreaks() {
-    #expect(
-      SpeechSegmenter.segments(of: "Release notes here\n\nFixed the paste bug")
-        == ["Release notes here", "Fixed the paste bug"])
-  }
-
-  @Test("blank input yields nothing to send")
-  func blank() {
-    #expect(SpeechSegmenter.segments(of: "  \n ").isEmpty)
+  @Test("segments cuts text into speakable sentences", arguments: cases)
+  func segments(_ c: Case) {
+    #expect(SpeechSegmenter.segments(of: c.text) == c.expected)
   }
 
   @Test("a runaway sentence splits at whitespace under the cap")

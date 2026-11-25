@@ -7,6 +7,17 @@
   struct SigningIdentityMigrationTests {
     private typealias Migration = SigningIdentityMigration
 
+    /// One `decide()` input — last launch's identity, this launch's, and the live
+    /// trust state — and the decision it must produce.
+    struct DecideCase: Sendable, CustomTestStringConvertible {
+      let name: String
+      let last: String?
+      let current: String?
+      let isTrusted: Bool
+      let expected: SigningIdentityMigration.Decision
+      var testDescription: String { name }
+    }
+
     // The identities `SigningIdentity.current()` produces, one per way Blurt is
     // signed. The migration treats them alike — it only ever compares strings — but
     // which pairs of them differ is the whole reason the cases below exist, so they
@@ -23,42 +34,41 @@
     private static let reissuedRelease =
       "\(prefix)\(anchor) and certificate leaf[subject.CN] = \"Dev ID 2029\""
 
-    // decide(): unsigned builds never act.
-    @Test
-    func unsignedNeverActs() {
-      #expect(Migration.decide(lastIdentity: nil, currentIdentity: nil, isTrusted: false) == .noAction)
-      #expect(Migration.decide(lastIdentity: "OLD", currentIdentity: nil, isTrusted: true) == .noAction)
-    }
+    static let decideCases: [DecideCase] = [
+      // Unsigned builds never act.
+      DecideCase(
+        name: "unsigned, untrusted, never seen",
+        last: nil, current: nil, isTrusted: false, expected: .noAction),
+      DecideCase(
+        name: "unsigned, trusted, seen before",
+        last: "OLD", current: nil, isTrusted: true, expected: .noAction),
+      // The same identity as last launch is steady state, regardless of trust.
+      DecideCase(
+        name: "steady state, untrusted",
+        last: "NEW", current: "NEW", isTrusted: false, expected: .noAction),
+      DecideCase(
+        name: "steady state, trusted",
+        last: "NEW", current: "NEW", isTrusted: true, expected: .noAction),
+      // No marker (every build predating it) is treated as changed.
+      DecideCase(
+        name: "first seen, untrusted, resets",
+        last: nil, current: "NEW", isTrusted: false, expected: .resetThenRecord("NEW")),
+      DecideCase(
+        name: "first seen, trusted, records only",
+        last: nil, current: "NEW", isTrusted: true, expected: .record("NEW")),
+      // Any identity change at all.
+      DecideCase(
+        name: "identity changed, untrusted, resets",
+        last: "OLD", current: "NEW", isTrusted: false, expected: .resetThenRecord("NEW")),
+      DecideCase(
+        name: "identity changed, trusted, records only",
+        last: "OLD", current: "NEW", isTrusted: true, expected: .record("NEW")),
+    ]
 
-    // decide(): same identity as last launch is steady state, regardless of trust.
-    @Test
-    func steadyStateIsNoAction() {
-      #expect(Migration.decide(lastIdentity: "NEW", currentIdentity: "NEW", isTrusted: false) == .noAction)
-      #expect(Migration.decide(lastIdentity: "NEW", currentIdentity: "NEW", isTrusted: true) == .noAction)
-    }
-
-    // decide(): no marker (every build predating it) is treated as changed.
-    @Test
-    func firstSeenUntrustedResets() {
-      let decision = Migration.decide(lastIdentity: nil, currentIdentity: "NEW", isTrusted: false)
-      #expect(decision == .resetThenRecord("NEW"))
-    }
-    @Test
-    func firstSeenTrustedRecordsOnly() {
-      let decision = Migration.decide(lastIdentity: nil, currentIdentity: "NEW", isTrusted: true)
-      #expect(decision == .record("NEW"))
-    }
-
-    // decide(): any identity change at all.
-    @Test
-    func identityChangedUntrustedResets() {
-      let decision = Migration.decide(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: false)
-      #expect(decision == .resetThenRecord("NEW"))
-    }
-    @Test
-    func identityChangedTrustedRecordsOnly() {
-      let decision = Migration.decide(lastIdentity: "OLD", currentIdentity: "NEW", isTrusted: true)
-      #expect(decision == .record("NEW"))
+    @Test("decide resets only an untrusted identity change, and records any change", arguments: decideCases)
+    func decide(_ c: DecideCase) {
+      #expect(
+        Migration.decide(lastIdentity: c.last, currentIdentity: c.current, isTrusted: c.isTrusted) == c.expected)
     }
 
     // decide(): the case this exists for now that debug builds carry their own

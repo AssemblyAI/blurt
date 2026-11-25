@@ -5,33 +5,45 @@ import Testing
 
 @Suite("UserAgent")
 struct UserAgentTests {
-  @Test("the agent is the product name, the short version, and the details as a comment")
-  func productVersionAndComment() {
-    #expect(
-      UserAgent.value(product: "Blurt", version: "0.1.54", details: ["macOS 15.5", "dev"])
-        == "Blurt/0.1.54 (macOS 15.5; dev)")
+  /// One `UserAgent.value(product:version:details:)` expectation.
+  struct Case: Sendable, CustomTestStringConvertible {
+    let name: String
+    let product: String
+    let version: String?
+    let details: [String]
+    let expected: String
+    var testDescription: String { name }
   }
 
-  /// A release build sends one detail, so the comment must not gain a stray
-  /// separator — the reason `details` is a list the formatter joins rather than
-  /// a preformatted string each caller assembles.
-  @Test("a single detail needs no separator")
-  func singleDetail() {
-    #expect(
-      UserAgent.value(product: "Blurt", version: "0.1.54", details: ["macOS 26.1"])
-        == "Blurt/0.1.54 (macOS 26.1)")
-  }
+  static let cases: [Case] = [
+    Case(
+      name: "the agent is the product name, the short version, and the details as a comment",
+      product: "Blurt", version: "0.1.54", details: ["macOS 15.5", "dev"], expected: "Blurt/0.1.54 (macOS 15.5; dev)"),
+    // A release build sends one detail, so the comment must not gain a stray
+    // separator — the reason `details` is a list the formatter joins rather than
+    // a preformatted string each caller assembles.
+    Case(
+      name: "a single detail needs no separator",
+      product: "Blurt", version: "0.1.54", details: ["macOS 26.1"], expected: "Blurt/0.1.54 (macOS 26.1)"),
+    Case(
+      name: "no details means no empty parentheses",
+      product: "Blurt", version: "0.1.54", details: [], expected: "Blurt/0.1.54"),
+    Case(
+      name: "blank details drop out rather than widening the comment",
+      product: "Blurt", version: "0.1.54", details: ["", "  ", "macOS 15.5"], expected: "Blurt/0.1.54 (macOS 15.5)"),
+    Case(
+      name: "a surrounding-whitespace version is trimmed rather than sent as-is",
+      product: "Blurt", version: " 0.1.54\n", details: [], expected: "Blurt/0.1.54"),
+    // A `User-Agent` product token may not contain whitespace. Blurt's own name
+    // has none, but `HostIdentity` exists so another app can supply its own.
+    Case(
+      name: "a multi-word product name becomes a single valid token",
+      product: "Acme Voice", version: "2.0", details: [], expected: "Acme-Voice/2.0"),
+  ]
 
-  @Test("no details means no empty parentheses")
-  func noDetails() {
-    #expect(UserAgent.value(product: "Blurt", version: "0.1.54", details: []) == "Blurt/0.1.54")
-  }
-
-  @Test("blank details drop out rather than widening the comment")
-  func blankDetailsDropped() {
-    #expect(
-      UserAgent.value(product: "Blurt", version: "0.1.54", details: ["", "  ", "macOS 15.5"])
-        == "Blurt/0.1.54 (macOS 15.5)")
+  @Test("value formats the product, version and details as one header", arguments: cases)
+  func value(_ c: Case) {
+    #expect(UserAgent.value(product: c.product, version: c.version, details: c.details) == c.expected)
   }
 
   /// No version means no version token — not `Blurt/unknown`, which reads like
@@ -46,19 +58,6 @@ struct UserAgentTests {
     #expect(
       UserAgent.value(product: "Blurt", version: version, details: ["macOS 15.5"])
         == "Blurt (macOS 15.5)")
-  }
-
-  @Test("a surrounding-whitespace version is trimmed rather than sent as-is")
-  func versionTrimmed() {
-    #expect(UserAgent.value(product: "Blurt", version: " 0.1.54\n", details: []) == "Blurt/0.1.54")
-  }
-
-  /// A `User-Agent` product token may not contain whitespace. Blurt's own name
-  /// has none, but `HostIdentity` exists so another app can supply its own.
-  @Test("a multi-word product name becomes a single valid token")
-  func multiWordProductHyphenated() {
-    #expect(
-      UserAgent.value(product: "Acme Voice", version: "2.0", details: []) == "Acme-Voice/2.0")
   }
 
   /// `UserAgent.current` resolves `HostIdentity.current.productName`, the

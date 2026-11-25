@@ -11,34 +11,38 @@ import Testing
 /// context can never produce turns; a non-empty one often doesn't either.
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
-  @Test("both fields nil is empty")
-  func bothNil() {
-    #expect(TranscriptionContext(appName: nil, priorText: nil).isEmpty)
+  /// One `isEmpty` expectation for a context built from the fields named.
+  struct Case: Sendable, CustomTestStringConvertible {
+    let name: String
+    let context: TranscriptionContext
+    let expectsEmpty: Bool
+    var testDescription: String { name }
   }
 
-  @Test("whitespace-only fields are empty")
-  func whitespaceOnly() {
-    #expect(TranscriptionContext(appName: "   ", priorText: "\n\t ").isEmpty)
-  }
+  static let cases: [Case] = [
+    Case(
+      name: "both fields nil is empty",
+      context: TranscriptionContext(appName: nil, priorText: nil), expectsEmpty: true),
+    Case(
+      name: "whitespace-only fields are empty",
+      context: TranscriptionContext(appName: "   ", priorText: "\n\t "), expectsEmpty: true),
+    Case(
+      name: "a real app name makes it non-empty",
+      context: TranscriptionContext(appName: "Slack", priorText: nil), expectsEmpty: false),
+    Case(
+      name: "real prior text makes it non-empty",
+      context: TranscriptionContext(appName: nil, priorText: "hello there"), expectsEmpty: false),
+    Case(
+      name: "real selected text makes it non-empty",
+      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "highlighted"), expectsEmpty: false),
+    Case(
+      name: "whitespace-only selected text stays empty",
+      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n"), expectsEmpty: true),
+  ]
 
-  @Test("a real app name makes it non-empty")
-  func appNamePresent() {
-    #expect(!TranscriptionContext(appName: "Slack", priorText: nil).isEmpty)
-  }
-
-  @Test("real prior text makes it non-empty")
-  func priorTextPresent() {
-    #expect(!TranscriptionContext(appName: nil, priorText: "hello there").isEmpty)
-  }
-
-  @Test("real selected text makes it non-empty")
-  func selectedTextPresent() {
-    #expect(!TranscriptionContext(appName: nil, priorText: nil, selectedText: "highlighted").isEmpty)
-  }
-
-  @Test("whitespace-only selected text stays empty")
-  func selectedTextWhitespace() {
-    #expect(TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n").isEmpty)
+  @Test("isEmpty is false only when some field carries real text", arguments: cases)
+  func isEmptyGate(_ c: Case) {
+    #expect(c.context.isEmpty == c.expectsEmpty)
   }
 
   @Test("key terms alone make it non-empty, and ride their own field")
