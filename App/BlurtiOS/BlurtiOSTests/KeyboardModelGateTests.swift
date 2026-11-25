@@ -285,3 +285,45 @@ struct KeyboardModelGateTests {
     init(_ now: Date) { self.now = now }
   }
 }
+
+/// The password-field press (#349), apart so the suite's body stays within
+/// its length budget.
+extension KeyboardModelGateTests {
+  /// #349: the Mac never remembers what was dictated into a password field;
+  /// the press is the only place the phone can say it was one.
+  @Test("a press into a password field carries none of its text and says it is secure")
+  func passwordFieldPress() throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let proxy = FakeProxy()
+    proxy.before = "user@example.com "
+    proxy.selected = "hunter"
+    proxy.textContentType = .password
+    let rig = KeyboardRig(proxy: proxy)
+    rig.model.tapMic()
+    let press = try #require(rig.lastPress)
+    #expect(press.isSecure == true)
+    #expect(press.priorText == nil && press.selectedText == nil)
+    // Secure text entry says it as well as the content type does.
+    proxy.textContentType = nil
+    proxy.isSecureTextEntry = true
+    #expect(proxy.isPasswordField)
+    proxy.isSecureTextEntry = false
+    proxy.textContentType = .newPassword
+    #expect(proxy.isPasswordField)
+    proxy.textContentType = .username
+    #expect(!proxy.isPasswordField)
+  }
+
+  @Test("a press into an ordinary field carries its text and says it is not secure")
+  func ordinaryFieldPress() throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let proxy = FakeProxy()
+    proxy.before = "Hi Sam, "
+    let rig = KeyboardRig(proxy: proxy)
+    rig.model.tapMic()
+    let press = try #require(rig.lastPress)
+    #expect(press.isSecure == false && press.priorText == "Hi Sam, ")
+  }
+}

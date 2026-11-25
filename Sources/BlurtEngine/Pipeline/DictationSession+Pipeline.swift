@@ -251,7 +251,7 @@ extension DictationSession {
   /// session is at rest, and this is not a dictation. Throws only on cancellation.
   public func replaceSelection(with text: String) async throws -> PipelinePhase {
     do {
-      try await injector.insert(text, after: nil, windowTitle: nil)
+      try await injector.insert(text, after: nil, windowTitle: nil, secure: false)
       return .pasted
     } catch {
       if error is CancellationError || Task.isCancelled { throw CancellationError() }
@@ -291,8 +291,11 @@ extension DictationSession {
   private func inject(_ text: String) async -> PipelinePhase {
     setPhase(.injecting)
     do {
+      // A password field's words are pasted like any others, but if they end
+      // up left on the clipboard instead they are left as the secret they are.
       try await injector.insert(
-        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle)
+        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle,
+        secure: capturedContext?.targetIsSecure == true)
       // A cancel() that landed in insert's final, non-cancellable stretch
       // (after its last checkCancellation) already set .cancelled — leave the
       // claimed phase alone rather than repainting it as .pasted.

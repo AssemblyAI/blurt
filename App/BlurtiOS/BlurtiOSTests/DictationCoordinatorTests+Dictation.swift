@@ -101,6 +101,26 @@ extension DictationCoordinatorTests {
     #expect(rig.idle.ended == 1 && rig.tasks.ended.contains(DictationCoordinator.releaseTask))
   }
 
+  /// #349: the engine's rule — a password field's words are pasted, never
+  /// remembered — reaches the phone only through the press's flag.
+  @Test("a dictation into a password field is inserted but never joins Recent")
+  func secureDictationNotRemembered() async throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (coordinator, _) = await listening()
+    send(command(.press, isSecure: true), to: coordinator)
+    #expect(await until { self.published?.state == .recording })
+    send(command(.release), to: coordinator)
+    #expect(await takeResult()?.text == Self.transcript)
+    #expect(await until { coordinator.phase == .pasted })
+    // An ordinary dictation after it is remembered, and is the only one.
+    _ = try await recording(coordinator)
+    send(command(.release), to: coordinator)
+    #expect(await takeResult()?.text == Self.transcript)
+    #expect(await until { coordinator.recent.entries.count == 1 })
+    #expect(coordinator.recent.entries.count == 1)
+  }
+
   /// #346: the words carry the field, not only the process, so a keyboard in
   /// the same process over another field can tell they aren't its own.
   @Test("the words are addressed to the field the press came from, or the accepted stop's")
