@@ -240,7 +240,8 @@ slightly worse instruction, not misreporting one. Raise `--dev-fraction` to 0.15
 care more about a confident selection than about search cost.
 
 `uv run` reads the PEP 723 header at the top of the script and installs DSPy into a throwaway
-environment. With plain `pip`, `pip install "dspy>=3.0,<3.5"` is the only requirement. The cap is
+environment, on Python 3.10–3.14 (GEPA, which the harness imports, supports nothing newer). With
+plain `pip`, `pip install "dspy>=3.0,<3.5" gepa` is all it needs. The DSPy cap is
 deliberate: DSPy 3.5.0 reworked its LM layer, and every `openai/` model call through the LLM Gateway
 then fails with "Not found".
 

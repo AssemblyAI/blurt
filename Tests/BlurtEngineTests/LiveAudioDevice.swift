@@ -41,7 +41,9 @@ enum LiveAudioDevice {
 extension Tag {
   /// Marks tests that drive a real `AVCaptureSession` and the system mic. They
   /// only run when BLURT_LIVE_AUDIO_TESTS=1; the tag lets a run include/exclude
-  /// them as a group (e.g. `--filter-tag liveAudio`).
+  /// them as a group (e.g. `--filter-tag liveAudio`). CI runs them in check.yml's
+  /// `live-tests` job, on a loopback input (BlackHole) fed white noise: the
+  /// capture path rejects a silent input by design, so they need a signal.
   @Tag static var liveAudio: Self
 }
 
