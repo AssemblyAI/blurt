@@ -16,15 +16,22 @@ struct DictationCoordinatorTests {
   /// The words every stub transcript carries.
   static let transcript = "hello there"
 
+  /// The instant the coordinator judges the keyboard's presence at, held for
+  /// the whole test, and the one `onScreen` dates its presence from: a
+  /// keyboard "seen 11 s ago" stays 11 s old however slowly the run goes
+  /// (ASan has taken a minute), never crossing `presenceWindow` mid-test.
+  let frozenNow = Date()
+
   /// A coordinator over a rig's window, transcribing offline and ticking on
   /// the rig's clock. `startDelay` holds a press's start, so `.connecting`
   /// can be seen; `closeDelay` holds the source's close, so a press can land
   /// while the window is closing.
   func coordinator(startDelay: Duration = .zero, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
     let rig = WindowRig(closeDelay: closeDelay, startDelay: startDelay)
+    let frozen = frozenNow
     let coordinator = DictationCoordinator(
       apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()), window: rig.window,
-      transcriber: StubTranscriber(text: Self.transcript), clock: rig.clock)
+      transcriber: StubTranscriber(text: Self.transcript), clock: rig.clock, now: { frozen })
     return (coordinator, rig)
   }
 

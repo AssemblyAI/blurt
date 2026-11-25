@@ -26,7 +26,7 @@ extension DictationCoordinator {
     let decision = CommandRouter.route(
       CommandRouter.Input(
         command: command, state: window.liveState, phase: routerPhase, inFlight: inFlight,
-        onScreen: SharedStore.keyboardOnScreen()?.processID, answered: answered, launchID: window.launchID))
+        onScreen: SharedStore.keyboardOnScreen(now: now())?.processID, answered: answered, launchID: window.launchID))
     SharedStore.acknowledge(decision.ack)
     if decision.remember { remember(command.id, decision.ack.outcome) }
     log(command, decision)
@@ -128,7 +128,7 @@ extension DictationCoordinator {
   /// the log line.
   func tickWatchdog() {
     guard let inFlight, watchdogReleased != inFlight.id, stopAccepted != inFlight.id,
-      OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: Date())
+      OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: now())
     else { return }
     watchdogReleased = inFlight.id
     Self.log.notice("watchdog released \(inFlight.id, privacy: .public): its keyboard is gone")

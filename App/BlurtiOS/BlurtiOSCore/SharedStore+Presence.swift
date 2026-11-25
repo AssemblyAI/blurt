@@ -34,8 +34,8 @@ nonisolated extension SharedStore {
   }
 
   /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
-  package static var isKeyboardPresent: Bool {
-    Date().timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
+  package static func isKeyboardPresent(now: Date) -> Bool {
+    now.timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
   }
 
   /// Which keyboard process is on screen — a fresh id per process, written
