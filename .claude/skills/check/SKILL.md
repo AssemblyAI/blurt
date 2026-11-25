@@ -92,7 +92,12 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
    cleanup pass, `LSUIElement`, a keystroke-typing injector, the production
    Keychain in tests. Each rule is pinned to its table row and its
    `project-guardrails` bullet, so editing the prose without revisiting the rule
-   fails here rather than leaving a gate that enforces a reversed decision. Both
+   fails here rather than leaving a gate that enforces a reversed decision. Then
+   SwiftLint's size budgets counted without SwiftLint
+   (`scripts/check-swift-size.sh`: `file_length` 400, `type_body_length` ~250,
+   with notes for files near either), the test-clock ratchet
+   (`scripts/check-test-clock.sh`: no test file gains a fixed sleep or a real
+   clock), and the Mac pbxproj's repo-root folder named `blurt`. All
    `--portable` too
 3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
    failures) — both source-only
