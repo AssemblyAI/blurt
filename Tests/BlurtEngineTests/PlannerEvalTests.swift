@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The Control Your Mac planner's eval: `evals/command-planner/cases.json`,

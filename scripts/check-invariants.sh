@@ -85,25 +85,19 @@ TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*
 # design keeps every audio type out of it, so an import there is a decision
 # being reversed by accident.
 KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/BlurtDesign/*.swift App/BlurtiOS/BlurtiOSCore/*.swift"
-# The client-side-LLM rule's one carve-out, on the same reasoning: read-aloud
-# shapes what the voice says through the LLM Gateway (the skip-jargon listening
-# rewrite, and the answer to a spoken question about a selection), because the
-# TTS API has no server-side rewrite or reply to ask for. The rule is about
-# *dictation* cleanup staying on the dictation request, so that client — that
-# one file — is excluded; a gateway call anywhere else still fails.
-NOT_READ_ALOUD_LLM=":!Sources/BlurtEngine/TTS/ReadAloudLLM.swift"
-# The same rule's second carve-out: the transforms over a stored *file*
-# transcript (summary, key points, …). Those transcripts come from the async
-# API, which has no rewrite to ask for, and can run for hours — past anything
-# the dictation request accepts. It is never in the dictation path: it runs
-# only on a saved history entry the user asks a task of, and pastes nothing.
-NOT_TRANSCRIPT_LLM=":!Sources/BlurtEngine/STT/TranscriptTransform.swift"
-# The Rewrite Selection key's client (Rewrite/SelectionRewriter.swift) needs no
-# carve-out: it sends through GatewayConnection.send (in ReadAloudLLM.swift), so the gateway URL this rule
-# greps for stays in ReadAloudLLM.swift. Keep it that way rather than adding a
-# third exemption. The same goes for the Compose From Instructions key's
-# composer (Rewrite/MessageComposer.swift) and the Control Your Mac key's
-# planner (Command/VoiceCommandPlanner.swift).
+# The client-side-LLM rule's one carve-out: the SDK's LLM Gateway client
+# (Sources/AssemblyAI/Gateway/GatewayChatClient.swift), the one file that holds
+# the gateway's URL. Every engine client that talks to an LLM — read-aloud's
+# (TTS/ReadAloudLLM.swift), the file-transcript transforms'
+# (STT/TranscriptTransform.swift), the Rewrite Selection key's
+# (Rewrite/SelectionRewriter.swift), the Compose From Instructions key's
+# (Rewrite/MessageComposer.swift) and the Control Your Mac key's
+# (Command/VoiceCommandPlanner.swift) — sends through the engine's provider-
+# neutral GatewayConnection, so none of them names the gateway. The rule is
+# about *dictation* cleanup staying on the dictation request; none of those is
+# in the dictation path. Keep it that way rather than adding a second
+# exemption: a gateway URL anywhere else still fails.
+NOT_LLM_GATEWAY_CLIENT=":!Sources/AssemblyAI/Gateway/GatewayChatClient.swift"
 # The socket rule's one carve-out: the main window's Record button, which
 # streams a meeting or call to AssemblyAI's realtime API so its words appear as
 # they're spoken. It never carries a dictation — dictation stays one HTTP
@@ -114,7 +108,7 @@ NOT_REALTIME_RECORDING=":!Sources/AssemblyAI/Realtime/RealtimeTranscriber.swift"
 # recording the streaming route refused past its 120 s cap to /v1/transcribe
 # whole. The copy it sends exists for that alone, so the route's path may appear
 # in that file and nowhere else.
-NOT_LIVE_CAP_FALLBACK=":!Sources/BlurtEngine/STT/AssemblyAITranscriber+LiveCapFallback.swift"
+NOT_LIVE_CAP_FALLBACK=":!Sources/AssemblyAI/Dictation/DictationClient+LiveCapFallback.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
@@ -139,7 +133,7 @@ PATTERNS=(
 SCOPES=(
   "$ENGINE $APP"
   "$ENGINE $APP $NOT_REALTIME_RECORDING"
-  "$ENGINE $APP $NOT_READ_ALOUD_LLM $NOT_TRANSCRIPT_LLM"
+  "$ENGINE $APP $NOT_LLM_GATEWAY_CLIENT"
   "$ENGINE $APP"
   "$ENGINE"
   "$ENGINE"
@@ -155,7 +149,7 @@ SCOPES=(
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
   "the dictation API returns the full text in one response; there is no streaming dictation, and the one socket is the Record button's live transcript (RealtimeTranscriber.swift; read-aloud's TTS is a streaming HTTP response)"
-  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the gateway clients are read-aloud's, ReadAloudLLM.swift, file transcripts', TranscriptTransform.swift, the rewrite key's, SelectionRewriter.swift, the compose key's, MessageComposer.swift, and the command key's, VoiceCommandPlanner.swift, all three sending through GatewayConnection in ReadAloudLLM.swift)"
+  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the LLM clients are read-aloud's, ReadAloudLLM.swift, file transcripts', TranscriptTransform.swift, the rewrite key's, SelectionRewriter.swift, the compose key's, MessageComposer.swift, and the command key's, VoiceCommandPlanner.swift, all sending through the engine's GatewayConnection; the gateway URL lives only in the SDK's GatewayChatClient.swift)"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
   "config.conversation_context was replaced by config.stt_prompt (STTPrompt)"
@@ -166,7 +160,7 @@ ADVICE=(
   "use an isolated service (see KeychainStoreTests) or InMemoryAPIKeyStore"
   "deleted types stay deleted — no deprecated re-exports"
   "the keyboard never hears anything: the app listens and transcribes, the keyboard inserts (KeyboardRelayInjector)"
-  "dictation streams to /v1/transcribe/live; the buffered route is only the over-cap fallback's (AssemblyAITranscriber+LiveCapFallback.swift)"
+  "dictation streams to /v1/transcribe/live; the buffered route is only the over-cap fallback's (DictationClient+LiveCapFallback.swift)"
 )
 
 # One known-bad line per rule, same order. `--self-test` asserts each pattern

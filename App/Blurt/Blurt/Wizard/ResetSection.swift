@@ -1,4 +1,5 @@
 import AppKit
+import BlurtAssemblyAI
 import BlurtEngine
 import OSLog
 import SwiftUI
@@ -129,9 +130,11 @@ struct ResetSection: View {
   private func reset() {
     let report = InstallReset(
       bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem,
-      keyStore: coordinator.apiKey.storage,
-      signInStore: coordinator.account.storage
-    ).run()
+      keyStore: coordinator.apiKey.storage
+    ) { [storage = coordinator.account.storage] in
+      storage.save(nil)
+    }
+    .run()
     coordinator.account.refreshStatus()
     // `hasAPIKey` is a mirror of the store, not a read-through, so it has to be
     // re-read for the wizard to see the key go — which matters on the failure

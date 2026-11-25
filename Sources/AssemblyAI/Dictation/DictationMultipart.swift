@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 /// The dictation upload's multipart envelope: boundaries, part headers, the
 /// `audio.pcm` filename, CRLF placement.
@@ -18,11 +18,11 @@ public import Foundation
 /// The order they go on the wire — config, audio header, frames, closing
 /// boundary — is `AssemblyAITranscriber.streamedBody`'s to explain, and it is
 /// the streaming route's requirement rather than a choice.
-public enum DictationMultipart {
+enum DictationMultipart {
   /// The `audio` part's framing — everything before the PCM bytes themselves,
   /// written once, straight after the `config` part, so the frames that follow
   /// are just audio.
-  public static func audioPartHeader(boundary: String) -> Data {
+  static func audioPartHeader(boundary: String) -> Data {
     framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n",
@@ -41,7 +41,7 @@ public enum DictationMultipart {
   /// headers, the JSON, and the CRLF terminating the part. Written before a
   /// single audio byte — see `streamedBody` for why, and why the service cannot
   /// start without it.
-  public static func configHead(config: Data, boundary: String) -> Data {
+  static func configHead(config: Data, boundary: String) -> Data {
     var head = framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"config\"\r\n",
@@ -62,7 +62,7 @@ public enum DictationMultipart {
   ///
   /// Sized once up front, because `audio` can be tens of megabytes at the
   /// 20-minute cap and growing the buffer by appends would copy it repeatedly.
-  public static func bufferedBody(config: Data, audio: Data, boundary: String) -> Data {
+  static func bufferedBody(config: Data, audio: Data, boundary: String) -> Data {
     let head = configHead(config: config, boundary: boundary)
     let audioHeader = audioPartHeader(boundary: boundary)
     let tail = closingBoundary(boundary: boundary)
@@ -77,7 +77,7 @@ public enum DictationMultipart {
   /// Everything after the last audio frame: the `audio` part's terminating CRLF
   /// and the closing boundary — all that stands between the last frame and the
   /// request completing, which is why it carries no work.
-  public static func closingBoundary(boundary: String) -> Data {
+  static func closingBoundary(boundary: String) -> Data {
     framed("\r\n", "--\(boundary)--\r\n")
   }
 }

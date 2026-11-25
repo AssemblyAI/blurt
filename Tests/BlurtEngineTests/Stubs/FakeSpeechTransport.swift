@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// Plays the TTS service's side of `POST /v1/speech`. Each request is passed to
@@ -57,7 +58,7 @@ final class FakeSpeechTransport: SpeechTransport, Sendable {
     recorded.withLock { $0.append(request) }
     if let failure { throw failure }
     let (status, chunks) = respond(request)
-    let url = request.url ?? AssemblyAISpeechSynthesizer.endpoint
+    let url = request.url ?? SpeechClient.endpoint
     guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else {
       throw URLError(.badServerResponse)
     }

@@ -46,9 +46,12 @@ ENGINE_FLAGS=(
   -enable-upcoming-feature InferIsolatedConformances
   -enable-upcoming-feature ImmutableWeakCaptures
   -strict-memory-safety -warnings-as-errors -require-explicit-sendable
+  # One package name for the three modules, as SwiftPM gives them, so the
+  # engine's `package` API reaches the provider package (BlurtAssemblyAI).
+  -package-name BlurtEnginePackage
 )
 
-# The AssemblyAI SDK first: the engine imports it.
+# The AssemblyAI SDK and the engine stand alone: neither imports the other.
 echo "AssemblyAI → $TARGET"
 find "$REPO_ROOT/Sources/AssemblyAI" -name '*.swift' -print0 \
   | xargs -0 xcrun swiftc "${COMMON[@]}" "${ENGINE_FLAGS[@]}" -module-name AssemblyAI \
@@ -56,8 +59,14 @@ find "$REPO_ROOT/Sources/AssemblyAI" -name '*.swift' -print0 \
 
 echo "BlurtEngine → $TARGET"
 find "$REPO_ROOT/Sources/BlurtEngine" -name '*.swift' -print0 \
-  | xargs -0 xcrun swiftc "${COMMON[@]}" "${ENGINE_FLAGS[@]}" -I "$WORK" -module-name BlurtEngine \
+  | xargs -0 xcrun swiftc "${COMMON[@]}" "${ENGINE_FLAGS[@]}" -module-name BlurtEngine \
     -emit-module -emit-module-path "$WORK/BlurtEngine.swiftmodule"
+
+# The provider package joins them: it imports both.
+echo "BlurtAssemblyAI → $TARGET"
+find "$REPO_ROOT/Sources/BlurtAssemblyAI" -name '*.swift' -print0 \
+  | xargs -0 xcrun swiftc "${COMMON[@]}" "${ENGINE_FLAGS[@]}" -I "$WORK" -module-name BlurtAssemblyAI \
+    -emit-module -emit-module-path "$WORK/BlurtAssemblyAI.swiftmodule"
 
 IOS="$REPO_ROOT/App/BlurtiOS"
 # project.yml's SWIFT_PACKAGE_NAME, so BlurtiOSCore's `package` API resolves.
