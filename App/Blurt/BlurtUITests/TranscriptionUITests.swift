@@ -131,17 +131,17 @@ final class TranscriptionUITests: BlurtUITestCase {
 
     releaseLiveTurn(in: harness)
     XCTAssertTrue(
-      windowText(containing: UITestIdentifiers.livePartialA).waitForExistence(timeout: 5),
+      text(containing: UITestIdentifiers.livePartialA).waitForExistence(timeout: 5),
       "What's being said shows as it's said"
     )
     releaseLiveTurn(in: harness)
     XCTAssertTrue(
-      windowText(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5), "The final settles it"
+      liveTurn(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5), "The final settles it"
     )
     releaseLiveTurn(in: harness)
     releaseLiveTurn(in: harness)
-    XCTAssertTrue(windowText(containing: UITestIdentifiers.liveFinalB).waitForExistence(timeout: 5))
-    XCTAssertTrue(windowText(containing: "Speaker B").exists, "Two speakers: each turn under its speaker")
+    XCTAssertTrue(liveTurn(containing: UITestIdentifiers.liveFinalB).waitForExistence(timeout: 5))
+    XCTAssertTrue(liveTurn(containing: "Speaker B").exists, "Two speakers: each turn under its speaker")
 
     main.buttons[UITestIdentifiers.liveRecordingStop].click()
     XCTAssertTrue(viewPicker.waitForExistence(timeout: 15), "Stop saves the recording and opens it")
@@ -175,7 +175,7 @@ final class TranscriptionUITests: BlurtUITestCase {
     startLiveRecording(in: main)
     releaseLiveTurn(in: harness)
     releaseLiveTurn(in: harness)
-    XCTAssertTrue(windowText(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5))
+    XCTAssertTrue(liveTurn(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5))
 
     let discard = main.buttons[UITestIdentifiers.liveRecordingDiscard]
     discard.click()
@@ -192,7 +192,7 @@ final class TranscriptionUITests: BlurtUITestCase {
     XCTAssertTrue(
       main.buttons[UITestIdentifiers.liveRecordingStop].waitForNonExistence(timeout: 10), "Discard ends the recording"
     )
-    XCTAssertFalse(windowText(containing: UITestIdentifiers.liveFinalA).exists, "Nothing of it is kept")
+    XCTAssertFalse(liveTurn(containing: UITestIdentifiers.liveFinalA).exists, "Nothing of it is kept")
   }
 
   /// A live session that drops mid-recording ends the recording and still
@@ -202,7 +202,7 @@ final class TranscriptionUITests: BlurtUITestCase {
     startLiveRecording(in: main)
     releaseLiveTurn(in: harness)
     releaseLiveTurn(in: harness)
-    XCTAssertTrue(windowText(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5))
+    XCTAssertTrue(liveTurn(containing: UITestIdentifiers.liveFinalA).waitForExistence(timeout: 5))
 
     harness.buttons[UITestIdentifiers.harnessLiveFail].click()
     XCTAssertTrue(viewPicker.waitForExistence(timeout: 15), "The recording is saved and opened")
@@ -234,6 +234,15 @@ final class TranscriptionUITests: BlurtUITestCase {
   /// hierarchy for XCUITest to time out.
   private func text(containing text: String) -> XCUIElement {
     app.windows[UITestIdentifiers.mainWindowTitle].staticTexts
+      .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
+  }
+
+  /// A turn on the live page whose words or speaker contain `text`: a
+  /// `TurnBlock` is one combined element, a group. A typed query on the main
+  /// window: `windowText`'s app-wide `.any` match timed out
+  /// ("Timed out while evaluating UI query") under the live page's ticking clock.
+  private func liveTurn(containing text: String) -> XCUIElement {
+    app.windows[UITestIdentifiers.mainWindowTitle].groups
       .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
   }
 

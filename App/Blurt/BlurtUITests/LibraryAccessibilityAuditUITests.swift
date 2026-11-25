@@ -46,7 +46,8 @@ final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
 
     for _ in 0..<4 { releaseLiveTurn(in: harness) }
     let lastTurn = NSPredicate(format: "label CONTAINS %@", UITestIdentifiers.liveFinalB)
-    XCTAssertTrue(main.descendants(matching: .any).matching(lastTurn).firstMatch.waitForExistence(timeout: 5))
+    // A turn is a group (TurnBlock); a typed query, as `.any` can time out under the ticking clock.
+    XCTAssertTrue(main.groups.matching(lastTurn).firstMatch.waitForExistence(timeout: 5))
     try audit("live recording, two speakers", into: &found)
 
     main.buttons[UITestIdentifiers.liveRecordingPause].click()
