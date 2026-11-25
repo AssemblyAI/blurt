@@ -505,6 +505,15 @@ check_test_clock() {
 }
 run_check "wall-clock waits in tests say why" check_test_clock
 
+# The opt-in SwiftLint and swift-format rules a text match can see — modifier_order,
+# no_empty_block, NoBlockComments, catch-where spacing — each of which cost a PR a
+# CI run after #392 enabled every rule (#414, #422, #425). Pure text, so --portable.
+check_swift_lint_lite() {
+  bash scripts/check-swift-lint-lite.sh --self-test >/dev/null || return 1
+  bash scripts/check-swift-lint-lite.sh
+}
+run_check "swift lint-lite (rules swiftlint/swift-format fail CI on)" check_swift_lint_lite
+
 # The design's one source (App/BlurtiOS/Design/tokens.json) and everything
 # generated from it — BlurtDesign/DesignTokens.swift (the Mac app compiles it too),
 # DESIGN.md's token tables, both apps' colour sets — must agree, and the keyboard's views must carry no

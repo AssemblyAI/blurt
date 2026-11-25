@@ -483,12 +483,30 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
   It skips the entire Swift side, and its closing line says so. **Run it before every push, Swift
   changes included**: jscpd, the invariants and the shell, workflow and Markdown linters all catch
-  real CI failures from here. So do two Swift checks that need no toolchain:
+  real CI failures from here. So do three Swift checks that need no toolchain:
   `scripts/check-swift-size.sh` counts SwiftLint's `file_length` (400) and `type_body_length`
   (~250) budgets and notes files within 20 lines of either, where a parallel PR can tip the merge
-  over; and `scripts/check-test-clock.sh` fails a fixed sleep or real clock in a test that doesn't
+  over; `scripts/check-test-clock.sh` fails a fixed sleep or real clock in a test that doesn't
   say why (step a `TestClock` or wait for the event; `// wall-clock-ok: <reason>` where real time
-  is the point).
+  is the point); and `scripts/check-swift-lint-lite.sh` matches the opt-in SwiftLint and swift-format
+  rules text can see (`modifier_order`'s `nonisolated public`, `no_empty_block`, `NoBlockComments`,
+  swift-format's `catch  where` spacing). **After merging `main` into a branch, run it again**: two PRs that
+  each fit a size budget merge into one that doesn't (#363, #378), and a merge fires no edit hook.
+- **Rules only CI catches**, each of which cost a recent PR a run — write Swift to them up front:
+  - `variable_shadowing` / `shadowing`: don't rebind a parameter or outer name with `let`
+    (`let entries = … entries` → `let written`), and don't redeclare a name a helper already binds
+    (#410, #416).
+  - `one_declaration_per_file`: a test file's helper types nest inside its suite, not beside it
+    (#423).
+  - `type_contents_order`: type (`static`) methods sit together, ahead of instance methods (#426).
+  - `multiline_function_chains`: bind an intermediate (`let window = …`) rather than wrapping a
+    chain across lines (#410).
+  - `MemberImportVisibility` (the engine's strict compiler settings): import every module whose
+    members a file uses — `Foundation` beside `Testing`, `Dispatch`, `CoreFoundation` (#392, #423).
+  - swift-format: once a call wraps, every argument goes on its own line, table rows included
+    (#409); empty closures carry a `//` line comment on its own line, never `/* */` (#414).
+  - jscpd: a second test that repeats another's setup gets a shared helper on the first push
+    (#384, #420, #422) — `--portable` runs it, so the push is where it is caught, not CI.
 - **Splitting a file**: give each new file only the imports it uses — `swiftlint analyze`'s
   `unused_import` (CI only) flagged 86 copied headers in #392 — and import a type from the module
   that declares it (`CGFloat` from CoreFoundation, `DispatchQueue` from Dispatch).

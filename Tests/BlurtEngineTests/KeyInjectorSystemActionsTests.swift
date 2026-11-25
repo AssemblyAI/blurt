@@ -141,15 +141,15 @@
     // MARK: - Frontmost wait
 
     @Test("waitUntilFrontmost reports failure for an app that never comes frontmost")
-    func waitUntilFrontmostGivesUp() async {
+    func waitUntilFrontmostGivesUp() async throws {
       // The test host is a command-line process with no windows, so the window
       // server never reports it frontmost — the deterministic "activation didn't
       // land" case. `KeyInjector.activateTargetApp` turns this `false` into
       // `.targetAppLost` rather than pasting into the wrong app.
-      #expect(await KeyInjector.waitUntilFrontmost(.current) == false)
+      #expect(try await KeyInjector.waitUntilFrontmost(.current) == false)
     }
 
-    private func runPoll(trueFrom: Int?, sleeps: Int) async -> PollRun {
+    private func runPoll(trueFrom: Int?, sleeps: Int) async throws -> PollRun {
       let clock = TestClock()
       let checks = Mutex(0)
       async let result = KeyInjector.poll(
@@ -166,32 +166,75 @@
         await clock.waitUntilSleeping(for: KeyInjector.frontmostPollInterval)
         clock.advance(by: KeyInjector.frontmostPollInterval)
       }
-      return PollRun(result: await result, checks: checks.withLock { $0 }, elapsed: clock.now.offset)
+      return PollRun(result: try await result, checks: checks.withLock { $0 }, elapsed: clock.now.offset)
     }
 
     @Test("the frontmost wait gives up once its budget is spent instead of hanging")
-    func pollIsBounded() async {
+    func pollIsBounded() async throws {
       // Sits on the press→paste path, so an unbounded wait would freeze the
       // paste, not just slow it. One check per interval across the budget, plus
       // the last read past the deadline.
-      let run = await runPoll(trueFrom: nil, sleeps: Self.checksPerBudget)
+      let run = try await runPoll(trueFrom: nil, sleeps: Self.checksPerBudget)
       #expect(run.result == false)
       #expect(run.checks == Self.checksPerBudget + 1)
       #expect(run.elapsed == KeyInjector.frontmostWaitBudget)
     }
 
     @Test("the frontmost wait returns as soon as the target is frontmost")
-    func pollStopsEarly() async {
-      let run = await runPoll(trueFrom: 3, sleeps: 2)
+    func pollStopsEarly() async throws {
+      let run = try await runPoll(trueFrom: 3, sleeps: 2)
       #expect(run.result)
       #expect(run.checks == 3)
     }
 
     @Test("the last read past the deadline still catches an activation that just landed")
-    func pollTakesTheLastRead() async {
-      let run = await runPoll(trueFrom: Self.checksPerBudget + 1, sleeps: Self.checksPerBudget)
+    func pollTakesTheLastRead() async throws {
+      let run = try await runPoll(trueFrom: Self.checksPerBudget + 1, sleeps: Self.checksPerBudget)
       #expect(run.result)
       #expect(run.checks == Self.checksPerBudget + 1)
+    }
+
+    @Test("a cancel during the frontmost wait throws at once, rather than reading as never frontmost")
+    func pollThrowsWhenCancelled() async {
+      let clock = TestClock()
+      let checks = ValueBox(0)
+      let wait = Task {
+        try await KeyInjector.poll(
+          for: KeyInjector.frontmostWaitBudget,
+          every: KeyInjector.frontmostPollInterval,
+          clock: clock
+        ) {
+          checks.value += 1
+          return false
+        }
+      }
+      await clock.waitUntilSleeping(for: KeyInjector.frontmostPollInterval)
+      wait.cancel()
+      await #expect(throws: CancellationError.self) {
+        try await wait.value
+      }
+      // Stopped at the cancel, not spinning on `check` for the rest of the budget.
+      #expect(checks.value == 1)
+    }
+
+    @Test("a cancel that misses every sleep still throws: false only ever means the budget ran out")
+    func pollThrowsWhenCancelledAtTheLastRead() async {
+      // A zero budget skips the loop, so only the last read runs: the case of a
+      // cancel landing during it, after the final sleep.
+      let gate = AsyncGate()
+      let wait = Task {
+        await gate.wait()
+        return try await KeyInjector.poll(
+          for: .zero,
+          every: KeyInjector.frontmostPollInterval,
+          clock: TestClock()
+        ) { false }
+      }
+      wait.cancel()
+      gate.open()
+      await #expect(throws: CancellationError.self) {
+        try await wait.value
+      }
     }
   }
 #endif

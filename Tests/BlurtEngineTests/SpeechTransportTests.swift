@@ -40,6 +40,18 @@ struct SpeechTransportTests {
     #expect(audio.value == Data([1, 0]))
   }
 
+  @Test("a request the system dropped, which nobody stopped, fails rather than reading as a stop")
+  func systemDroppedIsFailure() async {
+    // `URLError.cancelled` on a read that's still being listened to: the
+    // system cut the request (a network switch, sleep). A stop would have
+    // cancelled the reading task; this one wasn't.
+    let dropped = FakeSpeechTransport(end: .fail(URLError(.cancelled))) { _ in (200, [Data([1, 0])]) }
+    await #expect(throws: URLError(.cancelled)) { try await collect(synthesizer(dropped), ValueBox(Data())) }
+    await #expect(throws: URLError(.cancelled)) {
+      try await collect(synthesizer(FakeSpeechTransport(failing: URLError(.cancelled))), ValueBox(Data()))
+    }
+  }
+
   @Test("an error body is read only so far: a huge or stalled one still fails promptly")
   func errorBodyCap() async {
     let page = Data(repeating: 0x3C, count: 1_024)
