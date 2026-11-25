@@ -259,6 +259,16 @@ final class AccessibilityAuditTests: XCTestCase {
       let step = y > band.upperBound ? -height / 4 : height / 4
       middle.press(forDuration: 0.05, thenDragTo: middle.withOffset(CGVector(dx: 0, dy: step)))
     }
+    // At rest before anyone taps it: a tap while the list still coasts from
+    // the last drag only stops the scroll and never reaches the control, which
+    // on a slow runner left `testConsent`'s switch off and no consent sheet.
+    var frame = element.frame
+    for _ in 0..<20 {
+      Thread.sleep(forTimeInterval: 0.2)
+      let now = element.frame
+      if now == frame { break }
+      frame = now
+    }
     XCTAssertTrue(element.exists && element.isHittable, "\(element) never came on screen")
   }
 
