@@ -48,15 +48,14 @@ let strictSettings: [SwiftSetting] = [
   // SE-0480: the build fails on any warning, not only under check.sh's flag.
   .treatAllWarnings(as: .error),
   // A public type says whether it is Sendable rather than leaving it implied.
-  // The type-checking thresholds fail a function body or expression that takes
-  // the type checker over 500 ms: the slowest today is under 200 ms on an M-series
-  // Mac, so the headroom covers a slower CI runner, and an expression that needs
-  // more is one to split.
-  .unsafeFlags([
-    "-require-explicit-sendable",
-    "-Xfrontend", "-warn-long-function-bodies=500",
-    "-Xfrontend", "-warn-long-expression-type-checking=500",
-  ]),
+  //
+  // No type-checking time thresholds (`-warn-long-function-bodies`,
+  // `-warn-long-expression-type-checking`): they measure how long the compiler
+  // took, which a loaded CI runner varies run to run, and with every warning an
+  // error they failed a merge-queue build on a test that type-checked under the
+  // limit in the run beside it (729 ms against 500). Every setting here has to
+  // give the same answer on every machine.
+  .unsafeFlags(["-require-explicit-sendable"]),
 ]
 
 let package = Package(
