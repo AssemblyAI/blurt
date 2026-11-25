@@ -18,7 +18,7 @@ A `check.yml` run takes ~37 minutes, so the time to merge is mostly the number o
    `.swiftlint.yml` before writing Swift), periphery (a property assigned but never read is the
    usual catch), `scripts/design-sync.sh --check` (after touching `App/BlurtiOS/Design/tokens.json`
    or a keyboard view), swift-format, the build and every test.
-3. **Watch the `lint` job first.** It runs `check.sh --lint-only` and turns red in minutes; `check`
+3. **Watch the `lint` job first.** It runs `check.sh --lint-only` and turns red in minutes; `macos`
    runs the same checks but reports them only at the end of its build and tests.
 4. **Push once per batch.** Each push cancels the run in progress and restarts the clock. When a run
    goes red, fix everything it names — apply the `swift-format-patch` artifact rather than guessing
