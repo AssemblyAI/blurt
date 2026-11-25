@@ -50,6 +50,7 @@ struct LiveRecordingView: View {
     .textAreaSurface()
     HStack {
       Button("Discard…", role: .destructive) { isConfirmingDiscard = true }
+        .accessibilityIdentifier(UITestIdentifiers.liveRecordingDiscard)
       Spacer()
       Button {
         model.togglePause()
@@ -57,12 +58,14 @@ struct LiveRecordingView: View {
         Label(model.isPaused ? "Resume" : "Pause", systemImage: model.isPaused ? "record.circle" : "pause.fill")
       }
       .help(model.isPaused ? "Carry on recording" : "Pause: nothing is recorded until you resume")
+      .accessibilityIdentifier(UITestIdentifiers.liveRecordingPause)
       Button {
         model.stopRecording()
       } label: {
         Label("Stop", systemImage: "stop.fill")
       }
       .keyboardShortcut(.defaultAction)
+      .accessibilityIdentifier(UITestIdentifiers.liveRecordingStop)
     }
     .confirmationDialog("Discard this recording?", isPresented: $isConfirmingDiscard) {
       Button("Discard", role: .destructive) { model.discardRecording() }

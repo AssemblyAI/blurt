@@ -63,6 +63,16 @@
         Button("Cancel") { Task { await coordinator?.session.cancel() } }
           .accessibilityIdentifier(UITestIdentifiers.cancelButton)
       }
+
+      // The Record button's scripted live session
+      // (`TranscriptsModel.UITestLiveSession`): its next turn, or a dropped
+      // connection.
+      HStack(spacing: 8) {
+        Button("Next Turn") { Task { await TranscriptsModel.UITestLiveSession.latest()?.next() } }
+          .accessibilityIdentifier(UITestIdentifiers.harnessLiveNextTurn)
+        Button("Fail Live") { Task { await TranscriptsModel.UITestLiveSession.latest()?.fail() } }
+          .accessibilityIdentifier(UITestIdentifiers.harnessLiveFail)
+      }
     }
 
     /// Drives the picked trigger key through the *real* key tap
