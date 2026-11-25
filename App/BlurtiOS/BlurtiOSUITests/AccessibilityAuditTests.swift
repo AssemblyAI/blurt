@@ -58,6 +58,9 @@ import XCTest
 /// taller at AX XXXL. On CI the audit intermittently said it of Settings'
 /// last rows, on both passes, while they scaled. A font that doesn't scale
 /// stays the same height, so it still fails.
+///
+/// A pass XCTest times out on, which reports nothing at all, is run again
+/// (`auditPass`).
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
   private static let auditedTypes = XCUIAccessibilityAuditType.all.subtracting(.contrast)
@@ -345,19 +348,12 @@ final class AccessibilityAuditTests: XCTestCase {
       + [app.otherElements["brand.tabBar"]].filter(\.exists)
       .map(\.frame)
     let screenArea = app.windows.firstMatch.frame
-    // Each finding, and the element of a default-size "Dynamic Type
-    // unsupported" one, which `scaling` checks at the largest size.
+    // One audit of the screen as it stands (`auditPass`), so the second pass
+    // below reads it exactly as the first did.
     let pass = { [app] () throws -> [(line: String, unscaled: XCUIElement?)] in
-      var raised: [(line: String, unscaled: XCUIElement?)] = []
-      try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
-        if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
-          return true
-        }
-        let unscaled = isDefaultSize && issue.auditType == .dynamicType ? issue.element : nil
-        raised.append((Self.describe(issue), unscaled))
-        return true
-      }
-      return raised
+      try Self.auditPass(
+        of: app, for: Self.auditedTypes, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea
+      )
     }
     var issues = try pass()
     // A finding has to hold on a second audit of the same, untouched screen:
