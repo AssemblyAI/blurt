@@ -53,12 +53,7 @@ struct TextShortcutsCard: View {
           }
         }
         .brandInput()
-      if TextShortcut.isTaken(trigger, by: takenKeys) {
-        Text("Another shortcut already uses this phrase.")
-          .bodyFont(DesignTokens.Typography.sizeCaption)
-          .foregroundStyle(BlurtBrand.errorOrange)
-          .fixedSize(horizontal: false, vertical: true)
-      }
+      takenNote
       TextField("Type this (me@example.com)", text: $expansion, axis: .vertical)
         .lineLimit(1...4)  // literal-ok: the field's rows
         .textInputAutocapitalization(.never)
@@ -73,6 +68,16 @@ struct TextShortcutsCard: View {
       Button("Add shortcut", action: add)
         .buttonStyle(BrandButtonStyle())
         .disabled(!canAdd)
+    }
+  }
+
+  /// The note under the phrase field while another shortcut already holds it.
+  @ViewBuilder private var takenNote: some View {
+    if TextShortcut.isTaken(trigger, by: takenKeys) {
+      Text("Another shortcut already uses this phrase.")
+        .bodyFont(DesignTokens.Typography.sizeCaption)
+        .foregroundStyle(BlurtBrand.errorOrange)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 
