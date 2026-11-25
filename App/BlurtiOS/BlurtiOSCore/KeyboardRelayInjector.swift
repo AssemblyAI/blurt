@@ -54,7 +54,17 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     let deadline = posted.addingTimeInterval(Self.deliveryTimeout)
     var resignalled = false
     while Date() < deadline {
-      try await Task.sleep(for: Self.deliveryPoll)
+      do {
+        try await Task.sleep(for: Self.deliveryPoll)
+      } catch {
+        // A dictation cancelled mid-wait takes its words back: left in the
+        // App Group, the keyboard would still insert them into the host app.
+        // Only this result, though — a newer one isn't this wait's to drop.
+        if SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.id == result.id {
+          SharedStore.remove(forKey: BlurtShared.Key.result)
+        }
+        throw error
+      }
       guard let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
         pending.id == result.id
       else {

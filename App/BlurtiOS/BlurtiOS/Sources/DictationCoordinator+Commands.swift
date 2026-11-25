@@ -165,12 +165,20 @@ extension DictationCoordinator {
   /// The session accepted a press: the last one asked for becomes the
   /// dictation's, and is no longer pending. Nil, as the frontmost app: there is
   /// none to paste into on the iPhone; the words go back to the keyboard.
+  ///
+  /// The stop's recipient is kept, not replaced: a quick release can be
+  /// accepted (`handleCommand`) before the session gets here, and it already
+  /// names where this dictation's words go. Nothing stale can be in it — it is
+  /// cleared when the last dictation ended, before any new press is accepted.
   nonisolated static func claimPress() -> CapturedFocus? {
     let press = pendingPress.withLock { pending in
       defer { pending = Press() }
       return pending
     }
-    claimedPress.withLock { $0 = press }
+    claimedPress.withLock {
+      $0.address = press.address
+      $0.context = press.context
+    }
     return nil
   }
 

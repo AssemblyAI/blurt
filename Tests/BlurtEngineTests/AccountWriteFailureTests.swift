@@ -22,6 +22,18 @@ final class RefusingKeyStore: APIKeyGateway {
   }
 }
 
+/// An in-memory key store that reads as empty while "locked", standing in for
+/// a Keychain item that can't be read until the login Keychain unlocks.
+final class LockableKeyStore: APIKeyGateway {
+  private let inner = InMemoryAPIKeyStore()
+  let locked = Mutex(false)
+
+  var current: String? { locked.withLock { $0 } ? nil : inner.current }
+
+  @discardableResult
+  func save(_ key: String?) -> Bool { inner.save(key) }
+}
+
 // What the account does when the Keychain refuses a write, and when a sign-out
 // overlaps a renewal or a new sign-in.
 extension AssemblyAIAccountTests {
@@ -94,19 +106,48 @@ extension AssemblyAIAccountTests {
         renewedAt: clock.now))
     locked.withLock { $0 = true }
 
-    keyStore.save("connection-key")
+    // The key's item is in the same locked Keychain.
+    let keys = LockableKeyStore()
+    keys.save("connection-key")
+    keys.locked.withLock { $0 = true }
+    let apiKey = APIKeyModel(keyStore: keys) { _ in .valid }
     let account = AssemblyAIAccount(
-      configuration: testOAuthConfiguration, apiKey: APIKeyModel(keyStore: keyStore) { _ in .valid },
+      configuration: testOAuthConfiguration, apiKey: apiKey,
       store: store, transport: server.transport, now: { [clock] in clock.now })
     #expect(account.status == .signedOut)
+    #expect(!apiKey.hasAPIKey)
     #expect(account.nextRenewalCheck() == AssemblyAIAccount.unreadableSessionRecheck)
 
     locked.withLock { $0 = false }
+    keys.locked.withLock { $0 = false }
     let loop = Task { await account.runRenewal(clock: TestClock()) }
     for _ in 0..<50 where account.status == .signedOut { await Task.yield() }
     #expect(account.status == .signedIn(email: "member@example.com"))
+    // The readiness gate catches up with the status, or the wizard would show
+    // "Signed in as …" and still hold the user in onboarding.
+    #expect(apiKey.hasAPIKey)
     loop.cancel()
     await loop.value
+  }
+
+  @Test("a sign-in over a session item that can't be read refuses, and never deletes that item")
+  func signInOverUnreadableSession() async throws {
+    let writes = Mutex<[String?]>([])
+    let store = SignInStore(
+      read: { .unavailable(errSecInteractionNotAllowed) },
+      write: { json in
+        writes.withLock { $0.append(json) }
+        return true
+      })
+    let keys = RefusingKeyStore()
+    keys.refuse(true)
+    let account = AssemblyAIAccount(
+      configuration: testOAuthConfiguration, apiKey: APIKeyModel(keyStore: keys) { _ in .valid },
+      store: store, transport: server.transport, now: { [clock] in clock.now })
+    #expect(try await signIn(account) == .failed(.keychain))
+    // Neither overwritten nor rolled back to "nothing" (a delete).
+    #expect(writes.withLock { $0 }.isEmpty)
+    #expect(server.state.withLock { $0.revokes } == 1)
   }
 
   /// A signed-in account whose sign-out is parked at the token endpoint until

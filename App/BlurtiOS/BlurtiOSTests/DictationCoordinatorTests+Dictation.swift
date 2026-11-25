@@ -197,4 +197,21 @@ extension DictationCoordinatorTests {
     send(command(.cancel), to: coordinator)
     #expect(await until { coordinator.phase == .cancelled })
   }
+
+  @Test("a release accepted before the session claims the press keeps its recipient")
+  func releaseBeforeClaim() {
+    defer {
+      DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press() }
+      DictationCoordinator.claimedPress.withLock { $0 = DictationCoordinator.Press() }
+    }
+    DictationCoordinator.pendingPress.withLock {
+      $0 = DictationCoordinator.Press(address: ResultAddress(keyboard: Self.keyboard))
+    }
+    // The release lands first (`handleCommand`), then the session claims.
+    DictationCoordinator.claimedPress.withLock { $0.stopAddress = ResultAddress(keyboard: "kb-2") }
+    #expect(DictationCoordinator.claimPress() == nil)
+    let claimed = DictationCoordinator.claimedPress.withLock { $0 }
+    #expect(claimed.address.keyboard == Self.keyboard)
+    #expect(claimed.stopAddress?.keyboard == "kb-2")
+  }
 }
