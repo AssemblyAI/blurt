@@ -137,11 +137,13 @@ jobs:
         # environment (evals/uv.lock) leaves out, so check.sh's pytest skips it
         # on every machine. Here it runs with DSPy in the range the harness's
         # own script declares (optimize_cleanup_prompt.py's inline metadata),
-        # and the step fails unless it passed rather than skipped.
+        # and the step fails unless it passed rather than skipped. Python 3.14,
+        # not the runner's newest: GEPA, which DSPy brings and the harness
+        # imports, supports nothing past 3.14.
         working-directory: blurt/evals
         run: |
           set -o pipefail
-          uv run --locked --with 'dspy>=3.0,<3.5' pytest dictation-prompt/test_eval.py \
+          uv run --python 3.14 --locked --with 'dspy>=3.0,<3.5' --with gepa pytest dictation-prompt/test_eval.py \
             -k test_a_failing_example_still_advances_the_meter 2>&1 | tee "$RUNNER_TEMP/dspy-test.log"
           grep -q '1 passed' "$RUNNER_TEMP/dspy-test.log"
 
