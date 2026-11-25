@@ -14,10 +14,6 @@ on:
         description: "Space-separated target files (empty = mutate.sh's default set)"
         required: false
         default: ""
-  # TEMPORARY: lets the branch that adds this workflow run it before it is on
-  # main (workflow_dispatch only sees workflows on the default branch).
-  push:
-    branches: [claude/optimistic-turing-4hkfog]
 
 concurrency:
   group: mutate-${{ github.ref }}
