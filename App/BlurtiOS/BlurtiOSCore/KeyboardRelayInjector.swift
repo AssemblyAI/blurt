@@ -24,15 +24,6 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   package static let resignalAfter: TimeInterval = 1
   private static let log = HostIdentity.current.logger("Relay")
 
-  /// The keyboard process on screen: the presence record's, or — for a
-  /// keyboard build that writes none yet — the older heartbeat keys'.
-  private static var onScreen: String? {
-    if let record = SharedStore.keyboardOnScreen() {
-      return record.processID
-    }
-    return SharedStore.isKeyboardPresent ? SharedStore.keyboardInstance : nil
-  }
-
   /// How long a password field's words stay on the clipboard when no keyboard
   /// took them: the Mac's `SystemClipboard.concealedLifetime`, as an iOS expiry.
   package static let secureClipboardLifetime: TimeInterval = 90
@@ -46,12 +37,29 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// and the re-signal are stepped through rather than waited out.
   package let clock: any Clock<Duration> & Sendable
 
+  /// The time a keyboard's presence is judged against: the wall clock, or a
+  /// test's fixed instant, so a slow run can't age the keyboard out from under
+  /// the words before they are delivered.
+  package let now: @Sendable () -> Date
+
+  /// The keyboard process on screen: the presence record's, or — for a
+  /// keyboard build that writes none yet — the older heartbeat keys'.
+  private var onScreen: String? {
+    let instant = now()
+    if let record = SharedStore.keyboardOnScreen(now: instant) {
+      return record.processID
+    }
+    return SharedStore.isKeyboardPresent(now: instant) ? SharedStore.keyboardInstance : nil
+  }
+
   package init(
     presser: @escaping @Sendable () -> ResultAddress = { ResultAddress() },
-    clock: any Clock<Duration> & Sendable = ContinuousClock()
+    clock: any Clock<Duration> & Sendable = ContinuousClock(),
+    now: @escaping @Sendable () -> Date = { Date() }
   ) {
     self.presser = presser
     self.clock = clock
+    self.now = now
   }
 
   package func setTarget(_: CapturedFocus?) {
@@ -67,7 +75,7 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.
-    let current = Self.onScreen
+    let current = onScreen
     let address = presser()
     let recipient = address.keyboard ?? current
     guard let current, recipient == current else {

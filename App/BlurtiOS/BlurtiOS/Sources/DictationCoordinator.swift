@@ -142,9 +142,13 @@ final class DictationCoordinator {
   @ObservationIgnored private(set) var recordingSince: Date?
   @ObservationIgnored private var lastSpokenSeconds: Double = 0
 
-  /// `transcriber` and `clock` are seams for the tests, which drive a press
-  /// through the real session against a stub transcript and a clock they
-  /// advance; the app keeps both defaults.
+  /// `transcriber`, `clock` and `now` are seams for the tests, which drive a
+  /// press through the real session against a stub transcript, a clock they
+  /// advance and an instant they hold; the app keeps the defaults.
+  /// The time the keyboard's presence is judged against — by a press's
+  /// decision, the owner's watchdog and the words' delivery — so a test's
+  /// "seen 11 s ago" stays 11 s however slowly the run goes.
+  @ObservationIgnored let now: @Sendable () -> Date
   /// Whether the app is in front, as `handle(url)` reads it; a test's stand-in.
   @ObservationIgnored let appState: @MainActor () -> UIApplication.State
   /// Brings the host app back (`HostReturn.open`); a test's capture.
@@ -165,12 +169,14 @@ final class DictationCoordinator {
     window: ListeningWindow = ListeningWindow(),
     transcriber: any TranscriberProtocol = AssemblyAITranscriber(),
     clock: any Clock<Duration> = ContinuousClock(),
+    now: @escaping @Sendable () -> Date = { Date() },
     appState: @escaping @MainActor () -> UIApplication.State = { UIApplication.shared.applicationState },
     hostReturner: @escaping @MainActor (String) -> Bool = HostReturn.open(bundleID:)
   ) {
     self.window = window
     self.apiKey = apiKey
     self.clock = clock
+    self.now = now
     self.appState = appState
     self.hostReturner = hostReturner
     let (recentStream, continuation) = AsyncStream.makeStream(
@@ -181,8 +187,14 @@ final class DictationCoordinator {
       mic: window.source,
       transcriber: transcriber,
       // The words go to the keyboard that sent the accepted stop, else to
-      // the one whose press started the dictation.
-      injector: KeyboardRelayInjector { Self.claimedPress.withLock { $0.stopAddress ?? $0.address } },
+      // the one whose press started the dictation. Delivery waits on the
+      // coordinator's clock and judges presence by its `now`, as the
+      // watchdog does.
+      injector: KeyboardRelayInjector(
+        presser: { Self.claimedPress.withLock { $0.stopAddress ?? $0.address } },
+        clock: clock,
+        now: now
+      ),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { text, ring in

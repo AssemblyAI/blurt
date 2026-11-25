@@ -34,8 +34,8 @@ jobs:
   # Why a skipped job rather than `paths-ignore`: `check` is a required status
   # check on main. `paths-ignore` filters the whole workflow, so the required
   # context is never reported and the PR stays stuck "Expected". A job skipped
-  # via `if:` still reports — branch protection treats a skipped required check
-  # as passing — so docs-only PRs stay mergeable.
+  # via `if:` still reports, and the required `check` (the summary job at the
+  # bottom) accepts a skip the filter intended — so docs-only PRs stay mergeable.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -70,9 +70,9 @@ jobs:
           # `|| true` is the safety property, not tidiness: this step runs under
           # `bash -e`, so a failing git diff (an unreachable base sha after a
           # force-push, a fork edge case) fails the step, fails this job, and makes
-          # the `check` job SKIP — which GitHub reports to branch protection as a
-          # passing required check. The entire macOS gate would be bypassed on a
-          # green-looking PR. An empty `changed` falls through to code=true below,
+          # every gate below SKIP — which GitHub reports as passing. The required
+          # `check` catches that (it fails when `changes` did not succeed), but an
+          # empty `changed` failing open is the first line of defence. An empty `changed` falls through to code=true below,
           # so failing open runs the full check instead.
           changed="$(git diff --name-only "$range" || true)"
           echo "Changed files in $range:"; echo "$changed"
@@ -94,11 +94,11 @@ jobs:
 
   # The read-only checks alone (`check.sh --lint-only`: swift-format, swiftlint,
   # jscpd, design-sync, the invariants, the shell/workflow/Markdown linters, ruff,
-  # pytest, …), so their findings turn the PR red in minutes. `check` runs the
-  # same checks first but, by design, carries on through the build, the tests,
-  # the UI suite and periphery before its exit trap reports — in the month this
-  # job was added for, every red `check` run was one of these checks, surfacing
-  # 30–39 minutes in. `check` keeps running them too, so it stays a complete
+  # pytest, …), so their findings turn the PR red in minutes. `macos` runs the
+  # same checks first but, by design, carries on through the build, the tests
+  # and periphery before its exit trap reports — in the month this
+  # job was added for, every red `check` run (then all of check.sh) was one of these checks, surfacing
+  # 30–39 minutes in. `macos` keeps running them too, so it stays a complete
   # answer on its own; this job only moves the bad news earlier. It is also the
   # only job an evals-only change runs (see `changes`).
   lint:
@@ -132,14 +132,17 @@ jobs:
           CI: "true"
         run: scripts/check.sh --lint-only
 
-  check:
+  # The full check.sh on macOS — engine tests, coverage, sanitizers, the app
+  # build, swiftlint analyze and periphery — minus the whole-app integration
+  # steps, which `ui-tests` runs in parallel. (This job was `check` until the
+  # required status moved to the summary job at the bottom; see there.)
+  macos:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # The UI suite alone is ~17 minutes (47 tests, driving every trigger key and
-    # read-aloud end to end) on top of the engine suite, the leak run and the
-    # lint passes; 30 cut a passing run off in its last lint step.
-    timeout-minutes: 45
+    # ~17 minutes without the UI suite (Nov 2026); 30 leaves headroom for a
+    # slow runner.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout blurt
@@ -173,18 +176,50 @@ jobs:
 
       - name: Run check.sh
         working-directory: blurt
-        # CI=true is what makes check.sh run the whole-app integration steps (the
-        # XCUITest suite and the leak scan). They take over the keyboard and
-        # screen of whatever machine they run on, so a local check.sh skips them
-        # and this job is the only place they run — don't unset it. Actions
-        # exports CI=true for every step anyway; it's set here so the dependency
-        # is visible at the call site rather than only in check.sh.
+        # BLURT_INTEGRATION_TESTS=0 skips the XCUITest suite and the leak scan,
+        # which CI would otherwise run here: `ui-tests` runs them on a runner of
+        # its own, in parallel, and the required `check` job fails unless it
+        # passed. Drop the variable only together with that job.
         env:
           CI: "true"
+          BLURT_INTEGRATION_TESTS: "0"
+        run: scripts/check.sh
+
+  # The whole-app integration steps check.sh runs under CI: the XCUITest suite
+  # (scripts/uitest.sh — ~17 minutes, 47 tests driving every trigger key and
+  # read-aloud end to end) and the leak scan (scripts/leaks.sh). Half of what
+  # used to be one ~35-minute job, so a job of its own: it needs nothing the
+  # `macos` job produces — both scripts build the app themselves, from the
+  # committed project (`macos` runs the xcodegen drift check).
+  ui-tests:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install xcbeautify
+        # Just the one formula: both scripts need only Xcode, and fall back to raw
+        # output without it.
+        run: brew install xcbeautify
+
+      - name: Run the XCUITest suite
+        working-directory: blurt
+        env:
           # Where scripts/uitest.sh writes the UI suite's result bundle, for
           # the upload below.
           BLURT_UITEST_RESULTS: ${{ runner.temp }}/BlurtUITests.xcresult
-        run: scripts/check.sh
+        run: scripts/uitest.sh
+
+      - name: Run the whole-app leak scan
+        working-directory: blurt
+        run: scripts/leaks.sh
 
       # The UI suite's result bundle when the job fails or times out: the log
       # shows each failure's first line only, and the bundle has the rest — every
@@ -198,16 +233,16 @@ jobs:
           path: ${{ runner.temp }}/BlurtUITests.xcresult
           if-no-files-found: ignore
 
-  # Fast-fail typecheck. `check` above is the authority on green and this job can
-  # only go red where `check` would too — so it is deliberately NOT required, and
-  # `gate` ignores it.
+  # Fast-fail typecheck. `macos` above is the authority on green and this job can
+  # only go red where `macos` would too — so it is deliberately NOT required, and
+  # the summary `check` job ignores it.
   #
   # It exists for latency. The web sandbox has no Swift toolchain (macOS-only
   # project; the Linux toolchain isn't reachable under the default network
   # policy), so CI is the first compiler to see any Swift change, and a test
   # target that doesn't build is the single most common way a PR here goes red —
   # PRs #122 and #124 each burned three consecutive red runs on one compile error
-  # at a time. `check` reaches that error only after the engine suite starts, and
+  # at a time. `macos` reaches that error only after the engine suite starts, and
   # a full run is ~11 minutes. Building just the engine and its tests reports the
   # same error in ~2, which is the whole point.
   compile:
@@ -229,19 +264,19 @@ jobs:
         # a typecheck of Tests/ as well as Sources/. -warnings-as-errors matches
         # what check.sh passes, so a warning can't pass here and fail there. No
         # xcodegen, no app build, no sanitizers, no coverage — those stay in
-        # `check`, and duplicating any of them here would spend the latency this
+        # `macos`, and duplicating any of them here would spend the latency this
         # job is meant to save.
         run: swift build --build-tests -Xswiftc -warnings-as-errors
 
   # What swift-format would change, as an applicable patch. Formatting is the
-  # other half of what CI is sole authority over here, and `check` can only say
+  # other half of what CI is sole authority over here, and `macos` can only say
   # *that* a file is misformatted (`swift-format lint --strict`) — leaving the
   # author to reproduce the reflow by hand, blind, with no formatter on the
   # machine they're editing from. Several PRs paid for that in commits of the form
   # "Format X the way swift-format wants".
   #
   # So: run the formatter for real and publish the diff. Read-only and advisory —
-  # it never fails the build (`check` already does that) and never pushes, which
+  # it never fails the build (`macos` already does that) and never pushes, which
   # keeps this job free of a writable token while it holds PR code. Applying the
   # patch stays a deliberate act by the author:
   #   gh run download <id> -n swift-format-patch && git apply swift-format.patch
@@ -302,13 +337,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The engine is a two-platform package, and `check` only ever compiles it for
+  # The engine is a two-platform package, and `macos` only ever compiles it for
   # macOS: `swift test` builds for the host, and every job above runs on one.
   # A macOS-only symbol that escapes its `#if os(macOS)` fence therefore passes
-  # `check` and breaks the iOS app, which is why this job exists and why `gate`
-  # treats it as required. It builds the library alone, for the simulator SDK —
-  # `xcodebuild` rather than `swift build`, because cross-compiling needs the
-  # SDK/destination handling xcodebuild owns, and it resolves the package
+  # `macos` and breaks the iOS app, which is why this job exists and why the
+  # required `check` job asserts it. It builds the library alone, for the
+  # simulator SDK — `xcodebuild` rather than `swift build`, because
+  # cross-compiling needs the SDK/destination handling xcodebuild owns, and it
+  # resolves the package
   # straight from the checkout, no project needed. `generic/platform=iOS
   # Simulator` builds against the runner's default (latest installed) simulator
   # SDK without naming a device or pinning an iOS version. The scheme is the
@@ -396,14 +432,22 @@ jobs:
           BLURT_IOS_SANITIZER: ${{ matrix.sanitizer }}
         run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
 
-  # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
-  # GitHub reports a skipped required check to branch protection as successful, so
-  # anything that makes `check` skip — the `changes` filter erroring, a `needs`
-  # failure — silently bypasses the entire macOS gate on a green-looking PR.
-  # This job runs whenever the run wasn't cancelled — on a failed or skipped
-  # `needs` too — and fails unless each gate either succeeded or was skipped
-  # *by design*: `lint` only for a docs-only change
-  # (changes.outputs.code == 'false'), the Swift/iOS gates for a docs- or
+  # The required status: branch protection on main requires a job named `check`,
+  # and this is it. It used to be `gate`, beside a `check` job that ran all of
+  # check.sh; the UI suite moved to `ui-tests` to run in parallel, which would
+  # have left it behind no required status at all. Renaming this summary job to
+  # `check` (and the old one to `macos`) puts every gate below behind the one
+  # required context with no repo-settings change — `ios-build`,
+  # `ios-sanitizers` and `lint` included, which `gate` asserted but nothing
+  # required.
+  #
+  # Always-runs, so a *skipped* gate can't be mistaken for a pass. GitHub reports
+  # a skipped required check to branch protection as successful, so anything that
+  # makes a gate skip — the `changes` filter erroring, a `needs` failure — would
+  # otherwise bypass it on a green-looking PR. This job runs whenever the run
+  # wasn't cancelled — on a failed or skipped `needs` too — and fails unless each
+  # gate either succeeded or was skipped *by design*: `lint` only for a docs-only
+  # change (changes.outputs.code == 'false'), the Swift/iOS gates for a docs- or
   # evals-only one (changes.outputs.swift == 'false').
   #
   # `!cancelled()`, not `always()`: on a push to main the concurrency group is
@@ -412,26 +456,23 @@ jobs:
   # marking nearly every main commit red though no test had failed. A
   # superseded run now ends cancelled, not failed. (Nothing is lost: each
   # merge-queue commit already passed `check` as its merge group.)
-  #
-  # NOTE: this only protects the repo once branch protection requires `gate`
-  # instead of (or as well as) `check` — that's a repo settings change. Until it
-  # does, an evals-only PR is held only by `lint`, which is not required either.
-  gate:
-    needs: [changes, lint, check, ios-build, ios-sanitizers]
+  check:
+    needs: [changes, lint, macos, ui-tests, ios-build, ios-sanitizers]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the lint, macOS, iOS and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, UI, iOS and iOS-sanitizer gates ran or were intentionally skipped
         env:
           LINT_RESULT: ${{ needs.lint.result }}
-          CHECK_RESULT: ${{ needs.check.result }}
+          MACOS_RESULT: ${{ needs.macos.result }}
+          UI_RESULT: ${{ needs.ui-tests.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
           IOS_SANITIZERS_RESULT: ${{ needs.ios-sanitizers.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT check=$CHECK_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -454,6 +495,7 @@ jobs:
             esac
           }
           assert_gate lint "$LINT_RESULT" "$CODE_CHANGED"
-          assert_gate macOS "$CHECK_RESULT" "$SWIFT_CHANGED"
+          assert_gate macOS "$MACOS_RESULT" "$SWIFT_CHANGED"
+          assert_gate "UI suite" "$UI_RESULT" "$SWIFT_CHANGED"
           assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT" "$SWIFT_CHANGED"

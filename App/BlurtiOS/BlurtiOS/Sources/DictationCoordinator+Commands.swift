@@ -79,7 +79,7 @@ extension DictationCoordinator {
         state: window.liveState,
         phase: routerPhase,
         inFlight: inFlight,
-        onScreen: SharedStore.keyboardOnScreen()?.processID,
+        onScreen: SharedStore.keyboardOnScreen(now: now())?.processID,
         answered: answered,
         launchID: window.launchID
       )
@@ -186,7 +186,7 @@ extension DictationCoordinator {
   /// the log line.
   func tickWatchdog() {
     guard let inFlight, watchdogReleased != inFlight.id, stopAccepted != inFlight.id,
-      OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: Date())
+      OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: now())
     else {
       return
     }

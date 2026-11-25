@@ -30,11 +30,16 @@ extension DictationCoordinatorTests {
     return (coordinator, rig)
   }
 
-  /// `keyboard` on screen, its presence `age` old.
+  /// `keyboard` on screen, its presence `age` old by the coordinator's frozen
+  /// `now`.
   func onScreen(_ keyboard: String, age: TimeInterval = 0) {
     SharedStore.writeKeyboardPresence(
       KeyboardPresenceRecord(
-        processID: keyboard, controllerID: "field", pid: 1, onScreen: true, seenAt: Date().addingTimeInterval(-age)
+        processID: keyboard,
+        controllerID: "field",
+        pid: 1,
+        onScreen: true,
+        seenAt: frozenNow.addingTimeInterval(-age)
       )
     )
   }
@@ -47,14 +52,19 @@ extension DictationCoordinatorTests {
     return dictation
   }
 
-  /// The keyboard takes the result, as it would on `Signal.result`.
-  func takeResult() async -> DictationResult? {
+  /// The keyboard takes the result, as it would on `Signal.result`, then the
+  /// relay's next poll is stepped on `clock` so it sees the words taken. The
+  /// delivery waits on the rig's clock, so it can't time out into the
+  /// clipboard on a slow run before the test gets to the result.
+  func takeResult(stepping clock: TestClock) async -> DictationResult? {
     let arrived = await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil }
     guard arrived else {
       return nil
     }
     let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
     SharedStore.remove(forKey: BlurtShared.Key.result)
+    await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
+    clock.advance(by: KeyboardRelayInjector.deliveryPoll)
     return result
   }
 
@@ -95,7 +105,7 @@ extension DictationCoordinatorTests {
     #expect(SharedStore.commandAck?.outcome == .stopped(dictation))
     #expect(coordinator.stopAccepted == dictation && coordinator.lastCommandID == release.id)
     #expect(DictationCoordinator.claimedPress.withLock { $0.stopAddress?.keyboard } == Self.keyboard)
-    let result = await takeResult()
+    let result = await takeResult(stepping: rig.clock)
     #expect(result?.recipient == Self.keyboard && result?.text == Self.transcript)
     #expect(await until { coordinator.phase == .pasted })
     #expect(published?.state == .pasted && published?.dictation?.id == dictation)
@@ -111,16 +121,16 @@ extension DictationCoordinatorTests {
   func secureDictationNotRemembered() async throws {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (coordinator, _) = await listening()
+    let (coordinator, rig) = await listening()
     send(command(.press, isSecure: true), to: coordinator)
     #expect(await until { self.published?.state == .recording })
     send(command(.release), to: coordinator)
-    #expect(await takeResult()?.text == Self.transcript)
+    #expect(await takeResult(stepping: rig.clock)?.text == Self.transcript)
     #expect(await until { coordinator.phase == .pasted })
     // An ordinary dictation after it is remembered, and is the only one.
     _ = try await recording(coordinator)
     send(command(.release), to: coordinator)
-    #expect(await takeResult()?.text == Self.transcript)
+    #expect(await takeResult(stepping: rig.clock)?.text == Self.transcript)
     #expect(await until { coordinator.recent.entries.count == 1 })
     #expect(coordinator.recent.entries.count == 1)
   }
@@ -131,19 +141,19 @@ extension DictationCoordinatorTests {
   func resultNamesTheField() async throws {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (coordinator, _) = await listening()
+    let (coordinator, rig) = await listening()
     let fieldA = UUID()
     send(command(.press, controllerID: "c-a", documentID: fieldA), to: coordinator)
     #expect(await until { self.published?.state == .recording })
     send(command(.release, controllerID: "c-a", documentID: fieldA), to: coordinator)
-    let pressed = await takeResult()
+    let pressed = await takeResult(stepping: rig.clock)
     #expect(pressed?.recipient == Self.keyboard && pressed?.controllerID == "c-a" && pressed?.documentID == fieldA)
     #expect(await until { coordinator.phase == .pasted })
     // An accepted stop from another field of the same keyboard: the words go there.
     let fieldB = UUID()
     _ = try await recording(coordinator)
     send(command(.release, controllerID: "c-b", documentID: fieldB), to: coordinator)
-    let stopped = await takeResult()
+    let stopped = await takeResult(stepping: rig.clock)
     #expect(stopped?.recipient == Self.keyboard && stopped?.controllerID == "c-b" && stopped?.documentID == fieldB)
   }
 
@@ -203,7 +213,7 @@ extension DictationCoordinatorTests {
     await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
     #expect(coordinator.watchdogReleased == nil)
     #expect(!rig.tasks.begun.contains(DictationCoordinator.releaseTask))
-    let result = await takeResult()
+    let result = await takeResult(stepping: rig.clock)
     #expect(result?.recipient == Self.keyboard)
     #expect(await until { coordinator.phase == .pasted })
     #expect(coordinator.inFlight == nil && coordinator.watchdogReleased == nil)

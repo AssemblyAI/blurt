@@ -25,11 +25,6 @@ nonisolated extension SharedStore {
   /// a press nobody would answer.
   package static var isListening: Bool { isListening(now: Date()) }
 
-  /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
-  package static var isKeyboardPresent: Bool {
-    Date().timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
-  }
-
   /// Which keyboard process is on screen — a fresh id per process, written
   /// with its heartbeat — so a result can be addressed to it.
   package static var keyboardInstance: String? {
@@ -85,6 +80,11 @@ nonisolated extension SharedStore {
       return false
     }
     return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
+  }
+
+  /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
+  package static func isKeyboardPresent(now: Date) -> Bool {
+    now.timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
   }
 
   /// Adds a term unless it is already there (case-insensitively). Returns

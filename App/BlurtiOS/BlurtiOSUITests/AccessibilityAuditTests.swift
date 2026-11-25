@@ -45,6 +45,14 @@ import XCTest
 ///   cleared "Ultracasual"; the audit still predicts a clip for the longest
 ///   name. Named here rather than ignored by kind, so any other chip or any
 ///   other text that clips still fails.
+///
+/// And a finding has to repeat: a screen that raised any is audited again,
+/// untouched, and only what both passes raise fails. On CI, and never on a
+/// Mac, the default-size audit of Settings' last page intermittently called
+/// the system-font rows at its foot ("AssemblyAI's privacy policy",
+/// "Powered by AssemblyAI", "How fast can you type?") "Dynamic Type
+/// unsupported" while the same commit passed an hour apart. A font that
+/// doesn't scale fails both passes, so nothing real gets through.
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
   private static let auditedTypes = XCUIAccessibilityAuditType.all.subtracting(.contrast)
@@ -273,21 +281,21 @@ final class AccessibilityAuditTests: XCTestCase {
   /// swipe once the page is at its end. (Not just the first text: that is a
   /// navigation bar's title on a pushed screen, which never moves.)
   private func screenTexts() -> String {
-    // Past the bounce a swipe at the end of a page sets off.
-    Thread.sleep(forTimeInterval: 0.6)
-    guard let root = try? app.snapshot() else {
-      return ""
-    }
-    let screen = root.frame
-    var texts: [String] = []
-    var pending = [root]
-    while let node = pending.popLast() {
-      if node.elementType == .staticText, screen.intersects(node.frame) {
-        texts.append("\(node.label)@\(Int(node.frame.minY))")
+    // Past the deceleration and the bounce a swipe sets off: snapshot until two
+    // in a row agree, rather than after a fixed pause. A slow runner (CI's
+    // takes half as long again as a Mac) can still be settling the last page
+    // after 0.6 s, and an audit of rows in motion reads their Dynamic Type
+    // wrong (`audit`).
+    var last = Self.textsOnScreen(of: app)
+    for _ in 0..<20 {
+      Thread.sleep(forTimeInterval: 0.3)
+      let current = Self.textsOnScreen(of: app)
+      if current == last {
+        return current
       }
-      pending += node.children
+      last = current
     }
-    return texts.joined(separator: "|")
+    return last
   }
 
   private func audit(_ screen: String) throws {
@@ -303,13 +311,26 @@ final class AccessibilityAuditTests: XCTestCase {
       + [app.otherElements["brand.tabBar"]].filter(\.exists)
       .map(\.frame)
     let screenArea = app.windows.firstMatch.frame
-    var issues: [String] = []
-    try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
-      if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
+    let pass = { [app] () throws -> [String] in
+      var raised: [String] = []
+      try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
+        if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
+          return true
+        }
+        raised.append(Self.describe(issue))
         return true
       }
-      issues.append(Self.describe(issue))
-      return true
+      return raised
+    }
+    var issues = try pass()
+    // A finding has to hold on a second audit of the same, untouched screen:
+    // a font that doesn't scale fails both, while a reading the audit took
+    // mid-layout — the bottom rows of Settings' last page, on CI only — does
+    // not repeat.
+    if !issues.isEmpty {
+      Thread.sleep(forTimeInterval: 1)
+      let again = Set(try pass())
+      issues = issues.filter(again.contains)
     }
     found += issues.map { "[\(name)] \($0)" }
   }
