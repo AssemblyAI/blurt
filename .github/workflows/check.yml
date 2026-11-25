@@ -372,17 +372,25 @@ jobs:
   # GitHub reports a skipped required check to branch protection as successful, so
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`
   # failure — silently bypasses the entire macOS gate on a green-looking PR.
-  # This job runs `if: always()` and fails unless each gate either succeeded or
-  # was skipped *by design*: `lint` only for a docs-only change
+  # This job runs whenever the run wasn't cancelled — on a failed or skipped
+  # `needs` too — and fails unless each gate either succeeded or was skipped
+  # *by design*: `lint` only for a docs-only change
   # (changes.outputs.code == 'false'), the Swift/iOS gates for a docs- or
   # evals-only one (changes.outputs.swift == 'false').
+  #
+  # `!cancelled()`, not `always()`: on a push to main the concurrency group is
+  # `check-refs/heads/main`, so each merge cancels the run before it — and
+  # `always()` then ran this job over the cancelled `needs` and failed it,
+  # marking nearly every main commit red though no test had failed. A
+  # superseded run now ends cancelled, not failed. (Nothing is lost: each
+  # merge-queue commit already passed `check` as its merge group.)
   #
   # NOTE: this only protects the repo once branch protection requires `gate`
   # instead of (or as well as) `check` — that's a repo settings change. Until it
   # does, an evals-only PR is held only by `lint`, which is not required either.
   gate:
     needs: [changes, lint, check, ios-build, ios-sanitizers]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Assert the lint, macOS, iOS and iOS-sanitizer gates ran or were intentionally skipped
