@@ -1,3 +1,4 @@
+import AssemblyAI
 import Testing
 
 @testable import BlurtiOSCore
@@ -48,6 +49,22 @@ struct KeyboardModelChipTests {
     #expect(!model.selectedTermIsKnown)
     model.addSelectedTerm()
     #expect(SharedStore.keyTerms.isEmpty)
+  }
+
+  /// A request carries the first `KeyTerms.termCap` terms, the user's own
+  /// first: a chip tap that adds a 101st shows its ✓ for a word no dictation
+  /// will ever send.
+  @Test("a word the chip saves with the list already at the cap is one a dictation sends")
+  func chipAtTheCap() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.keyTerms = (0..<KeyTerms.termCap).map { "term\($0)" }
+    let (model, _) = typingModel(before: "we met ", selected: "Zed")
+    model.hasFullAccess = true
+    model.contextChanged()
+    #expect(model.selectedTerm == "Zed")
+    model.addSelectedTerm()
+    #expect(KeyTerms.fitted(SharedStore.keyTerms).contains("Zed"))
   }
 
   @Test("the + coming back after a term was added from the chip keeps the highlight's word out of the chip")
