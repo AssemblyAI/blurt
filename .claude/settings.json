@@ -40,6 +40,8 @@
       "Bash(scripts/ios-check.sh*)",
       "Bash(scripts/ios-typecheck.sh*)",
       "Bash(scripts/ios-uitest.sh*)",
+      "Bash(scripts/swiftlint-analyze.sh*)",
+      "Bash(scripts/mac-static.sh*)",
       "Bash(prettier *)",
       "Bash(actionlint)",
       "Bash(actionlint *)",
