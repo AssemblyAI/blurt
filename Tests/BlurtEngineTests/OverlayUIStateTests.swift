@@ -104,6 +104,18 @@ struct OverlayUIStateTests {
     #expect(phase.overlayState == .error(message: "Audio capture failed: Boom."))
   }
 
+  /// A host's own capture source (the iPhone's listening window) words its
+  /// errors for the user; the phase says them as they are.
+  private struct HostCaptureFailure: CaptureFailureWording {
+    var errorDescription: String? { "A call or another app has the microphone." }
+  }
+
+  @Test
+  func userWordedCaptureErrorsDropThePrefix() {
+    let phase = PipelinePhase.failed(.audioCaptureFailed(underlying: HostCaptureFailure()))
+    #expect(phase.overlayState == .error(message: "A call or another app has the microphone."))
+  }
+
   @Test
   func missingKeyFailureMapsToIdle() {
     // A missing API key is an expected setup state the shell routes to the

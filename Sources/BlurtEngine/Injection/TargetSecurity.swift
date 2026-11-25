@@ -18,6 +18,12 @@ public enum TargetSecurity: Sendable, Equatable {
   /// a password would leave it.
   case unknown
 
+  /// How long a concealed transcript left on the clipboard stays there before
+  /// it is cleared — a password manager's own copy window. One figure for
+  /// every host: the Mac's `SystemClipboard` clears its leave-behind after it,
+  /// and the iPhone's keyboard relay sets it as the pasteboard item's expiry.
+  public static let concealedClipboardLifetime: Duration = .seconds(90)
+
   /// Whether words left on the clipboard for this target are left as a secret
   /// (`ClipboardAccess.write`'s `concealed`). A password field's always are. An
   /// unknown target's are when the app is AX-opaque — a browser or Electron

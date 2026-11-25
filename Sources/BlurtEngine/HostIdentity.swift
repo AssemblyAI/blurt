@@ -116,6 +116,13 @@ public struct HostIdentity: Sendable, Equatable {
   /// raw value would — pick it once, at the point the host is first published.
   public let defaultsPrefix: String
 
+  /// The bundle id of the app actually running — what TCC grants and resets
+  /// are keyed on — falling back to `subsystem` only for a bundle with no id at
+  /// all. Never `subsystem` alone: a debug build ships under its own bundle id
+  /// (`dev.alex.blurt.dev`), and resetting the constant would have it clear
+  /// the released app's grants, which this process has no business touching.
+  public var runningBundleID: String { Bundle.main.bundleIdentifier ?? subsystem }
+
   /// The directory under `~/Library/Logs` the developer-mode dictation and error
   /// logs are written to (`~/Library/Logs/Blurt/{dictations,errors}.jsonl`).
   public let logDirectoryName: String

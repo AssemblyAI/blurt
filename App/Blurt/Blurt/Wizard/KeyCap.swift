@@ -24,19 +24,6 @@ struct KeyCap: View {
   }
 }
 
-extension TriggerKey {
-  /// The key named in words, e.g. "Right Command": `fullName` without its
-  /// parenthesised symbol. The one name a key goes by on screen — the main
-  /// window's legend, the menu bar, and every Settings row — and what VoiceOver
-  /// hears, without the symbol read as the name a second time.
-  var spokenName: String {
-    guard let symbol = fullName.range(of: " (") else {
-      return fullName
-    }
-    return String(fullName[..<symbol.lowerBound])
-  }
-}
-
 extension TriggerKeyAction {
   /// The action's row icon — the main window's key rows and the Keys tab's
   /// action rows, so an action looks the same in both.

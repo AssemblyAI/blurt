@@ -93,11 +93,12 @@ extension BlurtError: LocalizedError {
     case .targetAppLost:
       "Target app lost focus or quit."
 
-    // `MicCaptureError`'s messages are already written for the user and name the
-    // problem, so the prefix would only bury the device name; anything else a
-    // capture throws keeps it as context.
-    case .audioCaptureFailed(let underlying as MicCaptureError):
-      underlying.localizedDescription
+    // A capture error worded for the user (`CaptureFailureWording`: the
+    // engine's `MicCaptureError`, a host source's own) already names the
+    // problem, so the prefix would only bury it; anything else a capture throws
+    // keeps it as context.
+    case .audioCaptureFailed(let underlying as any CaptureFailureWording):
+      underlying.errorDescription ?? underlying.localizedDescription
 
     case .audioCaptureFailed(let underlying):
       "Audio capture failed: \(underlying.localizedDescription)"

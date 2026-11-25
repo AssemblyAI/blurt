@@ -526,8 +526,8 @@ Selection, Rewrite Selection, Compose From Instructions, Control Your Mac — ea
 the Dictate row's key becomes the bound key), then one Activation pop-up for every key. Each key's start/stop cue voice is the Sounds tab's, after Keys
 (`SoundsSettingsTab`): one row per key that isn't Off. `TriggerKeySoundStore`
 (`BlurtTriggerKeySounds`, keycode → pack id) holds the ones set; a key with no entry plays its
-action's setting (`SoundPackStore.fallback(for:)` — read-aloud's, Control Your Mac's, or
-dictation's for every recording action), so an untouched install sounds as it did before keys had
+action's setting (`SoundPackStore.fallback(for:)`, over the engine's `TriggerKeyAction.cue` —
+read-aloud's, Control Your Mac's, or dictation's for every recording action), so an untouched install sounds as it did before keys had
 voices. `CueSoundPlayer` keeps a pair per key and plays the one whose press started the recording
 or read (`AppCoordinator`'s `onStart` tells it first). How read-aloud sounds (voice, speed, skipping jargon —
 `ReadAloudStyleStore`) is its own Settings tab, Read Aloud, before Styles (`ReadAloudSettingsTab`);

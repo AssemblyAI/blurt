@@ -154,15 +154,10 @@ final class DictationCoordinator {
   /// Brings the host app back (`HostReturn.open`); a test's capture.
   @ObservationIgnored let hostReturner: @MainActor (String) -> Bool
 
-  /// The phase as the home screen and the keyboard show it: the engine's own
-  /// wording, except a capture failure, which is said as the source's own
-  /// sentence (`CaptureFailure`) rather than as "Audio capture failed: …".
-  var overlay: OverlayUIState {
-    if case .failed(.audioCaptureFailed(let underlying)) = phase {
-      return .error(message: CaptureFailure.sentence(for: underlying))
-    }
-    return phase.overlayState
-  }
+  /// The phase as the home screen and the keyboard show it, in the engine's
+  /// wording — a capture failure in the source's own sentence, since
+  /// `ListeningSourceFailure` is `CaptureFailureWording`.
+  var overlay: OverlayUIState { phase.overlayState }
 
   init(
     apiKey: APIKeyModel = APIKeyModel(),

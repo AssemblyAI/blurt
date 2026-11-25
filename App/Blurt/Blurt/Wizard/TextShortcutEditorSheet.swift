@@ -72,9 +72,8 @@ struct TextShortcutEditorSheet: View {
         .accessibilityLabel("Phrase")
         .accessibilityIdentifier(UITestIdentifiers.textShortcutTrigger)
         .onChange(of: trigger) {
-          if trigger.count > TextShortcutStore.triggerLimit {
-            trigger = String(trigger.prefix(TextShortcutStore.triggerLimit))
-          }
+          let clamped = TextShortcutStore.clampedTrigger(trigger)
+          if clamped != trigger { trigger = clamped }
         }
       if duplicatesAnother {
         Text("Another shortcut already uses this phrase.")
@@ -99,9 +98,8 @@ struct TextShortcutEditorSheet: View {
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.textShortcutExpansion)
       .onChange(of: expansion) {
-        if expansion.count > TextShortcutStore.expansionLimit {
-          expansion = String(expansion.prefix(TextShortcutStore.expansionLimit))
-        }
+        let clamped = TextShortcutStore.clampedExpansion(expansion)
+        if clamped != expansion { expansion = clamped }
       }
     }
   }
@@ -116,8 +114,8 @@ struct TextShortcutEditorSheet: View {
     _expansion = State(initialValue: shortcut.expansion)
   }
 
-  /// Merged against the stored list, not the observed copy, for the reason on
-  /// `StyleProfileEditorSheet.save()`.
+  /// Merged against the stored list, not the observed copy, by the store
+  /// (`TextShortcutStore.save(_:)`).
   private func save() {
     guard canSave else {
       return
@@ -125,20 +123,12 @@ struct TextShortcutEditorSheet: View {
     var edited = shortcut
     edited.trigger = trigger
     edited.expansion = expansion
-    let store = TextShortcutStore()
-    var updated = store.shortcuts
-    if let index = updated.firstIndex(where: { $0.id == edited.id }) {
-      updated[index] = edited
-    } else {
-      updated.append(edited)
-    }
-    store.shortcuts = updated
+    TextShortcutStore().save(edited)
     dismiss()
   }
 
   private func delete() {
-    let store = TextShortcutStore()
-    store.shortcuts = store.shortcuts.filter { $0.id != shortcut.id }
+    TextShortcutStore().remove(id: shortcut.id)
     dismiss()
   }
 }

@@ -99,6 +99,14 @@ extension FileTranscriptionTests {
     #expect(stamp != TranscriptStore.fileStamp(date.addingTimeInterval(0.001)))
   }
 
+  @Test("recordings and read-aloud clips are named by their stamp, like the system's screenshots")
+  func fileNames() {
+    let date = Date(timeIntervalSince1970: 1_793_380_962.123)
+    let stamp = TranscriptStore.fileStamp(date)
+    #expect(TranscriptStore.recordingFileName(at: date) == "Recording \(stamp).m4a")
+    #expect(TranscriptStore.readAloudClipFileName(at: date) == "Read \(stamp).wav")
+  }
+
   @Test("a user's file is found through its bookmark after a move")
   func bookmarkFollowsMove() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: "BookmarkTests-\(UUID())")

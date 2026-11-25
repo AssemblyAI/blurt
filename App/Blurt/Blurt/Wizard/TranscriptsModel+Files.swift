@@ -15,12 +15,6 @@ extension TranscriptsModel {
     return type.conforms(to: .audiovisualContent)
   }
 
-  /// "Recording 2026-10-30 at 10.04.08.m4a" — the shape macOS names a
-  /// screenshot, so recordings sort by time and read like the system's own.
-  static func recordingName(at date: Date) -> String {
-    "Recording \(TranscriptStore.fileStamp(date)).m4a"
-  }
-
   /// Transcribes the first audio or video file among `urls` — dropped on the
   /// window or the Dock icon, or opened from Finder's Open With — or says why
   /// none was. Never over a recording: it owns the sheet until it's saved.

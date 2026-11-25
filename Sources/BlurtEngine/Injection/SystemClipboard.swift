@@ -35,8 +35,8 @@
     }
 
     /// How long a concealed leave-behind stays for the paste by hand before it
-    /// is cleared — a password manager's own copy window.
-    static let concealedLifetime: Duration = .seconds(90)
+    /// is cleared — the engine's one figure for every host.
+    static let concealedLifetime = TargetSecurity.concealedClipboardLifetime
 
     /// Counts the writes Blurt itself makes to the pasteboard, bumped *before*
     /// each one, so a reader that sees the pasteboard's change count move can

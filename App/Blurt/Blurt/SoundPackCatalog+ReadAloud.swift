@@ -17,18 +17,17 @@ extension SoundPackStore {
   static var readAloud: SoundPackStore { SoundPackStore(catalog: .blurtReadAloud, cue: .readAloud) }
   static var command: SoundPackStore { SoundPackStore(catalog: .blurtCommand, cue: .command) }
 
-  /// The setting a key with no voice of its own follows: its action's. A read
-  /// key sounds like a read and a command key like a command, and any other
-  /// key — dictate, ask, rewrite, compose, each a recording — like a dictation.
+  /// The setting a key with no voice of its own follows: its action's cue
+  /// (`TriggerKeyAction.cue`, the engine's rule).
   static func fallback(for action: TriggerKeyAction) -> SoundPackStore {
-    switch action {
+    switch action.cue {
     case .readAloud:
       .readAloud
 
     case .command:
       .command
 
-    case .off, .dictate, .ask, .rewrite, .compose:
+    case .dictation:
       .dictation
     }
   }

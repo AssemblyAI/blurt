@@ -45,4 +45,35 @@ struct KeyTermsParseTests {
     // names with the user's terms through this rather than through `parse`.
     #expect(KeyTermList.normalized([" Smith, John ", "", "smith, john", "Blurt"]) == ["Smith, John", "Blurt"])
   }
+
+  @Test("contains matches a trimmed term case-insensitively, and a blank term is in no list")
+  func containsIgnoresCase() {
+    #expect(KeyTermList.contains(" rizz ", in: ["Rizz"]))
+    #expect(!KeyTermList.contains("Riz", in: ["Rizz"]))
+    #expect(!KeyTermList.contains("  ", in: ["Rizz"]))
+  }
+
+  @Test("appending adds the draft's terms, splitting on commas and dropping duplicates of any case")
+  func appendingAddsTerms() {
+    #expect(KeyTermList.appending("Neil Bisht, blurt", to: ["Blurt"]) == ["Blurt", "Neil Bisht"])
+    #expect(KeyTermList.appending("  ", to: ["Blurt"]) == ["Blurt"])
+  }
+
+  @Test("appending stops at maxCount, so nothing is kept that couldn't be sent")
+  func appendingStopsAtTheCap() {
+    let full = (0..<KeyTerms.termCap).map { "t\($0)" }
+    #expect(KeyTermList.appending("one more", to: full, maxCount: KeyTerms.termCap) == full)
+    let nearlyFull = Array(full.dropLast())
+    #expect(KeyTermList.appending("one, two", to: nearlyFull, maxCount: KeyTerms.termCap) == nearlyFull + ["one"])
+  }
+
+  /// The iPhone keyboard's + and a shared list add without the cap, so the
+  /// list can be over it; a typed add then used to cut the list back to the
+  /// cap, deleting the rest.
+  @Test("appending to a list already over maxCount keeps every term it had and adds nothing")
+  func appendingOverTheCapKeepsTheList() {
+    let over = (0..<(KeyTerms.termCap + 5)).map { "t\($0)" }
+    #expect(KeyTermList.appending("one more", to: over, maxCount: KeyTerms.termCap) == over)
+    #expect(KeyTermList.appending("t3", to: over, maxCount: KeyTerms.termCap) == over)
+  }
 }

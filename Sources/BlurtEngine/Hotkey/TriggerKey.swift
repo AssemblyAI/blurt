@@ -119,28 +119,52 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     }
   }
 
+  /// The key named in words, e.g. "Right Command". The one name a key goes by
+  /// on screen — a host's legend, its menu, every settings row — and what
+  /// VoiceOver hears, without the symbol read as the name a second time.
+  public var spokenName: String {
+    switch self {
+    case .rightCommand:
+      return "Right Command"
+
+    case .rightOption:
+      return "Right Option"
+
+    case .function:
+      return "Function"
+
+    case .leftCommand:
+      return "Left Command"
+
+    case .leftOption:
+      return "Left Option"
+
+    case .leftControl:
+      return "Left Control"
+    }
+  }
+
   /// Spelled-out form with the symbol in parentheses, e.g.
   /// "Right Command (⌘)" — the ready screen's readout bolds this inline, where
   /// the bare symbol alone assumes the reader already knows the glyph.
   public var fullName: String {
-    switch self {
-    case .rightCommand:
-      return "Right Command (⌘)"
+    "\(spokenName) (\(symbol))"
+  }
 
-    case .rightOption:
-      return "Right Option (⌥)"
+  /// The key's glyph alone, as `fullName` puts it in parentheses.
+  private var symbol: String {
+    switch self {
+    case .rightCommand, .leftCommand:
+      return "⌘"
+
+    case .rightOption, .leftOption:
+      return "⌥"
 
     case .function:
-      return "Function (fn)"
-
-    case .leftCommand:
-      return "Left Command (⌘)"
-
-    case .leftOption:
-      return "Left Option (⌥)"
+      return "fn"
 
     case .leftControl:
-      return "Left Control (⌃)"
+      return "⌃"
     }
   }
 

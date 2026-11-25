@@ -31,3 +31,15 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
     self.instructions = instructions
   }
 }
+
+extension StyleProfile {
+  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Whether a profile from these fields can be saved: both say something. A
+  /// nameless profile would render a blank segment in the main window's
+  /// switcher, and one with no instructions would be a style that changes
+  /// nothing about the dictation it selects. The one rule behind the Mac's
+  /// editor sheet and the iPhone's, as `TextShortcut.canSave` is for shortcuts.
+  public static func canSave(name: String, instructions: String) -> Bool {
+    name.trimmedNonEmpty() != nil && instructions.trimmedNonEmpty() != nil
+  }
+}
