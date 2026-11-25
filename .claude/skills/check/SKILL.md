@@ -1,6 +1,6 @@
 ---
 name: check
-description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, settled-decision invariants, ruff + pytest over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/scripts/workflows).
+description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, settled-decision invariants, ruff + pytest over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset — run it before every push, Swift changes included. On a Mac, scripts/check.sh --lint-only runs just the read-only checks in minutes.
 ---
 
 # check — is this green?
@@ -36,11 +36,18 @@ are not.
 
 That fully verifies docs, scripts, eval, and workflow changes. It is
 **not** "green" in the CI sense: the entire Swift side is skipped, and the
-closing line says so. For Swift changes, push and watch `check.yml` instead —
-its `compile` job reports a broken test build in ~2 minutes, and `format-patch`
-publishes the exact `swift-format` reflow as an artifact so you don't have to
-reproduce it by hand. In Claude Code on the web, the `SessionStart` hook
-installs the portable linters automatically.
+closing line says so. **Run it before every push anyway, Swift changes
+included** — jscpd, the invariants and the shell/workflow/Markdown linters
+catch real CI failures from here. For the Swift side, push and watch
+`check.yml`: its `lint` job reports swift-format, `swiftlint lint`, jscpd and
+design-sync findings in minutes, `compile` reports a broken test build in ~2
+minutes, and `format-patch` publishes the exact `swift-format` reflow as an
+artifact so you don't have to reproduce it by hand. In Claude Code on the web,
+the `SessionStart` hook installs the portable linters automatically — but not
+`swiftlint`, so read `.swiftlint.yml` before writing Swift you can't lint.
+
+Every push cancels the `check.yml` run in progress and restarts its ~37
+minutes. When a run goes red, fix everything it names, then push once.
 
 Quick preflight:
 
@@ -55,6 +62,11 @@ command -v swift xcodebuild xcodegen >/dev/null 2>&1 \
 ```bash
 scripts/check.sh
 ```
+
+For a fast answer on a Mac, `scripts/check.sh --lint-only` runs steps 1–5
+plus swift-format, `swiftlint lint` and design-sync, then stops before
+`swift test` — what CI's `lint` job runs. A green `--lint-only` is not green:
+the build, the tests, `swiftlint analyze` and periphery never ran.
 
 It runs, in order (each tool skipped with a note if absent — but on a configured
 Mac they're all present, so don't treat a skip as a pass):
