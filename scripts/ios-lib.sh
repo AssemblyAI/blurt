@@ -8,6 +8,17 @@
 # shellcheck disable=SC2034 # used by the scripts that source this file
 IOS_SIM_SIGNING=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=)
 
+# Where the tests are built for: any simulator, Apple silicon's architecture
+# only. Not the simulator they run on, so the build never waits on it:
+# xcodebuild resolving a named device stalls while that device boots, and on
+# CI a fresh simulator's first boot (its data migration, 2–4 minutes) is what
+# the build was meant to overlap. ARCHS=arm64 because a generic destination
+# otherwise builds every simulator architecture. The run (test-without-
+# building) names the device. ios-check.sh's probe build uses the same, so it
+# reuses this build rather than redoing it.
+# shellcheck disable=SC2034 # used by the scripts that source this file
+IOS_SIM_BUILD=(-destination "generic/platform=iOS Simulator" ARCHS=arm64)
+
 # The iPhone build's derived data, shared so each script's build reuses the
 # last one's (ios-check.sh's probe build relies on it). Needs REPO_ROOT set by
 # the sourcing script; BLURT_DERIVED_DATA moves it (CI puts it in RUNNER_TEMP).
@@ -90,6 +101,31 @@ ios_require_device() {
   UDID="${picked%%	*}"
   # shellcheck disable=SC2034 # used by the scripts that source this file
   NAME="${picked#*	}"
+  # BLURT_SIM_FRESH=1 (check.yml's iPhone jobs) runs on a new simulator of the
+  # picked one's type and runtime rather than the runner image's own: every
+  # first boot migrates data, but the image's device took 138–250 s to boot and
+  # launch an app in a probe, a fresh one 148–158 s. Off by default, so a Mac
+  # doesn't collect a simulator per run.
+  if [ "${BLURT_SIM_FRESH:-0}" = "1" ]; then
+    UDID="$(ios_fresh_device "$UDID" "$NAME")"
+    NAME="$NAME (fresh)"
+  fi
+}
+
+# ios_fresh_device UDID NAME → creates a simulator of UDID's device type and
+# runtime, named "NAME (fresh)", and prints its udid.
+ios_fresh_device() {
+  local kind
+  kind="$(xcrun simctl list devices -j | python3 -c '
+import json, sys
+for devs in json.load(sys.stdin)["devices"].values():
+    for d in devs:
+        if d["udid"] == sys.argv[1]:
+            print(d["deviceTypeIdentifier"])
+            sys.exit(0)
+sys.exit("ios_fresh_device: no simulator " + sys.argv[1])
+' "$1")"
+  xcrun simctl create "$2 (fresh)" "$kind" "$(ios_device_runtime_id "$1")"
 }
 
 # ios_boot_async UDID → starts booting the simulator and returns at once, so

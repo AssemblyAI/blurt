@@ -893,6 +893,13 @@ else
     AFTER="$(shasum "$PBXPROJ" 2>/dev/null || true)"
     if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
       echo "error: $PBXPROJ is out of sync with project.yml; run 'xcodegen generate' and commit it"
+      # What changed, and by which XcodeGen: CI installs whichever Homebrew
+      # has, so a new release can move the output with no project.yml change
+      # (a #415 run hit this drift on a main whose App/Blurt was unchanged and
+      # passed two minutes earlier, with nothing to say why).
+      echo "xcodegen $(xcodegen --version 2>/dev/null || echo '(version unknown)')"
+      git --no-pager diff --stat -- "$PBXPROJ" || true
+      git --no-pager diff -- "$PBXPROJ" | head -n 80 || true
       exit 1
     fi
   else

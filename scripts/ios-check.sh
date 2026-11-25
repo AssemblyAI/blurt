@@ -100,18 +100,12 @@ fi
 
 if wants probe; then
   echo "==> build-for-testing (BlurtiOSProbe)"
-  # The tests' destination, flags and derived data, so the build above is
-  # reused and only the probe's own files compile (a generic destination would
-  # rebuild everything for a second architecture).
-  UDID="$(ios_pick_device "${BLURT_SIM_DEVICE:-$IOS_DEFAULT_DEVICE}" | cut -f1)"
-  if [ -n "$UDID" ]; then
-    xcodebuild build-for-testing -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOSProbe \
-      -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED" \
-      "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES -quiet || FAILED+=("build-for-testing (BlurtiOSProbe)")
-  else
-    echo "error: no iPhone simulator to build the probe for" >&2
-    FAILED+=("build-for-testing (BlurtiOSProbe)")
-  fi
+  # The tests' destination (IOS_SIM_BUILD: any simulator, arm64), flags and
+  # derived data, so the build above is reused and only the probe's own files
+  # compile. A different destination or architecture would rebuild everything.
+  xcodebuild build-for-testing -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOSProbe \
+    "${IOS_SIM_BUILD[@]}" -derivedDataPath "$IOS_DERIVED" \
+    "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES -quiet || FAILED+=("build-for-testing (BlurtiOSProbe)")
 fi
 
 if wants periphery; then

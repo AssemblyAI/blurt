@@ -581,7 +581,8 @@ jobs:
         # XCUITest bundle compiled over that build. Ad hoc signing: the
         # simulator accepts it and, unlike no signing, it embeds the App Group
         # entitlement.
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
+        # BLURT_SIM_FRESH: on a new simulator, not the image's (scripts/ios-lib.sh).
+        run: BLURT_SIM_FRESH=1 BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
 
   # The iPhone accessibility audits (BlurtiOSUITests, scripts/ios-uitest.sh):
   # every screen at the default and the largest text size, ~15 minutes of test
@@ -641,7 +642,7 @@ jobs:
           SELECTION: ${{ matrix.selection }}
         run: |
           read -ra selection <<<"$SELECTION"
-          BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-uitest.sh "${selection[@]}"
+          BLURT_SIM_FRESH=1 BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-uitest.sh "${selection[@]}"
 
       # The audits' result bundle when the job fails or times out, as ui-tests
       # keeps the Mac suite's: the log shows each failure's first line only,
@@ -713,7 +714,7 @@ jobs:
         working-directory: blurt
         env:
           BLURT_IOS_SANITIZER: ${{ matrix.sanitizer }}
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
+        run: BLURT_SIM_FRESH=1 BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
 
   # The required status: branch protection on main requires a job named `check`,
   # and this is it. It used to be `gate`, beside a `check` job that ran all of
