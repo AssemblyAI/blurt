@@ -600,9 +600,9 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   #
   # The Claude Code hooks are included: they run on every file edit, so a quoting
   # bug there corrupts a source file rather than just failing a build, and nothing
-  # else checked them. Both directories are passed as one invocation on purpose —
-  # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
-  # resolve instead of raising SC1091. (shfmt below deliberately still covers only
+  # else checked them. The `source` lines resolve through .shellcheckrc, so this
+  # run and a lint of any one script alone agree (no SC1091 for a library that
+  # isn't on the command line). (shfmt below deliberately still covers only
   # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
   run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit
 fi

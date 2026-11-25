@@ -81,8 +81,17 @@ echo "==> periphery (App/BlurtiOS)"
 # findings are excluded from the report, so only the iPhone code's dead
 # declarations are reported. BlurtiOSCore's API is `package`, not public, so
 # it is still scanned.
+#
+# `--clean-build`: periphery keeps its DerivedData between runs
+# (~/Library/Caches/com.github.peripheryapp), and an index unit for a file
+# that no longer compiles to the same output is never replaced — it outlives
+# the build that wrote it. A scan then reads a declaration from that old build
+# with none of today's references and reports live code as unused (after
+# #315, `TermField` and its `Caret`, at the line numbers of the file before
+# it). Clearing it costs a local run its incremental build; CI starts clean
+# anyway.
 periphery scan --project App/BlurtiOS/BlurtiOS.xcodeproj --schemes BlurtiOS \
-  --retain-public --retain-unused-protocol-func-params \
+  --retain-public --retain-unused-protocol-func-params --clean-build \
   --report-exclude 'Sources/**' --strict --quiet || FAILED+=("periphery")
 
 if [ "${#FAILED[@]}" -gt 0 ]; then
