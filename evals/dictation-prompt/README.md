@@ -9,8 +9,8 @@ instruction that beats that default, and by how much? It scores candidate instru
 how well they turn a disfluent transcript back into the text the speaker meant to write.
 
 The Python here is offline decision support — nothing in it ships inside the app. It is still
-gated by `scripts/check.sh`, which runs `ruff format --check` and `ruff check` over `evals/`
-(config in [`../ruff.toml`](../ruff.toml)) and `pytest` over `test_eval.py`. All three are
+gated by `scripts/check.sh`, which runs ruff (format and lint), mypy, and the `test_*.py` suites
+under a 100% coverage gate (config in [`../pyproject.toml`](../pyproject.toml)). All of it is
 platform-independent, so they run in the `--portable` subset too — an eval change can be
 verified off-Mac. A harness whose own correctness is unchecked is a bad instrument.
 

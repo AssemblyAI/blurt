@@ -133,6 +133,15 @@ if ! npm ci --prefix "$REPO_ROOT/tools/jscpd"; then
   status=1
 fi
 
+# ruff, mypy, pytest and coverage.py for the evals, locked in evals/uv.lock —
+# outside the Brewfile because coverage has to share pytest's interpreter. uv
+# (from the Brewfile) fetches a matching Python itself if none is installed.
+echo "==> uv sync --project evals --locked"
+if ! uv sync --project "$REPO_ROOT/evals" --locked; then
+  echo "error: the evals' Python tools didn't install; retry with: uv sync --project evals --locked" >&2
+  status=1
+fi
+
 # The repo's own git hooks (.githooks/pre-commit formats and lints staged
 # Markdown), versioned with the code rather than left in .git/hooks. Never over
 # a hooks path someone already chose: that would silently switch off their
@@ -151,4 +160,4 @@ if [ "$status" -ne 0 ]; then
 fi
 
 echo "==> done"
-echo "Every Brewfile tool and jscpd is on PATH; scripts/check.sh will skip none of them."
+echo "Every Brewfile tool, jscpd and the Python tools are installed; scripts/check.sh will skip none of them."

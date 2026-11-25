@@ -1,0 +1,129 @@
+# The offline evals (`evals/`) — the repo's only Python, none of it shipped.
+#
+# One file for the project's Python tooling, the way a Python project is laid out:
+# the dev tools (pinned with hashes in uv.lock beside this) and the ruff, mypy,
+# pytest and coverage.py config. Scoped to evals/ rather than the repo root on
+# purpose: Blurt is a Swift project, and this directory is decision-support
+# tooling that happens to be Python.
+#
+# Setup: `uv sync --project evals --locked` (bootstrap.sh, CI and the web sandbox
+# run exactly that) creates evals/.venv. scripts/check.sh puts its bin/ first on
+# PATH and runs every tool from this directory, so each finds this file itself.
+#
+# Each harness's runtime dependencies (DSPy and friends) stay in its scripts' own
+# PEP 723 headers, so `uv run <script>` keeps working with nothing installed.
+
+[project]
+name = "blurt-evals"
+version = "0"
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = ["coverage", "mypy", "pytest", "ruff"]
+
+[tool.uv]
+# A set of scripts, not an installable package: `uv sync` installs the dev group
+# only and never tries to build this directory.
+package = false
+
+# --- ruff ------------------------------------------------------------------------
+
+[tool.ruff]
+# The eval's modules are prose-heavy: long explanatory docstrings wrapped just
+# under 100, and code hand-wrapped to match. 100 keeps that rhythm instead of
+# reflowing every module to fit Black's 88.
+line-length = 100
+
+# Each harness directory is an import root, not a package: its CLI inserts its own
+# directory on `sys.path` and the modules import each other by bare name
+# (`import corpus`). Telling ruff where those roots are makes isort classify them
+# as first-party, so the existing stdlib / third-party / local grouping is what it
+# expects rather than something it wants to rewrite.
+src = ["dictation-prompt", "command-planner"]
+
+[tool.ruff.lint]
+# Pyflakes + pycodestyle for correctness, then three additions that pay for
+# themselves on a codebase this size: `I` (import order — the analogue of
+# swift-format's OrderedImports rule), `UP` (keeps the modern syntax the modules
+# already use, e.g. `from __future__ import annotations` plus PEP 585 generics),
+# and `B` (bugbear's real-bug patterns, like mutable default arguments).
+#
+# NOT enabled: `PL`. Its complexity and magic-value rules would flag the argparse
+# CLI and the scoring thresholds, which are legible as written — the stray
+# `# noqa: PLC0415` in `optimize_cleanup_prompt.py` is documentation of intent
+# for whoever reads that deferred import, not a suppression this config needs.
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# Line width is the formatter's job, exactly as `line_length` is disabled in
+# .swiftlint.yml because swift-format owns it. Two tools arguing over wrapping
+# is churn, and E501 would also fire on the long docstring lines `ruff format`
+# deliberately leaves alone.
+ignore = ["E501"]
+
+# --- mypy ------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.11"
+# Every harness directory, as top-level modules (they import siblings by bare
+# name, so module names must stay distinct across directories — a clash fails
+# loudly). `mypy` with no arguments checks these.
+files = ["."]
+exclude = ['^\.venv/']
+explicit_package_bases = true
+
+# Type-check the bodies of unannotated functions too. Most tests are unannotated
+# pytest functions, and without this mypy skips them completely — they are where
+# it found a `None` handed to `urlopen` and a list of ints passed where
+# `Utterance`s were expected.
+check_untyped_defs = true
+
+# NOT `strict`: requiring every pytest function and fixture parameter to be
+# annotated adds ~270 annotations and finds no bugs. These flags are the parts of
+# strict that catch real mistakes without that cost.
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_reexport = true
+
+# Third-party packages the offline suite never imports: DSPy (and GEPA under it)
+# only in `program.py`, and `amend` only for the Voice Arena baseline run. Neither
+# is in the dev environment, so mypy would otherwise fail on the import.
+[[tool.mypy.overrides]]
+module = ["dspy", "dspy.*", "gepa.*", "amend"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# --- pytest ----------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+# Fail on a typo'd marker or a mistyped config key rather than ignoring it.
+addopts = ["-q", "--strict-markers", "--strict-config"]
+
+# --- coverage.py -----------------------------------------------------------------
+
+[tool.coverage.run]
+# Line and branch coverage: an `if` whose else-path no test takes is the usual
+# place a scorer or a retry loop hides a bug.
+branch = true
+# The whole directory, so a new harness is measured the moment it lands.
+source = ["."]
+omit = [
+  # The tests and their shared fixtures are not the code under measurement.
+  "*/test_*.py",
+  "*/conftest.py",
+  # The DSPy/GEPA adapter. DSPy is not in the dev environment (the offline suite
+  # deliberately needs nothing beyond pytest), so the tests that drive it skip
+  # themselves, and its coverage would depend on the machine. It is exercised by
+  # a real `--optimizer gepa` run instead.
+  "dictation-prompt/program.py",
+]
+
+[tool.coverage.report]
+# 100% of the measured code, branches included. Code that genuinely can't run
+# under test takes a `# pragma: no cover` with a reason beside it, never a
+# lowered floor.
+fail_under = 100
+show_missing = true
+skip_covered = true
+exclude_also = ['if __name__ == .__main__.:', 'assert_never\(']

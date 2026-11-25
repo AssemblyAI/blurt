@@ -494,7 +494,7 @@ def run_live_verification(
         return None
 
     sample = test[: args.verify_live]
-    runs = [(winner_name, winner_instruction)]
+    runs: list[tuple[str, str | None]] = [(winner_name, winner_instruction)]
     if args.verify_baseline:
         # `None` omits the instruction — the service's own default wording, which no
         # text-only candidate can stand in for.
