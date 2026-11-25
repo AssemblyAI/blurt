@@ -16,8 +16,30 @@ public import Foundation
 /// `Termination` messages, and `{"type": "Terminate"}` to end. The speech
 /// model is the endpoint's default.
 public actor RealtimeTranscriber: LiveTranscriptionSession {
+  /// Where a session is in its one pass through life, in order. The socket
+  /// lives in the phases that have one, so it can't outlive or predate them.
   private enum Phase {
-    case idle, open, closed
+    /// Not started: audio queues in `pending`.
+    case idle
+    /// Socket up: audio is sent as it gathers.
+    case open(URLSessionWebSocketTask)
+    /// `finish` is sending the rest and waiting for `Termination`: new audio
+    /// is dropped, and a second `finish` waits on the first.
+    case finishing(URLSessionWebSocketTask)
+    /// Final: the `URLSession` is invalidated by then, and asking it for a
+    /// socket raises — so a `start` that loses a race with `cancel` (the
+    /// recording's tasks are unstructured) must find it here and open nothing.
+    case closed
+
+    var socket: URLSessionWebSocketTask? {
+      switch self {
+      case .open(let socket), .finishing(let socket):
+        socket
+
+      case .idle, .closed:
+        nil
+      }
+    }
   }
 
   /// One server message — only the fields read. `Turn`'s are flattened into
@@ -68,11 +90,7 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// The handshake request: internal so tests can read its query.
   nonisolated let request: URLRequest
   private let session: URLSession
-  private var task: URLSessionWebSocketTask?
-  /// Where the session is in its one pass through life. `closed` is final:
-  /// the `URLSession` is invalidated by then, and asking it for a socket
-  /// raises — so a `start` that loses a race with `cancel` (the recording's
-  /// tasks are unstructured) must find it here and open nothing.
+  /// The session's lifecycle, and its socket while it has one.
   private var phase = Phase.idle
   /// Audio not yet sent. Readable by tests, which check nothing is queued for
   /// a session that has closed.
@@ -81,7 +99,6 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// Every `finish` waiting for `Termination` — a list, not one slot, so a
   /// second caller can't overwrite (and so strand) the first.
   private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
-  private var isFinishing = false
   private var didTerminate = false
   /// One decoder for every message: a partial arrives several times a second.
   private let decoder = JSONDecoder()
@@ -109,14 +126,13 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// `finish` got here first — the stream is already over and nothing opens.
   public func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
     let (stream, turns) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
-    guard phase == .idle else {
+    guard case .idle = phase else {
       turns.finish()
       return stream
     }
-    phase = .open
     self.continuation = turns
     let socket = session.webSocketTask(with: request)
-    self.task = socket
+    phase = .open(socket)
     socket.resume()
     Task { await receive() }
     return stream
@@ -130,14 +146,17 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// Once the session is finishing or closed, audio is dropped rather than
   /// sent after `Terminate` or queued for a socket that will never take it.
   public func send(_ pcm: Data) async {
-    guard phase != .closed, !isFinishing else {
+    switch phase {
+    case .idle:
+      pending.append(pcm)
+
+    case .open:
+      pending.append(pcm)
+      await drainPending(final: false)
+
+    case .finishing, .closed:
       return
     }
-    pending.append(pcm)
-    guard phase == .open else {
-      return
-    }
-    await drainPending(final: false)
   }
 
   /// Sends what's left, asks the service to end the session, and waits for
@@ -146,15 +165,18 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// it — so a caller that has `start` in flight awaits it first; a second
   /// caller waits on the first's `Termination` rather than asking again.
   public func finish() async {
-    guard phase == .open else {
+    switch phase {
+    case .idle, .closed:
       close(error: nil)
       return
-    }
-    guard !isFinishing else {
+
+    case .finishing:
       await waitForTermination()
       return
+
+    case .open(let socket):
+      phase = .finishing(socket)
     }
-    isFinishing = true
     await drainPending(final: true)
     await transmit(.string(#"{"type":"Terminate"}"#))
     // Bounded: a service that never answers must not leave the recording
@@ -202,11 +224,11 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// The completion handler, not the async `send(_:)`, for the same
   /// ThreadSanitizer report `receive()` avoids.
   private func transmit(_ message: URLSessionWebSocketTask.Message) async {
-    guard let task else {
+    guard let socket = phase.socket else {
       return
     }
     await withCheckedContinuation { continuation in
-      task.send(message) { _ in continuation.resume() }
+      socket.send(message) { _ in continuation.resume() }
     }
   }
 
@@ -219,14 +241,14 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   private func waitForTermination() async {
     // Already closed (the socket failed, or `cancel`): no `Termination` is
     // coming, so don't sit out the timeout for one.
-    guard !didTerminate, task != nil else {
+    guard case .finishing = phase, !didTerminate else {
       return
     }
     await withCheckedContinuation { terminationWaiters.append($0) }
   }
 
   private func receive() async {
-    while let task {
+    while let task = phase.socket {
       let message: URLSessionWebSocketTask.Message
       do {
         // The completion handler under a checked continuation, not the async
@@ -266,10 +288,10 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   }
 
   private func close(error: (any Error)?) {
+    let socket = phase.socket
     phase = .closed
     pending = Data()
-    task?.cancel(with: .normalClosure, reason: nil)
-    task = nil
+    socket?.cancel(with: .normalClosure, reason: nil)
     // The session is this transcriber's alone; left valid, it leaks with it.
     session.finishTasksAndInvalidate()
     if let error { continuation?.finish(throwing: error) } else { continuation?.finish() }
