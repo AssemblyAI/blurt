@@ -275,8 +275,8 @@ import Foundation
           try Task.checkCancellation()
           outcome = try await session.replaceSelection(with: text).overlayState
         } catch {
-          // A cancelled request answers `URLError.cancelled`: abandoned, not failed.
-          if Self.isCancellation(error) { return }
+          // Abandoned only if cancelled; otherwise a dropped request, a failure.
+          if Self.isCancellation(error) && Task.isCancelled { return }
           Self.logger.error("\(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
           outcome = Self.failure(error)
         }

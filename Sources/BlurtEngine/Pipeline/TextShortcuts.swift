@@ -75,9 +75,12 @@ enum TextShortcutExpander {
 
   static func expand(_ text: String, using shortcuts: [TextShortcut]) -> String {
     // Longest first, so a trigger that extends another claims the text before
-    // its prefix can. Group i+1 of `alternation` is `ordered[i]`.
+    // its prefix can. Length is the trigger's letters and digits — what it
+    // matches — not its pattern's, which grows with every separator, so
+    // "a.s.a.p." would otherwise outrank "asap reply". Group i+1 of
+    // `alternation` is `ordered[i]`.
     let ordered = shortcuts.compactMap { shortcut in pattern(for: shortcut.trigger).map { (shortcut, $0) } }
-      .sorted { $0.1.count > $1.1.count }
+      .sorted { TextShortcut.matchKey(for: $0.0.trigger).count > TextShortcut.matchKey(for: $1.0.trigger).count }
     guard !ordered.isEmpty else { return text }
     let alternation = ordered.map { "(\($0.1))" }.joined(separator: "|")
 

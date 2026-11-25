@@ -54,7 +54,7 @@
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: { true },
+        postPaste: { _ in true },
         activateTarget: { _ in false },
         clipboard: clip)
       await injector.setTarget(try liveTargetFocus())
@@ -73,7 +73,7 @@
       let editable = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: { true },
+        postPaste: { _ in true },
         hasEditableTarget: { editable.value },
         clipboard: clip)
 

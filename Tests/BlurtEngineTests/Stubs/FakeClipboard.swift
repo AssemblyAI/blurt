@@ -20,6 +20,7 @@
       var keptForHandPaste = false
     }
     private let state: Mutex<State>
+    let lock = PasteboardLock()
 
     init(string: String?) {
       state = Mutex(State(text: string))

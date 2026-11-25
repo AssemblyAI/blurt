@@ -1,0 +1,11 @@
+# Resolve `source` lines the same way however shellcheck is run — check.sh's
+# one invocation over every script, an editor's lint of a single file, or a
+# hook's own file — instead of raising SC1091 whenever the sourced library
+# isn't also on the command line.
+#
+# SCRIPTDIR covers the hooks' `source "$(dirname "$0")/hook-lib.sh"`;
+# SCRIPTDIR/.. covers the scripts' `source "$REPO_ROOT/scripts/<lib>.sh"`,
+# which shellcheck reads as `scripts/<lib>.sh` and finds from the repo root.
+external-sources=true
+source-path=SCRIPTDIR
+source-path=SCRIPTDIR/..

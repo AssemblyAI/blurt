@@ -66,6 +66,45 @@ struct RealtimeTranscriberTests {
     #expect(server.chunkSizes == [6_400])
   }
 
+  @Test("a backlog longer than 1000 ms is sliced on finish, not sent whole")
+  func backlogIsSlicedOnFinish() async throws {
+    let server = try await FakeRealtimeServer.start()
+    defer { server.stop() }
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
+    await transcriber.send(Data(count: 40_000))  // before start: no socket yet
+    let turns = await transcriber.start()
+    await transcriber.finish()
+    for try await _ in turns {}
+    #expect(server.chunkSizes == [32_000, 8_000])
+  }
+
+  @Test("a start that loses the race with cancel opens nothing")
+  func startAfterCancel() async throws {
+    let server = try await FakeRealtimeServer.start()
+    defer { server.stop() }
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
+    await transcriber.cancel()
+    let turns = await transcriber.start()
+    await transcriber.send(Data(count: 3_200))
+    for try await _ in turns {}
+    await transcriber.finish()
+    #expect(server.chunkSizes.isEmpty)
+    #expect(!server.terminated)
+  }
+
+  @Test("a second finish waits for the same Termination instead of stranding the first")
+  func concurrentFinish() async throws {
+    let connection = try await connect()
+    let (server, transcriber, turns) = (connection.server, connection.transcriber, connection.turns)
+    defer { server.stop() }
+    await transcriber.send(Data(count: 3_200))
+    async let first: Void = transcriber.finish()
+    async let second: Void = transcriber.finish()
+    _ = await (first, second)
+    for try await _ in turns {}
+    #expect(server.terminated)
+  }
+
   @Test("a connection that fails surfaces as an error on the turns")
   func connectionFailure() async throws {
     // Nothing listens on port 9 of loopback.

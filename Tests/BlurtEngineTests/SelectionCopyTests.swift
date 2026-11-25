@@ -20,6 +20,7 @@ final class FakeCopyPasteboard: CopyPasteboard {
 
   let state = Mutex(State())
   let readable: Bool
+  let lock = PasteboardLock()
 
   init(readable: Bool = true) { self.readable = readable }
 
@@ -109,6 +110,29 @@ struct SelectionCopyTests {
       })
     #expect(await copy.copySelection(maxCharacters: 100) == nil)
     #expect(!posted.withLock { $0 })
+  }
+
+  @Test("waits for a paste's turn, so its transcript isn't kept as the user's clipboard (issue #341)")
+  func waitsOutPaste() async throws {
+    let pasteboard = FakeCopyPasteboard()
+    // A paste mid-settle: its transcript on the clipboard, its restore to come.
+    let paste = await pasteboard.lock.acquire()
+    pasteboard.ownWrite("transcript")
+    let posted = Mutex(false)
+    let copy = SelectionCopy(
+      pasteboard: pasteboard,
+      postCopy: {
+        posted.withLock { $0 = true }
+        return pasteboard.answerCopy(with: "selected")()
+      })
+    let copying = Task { await copy.copySelection(maxCharacters: 100) }
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(!posted.withLock { $0 })
+    // The paste's restore, then its turn ends.
+    pasteboard.ownWrite("user's clipboard")
+    paste.end()
+    #expect(await copying.value == "selected")
+    #expect(pasteboard.string == "user's clipboard")
   }
 
   @Test("the copied text is capped like an Accessibility read")
