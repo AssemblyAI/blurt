@@ -88,6 +88,10 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   package let seq: UInt64?
   /// The controller (one per host field) within the process.
   package let controllerID: String?
+  /// The host field itself (`UITextDocumentProxy.documentIdentifier`): iOS
+  /// can keep one controller as the user taps from field to field, and this
+  /// is what changes then (`ResultAddress`).
+  package let documentID: UUID?
   /// For a release or cancel: the dictation it ends (`CommandAck.started`),
   /// so an ending can't land on a later dictation.
   package let dictationID: UUID?
@@ -96,7 +100,8 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
 
   package init(
     id: UUID, kind: Kind, priorText: String?, selectedText: String?, sentAt: Date, keyboard: String?,
-    seq: UInt64? = nil, controllerID: String? = nil, dictationID: UUID? = nil, stateSequence: UInt64? = nil
+    seq: UInt64? = nil, controllerID: String? = nil, documentID: UUID? = nil, dictationID: UUID? = nil,
+    stateSequence: UInt64? = nil
   ) {
     self.id = id
     self.kind = kind
@@ -106,6 +111,7 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
     self.keyboard = keyboard
     self.seq = seq
     self.controllerID = controllerID
+    self.documentID = documentID
     self.dictationID = dictationID
     self.stateSequence = stateSequence
   }
@@ -115,6 +121,30 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   /// unread — so the keyboard stops waiting for an answer to it, too.
   package func isFresh(now: Date = Date()) -> Bool {
     now.timeIntervalSince(sentAt) < BlurtShared.commandFreshnessWindow
+  }
+}
+
+/// Where a dictation's words go: the field the accepted stop came from, else
+/// the one the press did (DESIGN.md › result addressing), named three ways.
+/// The keyboard process keeps a second host app's keyboard out; the
+/// controller and the document keep out another field in the same process,
+/// which is where words used to land when the user tapped away while they
+/// were still being transcribed (#346). Nil in any part — a keyboard build
+/// that never sent it — matches anything there.
+package nonisolated struct ResultAddress: Sendable, Equatable {
+  package var keyboard: String?
+  package var controllerID: String?
+  package var documentID: UUID?
+
+  package init(keyboard: String? = nil, controllerID: String? = nil, documentID: UUID? = nil) {
+    self.keyboard = keyboard
+    self.controllerID = controllerID
+    self.documentID = documentID
+  }
+
+  /// The field the command was sent from.
+  package init(_ command: KeyboardCommand) {
+    self.init(keyboard: command.keyboard, controllerID: command.controllerID, documentID: command.documentID)
   }
 }
 
@@ -129,6 +159,30 @@ package nonisolated struct DictationResult: Codable, Sendable {
   /// app last saw — so a second live keyboard in another app doesn't also
   /// insert them. Nil means whoever is up.
   package let recipient: String?
+  /// The controller and the field within `recipient` (`ResultAddress`): a
+  /// keyboard in the right process but over another field leaves the words
+  /// alone, and the app copies them out when nobody takes them.
+  package let controllerID: String?
+  package let documentID: UUID?
+
+  package init(
+    id: UUID, text: String, deliveredAt: Date, recipient: String?, controllerID: String? = nil,
+    documentID: UUID? = nil
+  ) {
+    self.id = id
+    self.text = text
+    self.deliveredAt = deliveredAt
+    self.recipient = recipient
+    self.controllerID = controllerID
+    self.documentID = documentID
+  }
+
+  /// Whether these words are for the field a keyboard is over now — its
+  /// controller and the document its proxy is attached to.
+  package func isFor(controllerID: String, documentID: UUID?) -> Bool {
+    guard self.controllerID == nil || self.controllerID == controllerID else { return false }
+    return self.documentID == nil || self.documentID == documentID
+  }
 }
 
 /// What the keyboard shows while the app works: the pipeline's phase, flattened

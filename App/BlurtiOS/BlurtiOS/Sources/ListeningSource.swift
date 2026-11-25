@@ -218,7 +218,7 @@ nonisolated final class UtteranceFeed: Sendable {
   /// Every sample exactly zero: what a microphone route delivers while it is
   /// still coming up, never what a live one hears in a quiet room.
   static func isDigitalSilence(_ pcm: Data) -> Bool {
-    pcm.withUnsafeBytes { raw in raw.bindMemory(to: Int16.self).allSatisfy { $0 == 0 } }
+    pcm.allSatisfy { $0 == 0 }
   }
 
   /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 by the Mac meter's own
@@ -226,9 +226,10 @@ nonisolated final class UtteranceFeed: Sendable {
   static func level(of pcm: Data) -> Float {
     let count = pcm.count / MemoryLayout<Int16>.size
     guard count > 0 else { return 0 }
+    // Loaded unaligned: a `Data` slice needn't start on an `Int16` boundary.
     let energy = pcm.withUnsafeBytes { raw -> Double in
-      raw.bindMemory(to: Int16.self).reduce(0) { sum, sample in
-        let value = Double(sample)
+      (0..<count).reduce(0) { sum, index in
+        let value = Double(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self)))
         return sum + value * value
       }
     }

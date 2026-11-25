@@ -71,6 +71,14 @@ extension KeyboardModel {
       KeyboardLog.result(result.id, inserted: false, why: "for \(result.recipient ?? "")")
       return
     }
+    // The right process, but maybe not the right field: the user may have
+    // tapped into another while the words were being transcribed, and iOS
+    // can keep this controller for it. Left in the store, not taken — the
+    // app copies the words out when the field they were for never takes them.
+    guard result.isFor(controllerID: controllerID, documentID: proxy.documentIdentifier) else {
+      KeyboardLog.result(result.id, inserted: false, why: "for another field")
+      return
+    }
     lastResultID = result.id
     // Taken out of the store once inserted, so no other keyboard process —
     // each host app runs its own — can insert the same words again; the app

@@ -71,6 +71,32 @@ extension FocusCapture {
     return visibleTextOrNil(clipped.trimmedNonEmpty()) == nil ? nil : clipped
   }
 
+  /// What an Accessibility read of the selection found.
+  enum SelectionRead: Equatable {
+    case text(String)
+    /// A readable focused element with no selection (a bare caret), or a secure
+    /// field. A definite answer: the press should dictate.
+    case none
+    /// AX can't say what is selected: no focused element could be reached, or
+    /// the one it reached answers neither a selected range's text nor
+    /// `kAXSelectedText`. Electron apps such as Claude.app answer the
+    /// system-wide focus query with `cannotComplete`; once a voice command has
+    /// set `AXManualAccessibility` they answer it with a web area instead, which
+    /// still exposes no selected text (nor do Sublime Text and Zed). Only here
+    /// may the caller fall back to copying (`SelectionCopy`).
+    case unreadable
+  }
+
+  /// How `captureSelectedText` reads what the focused element answered for its
+  /// selection, once a bare caret has been ruled out. `raw` nil means the element
+  /// answered nothing at all — not an empty selection but an unreadable one, so
+  /// the copy fallback gets its chance (#342). A read that holds nothing visible
+  /// is a definite "no selection".
+  static func selectionRead(_ raw: String?, maxChars: Int) -> SelectionRead {
+    guard let raw else { return .unreadable }
+    return selectionText(raw, maxChars: maxChars).map(SelectionRead.text) ?? .none
+  }
+
   static func visibleTextOrNil(_ text: String?) -> String? {
     guard let text else { return nil }
     let hasVisible = text.contains { character in

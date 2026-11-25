@@ -73,19 +73,6 @@
         isSecure: isSecure)
     }
 
-    /// What an Accessibility read of the selection found.
-    enum SelectionRead: Equatable {
-      case text(String)
-      /// A readable focused element with no selection (a bare caret), or a secure
-      /// field. A definite answer: the press should dictate.
-      case none
-      /// No focused element could be reached. Electron apps such as Claude.app
-      /// answer the system-wide focus query with `cannotComplete`, and the
-      /// selection in their web content is invisible to AX. Only here may the
-      /// caller fall back to copying (`SelectionCopy`).
-      case unreadable
-    }
-
     /// Just the focused field's selected text, up to `maxChars` — the read the
     /// experimental read-aloud press makes (`SelectionSpeaker.focusedSelection`).
     /// A narrower traversal than `captureFieldContext` because it sits on the
@@ -101,8 +88,7 @@
       // is on), so skip `selectedText`'s `kAXSelectedText` fallback read for it.
       // That fallback is for elements that expose no range at all.
       if let selection, selection.length == 0 { return .none }
-      let text = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxChars))
-      return text.map(SelectionRead.text) ?? .none
+      return selectionRead(rawSelectedText(of: element, selection: selection, maxChars: maxChars), maxChars: maxChars)
     }
 
     /// The focused element and whether its contents must stay unread, or nil when
@@ -250,14 +236,21 @@
     private nonisolated static func selectedText(
       of element: AXUIElement, selection: CFRange?, maxChars: Int
     ) -> String? {
+      selectionText(rawSelectedText(of: element, selection: selection, maxChars: maxChars), maxChars: maxChars)
+    }
+
+    /// The selection exactly as the element answered it — the selected range's
+    /// slice, else `kAXSelectedText` — or nil when the element answered neither.
+    /// Unfiltered, so `captureSelectedText` can tell an element that holds no
+    /// visible selection from one that won't say (`selectionRead`).
+    private nonisolated static func rawSelectedText(
+      of element: AXUIElement, selection: CFRange?, maxChars: Int
+    ) -> String? {
       if var selectedRange = selection, selectedRange.length > 0 {
         selectedRange.length = min(selectedRange.length, maxChars)
-        if let slice = string(of: element, in: selectedRange) {
-          return selectionText(slice, maxChars: maxChars)
-        }
+        if let slice = string(of: element, in: selectedRange) { return slice }
       }
-
-      return selectionText(rawStringValue(element, kAXSelectedTextAttribute), maxChars: maxChars)
+      return rawStringValue(element, kAXSelectedTextAttribute)
     }
 
     /// The title of the window containing the focused element, if exposed.
