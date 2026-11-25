@@ -39,15 +39,20 @@ extension TranscriptsModel {
     pausedAt = nil
     clockStart = .now
     state = .recording
+    // Every update is checked against the recording it belongs to, as
+    // `watchForQuiet` is: a session that outlives its recording must not write
+    // its turns into the next one's transcript, or end it when it fails.
     let turns = Task { [weak self] in
       let turns = await realtime.start()
       do {
         for try await turn in turns {
-          self?.live.apply(turn)
-          if turn.transcript.trimmedNonEmpty() != nil { self?.recording?.quietStop.heard(at: .now) }
+          guard let self, recording?.realtime === realtime else { return }
+          live.apply(turn)
+          if turn.transcript.trimmedNonEmpty() != nil { recording?.quietStop.heard(at: .now) }
         }
       } catch {
-        self?.liveTranscriptionFailed(error)
+        guard let self, recording?.realtime === realtime else { return }
+        liveTranscriptionFailed(error)
       }
     }
     recording = Recording(
@@ -148,9 +153,14 @@ extension TranscriptsModel {
   /// to here either way, and the async pass `saveRecording` starts
   /// transcribes all of it, replacing the cut-short live text. Only if that
   /// fails too does the entry keep the partial live transcript.
+  /// Also the way out when the recorder can't resume, where the socket is
+  /// still open: it is closed here, and its turns stop, rather than left
+  /// running into the next recording.
   private func liveTranscriptionFailed(_: any Error) {
     guard isRecording, let recording else { return }
     endCapture(recording, dropUnsent: true)
+    recording.turns.cancel()
+    Task { await recording.realtime.cancel() }
     saveRecording(recording.url)
   }
 
