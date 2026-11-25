@@ -7,7 +7,7 @@ import Testing
 /// spoken instructions recorded by the session, the composition for the app
 /// in front, and the paste through the session's own injector.
 @MainActor
-@Suite("SelectionSpeechRouter · Compose")
+@Suite("SelectionSpeechRouter · Compose", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterComposeTests {
   /// A compose press's router, what it reported, and the injector it pasted through.
   @MainActor
@@ -33,6 +33,7 @@ struct SelectionSpeechRouterComposeTests {
     let fixture = makeSession(
       mode: .transcript("Tell Dan we should ship it."), frontmost: CapturedFocus(pid: 42, processName: "Slack")
     )
+    let clock = TestClock()
     await fixture.injector.setError(injectorError)
     let router = SelectionSpeechRouter(
       session: fixture.session,
@@ -43,11 +44,12 @@ struct SelectionSpeechRouterComposeTests {
         Issue.record("a compose press read the selection")
         return nil
       },
-      defaults: defaults
+      defaults: defaults,
+      clock: clock
     )
     TriggerKeyStyleStore(defaults: defaults).setChoice(.compose, for: .rightOption)
     let events = JobEvents(watching: router)
-    let phases = try await speakHeldPress(router, on: fixture)
+    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
     try await waitUntil { !composer.calls.isEmpty }
     return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
   }

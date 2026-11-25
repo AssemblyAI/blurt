@@ -11,14 +11,17 @@ struct TryItBox: View {
   @State private var text = ""
 
   var body: some View {
-    RememberingTextView(text: $text)
-      .frame(minHeight: DesignTokens.Metrics.appTryBoxHeight, alignment: .topLeading)
+    // The text view itself takes the box's least height, not just its frame:
+    // the whole box is what a tap lands on, and what VoiceOver outlines.
+    RememberingTextView(text: $text, minHeight: DesignTokens.Metrics.appTryBoxHeight)
       .overlay(alignment: .topLeading) {
         if text.isEmpty {
           Text("Try it here")
-            .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+            .bodyFont(DesignTokens.Typography.sizeBody)
             .foregroundStyle(BlurtBrand.muted)
             .allowsHitTesting(false)
+            // The text view carries the same words as its label.
+            .accessibilityHidden(true)
         }
       }
       .brandInput()

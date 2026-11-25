@@ -7,7 +7,7 @@ import Testing
 /// command recorded by the session, the plan, each step performed, and a typed
 /// step pasted through the session's own injector.
 @MainActor
-@Suite("SelectionSpeechRouter · Command")
+@Suite("SelectionSpeechRouter · Command", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterCommandTests {
   @MainActor
   private struct Rig {
@@ -52,6 +52,7 @@ struct SelectionSpeechRouterCommandTests {
     injectorError: (any Error & Sendable)? = nil
   ) async throws -> Rig {
     let fixture = makeSession(mode: .transcript(said))
+    let clock = TestClock()
     await fixture.injector.setError(injectorError)
     let router = SelectionSpeechRouter(
       session: fixture.session,
@@ -59,11 +60,12 @@ struct SelectionSpeechRouterCommandTests {
       planner: planner,
       performer: performer,
       readSelection: { nil },
-      defaults: defaults
+      defaults: defaults,
+      clock: clock
     )
     TriggerKeyStyleStore(defaults: defaults).setChoice(.command, for: .rightOption)
     let events = JobEvents(watching: router)
-    let phases = try await speakHeldPress(router, on: fixture)
+    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
     return Rig(router: router, events: events, injector: fixture.injector, performer: performer, phases: phases)
   }
 

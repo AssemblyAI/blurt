@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import importlib.util
 import io
-import json
 import pathlib
 import re
 import sys
+import time
 
 import pytest
 
@@ -25,6 +25,7 @@ import live
 import metrics
 import optimize_cleanup_prompt as cli
 import progress
+from conftest import config_of, http_error, recording_into, va_row
 from disfluency import inject
 
 SENTENCE = (
@@ -657,6 +658,26 @@ def test_zero_total_does_not_divide_by_zero():
     meter.close()
 
 
+def test_a_labelled_meter_announces_the_work_and_reports_when_it_finishes():
+    stream = io.StringIO()
+    with progress.Progress(3, "Scoring", stream=stream) as meter:
+        meter.tick()
+    body = stream.getvalue()
+    assert body.startswith("\nScoring — 3 model calls\n")
+    assert body.endswith("s\n") and "  Scoring in " in body
+    assert "\r" not in body
+
+
+def test_an_unlabelled_meter_on_a_terminal_clears_its_line_and_says_done():
+    stream = _Terminal()
+    with progress.Progress(2, stream=stream) as meter:
+        meter.tick("x")
+    body = stream.getvalue()
+    assert "model calls" not in body
+    assert "\r" + " " * 120 + "\r" in body
+    assert "  done in " in body
+
+
 def test_eta_is_unknown_before_the_first_tick():
     assert progress.Progress(10, stream=_Pipe())._eta() == "—"
 
@@ -767,11 +788,11 @@ def test_the_seed_carries_no_dangling_rule_numbering():
 
 def test_a_long_candidate_does_not_stop_the_run(monkeypatch):
     monkeypatch.setitem(candidates.CANDIDATES, "long", "x" * 5000)
-    assert cli.check_candidates() is None
+    cli.check_candidates()
 
 
 def test_candidate_check_passes_as_shipped():
-    assert cli.check_candidates() is None
+    cli.check_candidates()
 
 
 def test_describe_length_reports_length_without_any_cap_warning():
@@ -892,7 +913,7 @@ def test_a_baseline_missing_a_safeguard_stops_the_run(monkeypatch):
 def test_terse_contrast_candidates_are_not_held_to_the_safeguard_bar():
     """`guessed-default` is a floor to beat, not something anyone would ship."""
     assert candidates.missing_safeguards(candidates.CANDIDATES["guessed-default"])
-    assert cli.check_candidates() is None
+    cli.check_candidates()
 
 
 def test_the_constraints_reach_the_reflector_before_its_first_attempt():
@@ -982,11 +1003,16 @@ def test_a_bare_invocation_is_the_recommended_gepa_run():
     assert args.reflection_model != args.model
 
 
+def _rows(n: int) -> list[corpus.Utterance]:
+    """`n` distinct, unremarkable rows: none from a held-out source."""
+    return [corpus.Utterance(reference=str(i), disfluent=str(i)) for i in range(n)]
+
+
 def _default_split(argv=()):
     """train / optimizer valset / dev / test, the way `main` carves them."""
     args = cli.parse_args(list(argv))
     train, dev, test = corpus.split(
-        list(range(args.limit)), args.seed, args.dev_fraction, args.test_fraction
+        _rows(args.limit), args.seed, args.dev_fraction, args.test_fraction
     )
     validation, train = corpus.carve_validation(train, args.gepa_valset)
     return train, validation, dev, test
@@ -1069,7 +1095,7 @@ def test_oversized_slices_scale_down_together_instead_of_starving_dev():
     Satisfying test first and handing dev the remainder leaves dev empty, which reads
     as a corpus problem when it is really arithmetic.
     """
-    train, dev, test = corpus.split(list(range(12)), 7, dev_size=50, test_size=150)
+    train, dev, test = corpus.split(_rows(12), 7, dev_size=50, test_size=150)
     assert len(dev) > 0
     assert len(dev) + len(test) <= 12
     # The 1:3 ratio the sizes asked for survives the scaling.
@@ -1079,7 +1105,7 @@ def test_oversized_slices_scale_down_together_instead_of_starving_dev():
 
 def test_slices_that_already_fit_are_left_exactly_as_asked():
     """Scaling must not fire on the normal case, including dev+test == the whole corpus."""
-    _, dev, test = corpus.split(list(range(500)), 7, dev_size=0.5, test_size=0.5)
+    _, dev, test = corpus.split(_rows(500), 7, dev_size=0.5, test_size=0.5)
     assert (len(dev), len(test)) == (250, 250)
 
 
@@ -1279,11 +1305,7 @@ def test_an_empty_instruction_asks_for_the_service_default():
         if instruction:
             config["llm_instruction"] = instruction
         body, _ = live._multipart(b"", config)
-        # Found by part name, not by position: this used to take the last
-        # `\r\n\r\n` chunk, which silently depended on `config` being the trailing
-        # part and broke when the streaming route required it to lead.
-        part = body.decode("latin-1").split('name="config"')[1]
-        parsed = json.loads(part.split("\r\n\r\n")[1].split("\r\n--")[0])
+        parsed = config_of(body)
         assert parsed.get("llm_instruction") == expected
         assert "llm" not in parsed
 
@@ -1361,17 +1383,8 @@ def test_program_is_the_only_module_that_imports_dspy():
 # --------------------------------------------------------------------------
 
 
-def _va_row(clip_id: str, spoken: str, intended: str) -> dict:
-    return {
-        "id": clip_id,
-        "spoken_text": spoken,
-        "intended_text": intended,
-        "audio": [{"src": f"https://example.invalid/{clip_id}.flac", "type": "audio/flac"}],
-    }
-
-
 VA_ROWS = [
-    _va_row(
+    va_row(
         f"dict_{i:04d}",
         f"It's room four eighteen, no, four sixteen for patient {i}.",
         f"It's room 416 for patient {i}.",
@@ -1408,7 +1421,7 @@ def test_the_default_run_weaves_both_corpora():
 
 
 def test_sources_combine_and_dedupe_across_corpora(monkeypatch):
-    shared = _va_row(
+    shared = va_row(
         "dict_dup", "So we shipped the build on day 0.", "So we shipped the build on day 0."
     )
     _fake_sources(monkeypatch, [_nyra_row(i) for i in range(4)], [*VA_ROWS, shared])
@@ -1455,15 +1468,8 @@ def test_stt_input_is_the_services_transcript_and_is_cached(monkeypatch, tmp_pat
         calls.append(filename)
         return {"text": "It's room 418, no, 416 for the patient."}
 
-    class FakeResponse(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
     monkeypatch.setattr(live, "transcribe_encoded", fake_transcribe)
-    monkeypatch.setattr("urllib.request.urlopen", lambda url, timeout=0: FakeResponse(b"flac"))
+    monkeypatch.setattr("urllib.request.urlopen", lambda url, timeout=0: io.BytesIO(b"flac"))
     path = tmp_path / "stt.json"
     first = voicearena.transcripts(VA_ROWS[:2], "key", path)
     assert set(first.values()) == {"It's room 418, no, 416 for the patient."}
@@ -1532,7 +1538,7 @@ def test_zer_counts_zero_edit_drafts_and_amend_pools_characters():
     """ZER is per draft; AMEND pools, so a long draft weighs more — as amend-va does."""
     import voicearena_baseline as vb
 
-    rows = [
+    rows: list[dict] = [
         {"draft_edits": 0, "draft_chars": 100, "stt_edits": 0, "stt_chars": 100},
         {"draft_edits": 10, "draft_chars": 300, "stt_edits": 20, "stt_chars": 300},
         {"draft_edits": None, "draft_chars": None, "stt_edits": 1, "stt_chars": 50},
@@ -1545,9 +1551,8 @@ def test_zer_counts_zero_edit_drafts_and_amend_pools_characters():
     assert summary["buckets"] == {"pass": 1, "both fail": 1}
 
 
-def test_fetched_pages_are_cached_and_reused(monkeypatch, tmp_path):
+def test_fetched_pages_are_cached_and_reused(monkeypatch):
     """Every run re-reads ~40 pages; the rows API rate-limits that, token or not."""
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     calls = []
 
     def fake_fetch(url, headers, source, token):
@@ -1573,13 +1578,31 @@ def test_live_verification_refreshes_expired_audio_urls(monkeypatch):
     """Signed URLs expire mid-run; a 4-hour search once got 403 on every clip."""
     import voicearena
 
-    seen = []
+    seen: list[str] = []
     monkeypatch.setattr(live, "require_tools", lambda: None)
-    monkeypatch.setattr(live, "recorded", lambda url, directory: seen.append(url) or b"pcm")
+    monkeypatch.setattr(live, "recorded", recording_into(seen))
     monkeypatch.setattr(voicearena, "fresh_audio_urls", lambda: {"a": "https://x/fresh.flac"})
     stale = corpus.Utterance(reference="a", disfluent="a", audio_url="https://x/stale.flac")
     live.synthesize_all([stale])
     assert seen == ["https://x/fresh.flac"]
+
+
+def test_an_unrefreshable_url_keeps_the_one_from_load(monkeypatch, capsys):
+    """The datasets-server being down too must not fail the whole live check here."""
+    import voicearena
+
+    seen: list[str] = []
+
+    def server_down():
+        raise RuntimeError("HTTP 502")
+
+    monkeypatch.setattr(live, "require_tools", lambda: None)
+    monkeypatch.setattr(voicearena, "fresh_audio_urls", server_down)
+    monkeypatch.setattr(live, "recorded", recording_into(seen))
+    stale = corpus.Utterance(reference="a", disfluent="a", audio_url="https://x/old.flac")
+    assert live.synthesize_all([stale]) == [(stale, b"pcm")]
+    assert seen == ["https://x/old.flac"]
+    assert "could not refresh recording URLs (HTTP 502)" in capsys.readouterr().out
 
 
 def test_a_failed_live_check_never_crashes_a_finished_run(monkeypatch):
@@ -1600,8 +1623,8 @@ def test_recordings_kept_on_disk_are_played_without_the_network(monkeypatch, tmp
     import voicearena
 
     monkeypatch.setattr(live, "require_tools", lambda: None)
-    seen = []
-    monkeypatch.setattr(live, "recorded", lambda url, directory: seen.append(url) or b"pcm")
+    seen: list[str] = []
+    monkeypatch.setattr(live, "recorded", recording_into(seen))
 
     def no_network():
         raise AssertionError("fresh URLs must not be fetched for local recordings")
@@ -1612,10 +1635,9 @@ def test_recordings_kept_on_disk_are_played_without_the_network(monkeypatch, tmp
     assert seen == [str(tmp_path / "a.flac")]
 
 
-def test_a_downloaded_recording_is_served_locally(monkeypatch, tmp_path):
+def test_a_downloaded_recording_is_served_locally():
     import voicearena
 
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     row = VA_ROWS[0]
     assert voicearena.local_or_url(row) == row["audio"][0]["src"]
     voicearena.audio_path(row).parent.mkdir(parents=True)
@@ -1623,44 +1645,30 @@ def test_a_downloaded_recording_is_served_locally(monkeypatch, tmp_path):
     assert voicearena.local_or_url(row) == str(voicearena.audio_path(row))
 
 
-def test_a_hostile_clip_id_cannot_escape_the_audio_cache(monkeypatch, tmp_path):
+def test_a_hostile_clip_id_cannot_escape_the_audio_cache(cache_home):
     """Clip ids come from a third-party dataset and become file names."""
     import voicearena
 
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    directory = (tmp_path / "blurt-evals" / "voicearena-audio").resolve()
+    directory = (cache_home / "blurt-evals" / "voicearena-audio").resolve()
     for hostile in ("../../etc/passwd", "/abs/path", "a/../../b", "..", "x\x00y"):
         path = voicearena.audio_path({"id": hostile, "spoken_text": "s"})
         assert path.parent == directory, hostile
     assert voicearena.audio_path(VA_ROWS[0]).name.startswith("dict_0000-")
 
 
-def _http_error(code):
-    import urllib.error
-
-    return urllib.error.HTTPError("https://x", code, "err", {}, io.BytesIO(b"body"))
-
-
 def test_a_gateway_hiccup_is_retried_not_fatal(monkeypatch):
     """502s and 500s hit three loads in one afternoon; each was fine seconds later."""
     import urllib.request
 
-    replies = [_http_error(502), _http_error(500)]
-
-    class Ok(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
+    replies = [http_error(502), http_error(500)]
 
     def fake_urlopen(request, timeout=0):
         if replies:
             raise replies.pop(0)
-        return Ok(b'{"rows": []}')
+        return io.BytesIO(b'{"rows": []}')
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    monkeypatch.setattr(corpus.time, "sleep", lambda s: None)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
     assert corpus._fetch_page("https://x", {}, corpus.SOURCES["nyra"], None) == {"rows": []}
 
 
@@ -1671,7 +1679,7 @@ def test_a_client_error_still_fails_at_once(monkeypatch):
 
     def fake_urlopen(request, timeout=0):
         attempts.append(1)
-        raise _http_error(404)
+        raise http_error(404)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     with pytest.raises(RuntimeError, match="HTTP 404"):
@@ -1798,8 +1806,13 @@ def test_baseline_csv_names_each_column_once(tmp_path):
 
     import voicearena_baseline as baseline  # noqa: PLC0415
 
-    scored = {"id": "a", "draft_edits": 0, "stt_edits": 1, "bucket": "rewrite fixed it"}
-    unscored = {"id": "b", "draft_edits": None, "stt_edits": None}
+    scored: dict[str, object] = {
+        "id": "a",
+        "draft_edits": 0,
+        "stt_edits": 1,
+        "bucket": "rewrite fixed it",
+    }
+    unscored: dict[str, object] = {"id": "b", "draft_edits": None, "stt_edits": None}
     for table in ([scored, unscored], [unscored, scored]):
         out = tmp_path / "out.csv"
         baseline.write_csv(str(out), table)

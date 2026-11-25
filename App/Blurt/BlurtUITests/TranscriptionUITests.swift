@@ -16,11 +16,6 @@ final class TranscriptionUITests: BlurtUITestCase {
     [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.seedHistoryLaunchArgument]
   }
 
-  /// The open item's toolbar View menu.
-  private var viewPicker: XCUIElement {
-    app.menuButtons[UITestIdentifiers.facetPicker].firstMatch
-  }
-
   // MARK: - Recent list
 
   func testSeededHistoryIsListedAndFiltered() {
@@ -140,13 +135,6 @@ final class TranscriptionUITests: BlurtUITestCase {
 
   // MARK: - Helpers
 
-  /// A Library row by its title. The row is one combined element whose text
-  /// ("<title>, <details>") XCUITest may report as its label or its value.
-  private func row(titled title: String) -> XCUIElement {
-    let titled = NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title)
-    return app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any).matching(titled).firstMatch
-  }
-
   /// Static text in the main window containing `text`. A typed query:
   /// matching `.any` element across the window is slow enough on this
   /// hierarchy for XCUITest to time out.
@@ -160,13 +148,6 @@ final class TranscriptionUITests: BlurtUITestCase {
   private func windowText(containing text: String) -> XCUIElement {
     app.descendants(matching: .any)
       .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
-  }
-
-  /// Shows the view titled `title`, from the toolbar's View menu.
-  private func showView(_ title: String) {
-    XCTAssertTrue(viewPicker.waitForExistence(timeout: 5), "The open item's View menu not found")
-    viewPicker.click()
-    viewPicker.menuItems[title].click()
   }
 
   /// A kind from the toolbar's Filter menu.

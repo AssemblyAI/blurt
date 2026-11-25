@@ -8,7 +8,7 @@ package struct Eyebrow: View {
 
   package var body: some View {
     Text(text.uppercased())
-      .font(BlurtType.mono(DesignTokens.Typography.sizeEyebrow, weight: .medium))
+      .monoFont(DesignTokens.Typography.sizeEyebrow, weight: .medium)
       .tracking(DesignTokens.Typography.trackingEyebrow)
       .foregroundStyle(color)
   }

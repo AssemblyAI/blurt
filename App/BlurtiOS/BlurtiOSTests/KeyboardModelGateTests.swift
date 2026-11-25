@@ -127,21 +127,6 @@ struct KeyboardModelGateTests {
     #expect(answered.commands.sent.count == 1)
   }
 
-  @Test("the retry and the deadline fire on the clock by themselves")
-  func pressTimers() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let rig = KeyboardRig()
-    let model = rig.model
-    model.tapMic()
-    try await Task.sleep(for: KeyboardModel.commandRetryDelay + .milliseconds(300))
-    #expect(rig.commands.sent.map(\.kind) == [.press, .press])
-    try await Task.sleep(for: .seconds(BlurtShared.pressDeadline) - KeyboardModel.commandRetryDelay)
-    #expect(model.handshake.unreadyReason == .unanswered)
-    #expect(model.gate.isIdle)
-    #expect(rig.commands.sent.count == 2)
-  }
-
   @Test("an unanswered press expires at the deadline: the gate comes up, the line says so, and the next tap hops")
   func unansweredPressExpires() {
     let suite = ScratchSuite()

@@ -19,6 +19,18 @@ struct BlurtiOSApp: App {
     #endif
   }
 
+  /// `-BlurtUITestKey`: a set-up install's view of the key, in memory, so the
+  /// accessibility audits (`BlurtiOSUITests`) reach the tabs without a real key
+  /// in the simulator's Keychain; debug builds only. Nothing is sent with it:
+  /// the audits never open the listening window.
+  private static var isUITestKeyed: Bool {
+    #if DEBUG
+      CommandLine.arguments.contains("-BlurtUITestKey")
+    #else
+      false
+    #endif
+  }
+
   @State private var coordinator: DictationCoordinator
 
   var body: some Scene {
@@ -34,6 +46,12 @@ struct BlurtiOSApp: App {
         } else if CommandLine.arguments.contains("-BlurtSettings") {
           // The settings sheet as the root, for a screenshot without a tap.
           SettingsView(coordinator: coordinator)
+        } else if CommandLine.arguments.contains("-BlurtImportTerms") {
+          // A shared key-term list as it opens, for the audits without a
+          // round trip through Messages.
+          ImportTermsView(
+            pack: TermPack(name: "Design team", from: "Alex", terms: ["Blurt", "AssemblyAI", "Figma", "Kubernetes"])
+          )
         } else if CommandLine.arguments.contains("-BlurtKeepOpen") {
           // The app-switcher card as the root, for a screenshot or a recording
           // without a trip to the switcher; `-BlurtGalleryStill` holds it at
@@ -92,9 +110,17 @@ struct BlurtiOSApp: App {
     // touches neither the Keychain nor the App Group (the Mac's UITestSupport
     // does the same for its harness), and `start()` below never runs.
     let initialCoordinator =
-      Self.isTestHost || Self.isKeyless
-      ? DictationCoordinator(apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore())) : DictationCoordinator()
+      Self.isTestHost || Self.isKeyless || Self.isUITestKeyed
+      ? DictationCoordinator(apiKey: APIKeyModel(keyStore: Self.inMemoryKeyStore())) : DictationCoordinator()
     _coordinator = State(initialValue: initialCoordinator)
+  }
+
+  /// The in-memory store the test host, `-BlurtNoKey` and `-BlurtUITestKey`
+  /// read, holding a placeholder key only under `-BlurtUITestKey`.
+  private static func inMemoryKeyStore() -> InMemoryAPIKeyStore {
+    let store = InMemoryAPIKeyStore()
+    if isUITestKeyed { store.save("uitest-key") }
+    return store
   }
 
   private func start() async {

@@ -93,9 +93,10 @@ struct ListeningWindowTests {
     await rig.interrupted()
     rig.source.setOpen(false)
     rig.audio.sink.yield(.interruptionEnded(shouldResume: true))
-    // The poll runs on the clock: ten steps of 50 ms.
-    for _ in 0..<12 {
-      try? await Task.sleep(for: .milliseconds(10))
+    // The poll runs on the clock: ten steps of 50 ms, each advanced only once
+    // it has parked, so no step lands before its sleeper.
+    for _ in 0..<Int(ListeningWindow.resumePoll / ListeningWindow.resumePollStep) {
+      await rig.clock.waitUntilSleeping(for: ListeningWindow.resumePollStep)
       rig.clock.advance(by: ListeningWindow.resumePollStep)
     }
     #expect(await until { rig.state?.reason == .interrupted && rig.tasks.ended.count == 1 })
@@ -217,11 +218,13 @@ struct ListeningWindowTests {
     defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
+    let sequence = rig.state?.sequence ?? 0
     rig.window.captureFailed(reason: .sessionOff)
-    try? await Task.sleep(for: .milliseconds(50))
-    #expect(rig.state?.window == .open, "the session being off is no news")
     rig.window.captureFailed(reason: .needsForeground)
+    // The two reach the window's loop in order: once the second has landed,
+    // the first would have too, so one record more means it was no news.
     #expect(await until { rig.state?.window == .interrupted })
+    #expect(rig.state?.sequence == sequence + 1, "the session being off is no news")
     #expect(rig.state?.reason == .needsForeground)
     #expect(rig.tasks.begun.isEmpty)
     rig.window.foregrounded(turnedOff: false)

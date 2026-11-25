@@ -28,7 +28,7 @@ struct StyleChips: View {
             StylesView()
           } label: {
             Label("Edit", systemImage: "slider.horizontal.3")
-              .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+              .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
               .foregroundStyle(BlurtBrand.muted)
               .padding(.horizontal, DesignTokens.Metrics.appChipPadX)
               .padding(.vertical, DesignTokens.Metrics.appChipPadY)

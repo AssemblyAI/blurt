@@ -19,3 +19,12 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci"
+  # The evals' Python tools (ruff, mypy, pytest, coverage.py), locked in
+  # evals/uv.lock. A bump is a PR so CI shows whether a new ruff or mypy release
+  # flags code the old one accepted.
+  - package-ecosystem: uv
+    directory: "/evals"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"

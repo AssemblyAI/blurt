@@ -45,11 +45,18 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   /// rather than restate it.
   static let drainSlack = Duration.seconds(2)
 
+  /// The longest one poll of `drain` sleeps, so the drain can overrun its
+  /// deadline by at most this much. Internal for the same reason.
+  static let drainPollCeiling = Duration.milliseconds(100)
+
   private let renderer = AVSampleBufferAudioRenderer()
   private let synchronizer = AVSampleBufferRenderSynchronizer()
   private let format: CMAudioFormatDescription?
   private let sampleRate: Int32
   private let rate: Double
+  /// What `drain`'s deadline is measured on and its polls sleep on; a test's
+  /// `TestClock` steps it, so the bound is checked exactly rather than timed.
+  private let clock: any Clock<Duration>
   private let state: Mutex<State>
 
   /// Seconds of audio queued ahead of what's playing, in listening time (the
@@ -79,8 +86,9 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     }
   }
 
-  init(sampleRate: Int, rate: Double = 1) {
+  init(sampleRate: Int, rate: Double = 1, clock: any Clock<Duration> = ContinuousClock()) {
     self.sampleRate = Int32(sampleRate)
+    self.clock = clock
     // `drain` divides by the rate, and a zero one is an infinite `Duration`,
     // which traps. The store never produces one; this guards new callers.
     self.rate = rate.isFinite && rate > 0 ? rate : 1
@@ -199,11 +207,21 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   /// mid-read), "remaining" would never reach zero, and the press would stay in
   /// read-aloud mode until the user pressed again.
   func drain() async {
+    // Copied to a local first: the compiler opens an existential local at a
+    // generic call, but not a class's stored property.
+    let opened = clock
+    await drain(on: opened)
+  }
+
+  /// Generic over the clock so its instants compare; `clock`, an existential,
+  /// is opened at the call.
+  private func drain(on clock: some Clock<Duration>) async {
     let queued = remaining() ?? 0
-    let deadline = ContinuousClock.now + .seconds(queued / rate) + Self.drainSlack
-    while ContinuousClock.now < deadline {
+    let deadline = clock.now.advanced(by: .seconds(queued / rate) + Self.drainSlack)
+    while clock.now < deadline {
       guard let remaining = remaining(), remaining > 0 else { break }
-      try? await Task.sleep(for: .milliseconds(min(100, Int(remaining / rate * 1_000) + 10)))
+      let poll = min(Self.drainPollCeiling, .milliseconds(Int(remaining / rate * 1_000) + 10))
+      try? await clock.sleep(for: poll)
       if Task.isCancelled { break }
     }
     stop()

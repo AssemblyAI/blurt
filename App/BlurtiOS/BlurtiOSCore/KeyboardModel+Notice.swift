@@ -51,10 +51,10 @@ extension KeyboardModel {
         guard let self else {
           return
         }
-        try? await Task.sleep(for: .seconds(max(0, countdownFrom.timeIntervalSince(now()))))
+        try? await clock.sleep(for: .seconds(max(0, countdownFrom.timeIntervalSince(now()))))
         while !Task.isCancelled, snapshot.state == .recording {
           noticeTick += 1
-          try? await Task.sleep(for: .seconds(1))
+          try? await clock.sleep(for: .seconds(1))
         }
       }
 
@@ -64,7 +64,7 @@ extension KeyboardModel {
         guard let self else {
           return
         }
-        try? await Task.sleep(for: .seconds(max(0, patience.timeIntervalSince(now()))))
+        try? await clock.sleep(for: .seconds(max(0, patience.timeIntervalSince(now()))))
         guard !Task.isCancelled else {
           return
         }

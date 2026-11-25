@@ -51,7 +51,7 @@ struct HomeHero: View {
         }
       }
       Text(status.message)
-        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+        .bodyFont(DesignTokens.Typography.sizeBody)
         .foregroundStyle(BlurtBrand.text)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -75,6 +75,6 @@ struct HomeHero: View {
   }
 
   private func note(_ text: String) -> some View {
-    Text(text).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.errorOrange)
+    Text(text).bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.errorOrange)
   }
 }

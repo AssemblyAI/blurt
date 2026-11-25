@@ -124,20 +124,24 @@ struct DictationCoordinatorReturnTests {
   func cancelled() async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
+    let cap = Duration.seconds(BlurtShared.hopReturnCap)
     let bench = await hopped(expectsKeeper: true)
     let coordinator = bench.coordinator
+    // The cap parked first, so its going is the cancel's doing.
+    await bench.rig.clock.waitUntilSleeping(for: cap)
     coordinator.sceneLeft()
     #expect(coordinator.returnHost == nil && coordinator.returnCap == nil && !coordinator.startedFromKeyboard)
-    bench.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
-    try? await Task.sleep(for: .milliseconds(50))
+    #expect(!bench.rig.clock.sleepingFor.contains(cap), "the cap is off the clock")
+    bench.rig.clock.advance(by: cap)
     #expect(bench.returns.hosts.isEmpty)
 
     // A window seen and then closed: the open did not hold.
     let later = await hopped(expectsKeeper: true)
+    await later.rig.clock.waitUntilSleeping(for: cap)
     await later.rig.closed()
     #expect(later.coordinator.returnHost == nil)
-    later.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
-    try? await Task.sleep(for: .milliseconds(50))
+    #expect(!later.rig.clock.sleepingFor.contains(cap), "the cap is off the clock")
+    later.rig.clock.advance(by: cap)
     #expect(later.returns.hosts.isEmpty)
   }
 }

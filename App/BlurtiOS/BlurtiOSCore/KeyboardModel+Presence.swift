@@ -136,8 +136,9 @@ extension KeyboardModel {
       return
     }
     leaving?.cancel()
+    let clock = clock
     leaving = Task { [weak self] in
-      try? await Task.sleep(for: .seconds(Self.leaveGrace))
+      try? await clock.sleep(for: .seconds(Self.leaveGrace))
       guard !Task.isCancelled, let self else {
         return
       }
@@ -218,7 +219,7 @@ extension KeyboardModel {
         readListeningState()
         perform(handshake.handle(.stateChanged(listeningState), now: now()))
         if expectsResult { resultArrived() }
-        try? await Task.sleep(for: .seconds(SharedStore.keyboardHeartbeatInterval))
+        try? await clock.sleep(for: .seconds(SharedStore.keyboardHeartbeatInterval))
       }
     }
   }

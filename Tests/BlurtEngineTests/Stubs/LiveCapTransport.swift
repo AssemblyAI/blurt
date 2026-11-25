@@ -26,12 +26,17 @@ final class LiveCapTransport: HTTPTransport, Sendable {
   private struct State {
     var liveBody = Data()
     var bufferedRequests: [URLRequest] = []
+    var abandonedBody: AsyncThrowingStream<Data, any Error>?
   }
 
   private let live: Answer
   /// Answer the streaming request once this many body bytes have arrived, while
   /// the body is still open; nil answers only after the body ends.
   private let answerAfterBytes: Int?
+  /// Stop reading the body at the threshold without cancelling the read, and
+  /// keep it: how `ChunkedRequestBody`'s writer leaves it when the response
+  /// lands mid-write, so nothing tears the body's producer down.
+  private let abandonsBody: Bool
   private let buffered: Answer
   /// When set, the buffered request parks here before answering, so a session
   /// test can look at the phase while the fallback is in flight.
@@ -44,11 +49,31 @@ final class LiveCapTransport: HTTPTransport, Sendable {
   /// The buffered requests made, in order — the fallback sends at most one.
   var bufferedRequests: [URLRequest] { state.withLock { $0.bufferedRequests } }
 
-  init(live: Answer, buffered: Answer, answerAfterBytes: Int? = nil, bufferedHold: Gate? = nil) {
+  init(
+    live: Answer,
+    buffered: Answer,
+    answerAfterBytes: Int? = nil,
+    abandonsBody: Bool = false,
+    bufferedHold: Gate? = nil
+  ) {
     self.live = live
     self.answerAfterBytes = answerAfterBytes
+    self.abandonsBody = abandonsBody
     self.buffered = buffered
     self.bufferedHold = bufferedHold
+  }
+
+  /// What an abandoned body (`abandonsBody`) still had in it, read to its end
+  /// once the streaming request was answered: returns only once the body's
+  /// producer has finished.
+  func restOfAbandonedBody() async throws -> Data {
+    await liveAnswered.wait()
+    guard let body = state.withLock({ $0.abandonedBody }) else {
+      return Data()
+    }
+    var rest = Data()
+    for try await chunk in body { rest.append(chunk) }
+    return rest
   }
 
   func upload(
@@ -57,12 +82,15 @@ final class LiveCapTransport: HTTPTransport, Sendable {
     delegate _: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
     let threshold = answerAfterBytes
+    let abandons = abandonsBody
     let reached = AsyncGate()
     let reader = Task {
       do {
         for try await chunk in body {
           let total = self.record(chunk)
-          if let threshold, total >= threshold { reached.open() }
+          guard let threshold, total >= threshold else { continue }
+          if abandons { break }
+          reached.open()
         }
       } catch {
         // A failed body just ends the read early; the gate opens below either way.
@@ -70,7 +98,11 @@ final class LiveCapTransport: HTTPTransport, Sendable {
       reached.open()
     }
     await reached.wait()
-    reader.cancel()
+    if abandons {
+      state.withLock { $0.abandonedBody = body }
+    } else {
+      reader.cancel()
+    }
     _ = await reader.result
     liveAnswered.open()
     return try respond(to: request, with: live)

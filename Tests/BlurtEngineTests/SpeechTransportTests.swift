@@ -143,17 +143,19 @@ struct SpeechTransportTests {
   @Test("URLSession: stopping a read cancels its request and reads as a cancellation, not a failure")
   func urlSessionCancellation() async throws {
     ScriptedSpeechProtocol.play(.respond(status: 200, chunks: [Data([1, 0])], finishes: false))
+    let sink = RecordingSink()
     let speaker = SelectionSpeaker(
       synthesizer: synthesizer(session()),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
-    ) { _ in RecordingSink() }
+    ) { _ in sink }
     let reading = Task { try await speaker.speak("Read this.", style: .standard, onLevel: nil) }
-    while !ScriptedSpeechProtocol.started { await Task.yield() }
-    try await Task.sleep(for: .milliseconds(50))
+    // Cancelled mid-body: once the first audio has reached the sink, rather
+    // than a fixed moment after the request started that a slow run can miss.
+    while sink.chunks.isEmpty { await Task.yield() }
     reading.cancel()
     await #expect(throws: CancellationError.self) { try await reading.value }
-    let deadline = ContinuousClock.now + .seconds(5)
-    while !ScriptedSpeechProtocol.stopped, ContinuousClock.now < deadline { await Task.yield() }
-    #expect(ScriptedSpeechProtocol.stopped, "the request should be cancelled, not left synthesizing")
+    // Unbounded, as the suite's time limit bounds it: a request left
+    // synthesizing fails there, and a slow URLSession teardown doesn't.
+    while !ScriptedSpeechProtocol.stopped { await Task.yield() }
   }
 }

@@ -28,14 +28,14 @@ struct SetupView: View {
         Text(
           hasKey ? "Two more steps and you can dictate anywhere." : "Paste an AssemblyAI API key to start dictating."
         )
-        .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+        .headingFont(DesignTokens.Typography.sizeTitle)
         .foregroundStyle(BlurtBrand.text)
         .fixedSize(horizontal: false, vertical: true)
         // The keyboard sent the user here for Full Access (`blurt://setup`):
         // step 03 below is the one to finish, and no session starts until then.
         if coordinator.needsFullAccess {
           Text("The Blurt keyboard needs Full Access to dictate: finish step 03.")
-            .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+            .bodyFont(DesignTokens.Typography.sizeCaption)
             .foregroundStyle(BlurtBrand.errorOrange)
             .fixedSize(horizontal: false, vertical: true)
         }

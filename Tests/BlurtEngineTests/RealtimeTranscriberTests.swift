@@ -99,6 +99,30 @@ struct RealtimeTranscriberTests {
     #expect(!server.terminated)
   }
 
+  @Test("audio sent after the session closes is dropped, not queued")
+  func sendAfterCloseIsDropped() async {
+    // No server: a session cancelled before it opened never connects.
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: URL(literal: "ws://127.0.0.1:9/v3/ws"))
+    await transcriber.cancel()
+    await transcriber.send(Data(count: 3_200))
+    #expect(await transcriber.pending.isEmpty)
+  }
+
+  @Test("an odd-length tail is padded to a whole sample on finish")
+  func oddTailIsPaddedToAWholeSample() async throws {
+    let server = try await FakeRealtimeServer.start()
+    defer { server.stop() }
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
+    // Over the 50 ms floor, under a 100 ms chunk, and half a sample over.
+    await transcriber.send(Data(count: RealtimeTranscriber.minimumChunkBytes + 1))
+    let turns = await transcriber.start()
+    await transcriber.finish()
+    for try await _ in turns {
+      // Drained only so the session runs to its end; the turns aren't checked.
+    }
+    #expect(server.chunkSizes == [RealtimeTranscriber.minimumChunkBytes + 2])
+  }
+
   @Test("a second finish waits for the same Termination instead of stranding the first")
   func concurrentFinish() async throws {
     let connection = try await connect()

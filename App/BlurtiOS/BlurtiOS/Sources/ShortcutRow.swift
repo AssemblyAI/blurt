@@ -11,7 +11,7 @@ struct ShortcutRow: View {
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
         Eyebrow(shortcut.trigger, color: BlurtBrand.accent)
         Text(shortcut.expansion)
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .bodyFont(DesignTokens.Typography.sizeCaption)
           .foregroundStyle(BlurtBrand.text)
           .lineLimit(2)  // literal-ok: two lines of the replacement
       }

@@ -33,7 +33,7 @@ package struct Wordmark: View {
         .accessibilityLabel("Blurt")
     } else {
       Text("blurt")
-        .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+        .headingFont(DesignTokens.Typography.sizeTitle)
         .foregroundStyle(tint)
     }
   }

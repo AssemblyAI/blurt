@@ -2,7 +2,8 @@
 # Project health check: build + test the SPM engine and the macOS app.
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
 # Runs swiftlint / periphery / actionlint / zizmor / prettier /
-# markdownlint / shellcheck / shfmt / jscpd / ruff / pytest when available.
+# markdownlint / shellcheck / shfmt / jscpd, and ruff / mypy / pytest + coverage
+# over the evals, when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # The read-only checks run to completion and report together at the bottom rather
 # than stopping at the first failure — see `run_check` below.
@@ -19,7 +20,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 
 # --portable: run only the platform-independent checks (actionlint / zizmor /
-# prettier / markdownlint / shellcheck / shfmt / jscpd / ruff / pytest /
+# prettier / markdownlint / shellcheck / shfmt / jscpd / ruff / mypy / pytest /
 # release.test.sh, plus swift-format and
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
@@ -648,30 +649,56 @@ if tool_ready jscpd 'npm ci --prefix tools/jscpd'; then
 fi
 
 # The evals (evals/) are the repo's only Python: offline decision support for the
-# dictation API's cleanup instruction, not shipped code. Linted, formatted, and
-# tested here anyway — a harness whose own correctness is unchecked is a bad
-# instrument, and all three tools are platform-independent, so they run in the
-# --portable subset too.
-if tool_ready ruff 'brew install ruff'; then
-  # Formatting authority for the Python, config in evals/ruff.toml. --check is the
-  # non-mutating half; run `ruff format evals/` to fix.
-  run_check "ruff format --check (evals)" ruff format --check evals/
-  # Lint: pyflakes/pycodestyle correctness plus import order, pyupgrade, and
-  # bugbear. Line width is deliberately left to the formatter (see the config).
-  run_check "ruff check (evals)" ruff check evals/
+# dictation API's cleanup instruction, not shipped code. Linted, formatted, type-
+# checked and tested here anyway: a harness whose own correctness is unchecked is
+# a bad instrument, and every tool is platform-independent, so all of it runs in
+# the --portable subset too.
+#
+# ruff, mypy, pytest and coverage.py come from evals/.venv, locked with hashes in
+# evals/uv.lock (`uv sync --project evals --locked`), and win over any other copy
+# on PATH, as jscpd's pinned install does above: coverage has to share pytest's
+# interpreter, and the lock means every machine runs one release of each. The venv
+# is a single prerequisite, so there is no partial mode that would run the tests
+# without the coverage gate. Every tool runs from evals/, where it finds its
+# config in evals/pyproject.toml with no flags, and covers every harness directory
+# there, so a new one is gated the moment it lands.
+evals_bin="$REPO_ROOT/evals/.venv/bin"
+if [ -x "$evals_bin/coverage" ]; then
+  PATH="$evals_bin:$PATH"
 fi
 
-if tool_ready pytest 'brew install pytest'; then
-  # The eval's offline suite: corpus construction, disfluency injection, the
-  # scoring metric, and the split disjointness. It needs no network, no API key,
-  # and no third-party packages beyond pytest itself — everything that imports
-  # DSPy lives in program.py, which these tests assert never gets imported. That
-  # property is why this is cheap enough to gate on.
-  run_check "pytest (evals/dictation-prompt)" pytest -q evals/dictation-prompt/test_eval.py
-  # The planner eval's log importer and corpus shape: stdlib only, no network.
-  # Its own invocation: two rootdirs' bare-name imports (`import corpus`,
-  # `import import_log`) can't share one pytest run's sys.path cleanly.
-  run_check "pytest (evals/command-planner)" pytest -q evals/command-planner/test_import.py
+# The offline suites: corpus construction, disfluency injection, the scoring
+# metric, the split disjointness, the CLI and the live/Voice Arena paths with the
+# network faked. They need no network, no API key, and no third-party packages
+# beyond pytest: everything that imports DSPy lives in program.py, which the tests
+# assert never gets imported. That property is why this is cheap enough to gate
+# on. One run under coverage.py, then the report enforces pyproject.toml's floor
+# (100%, line + branch; program.py omitted, see the config). The data file lives
+# in a fresh temp dir so a stale one can't leak in.
+evals_coverage_gate() {
+  local data_dir status=0
+  # An explicit XXXXXX template: GNU mktemp (the --portable sandboxes) rejects
+  # BSD's bare `-t prefix`, and an empty data_dir would aim coverage at /.coverage.
+  data_dir="$(mktemp -d "${TMPDIR:-/tmp}/blurt-evals-coverage.XXXXXX")" || return 1
+  COVERAGE_FILE="$data_dir/.coverage" coverage run -m pytest || status=1
+  if [ "$status" -eq 0 ]; then
+    COVERAGE_FILE="$data_dir/.coverage" coverage report || status=1
+  fi
+  rm -rf "$data_dir"
+  return "$status"
+}
+if tool_ready coverage 'uv sync --project evals --locked'; then
+  cd "$REPO_ROOT/evals"
+  # Formatting authority for the Python. --check is the non-mutating half; run
+  # `ruff format` in evals/ to fix.
+  run_check "ruff format --check (evals)" ruff format --check
+  # Lint: pyflakes/pycodestyle correctness plus import order, pyupgrade, and
+  # bugbear. Line width is deliberately left to the formatter (see the config).
+  run_check "ruff check (evals)" ruff check
+  # Unannotated test bodies included: the useful parts of --strict without its
+  # annotate-every-pytest-function cost.
+  run_check "mypy (evals)" mypy
+  run_check "pytest + coverage gate (evals)" evals_coverage_gate
 fi
 
 cd "$REPO_ROOT"

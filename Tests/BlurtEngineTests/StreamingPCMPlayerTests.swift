@@ -9,6 +9,10 @@ import Testing
 /// slack — is what keeps a read from sticking on "reading" when no output
 /// device moves the clock; a frozen clock can't be staged here, so these check
 /// the bound holds with one.)
+///
+/// The drain's deadline runs on a `TestClock`, so the bound is checked in
+/// virtual time rather than timed: timing it on the wall needed a margin a
+/// loaded CI runner kept outgrowing (it overshot one by 0.1 s, at 2.85 s).
 @Suite("StreamingPCMPlayer", .timeLimit(.minutes(1)))
 struct StreamingPCMPlayerTests {
   /// `seconds` of silence at the TTS sample rate.
@@ -16,35 +20,57 @@ struct StreamingPCMPlayerTests {
     Data(count: Int(Double(AssemblyAISpeechSynthesizer.sampleRate) * seconds) * 2)
   }
 
+  /// Drains `player`, waking each of its polls on `clock` as it parks, and
+  /// answers how much virtual time the drain took. The media clock still runs
+  /// on the wall, so whether the drain ends on its deadline or because the
+  /// audio played out first depends on the machine; how long it may take in
+  /// virtual time does not.
+  private func drain(_ player: StreamingPCMPlayer, on clock: TestClock) async -> Duration {
+    let finished = Finished()
+    let draining = Task {
+      await player.drain()
+      finished.set()
+    }
+    while !finished.value {
+      if let next = clock.sleepingFor.first {
+        clock.advance(by: next)
+      } else {
+        await Task.yield()
+      }
+    }
+    await draining.value
+    return clock.now.offset
+  }
+
+  /// The longest a drain of `seconds` of audio at `rate` may take: the audio
+  /// at that rate, the schedule's start lead, the slack, and the one poll that
+  /// can straddle the deadline.
+  private func bound(seconds: Double, rate: Double) -> Duration {
+    .seconds(seconds / rate + PCMSchedule.lead) + StreamingPCMPlayer.drainSlack
+      + StreamingPCMPlayer.drainPollCeiling
+  }
+
   @Test("a zero, negative or non-finite rate plays at 1 rather than trapping the drain")
   func badRateFallsBack() async {
     for rate in [0, -1, .nan, .infinity] {
-      let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: rate)
+      let clock = TestClock()
+      let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: rate, clock: clock)
       player.enqueue(silence(seconds: 0.05))
-      let start = ContinuousClock.now
-      await player.drain()
-      // With no output device the drain waits out its whole deadline (the
-      // 0.05 s at a sane rate, plus its slack), so the bound is that plus room
-      // for the scheduler, as in `drainIsBounded`: a flat 3 s left under a
-      // second of it, and a loaded runner overshot (3.39 s). A rate that
-      // trapped the drain would never finish at all.
-      let bound = Duration.seconds(0.05) + StreamingPCMPlayer.drainSlack + .seconds(2)
-      #expect(ContinuousClock.now - start < bound, "rate \(rate)")
+      // Bounded as a rate of 1 bounds it: the fallback rate is what the
+      // deadline divides by.
+      #expect(await drain(player, on: clock) <= bound(seconds: 0.05, rate: 1), "rate \(rate)")
     }
   }
 
   @Test("a drain finishes within the audio queued plus its slack")
   func drainIsBounded() async {
-    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: 2)
+    let clock = TestClock()
+    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: 2, clock: clock)
     player.enqueue(silence(seconds: 0.5))
-    let start = ContinuousClock.now
-    await player.drain()
-    // The drain's own deadline — the queued audio at 2× (0.25 s) plus its slack —
-    // plus room for the poll loop and the scheduler. With no output device the clock
-    // never moves, so the drain waits out its whole deadline, and a loaded CI runner
-    // overshot a 0.5 s margin by 0.1 s (2.85 s). What this guards is a drain that
-    // never ends, which no margin of seconds would let through.
-    #expect(ContinuousClock.now - start < .seconds(0.25) + StreamingPCMPlayer.drainSlack + .seconds(2))
+    // With no output device the media clock never moves, so the drain waits
+    // out its whole deadline — the queued audio at 2× plus its slack — and its
+    // last poll can carry it at most one poll past.
+    #expect(await drain(player, on: clock) <= bound(seconds: 0.5, rate: 2))
     #expect(player.bufferedSeconds == 0)
   }
 
@@ -63,7 +89,8 @@ struct StreamingPCMPlayerTests {
 
   @Test("stopping twice is safe, audio after a stop is ignored, and so is less than a sample")
   func stopAndShortInput() async {
-    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate)
+    let clock = TestClock()
+    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, clock: clock)
     player.enqueue(Data())
     player.enqueue(Data([1]))
     #expect(player.bufferedSeconds == 0)
@@ -71,9 +98,8 @@ struct StreamingPCMPlayerTests {
     player.stop()
     player.enqueue(silence(seconds: 1))
     #expect(player.bufferedSeconds == 0)
-    let start = ContinuousClock.now
-    await player.drain()
-    #expect(ContinuousClock.now - start < .seconds(1))
+    // Nothing left to wait for: the drain returns without a single poll.
+    #expect(await drain(player, on: clock) == .zero)
   }
 
   @Test("silence reads as no level")

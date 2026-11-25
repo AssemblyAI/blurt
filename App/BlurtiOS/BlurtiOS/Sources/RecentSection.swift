@@ -13,7 +13,7 @@ struct RecentSection: View {
       Eyebrow("Recent")
       if coordinator.recent.displayed.isEmpty {
         Text("Your recent blurts will appear here.")
-          .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+          .bodyFont(DesignTokens.Typography.sizeBody)
           .foregroundStyle(BlurtBrand.muted)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(DesignTokens.Metrics.appCardPad)
@@ -29,13 +29,13 @@ struct RecentSection: View {
   private func entryCard(for entry: RecentDictations.Entry) -> some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
       Text(entry.text)
-        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+        .bodyFont(DesignTokens.Typography.sizeBody)
         .foregroundStyle(BlurtBrand.text)
         .lineLimit(3)  // literal-ok: three lines of a dictation
       HStack(spacing: DesignTokens.Metrics.appChipGap) {
         if let style = entry.style { Eyebrow(style, color: BlurtBrand.accent) }
         Text(entry.relativeLabel(now: Date()))
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .bodyFont(DesignTokens.Typography.sizeCaption)
           .foregroundStyle(BlurtBrand.muted)
         Spacer()
         Button {

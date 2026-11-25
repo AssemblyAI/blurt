@@ -4,6 +4,11 @@ import XCTest
 /// setting the transcript, dictating, reading aloud, and reading the harness's
 /// read-outs. Shared by the suites that exercise the keys and read-aloud.
 extension BlurtUITestCase {
+  /// The open item's toolbar View menu.
+  var viewPicker: XCUIElement {
+    app.menuButtons[UITestIdentifiers.facetPicker].firstMatch
+  }
+
   /// The harness, with an API key set so presses clear the missing-key gate.
   func readyHarness() -> XCUIElement {
     let harness = harnessWindow()
@@ -120,5 +125,21 @@ extension BlurtUITestCase {
       for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: timeout
     )
     XCTAssertEqual(result, .completed, message)
+  }
+
+  // MARK: - The Library and an open item
+
+  /// A Library row by its title. The row is one combined element whose text
+  /// ("<title>, <details>") XCUITest may report as its label or its value.
+  func row(titled title: String) -> XCUIElement {
+    let titled = NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title)
+    return app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any).matching(titled).firstMatch
+  }
+
+  /// Shows the view titled `title`, from the toolbar's View menu.
+  func showView(_ title: String) {
+    XCTAssertTrue(viewPicker.waitForExistence(timeout: 5), "The open item's View menu not found")
+    viewPicker.click()
+    viewPicker.menuItems[title].click()
   }
 }

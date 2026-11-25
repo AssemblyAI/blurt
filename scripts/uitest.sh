@@ -34,6 +34,14 @@ set -o pipefail
 # -testPlan Blurt: run under Blurt.xctestplan, which retries a failing UI test
 # (up to 3 attempts) so a flake isn't an immediate red, and keeps screenshots +
 # attachments on the .xcresult for debugging a genuine failure on CI.
+# BLURT_UITEST_RESULTS names where that .xcresult goes (CI uploads it when the
+# job fails); unset, xcodebuild keeps it in DerivedData as usual. xcodebuild
+# refuses to write over an existing bundle, so a stale one is removed first.
+RESULT_FLAGS=()
+if [ -n "${BLURT_UITEST_RESULTS:-}" ]; then
+  rm -rf "$BLURT_UITEST_RESULTS"
+  RESULT_FLAGS=(-resultBundlePath "$BLURT_UITEST_RESULTS")
+fi
 xcodebuild \
   -project Blurt.xcodeproj \
   -scheme Blurt \
@@ -41,6 +49,7 @@ xcodebuild \
   -configuration Debug \
   -destination "platform=macOS,arch=$(uname -m)" \
   -only-testing:BlurtUITests \
+  ${RESULT_FLAGS[@]+"${RESULT_FLAGS[@]}"} \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=YES \

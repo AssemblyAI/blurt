@@ -24,7 +24,7 @@ struct KeyStep: View {
         .brandInput()
       if let errorMessage {
         Text(errorMessage)
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .bodyFont(DesignTokens.Typography.sizeCaption)
           .foregroundStyle(BlurtBrand.errorOrange)
           .fixedSize(horizontal: false, vertical: true)
       }

@@ -8,7 +8,7 @@ import SwiftUI
 struct ReturnHint: View {
   var body: some View {
     Label("To keep typing, tap “◀” with the app's name in the top-left corner.", systemImage: "arrow.up.left")
-      .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+      .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
       .foregroundStyle(BlurtBrand.ctaText)
       .padding(DesignTokens.Metrics.appChipPadX)
       .frame(maxWidth: .infinity, alignment: .leading)

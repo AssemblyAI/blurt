@@ -182,8 +182,11 @@ def transcribe_all(
     rewrite_mode = None if mode == "fast" else mode
 
     def one(row: dict) -> tuple[str, dict]:
+        clip = voicearena.local_or_url(row)
+        if clip is None:
+            raise ValueError(f"Voice Arena row {voicearena.cache_key(row)} has no audio")
         with tempfile.TemporaryDirectory(prefix="blurt-va-") as directory:
-            pcm = live.recorded(voicearena.local_or_url(row), Path(directory))
+            pcm = live.recorded(clip, Path(directory))
         url = f"https://{host}/v1/transcribe/live"
         response = live.transcribe(pcm, api_key, instruction, url, rewrite_mode=rewrite_mode)
         return voicearena.cache_key(row), {

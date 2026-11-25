@@ -5,7 +5,9 @@ import Synchronization
 
 /// A `PCMSink` that records what it's asked to do instead of playing it. For
 /// the pacing tests, `bufferedSeconds` can be set, and `bufferedAfterEnqueue`
-/// makes each enqueue report that much audio queued, as a real player would.
+/// makes each enqueue report that much audio queued, as a real player would;
+/// `roomChecks` counts the speaker asking, so a test can wait for the check
+/// that holds the next piece back rather than sleeping past it.
 final class RecordingSink: PCMSink {
   struct Record {
     var chunks: [Data] = []
@@ -13,6 +15,7 @@ final class RecordingSink: PCMSink {
     var stopped = false
     var buffered: Double = 0
     var bufferedAfterEnqueue: Double?
+    var roomChecks = 0
   }
 
   let record = Mutex(Record())
@@ -20,8 +23,14 @@ final class RecordingSink: PCMSink {
   var chunks: [Data] { record.withLock(\.chunks) }
   var drained: Bool { record.withLock(\.drained) }
   var stopped: Bool { record.withLock(\.stopped) }
+  var roomChecks: Int { record.withLock(\.roomChecks) }
   var bufferedSeconds: Double {
-    get { record.withLock(\.buffered) }
+    get {
+      record.withLock { record in
+        record.roomChecks += 1
+        return record.buffered
+      }
+    }
     set { record.withLock { $0.buffered = newValue } }
   }
   var bufferedAfterEnqueue: Double? {

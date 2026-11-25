@@ -181,7 +181,7 @@ extension KeyboardModel {
         guard let self else {
           return
         }
-        try? await Task.sleep(for: .seconds(max(0, due.timeIntervalSince(now()))))
+        try? await clock.sleep(for: .seconds(max(0, due.timeIntervalSince(now()))))
         guard !Task.isCancelled else {
           return
         }

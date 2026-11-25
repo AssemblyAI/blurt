@@ -35,7 +35,7 @@ extension View {
     scrollContentBackground(.hidden)
       .page()
       .listRowBackground(BlurtBrand.cardFill)
-      .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+      .bodyFont(DesignTokens.Typography.sizeBody)
       .foregroundStyle(BlurtBrand.text)
       .tint(BlurtBrand.accent)
   }
@@ -45,7 +45,7 @@ extension View {
   /// The brand's input: the page colour inside the card, 8 pt corners, the
   /// card's hairline, the body face.
   package func brandInput() -> some View {
-    font(BlurtType.body(DesignTokens.Typography.sizeBody))
+    bodyFont(DesignTokens.Typography.sizeBody)
       .foregroundStyle(BlurtBrand.text)
       .padding(.horizontal, DesignTokens.Metrics.appChipPadX)
       .padding(.vertical, DesignTokens.Metrics.appInputPadY)
@@ -58,7 +58,7 @@ extension View {
 
   /// The brand's small print under a card: the caption size, muted.
   package func brandFootnote() -> some View {
-    font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+    bodyFont(DesignTokens.Typography.sizeCaption)
       .foregroundStyle(BlurtBrand.muted)
       .fixedSize(horizontal: false, vertical: true)
   }

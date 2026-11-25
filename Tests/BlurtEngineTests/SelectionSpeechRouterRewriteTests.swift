@@ -7,7 +7,7 @@ import Testing
 /// instruction recorded by the session, the rewrite, and the paste through the
 /// session's own injector.
 @MainActor
-@Suite("SelectionSpeechRouter · Rewrite")
+@Suite("SelectionSpeechRouter · Rewrite", .timeLimit(.minutes(1)))
 struct SelectionSpeechRouterRewriteTests {
   /// A rewrite press's router, what it reported, and the injector it pasted through.
   @MainActor
@@ -32,17 +32,19 @@ struct SelectionSpeechRouterRewriteTests {
     _ rewriter: StubRewriter, injectorError: (any Error & Sendable)? = nil
   ) async throws -> Rig {
     let fixture = makeSession(mode: .transcript("Make it more formal."))
+    let clock = TestClock()
     await fixture.injector.setError(injectorError)
     let router = SelectionSpeechRouter(
       session: fixture.session,
       speaker: GatedSpeaker(),
       rewriter: rewriter,
       readSelection: { "hey all" },
-      defaults: defaults
+      defaults: defaults,
+      clock: clock
     )
     TriggerKeyStyleStore(defaults: defaults).setChoice(.rewrite, for: .rightOption)
     let events = JobEvents(watching: router)
-    let phases = try await speakHeldPress(router, on: fixture)
+    let phases = try await speakHeldPress(router, on: fixture, clock: clock)
     try await waitUntil { !rewriter.calls.isEmpty }
     return Rig(router: router, events: events, injector: fixture.injector, phases: phases)
   }

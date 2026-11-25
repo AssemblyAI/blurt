@@ -45,7 +45,7 @@ struct SetupSteps<KeyStep: View>: View {
             "In Settings, go to Apps › Blurt › Keyboards, turn on Blurt, then Allow Full Access. "
               + "Full Access is what lets the keyboard send your words to Blurt."
           )
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
+          .bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.muted)
           Button("Open Settings") { SystemSettings.open() }.buttonStyle(BrandButtonStyle(role: .secondary))
         }
       }

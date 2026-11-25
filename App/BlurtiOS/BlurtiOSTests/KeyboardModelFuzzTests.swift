@@ -167,6 +167,10 @@ struct KeyboardModelFuzzTests {
     var random = Random(state: 42)
     let rig = KeyboardRig()
     let (model, commands) = (rig.model, rig.commands)
+    // The wall clock, not the rig's held one: `appDies` ages the record by
+    // `Date()`, so over the run's rounds only a clock that moves with it sees
+    // the lease lapse.
+    model.now = { Date() }
     // Hands-free off: a tap must be the press here, not the stop of one the
     // appearance started.
     SharedStore.autoDictate = false

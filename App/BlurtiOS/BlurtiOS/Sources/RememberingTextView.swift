@@ -16,11 +16,14 @@ struct RememberingTextView: UIViewRepresentable {
   }
 
   @Binding var text: String
+  let minHeight: CGFloat
 
   func makeUIView(context: Context) -> ContextTextView {
     let view = ContextTextView()
     view.delegate = context.coordinator
-    view.font = .systemFont(ofSize: DesignTokens.Typography.sizeBody)
+    // The body size, following Dynamic Type as the rest of the app's text does.
+    view.font = BlurtType.scaledBody(DesignTokens.Typography.sizeBody)
+    view.adjustsFontForContentSizeCategory = true
     view.textColor = UIColor(BlurtBrand.text)
     view.backgroundColor = .clear
     // Growing with its text, as the brand's inputs do, rather than scrolling.
@@ -40,7 +43,7 @@ struct RememberingTextView: UIViewRepresentable {
       return nil
     }
     let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-    return CGSize(width: width, height: fitted.height)
+    return CGSize(width: width, height: max(fitted.height, minHeight))
   }
 
   func makeCoordinator() -> Coordinator { Coordinator(text: $text) }

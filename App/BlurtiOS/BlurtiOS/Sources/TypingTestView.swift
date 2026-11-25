@@ -27,6 +27,8 @@ struct TypingTestView: View {
   private var dismiss
   @Environment(\.accessibilityReduceMotion)
   private var reduceMotion
+  @Environment(\.dynamicTypeSize)
+  private var dynamicTypeSize
 
   @State private var test = TypingTest()
   @State private var phase = Phase.ready
@@ -73,13 +75,13 @@ struct TypingTestView: View {
       clock
 
       wordsText
-        .font(BlurtType.mono(DesignTokens.Typography.sizeTypingWords, weight: .medium))
+        .monoFont(DesignTokens.Typography.sizeTypingWords, weight: .medium)
         .lineSpacing(DesignTokens.Metrics.typingLineSpacing)
         .frame(maxWidth: .infinity, minHeight: DesignTokens.Metrics.typingWordsHeight, alignment: .topLeading)
         .accessibilityLabel("Next word: \(test.currentWord)")
 
       TextField("Start typing to begin", text: $input)
-        .font(BlurtType.mono(DesignTokens.Typography.sizeTypingField))
+        .monoFont(DesignTokens.Typography.sizeTypingField)
         .foregroundStyle(BlurtBrand.text)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
@@ -114,9 +116,14 @@ struct TypingTestView: View {
       let remaining = remainingSeconds(at: context.date)
       let isFinalStretch =
         phase.startDate != nil && remaining <= Double(TypingTest.finalStretch.components.seconds)
-      HStack(alignment: .firstTextBaseline) {
+      // Side by side, or the clock over the live speed at an accessibility
+      // text size, where the two no longer fit across the screen.
+      let layout =
+        dynamicTypeSize.isAccessibilitySize
+        ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+      layout {
         Text(String(format: "%.1f", remaining))
-          .font(BlurtType.mono(DesignTokens.Typography.sizeTypingClock, weight: .bold))
+          .monoFont(DesignTokens.Typography.sizeTypingClock, weight: .bold)
           .monospacedDigit()
           .foregroundStyle(isFinalStretch ? BlurtBrand.errorOrange : BlurtBrand.text)
           .scaleEffect(
@@ -124,11 +131,11 @@ struct TypingTestView: View {
             anchor: .leading
           )
           .animation(.easeOut(duration: DesignTokens.Motion.typingFlash), value: Int(remaining))
-        Spacer()
+        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
         VStack(alignment: .trailing, spacing: DesignTokens.Metrics.appLineGap) {
           Eyebrow("WPM")
           Text(liveWordsPerMinute(at: context.date))
-            .font(BlurtType.mono(DesignTokens.Typography.sizeTypingLive, weight: .bold))
+            .monoFont(DesignTokens.Typography.sizeTypingLive, weight: .bold)
             .monospacedDigit()
             .foregroundStyle(BlurtBrand.accent)
         }
@@ -257,7 +264,7 @@ extension TypingTestView {
           ? "\(talking) That's \(String(format: "%.1f", speedup))× you."
           : "\(talking) Honestly, you might not need us."
       )
-      .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+      .bodyFont(DesignTokens.Typography.sizeBody)
       .foregroundStyle(BlurtBrand.text)
       .fixedSize(horizontal: false, vertical: true)
       .padding(DesignTokens.Metrics.appCardPad)
@@ -285,17 +292,17 @@ extension TypingTestView {
       )
       HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Metrics.appChipGap) {
         Text("\(rounded)")
-          .font(BlurtType.mono(DesignTokens.Typography.sizeTypingResult, weight: .bold))
+          .monoFont(DesignTokens.Typography.sizeTypingResult, weight: .bold)
           .foregroundStyle(BlurtBrand.text)
         Text("WPM")
-          .font(BlurtType.mono(DesignTokens.Typography.sizeTypingUnit, weight: .medium))
+          .monoFont(DesignTokens.Typography.sizeTypingUnit, weight: .medium)
           .foregroundStyle(BlurtBrand.muted)
       }
       Text(rank.title)
-        .font(BlurtType.heading(DesignTokens.Typography.sizeTypingRank))
+        .headingFont(DesignTokens.Typography.sizeTypingRank)
         .foregroundStyle(BlurtBrand.text)
       Text(rank.line)
-        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+        .bodyFont(DesignTokens.Typography.sizeBody)
         .foregroundStyle(BlurtBrand.text)
     }
     .accessibilityElement(children: .combine)

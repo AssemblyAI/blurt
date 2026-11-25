@@ -15,7 +15,7 @@ package struct BrandButtonStyle: ButtonStyle {
 
   package func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(BlurtType.mono(DesignTokens.Typography.sizeCta, weight: .medium))
+      .monoFont(DesignTokens.Typography.sizeCta, weight: .medium)
       .tracking(DesignTokens.Typography.trackingCta)
       .textCase(.uppercase)
       .foregroundStyle(role == .primary ? BlurtBrand.ctaText : BlurtBrand.text)

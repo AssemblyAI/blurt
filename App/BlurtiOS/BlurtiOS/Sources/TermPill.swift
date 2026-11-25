@@ -10,7 +10,7 @@ struct TermPill: View {
   var body: some View {
     HStack(spacing: DesignTokens.Metrics.appLineGap) {
       Text(term)
-        .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+        .bodyFont(DesignTokens.Typography.sizeCaption)
         .foregroundStyle(BlurtBrand.text)
       Button(action: remove) {
         Image(systemName: "xmark")

@@ -5,7 +5,7 @@ import Testing
 @testable import AssemblyAI
 @testable import BlurtEngine
 
-@Suite("SelectionSpeaker")
+@Suite("SelectionSpeaker", .timeLimit(.minutes(1)))
 struct SelectionSpeakerTests {
   private let fastSkipping = ReadAloudStyle(rate: 2, skipsJargon: true)
 
@@ -36,14 +36,17 @@ struct SelectionSpeakerTests {
   @Test("the meter hears the sink's level while it plays, then a final 0")
   func meter() async throws {
     let levels = ValueBox<[Float]>([])
-    let sink = LevelSink(level: 0.6)
+    // Plays until the meter has heard it, rather than for a fixed moment the
+    // meter's first tick might miss on a loaded machine — which left nothing
+    // but the final 0 to check.
+    let sink = LevelSink(level: 0.6) { levels.value.contains(0.6) }
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: FakeSpeechTransport()),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
     ) { _ in sink }
     try await speaker.speak("Say something here.") { level in levels.value.append(level) }
-    #expect(levels.value.last == 0)
-    #expect(levels.value.dropLast().allSatisfy { $0 == 0.6 })
+    // The level once (the meter reports only a change), then the final 0.
+    #expect(levels.value == [0.6, 0])
   }
 
   @Test("a synthesis failure silences playback and surfaces the error")

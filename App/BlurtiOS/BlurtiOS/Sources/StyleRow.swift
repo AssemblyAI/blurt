@@ -8,6 +8,8 @@ struct StyleRow: View {
   let isActive: Bool
   let edit: (() -> Void)?
   let activate: () -> Void
+  @Environment(\.dynamicTypeSize)
+  private var dynamicTypeSize
 
   var body: some View {
     HStack(spacing: DesignTokens.Metrics.appStackGap) {
@@ -16,9 +18,9 @@ struct StyleRow: View {
           VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
             Text(name).foregroundStyle(BlurtBrand.text)
             Text(detail)
-              .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+              .bodyFont(DesignTokens.Typography.sizeCaption)
               .foregroundStyle(BlurtBrand.muted)
-              .lineLimit(2)  // literal-ok: two lines of instructions
+              .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)  // literal-ok: two lines, all at a large size
           }
           Spacer()
           // Decoration: the button carries the active style as its selected trait.

@@ -8,7 +8,7 @@ import Testing
 /// Long articles: reading starts after the first sentence, text goes to the
 /// service only as fast as it's listened to, and skip-jargon rewrites one chunk
 /// at a time instead of the whole article up front.
-@Suite("Long reads")
+@Suite("Long reads", .timeLimit(.minutes(1)))
 struct LongReadTests {
   /// An article of `paragraphs` paragraphs, each a dozen sentences long.
   private func article(paragraphs: Int) -> String {
@@ -46,7 +46,11 @@ struct LongReadTests {
     // The first piece's audio leaves a minute waiting to be heard.
     sink.bufferedAfterEnqueue = 60
     let reading = Task { try await speaker(transport, sink: sink).speak(text) }
-    try await Task.sleep(for: .milliseconds(600))
+    // The check before the first piece finds room; the one after it finds the
+    // minute queued, and is what would send the second piece if pacing were
+    // broken. Wait for that check rather than sleeping past it: once it has
+    // answered, the next piece can only go out after the queue drains.
+    while sink.roomChecks < 2 { await Task.yield() }
     #expect(transport.spoken == [pieces[0]], "a piece went out while a minute was still queued")
     // The listener catches up.
     sink.bufferedAfterEnqueue = nil

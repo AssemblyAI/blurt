@@ -12,6 +12,8 @@ struct StyleEditor: View {
   let store: StyleProfileStore
   @Environment(\.dismiss)
   private var dismiss
+  @Environment(\.dynamicTypeSize)
+  private var dynamicTypeSize
   @State private var name: String
   @State private var instructions: String
 
@@ -57,8 +59,14 @@ struct StyleEditor: View {
   /// A new style can start from a preset, which fills both fields to edit.
   private var presetsSection: some View {
     Section {
-      // The three share the row in equal widths, so none runs off it.
-      HStack(spacing: DesignTokens.Metrics.appChipGap) {
+      // The three share the row in equal widths, so none runs off it;
+      // at an accessibility text size, where a third of the row holds
+      // a few letters, each takes the whole row.
+      let chips =
+        dynamicTypeSize.isAccessibilitySize
+        ? AnyLayout(VStackLayout(spacing: DesignTokens.Metrics.appChipGap))
+        : AnyLayout(HStackLayout(spacing: DesignTokens.Metrics.appChipGap))
+      chips {
         ForEach(StylePreset.allCases) { preset in
           PresetChip(preset: preset, isChosen: instructions == preset.instructions) {
             name = preset.name

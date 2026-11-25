@@ -17,12 +17,12 @@ struct Stat: View {
         ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
           HStack(alignment: .firstTextBaseline, spacing: size * metrics.statUnitGapRatio) {
             Text(part.value)
-              .font(BlurtType.heading(size))
+              .headingFont(size)
               .tracking(size * metrics.statTrackingRatio)
               .foregroundStyle(BlurtBrand.text)
             if let unit = part.unit {
               Text(unit.uppercased())
-                .font(BlurtType.mono((size * metrics.statUnitRatio).rounded(), weight: .medium))
+                .monoFont((size * metrics.statUnitRatio).rounded(), weight: .medium)
                 .foregroundStyle(BlurtBrand.muted)
             }
           }

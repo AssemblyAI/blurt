@@ -21,7 +21,7 @@ package struct BrandTabBar<Tab: Hashable & Identifiable>: View {
             Image(systemName: isSelected ? symbol(tab) + ".fill" : symbol(tab))
               .font(.system(size: DesignTokens.Typography.sizeTabIcon, weight: DesignTokens.Typography.weightGlyph))
             Text(label(tab).uppercased())
-              .font(BlurtType.mono(DesignTokens.Typography.sizeTabLabel, weight: .medium))
+              .monoFont(DesignTokens.Typography.sizeTabLabel, weight: .medium)
               .tracking(DesignTokens.Typography.trackingEyebrow)
           }
           .foregroundStyle(isSelected ? BlurtBrand.accent : BlurtBrand.muted)
@@ -31,9 +31,21 @@ package struct BrandTabBar<Tab: Hashable & Identifiable>: View {
         .buttonStyle(.plain)
         .accessibilityLabel(label(tab))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        // A touch and hold shows the tab big, as the system tab bar does.
+        .accessibilityShowsLargeContentViewer {
+          Label(label(tab), systemImage: symbol(tab))
+        }
       }
     }
     .padding(.top, DesignTokens.Metrics.appLineGap)
+    // The labels grow with the text size only so far, as the system tab bar's
+    // do: past that a bar would crowd out the screen it switches, and the
+    // large content viewer above shows the tab instead.
+    .dynamicTypeSize(...DynamicTypeSize.xLarge)
+    // One container, so the accessibility audits can tell the bar's capped
+    // labels from a screen's own text.
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("brand.tabBar")
     .background(BlurtBrand.page)
     .overlay(alignment: .top) {
       Rectangle().fill(BlurtBrand.cardBorder).frame(height: DesignTokens.Metrics.cardBorder)

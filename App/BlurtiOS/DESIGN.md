@@ -266,6 +266,20 @@ and CTAs, `heading` (its serif design) for the app's headlines, `body` (the
 default face) for body text — so a call site names the role and the faces
 can change in one place. The keys take no role: their type is KeyboardKit's.
 
+The app's text follows Dynamic Type; the keyboard's doesn't. A screen sets
+a role with `bodyFont`, `headingFont` or `monoFont`, which take the token
+size above as the size at the default text size and scale it with the
+user's setting (`@ScaledMetric`, along the body, title and footnote styles);
+`BlurtType.mono`/`heading`/`body` give a size exactly, for the one place
+that has already fitted it to the space (the stats card). Where a layout
+runs out of room at an accessibility size it changes shape rather than
+clipping: the stats take a row each, the typing test's clock sits over the
+live speed, a preset's instructions wrap. The brand tab bar stops growing
+at `xLarge` and shows a tab in the large content viewer on a touch and
+hold, as the system tab bar does. `BlurtiOSUITests` audits every screen at
+the default size and at AX XXXL (`scripts/ios-uitest.sh`, part of
+`ios-check.sh`).
+
 ## The mic key
 
 The mic key is the one part of the keyboard that says what is happening, and

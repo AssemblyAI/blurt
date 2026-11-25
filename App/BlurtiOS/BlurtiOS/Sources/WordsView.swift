@@ -13,7 +13,7 @@ struct WordsView: View {
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
         HStack {
           Text("Words")
-            .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+            .headingFont(DesignTokens.Typography.sizeTitle)
             .foregroundStyle(BlurtBrand.text)
             .accessibilityAddTraits(.isHeader)
           Spacer()
