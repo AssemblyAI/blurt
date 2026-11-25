@@ -16,4 +16,11 @@ struct DestructiveGuardTests {
       #expect(!DestructiveGuard.isDestructive(label: label), "\(label)")
     }
   }
+
+  @Test("a phrase spelled as one word is refused too: Shutdown as well as Shut Down")
+  func oneWordSpellings() {
+    for label in ["Shutdown", "Shutdown…", "Logout"] {
+      #expect(DestructiveGuard.isDestructive(label: label), "\(label)")
+    }
+  }
 }

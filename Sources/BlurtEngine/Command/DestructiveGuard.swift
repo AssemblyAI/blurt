@@ -10,9 +10,12 @@ enum DestructiveGuard {
   /// "Show Log" isn't.
   /// English only, US and British ("Move to Bin", "Sign Out"): a Mac set to
   /// another language names these its own way, and the guard won't see them —
-  /// the planner's instruction still forbids them there.
+  /// the planner's instruction still forbids them there. A phrase an app also
+  /// spells as one word is listed both ways ("Logout", "Shutdown"): the words
+  /// are matched whole, so "shut down" never finds "Shutdown".
   static let phrases = [
-    "delete", "trash", "bin", "erase", "shut down", "restart", "log out", "logout", "log off", "sign out",
+    "delete", "trash", "bin", "erase", "shut down", "shutdown", "restart", "log out", "logout", "log off",
+    "sign out",
   ]
 
   /// ⌘ with delete or forward delete: Move to Trash, Empty Trash and Delete
