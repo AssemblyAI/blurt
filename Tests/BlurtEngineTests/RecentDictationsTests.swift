@@ -53,6 +53,18 @@ struct RecentDictationsTests {
     #expect(recent.spokenOldestFirst == ["a", "b", "c"])
   }
 
+  @Test("an unreplayable entry is listed but never projected into the request")
+  func unreplayableEntriesStayLocal() {
+    // A dictation into a field whose security couldn't be checked: the Recent
+    // list and saved history keep it, `stt_prompt` never sees it.
+    var recent = RecentDictations()
+    recent.record("a", at: epoch)
+    recent.record("maybe a password", at: epoch.addingTimeInterval(1), replayable: false)
+    recent.record("c", at: epoch.addingTimeInterval(2))
+    #expect(recent.entries.map(\.text) == ["c", "maybe a password", "a"])
+    #expect(recent.spokenOldestFirst == ["a", "c"])
+  }
+
   @Test("entries keep a stable, unique id as newer ones push in")
   func stableUniqueIDs() {
     var recent = RecentDictations()

@@ -152,11 +152,17 @@ struct DictationSessionContextTests {
       keyTerms: ["Kubernetes"], seams: seams)
 
     // Twice, so the second press has history to carry — `recentDictations` is
-    // actor state and this is how the sibling tests seed it.
-    for _ in 1...2 {
+    // actor state and this is how the sibling tests seed it. Each read is let
+    // through only once its request has gone out unprimed, and before release:
+    // a read still in flight at release is remembered but never replayed
+    // (`DictationSessionUnknownSecurityTests`), and the first press has to be replayed.
+    for press in 1...2 {
       await session.press()
       await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
       clock.advance(by: DictationSession.contextWaitBudget)
+      while await transcriber.receivedContexts.count < press { await Task.yield() }
+      hung.signal()
+      while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
       await session.release()
       await session.waitForIdle()
     }
@@ -172,7 +178,6 @@ struct DictationSessionContextTests {
     // None of the focus signals, which are the part that genuinely timed out.
     #expect(second.priorText == nil)
     #expect(second.windowTitle == nil)
-    hung.signal()
   }
 
   @Test("a secure capture that lands after the upload's budget is still honored")
@@ -184,11 +189,11 @@ struct DictationSessionContextTests {
     // target (Electron, Java, Office — `FocusCapture` makes ~6 serial round
     // trips, each capped at ~1 s) therefore misses it routinely.
     //
-    // Missing it must not cost the `targetIsSecure` flag: a nil context reads as
-    // "not a password field", so the dictation would be written into
-    // `recentDictations` and replayed in `stt_prompt` on every later
-    // dictation this launch. `PressContext` is what keeps the read reachable
-    // after the deadline, and this is the test that says so.
+    // Missing it must not cost the `targetIsSecure` flag, or the dictation
+    // would be written into `recentDictations` and replayed in `stt_prompt` on
+    // every later dictation this launch. `PressContext` is what keeps the read
+    // reachable after the deadline, and this is the test that says so. (A read
+    // that never lands at all is in `DictationSessionUnknownSecurityTests`.)
     let clock = TestClock()
     let transcriber = StubTranscriber(mode: .transcript("hunter2"))
     let injector = StubInjector()

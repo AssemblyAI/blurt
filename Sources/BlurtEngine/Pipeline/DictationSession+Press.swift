@@ -212,7 +212,8 @@ extension DictationSession {
         // and here rather than on the actor.
         textShortcuts: field.priorText == nil ? [] : textShortcutsProvider(),
         styleInstructions: styleInstructions,
-        targetIsSecure: field.isSecure)
+        targetIsSecure: field.isSecure,
+        targetSecurityUnknown: field.securityUnknown)
       // One publish, which is what makes the value-before-stream ordering
       // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.
       press.store(resolved: context.isEmpty ? nil : context)

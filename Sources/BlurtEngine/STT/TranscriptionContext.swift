@@ -63,6 +63,13 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// dictation. Nil focus signals mean "we read nothing"; this means "we refused".
   public let targetIsSecure: Bool
 
+  /// Whether the capture could not reach a focused element at all
+  /// (`FocusedFieldContext.securityUnknown`), so it cannot say whether the target
+  /// is a password field. **Local only, not sent.** The dictation is still
+  /// remembered for the Recent list, but marked never to be replayed in
+  /// `stt_prompt` (`RecentDictations.Entry.replayable`).
+  public let targetSecurityUnknown: Bool
+
   /// User-configured domain vocabulary (names, jargon, product names), sourced
   /// from `KeyTermsStore`. Like `recentTranscripts` this isn't per-utterance
   /// focus state — it's the same list every time. **Sent**, but not as context:
@@ -93,7 +100,8 @@ public struct TranscriptionContext: Sendable, Equatable {
     keyTerms: [String] = [],
     textShortcuts: [TextShortcut] = [],
     styleInstructions: String? = nil,
-    targetIsSecure: Bool = false
+    targetIsSecure: Bool = false,
+    targetSecurityUnknown: Bool = false
   ) {
     self.appName = appName
     self.windowTitle = windowTitle
@@ -105,6 +113,7 @@ public struct TranscriptionContext: Sendable, Equatable {
     self.textShortcuts = textShortcuts
     self.styleInstructions = styleInstructions
     self.targetIsSecure = targetIsSecure
+    self.targetSecurityUnknown = targetSecurityUnknown
   }
 
   /// True when no focus field carries usable (non-whitespace) content, there is no
@@ -123,9 +132,9 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// session collapses an empty snapshot to `nil`, and a secure target reduced to
   /// `nil` would be indistinguishable from an ordinary one — so the transcript
   /// would be remembered as history after all, which is the one thing the flag
-  /// exists to prevent.
+  /// exists to prevent. `targetSecurityUnknown` counts for the same reason.
   public var isEmpty: Bool {
-    !targetIsSecure && keyTerms.isEmpty && recentTranscripts.isEmpty
+    !targetIsSecure && !targetSecurityUnknown && keyTerms.isEmpty && recentTranscripts.isEmpty
       && [appName, windowTitle, fieldLabel, priorText, selectedText, styleInstructions].allSatisfy {
         $0.trimmedNonEmpty() == nil
       }

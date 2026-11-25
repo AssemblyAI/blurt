@@ -12,14 +12,16 @@ import Synchronization
 /// left needing the same value on a *later* deadline:
 ///
 /// - the paste separator (`inject`, via `priorText`/`windowTitle`), and
-/// - the remember-this-dictation decision, which is the one that matters. A nil
-///   context reads as "not a password field" (`TranscriptionContext.isEmpty`
-///   documents why the flag cannot survive being collapsed to nil), so a
-///   dictation into a secure field would be recorded into `recentDictations` and
-///   replayed in `stt_prompt` on every later dictation this launch.
+/// - the remember-this-dictation decision, which is the one that matters. A
+///   dictation into a secure field that got recorded into `recentDictations`
+///   would be replayed in `stt_prompt` on every later dictation this launch.
 ///   That is precisely the leak `targetIsSecure` exists to prevent, and a merely
 ///   slow target — `FocusCapture` makes ~6 serial AX round trips, each capped at
-///   ~1 s — must not be enough to open it.
+///   ~1 s — must not be enough to open it. Nor may a *hung* one: `resolved` is
+///   nil both for a read that settled on an empty snapshot and for one still in
+///   flight, and only the first says anything about the field. So that decision
+///   reads `targetSecurity`, which reports a read that has not landed as
+///   `.unknown` rather than as an ordinary field.
 ///
 /// So `wait(within:clock:)` is the deadline-bound read the upload needs and
 /// `resolved` is the peek the release path needs, over one stored value. Holding
@@ -42,6 +44,10 @@ import Synchronization
 final class PressContext: Sendable {
   private struct State {
     var resolved: TranscriptionContext?
+    /// Whether `store(resolved:)` has run. Separate from `resolved` because an
+    /// empty snapshot is stored as nil, and "the read found an ordinary, empty
+    /// field" must not look like "the read never came back".
+    var settled = false
     /// Handed out by the first `wait(within:clock:)` and nil after, so the
     /// take-it-out-in-the-same-turn-you-read-it discipline the actor used to
     /// carry in a comment is now a property of the type. An `AsyncStream` cannot
@@ -70,10 +76,42 @@ final class PressContext: Sendable {
   /// cannot do anything about either.
   var resolved: TranscriptionContext? { state.withLock { $0.resolved } }
 
+  /// What the press-time read says about whether the target is a password field.
+  enum TargetSecurity: Equatable {
+    /// The read landed and the field is an ordinary one: remember the dictation
+    /// and replay it as later request context.
+    case ordinary
+    /// The read refused the field (`TranscriptionContext.targetIsSecure`): the
+    /// dictation is the secret, so it is not remembered at all.
+    case secure
+    /// Nothing is known — the read has not landed (a slow or beachballing
+    /// frontmost app), or it reached no focused element
+    /// (`TranscriptionContext.targetSecurityUnknown`). Remembered for the Recent
+    /// list, which stays on this Mac, but never replayed in `stt_prompt`, where
+    /// a password would leave it.
+    case unknown
+  }
+
+  /// The verdict the remember decision acts on. Fails closed: only a read that
+  /// has *landed* can say `.ordinary`; one still in flight could yet turn out
+  /// to be a password field, and replaying on the strength of not knowing is
+  /// exactly the leak `targetIsSecure` exists to prevent.
+  var targetSecurity: TargetSecurity {
+    state.withLock {
+      guard $0.settled else { return .unknown }
+      if $0.resolved?.targetIsSecure == true { return .secure }
+      if $0.resolved?.targetSecurityUnknown == true { return .unknown }
+      return .ordinary
+    }
+  }
+
   /// Publishes the finished read. The value lands before the stream does, so
   /// `wait` cannot outrun `resolved`.
   func store(resolved context: TranscriptionContext?) {
-    state.withLock { $0.resolved = context }
+    state.withLock {
+      $0.resolved = context
+      $0.settled = true
+    }
     feed.yield(context)
     feed.finish()
   }
