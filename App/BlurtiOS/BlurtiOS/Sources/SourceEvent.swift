@@ -1,7 +1,3 @@
-import BlurtEngine
-import Foundation
-import Synchronization
-
 /// Something the microphone said about itself, after the fact. A failure is
 /// what a start throws; an event is what happens to a microphone already open.
 nonisolated enum SourceEvent: Sendable, Equatable {

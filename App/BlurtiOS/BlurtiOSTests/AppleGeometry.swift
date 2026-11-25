@@ -1,5 +1,4 @@
 import Foundation
-import KeyboardKit
 import Testing
 
 /// One measured profile (`Design/apple-geometry-*.json`), bundled with the

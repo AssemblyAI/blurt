@@ -1,7 +1,3 @@
-import Foundation
-import Synchronization
-import UIKit
-
 @testable import BlurtiOS
 
 /// An audio session that counts what the window does to it and says what the

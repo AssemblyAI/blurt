@@ -1,7 +1,4 @@
-import BlurtEngine
-import Foundation
 import Synchronization
-import UIKit
 
 // MARK: - The window's collaborators, faked
 //

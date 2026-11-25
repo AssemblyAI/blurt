@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 
 @testable import BlurtiOSCore
 

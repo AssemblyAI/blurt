@@ -1,5 +1,3 @@
-import Foundation
-import Synchronization
 import UIKit
 
 /// The application's state, as the window reads it.

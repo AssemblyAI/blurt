@@ -1,7 +1,6 @@
 import AVFoundation
 import BlurtEngine
 import Foundation
-import Synchronization
 import Testing
 
 @testable import BlurtiOS

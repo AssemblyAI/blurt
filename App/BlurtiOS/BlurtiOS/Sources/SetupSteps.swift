@@ -1,7 +1,6 @@
 import AVFoundation
 import BlurtDesign
 import SwiftUI
-import UIKit
 
 /// The setup steps, numbered: an AssemblyAI API key, the microphone, the
 /// keyboard, each with its control until it is done and a check after. The

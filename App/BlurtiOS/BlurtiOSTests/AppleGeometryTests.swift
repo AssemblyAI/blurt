@@ -1,5 +1,4 @@
-import Foundation
-import KeyboardKit
+import CoreGraphics
 import Testing
 
 /// The measured files against what they claim: each parses at the width its

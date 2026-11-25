@@ -1,4 +1,3 @@
-import BlurtEngine
 import Foundation
 
 // MARK: - Shared defaults

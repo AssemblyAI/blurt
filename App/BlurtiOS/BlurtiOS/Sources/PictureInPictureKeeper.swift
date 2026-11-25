@@ -1,7 +1,6 @@
 import AVKit
 import BlurtEngine
 import CoreMedia
-import SwiftUI
 import UIKit
 
 /// What keeps the app running between dictations so the microphone can close

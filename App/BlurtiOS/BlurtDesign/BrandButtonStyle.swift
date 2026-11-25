@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// The brand's button: 40 pt, 4 pt corners — rectangular, never a pill —
 /// its label in uppercase mono; a colour change while pressed, no lift.

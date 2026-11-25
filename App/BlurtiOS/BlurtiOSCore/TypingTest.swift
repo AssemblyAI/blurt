@@ -1,5 +1,3 @@
-import Foundation
-
 /// The easter egg behind Settings: a 30-second sprint over random common words
 /// that measures how fast the user types. Pure state, so the scoring is
 /// tested; `TypingTestView` owns the clock and the theatrics.

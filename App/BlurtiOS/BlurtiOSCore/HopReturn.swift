@@ -1,5 +1,3 @@
-import Foundation
-
 /// When the app, brought forward by the keyboard's hop, goes back to the app
 /// the keyboard was in: once the record says the window is open and the mic
 /// will stay live without the app in front — at once under a held mic (the

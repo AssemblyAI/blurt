@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// A brand button that can't be pressed yet sits back rather than looking live.
 /// A modifier because a `ButtonStyle` can't read the environment itself.

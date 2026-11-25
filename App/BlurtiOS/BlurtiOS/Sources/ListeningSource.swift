@@ -1,6 +1,4 @@
 import BlurtEngine
-import Foundation
-import Synchronization
 
 /// What the listening window needs from a microphone: opened once for the
 /// window, closed with it, and feeding the engine per utterance in between —

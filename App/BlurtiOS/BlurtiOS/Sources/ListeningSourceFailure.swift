@@ -1,6 +1,4 @@
-import BlurtEngine
 import Foundation
-import Synchronization
 
 /// Why a microphone couldn't open or start. Each case is its own sentence,
 /// for the home screen; `CaptureFailure` turns each into the keyboard's

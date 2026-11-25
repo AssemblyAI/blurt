@@ -1,7 +1,4 @@
-import BlurtEngine
 import BlurtiOSCore
-import Foundation
-import UIKit
 
 /// What keeps the microphone closed between dictations, when anything does.
 /// `HeldIdle` keeps nothing: the mic stays open for the window, the orange

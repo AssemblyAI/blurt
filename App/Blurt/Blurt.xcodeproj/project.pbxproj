@@ -685,6 +685,7 @@
 		37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowRoot.swift; sourceTree = "<group>"; };
 		383E03AB60BA21AAD92655D5 /* ReadyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyView.swift; sourceTree = "<group>"; };
 		3879273E32399C14F3533899 /* KeyActionName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyActionName.swift; sourceTree = "<group>"; };
+		38CAFC7A39E679F1CA3A9692 /* blurt */ = {isa = PBXFileReference; lastKnownFileType = folder; name = blurt; path = ../..; sourceTree = SOURCE_ROOT; };
 		3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */ = {isa = PBXFileReference; path = "rom1b-6-start.m4a"; sourceTree = "<group>"; };
 		3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextShortcutsSection.swift; sourceTree = "<group>"; };
 		3A7871E362C7B85812F03A49 /* MediaPauseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPauseController.swift; sourceTree = "<group>"; };
@@ -1054,7 +1055,6 @@
 		EBB8641EF9B0108DC0B103B7 /* juno-120-stop.m4a */ = {isa = PBXFileReference; path = "juno-120-stop.m4a"; sourceTree = "<group>"; };
 		EC0CF2AE01C6EE41101CBB74 /* juno-17-stop.m4a */ = {isa = PBXFileReference; path = "juno-17-stop.m4a"; sourceTree = "<group>"; };
 		EC6584FE7C94EF604CA33BE3 /* rom1a-19-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-19-stop.m4a"; sourceTree = "<group>"; };
-		ECB76F970CE404913C104F95 /* agent-a3660484b31df3864 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "agent-a3660484b31df3864"; path = ../..; sourceTree = SOURCE_ROOT; };
 		ED1535C5BDC865063C5DA3A3 /* juno-52-stop.m4a */ = {isa = PBXFileReference; path = "juno-52-stop.m4a"; sourceTree = "<group>"; };
 		ED1C7F2E22562A18197FED64 /* juno-19-start.m4a */ = {isa = PBXFileReference; path = "juno-19-start.m4a"; sourceTree = "<group>"; };
 		ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-17-stop.m4a"; sourceTree = "<group>"; };
@@ -1180,7 +1180,7 @@
 		4B1375E36CD42DBEFF08BC7E /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				ECB76F970CE404913C104F95 /* agent-a3660484b31df3864 */,
+				38CAFC7A39E679F1CA3A9692 /* blurt */,
 			);
 			name = Packages;
 			sourceTree = "<group>";

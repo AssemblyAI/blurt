@@ -1,5 +1,3 @@
-import Foundation
-
 /// Blurt is on: the app-switcher card. When the user swipes up to the switcher
 /// with a listening session on, Blurt's card shows this screen in place of
 /// whatever the app was on, so the card says the one thing the user has to

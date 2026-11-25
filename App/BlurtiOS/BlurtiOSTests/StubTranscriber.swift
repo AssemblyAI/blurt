@@ -1,7 +1,5 @@
 import BlurtEngine
 import Foundation
-import Synchronization
-import UIKit
 
 /// A transcriber that answers every utterance with the same words, offline.
 nonisolated struct StubTranscriber: TranscriberProtocol {

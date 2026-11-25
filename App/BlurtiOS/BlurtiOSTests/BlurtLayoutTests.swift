@@ -1,5 +1,5 @@
 import BlurtDesign
-import Foundation
+import CoreGraphics
 import KeyboardKit
 import Testing
 

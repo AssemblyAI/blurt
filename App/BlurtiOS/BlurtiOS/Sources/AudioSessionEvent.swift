@@ -1,5 +1,4 @@
 import AVFoundation
-import Foundation
 
 /// What the system says about the audio session while a window is open, in
 /// the order it happened. One reader: the window, which turns each into the

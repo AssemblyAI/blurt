@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// The app's chrome, on the brand: the card, the page, the form, the eyebrow,
 /// the button, the wordmark. Screens are built from these rather than stock

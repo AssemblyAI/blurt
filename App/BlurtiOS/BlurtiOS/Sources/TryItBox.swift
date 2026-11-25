@@ -1,6 +1,5 @@
 import BlurtDesign
 import SwiftUI
-import UIKit
 
 /// "Try it here": a text box on the home screen for trying the Blurt keyboard
 /// without leaving the app. iOS offers no public way for an app to choose a

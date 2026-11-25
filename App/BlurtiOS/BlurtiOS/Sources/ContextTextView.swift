@@ -1,4 +1,3 @@
-import SwiftUI
 import UIKit
 
 /// A text view with a fixed input context, so iOS restores the keyboard last

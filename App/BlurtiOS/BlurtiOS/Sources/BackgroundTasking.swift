@@ -1,7 +1,3 @@
-import BlurtEngine
-import Foundation
-import UIKit
-
 /// A named stretch of background time: the window asks for one around an
 /// interruption, the coordinator around a release, so the words land before
 /// iOS suspends the app. A protocol so tests count them instead of asking

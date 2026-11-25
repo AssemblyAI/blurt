@@ -1,6 +1,4 @@
 import BlurtiOSCore
-import Foundation
-import UIKit
 
 /// What the idle mode says back to the window about the microphone between
 /// dictations. The window turns each into the machine's event with the

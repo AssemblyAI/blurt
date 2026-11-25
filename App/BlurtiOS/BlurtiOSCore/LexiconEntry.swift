@@ -1,6 +1,3 @@
-import BlurtEngine
-import Foundation
-
 /// One entry of the phone's own word list (`UILexicon`): contact names and the
 /// user's text replacements. Names go to the request as key terms so they come
 /// back spelled right; replacements are the phone's own text shortcuts.
