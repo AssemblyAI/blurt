@@ -23,11 +23,48 @@ public enum InsertionSeparator {
   /// chunks where nothing strips it. `priorText` is nil for empty fields and for
   /// secure/Accessibility-opaque fields — there we can't tell what precedes the
   /// caret, so we add no separator rather than risk a stray leading space.
+  ///
+  /// Nor after an *opener* — a character that binds to the word typed after it
+  /// (see `endsInOpener`): `Call me (` + "maybe" pastes `Call me (maybe`, not
+  /// `Call me ( maybe`.
   public static func withLeadingSeparator(_ text: String, after priorText: String?) -> String {
     guard !text.isEmpty else { return text }
     guard let priorText, let last = priorText.last, !last.isWhitespace else { return text }
     guard let first = text.first, !first.isWhitespace else { return text }
+    guard !endsInOpener(priorText) else { return text }
     return " " + text
+  }
+
+  /// Characters that always open what follows them, so a dictation after one
+  /// joins with no space: brackets, the typographic *opening* quotes and
+  /// guillemet, Spanish inverted marks, and the mention and currency prefixes.
+  /// Deliberately conservative — `/` and `-` are left out because
+  /// `yes /` or `well -` can just as well want the space as not.
+  private static let openers: Set<Character> = [
+    "(",
+    "[",
+    "{",
+    "\u{201C}",
+    "\u{2018}",
+    "\u{00AB}",
+    "\u{00BF}",
+    "\u{00A1}",
+    "@",
+    "$",
+  ]
+
+  /// Characters that open only at the start of a word — the start of the text
+  /// or after whitespace. Straight quotes both open and close (`said "` opens,
+  /// `said "hi"` closes), and `#` after a word is a suffix (`C#`, `F#`), not a
+  /// hashtag.
+  private static let wordStartOpeners: Set<Character> = ["\"", "'", "#"]
+
+  /// Whether `priorText` ends in a character the next word should abut.
+  static func endsInOpener(_ priorText: String) -> Bool {
+    guard let last = priorText.last else { return false }
+    if openers.contains(last) { return true }
+    guard wordStartOpeners.contains(last) else { return false }
+    return priorText.dropLast().last?.isWhitespace ?? true
   }
 
   /// Chooses what text the separator decision should treat as preceding the
