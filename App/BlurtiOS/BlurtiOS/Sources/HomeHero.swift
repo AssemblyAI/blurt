@@ -33,7 +33,7 @@ struct HomeHero: View {
           }
         }
         Text(status.message)
-          .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+          .bodyFont(DesignTokens.Typography.sizeBody)
           .foregroundStyle(BlurtBrand.text)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -70,7 +70,7 @@ struct HomeHero: View {
   }
 
   private func note(_ text: String) -> some View {
-    Text(text).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.errorOrange)
+    Text(text).bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.errorOrange)
   }
 }
 
@@ -81,7 +81,7 @@ struct HomeHero: View {
 private struct ReturnHint: View {
   var body: some View {
     Label("To keep typing, tap “◀” with the app's name in the top-left corner.", systemImage: "arrow.up.left")
-      .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+      .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
       .foregroundStyle(BlurtBrand.ctaText)
       .padding(DesignTokens.Metrics.appChipPadX)
       .frame(maxWidth: .infinity, alignment: .leading)

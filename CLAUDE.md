@@ -143,7 +143,8 @@ The simulator records through the Mac's microphone (`SimulatorAudioSource`), so 
 needs macOS to allow the **Simulator** app the microphone (Privacy & Security › Microphone) and
 the right input under the Simulator's I/O › Audio Input — a refused microphone records silence
 rather than failing. `scripts/ios-check.sh` runs the iPhone's quality gates (tests with the
-`BlurtiOSCore` coverage floor, `swiftlint analyze`, periphery, the probe build); `check.sh` runs it
+`BlurtiOSCore` coverage floor, the accessibility audits (`scripts/ios-uitest.sh`), `swiftlint
+analyze`, periphery, the probe build); `check.sh` runs it
 itself when this Mac has the matching runtime.
 
 ## Permissions
@@ -153,5 +154,5 @@ itself when this Mac has the matching runtime.
 `scripts/check.sh` with and without `--portable` or `--lint-only`, the standalone checks it runs
 (`check-invariants.sh`, `check-portability.sh`, `check-release-notes.sh`, `design-sync.sh --check`,
 `mutate.sh --list`), `scripts/dev-build.sh`, and the iPhone scripts:
-`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`). If you find yourself
+`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`, `ios-uitest.sh`). If you find yourself
 prompted for a command that belongs in that set, add it there rather than working around it.
