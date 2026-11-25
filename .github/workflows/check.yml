@@ -322,11 +322,12 @@ jobs:
         # BlackHole, a loopback Core Audio driver: whatever plays to its output
         # comes back on its input. coreaudiod loads it only on a restart, which
         # launchd does at once. It then becomes the default input and output,
-        # and low-level white noise loops into it for the rest of the job: the
-        # capture path rejects a silent input by design (an input that never
-        # delivers, or reads below `MicLiveness.silenceFloorDB`), so the suites
-        # need a signal, not just a device. Noise rather than speech: speech
-        # has exact-zero gaps a short capture can land in.
+        # and 30 s of low-level white noise is written for the next step to
+        # loop into it: the capture path rejects a silent input by design (an
+        # input that never delivers, or reads below
+        # `MicLiveness.silenceFloorDB`), so the capture tests need a signal,
+        # not just a device. Noise rather than speech: speech has exact-zero
+        # gaps a short capture can land in.
         run: |
           brew install --cask blackhole-2ch
           brew install switchaudio-osx
@@ -345,28 +346,39 @@ jobs:
               out.setnchannels(1); out.setsampwidth(2); out.setframerate(48000)
               out.writeframes(b"".join(struct.pack("<h", random.randint(-2000, 2000)) for _ in range(48000 * 30)))
           PY
-          # Detached, so it outlives this step and plays under the suites; the
-          # runner ends it with the job.
-          nohup bash -c "while true; do afplay '$noise'; done" >/dev/null 2>&1 &
 
       - name: Run the live performer and live-audio suites
         working-directory: blurt
         env:
           BLURT_LIVE_AX_TESTS: "1"
           BLURT_LIVE_AUDIO_TESTS: "1"
+        # Two passes over one test build. BlackHole's input and output are one
+        # device, so while noise plays into it the device reads as running —
+        # exactly what "building a recorder leaves the microphone closed"
+        # asserts it is not. So the suites that need the device idle run first,
+        # in quiet, and the two that need a signal run with the noise playing.
         run: |
-          set -o pipefail
-          log="$RUNNER_TEMP/live-tests.log"
-          swift test --filter 'LivePerformerTests|MicCaptureLevelsTests|AudioInputDevicesTests|MicCaptureBringUpTests' \
-            2>&1 | tee "$log"
+          set -euo pipefail
+          quiet="$RUNNER_TEMP/live-quiet.log"
+          signal="$RUNNER_TEMP/live-signal.log"
+          swift test --filter 'LivePerformerTests|AudioInputDevicesTests|MicCaptureBringUpTests' \
+            --skip pinnedRecorderCapturesAudio 2>&1 | tee "$quiet"
+          bash -c "while true; do afplay '$RUNNER_TEMP/noise.wav'; done" &
+          player=$!
+          trap 'kill "$player" 2>/dev/null || true; pkill -x afplay || true' EXIT
+          swift test --filter 'MicCaptureLevelsTests|pinnedRecorderCapturesAudio' 2>&1 | tee "$signal"
           missing=0
-          for suite in "Live performer" "MicCapture.levels (live)" \
-            "AudioInputDevices & capture session (live)" "MicCapture bring-up (live)"; do
-            if ! grep -qF "Suite \"$suite\" passed" "$log"; then
-              echo "::error::Suite \"$suite\" did not run and pass (see its skip reason above)"
+          check() {
+            if ! grep -qF "Suite \"$2\" passed" "$1"; then
+              echo "::error::Suite \"$2\" did not run and pass (see its skip reason above)"
               missing=1
             fi
-          done
+          }
+          check "$quiet" "Live performer"
+          check "$quiet" "MicCapture bring-up (live)"
+          check "$quiet" "AudioInputDevices & capture session (live)"
+          check "$signal" "MicCapture.levels (live)"
+          check "$signal" "AudioInputDevices & capture session (live)"
           exit "$missing"
 
   # What swift-format would change, as an applicable patch. Formatting is the
