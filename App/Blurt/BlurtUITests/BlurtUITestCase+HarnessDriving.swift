@@ -142,4 +142,31 @@ extension BlurtUITestCase {
     viewPicker.click()
     viewPicker.menuItems[title].click()
   }
+
+  // MARK: - A live recording
+
+  /// Starts a recording with the ready screen's Record button — offline, on
+  /// `TranscriptsModel.uiTest(store:)`'s capture and live-session doubles —
+  /// and waits for the live page.
+  func startLiveRecording(in main: XCUIElement) {
+    let record = main.buttons[UITestIdentifiers.transcribeRecordButton]
+    XCTAssertTrue(record.waitForExistence(timeout: 10), "The Record button not found")
+    record.click()
+    XCTAssertTrue(
+      main.buttons[UITestIdentifiers.liveRecordingStop].waitForExistence(timeout: 10),
+      "Record should open the live page"
+    )
+  }
+
+  /// Releases the scripted live session's next turn, from the harness, then
+  /// brings the main window back to the front. The click raises the harness,
+  /// pinned top-leading, and how far it reaches over the centred main window
+  /// depends on the screen: Discard…, at the live page's leading edge, missed
+  /// its click after a turn while Pause and Stop, at the trailing edge, never
+  /// did. A click on the main window's centre — the live transcript, inert —
+  /// raises it from anywhere the harness can't reach.
+  func releaseLiveTurn(in harness: XCUIElement) {
+    harness.buttons[UITestIdentifiers.harnessLiveNextTurn].click()
+    app.windows[UITestIdentifiers.mainWindowTitle].click()
+  }
 }

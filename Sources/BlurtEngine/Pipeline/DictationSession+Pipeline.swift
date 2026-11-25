@@ -199,8 +199,8 @@ extension DictationSession {
       // The request gets the read if it arrived and the press-known half if it
       // didn't, rather than nothing: key terms and the recent turns never needed
       // the AX round trip that just timed out. Only the *request* falls back —
-      // `pressKnown` asserts a `targetIsSecure: false` it has no business
-      // asserting, and the release path, which reads that flag, reads the
+      // `pressKnown` asserts a `targetSecurity: .ordinary` it has no business
+      // asserting, and the release path, which reads that verdict, reads the
       // press's resolved value and never this one.
       return try await transcriber.transcribe(
         frames: frames,
@@ -325,7 +325,7 @@ extension DictationSession {
 
   /// The paste, answering how it ended for the log (`DictationLog.Entry.outcome`).
   /// `security` is the verdict the release path read once for this press —
-  /// not `press?.resolved?.targetIsSecure`, which a read that never landed
+  /// not `press?.resolved?.targetSecurity`, which a read that never landed
   /// leaves nil and so reads as an ordinary field. `press` supplies the
   /// separator's caret context and is whose failure gets logged.
   private func inject(_ text: String, security: TargetSecurity, press: PressContext?) async -> PipelinePhase {

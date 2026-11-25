@@ -120,7 +120,7 @@ extension DictationCoordinator {
           selectedText: command.selectedText,
           windowTitle: nil,
           fieldLabel: nil,
-          isSecure: command.isSecure == true
+          security: command.isSecure == true ? .secure : .ordinary
         )
       )
     }

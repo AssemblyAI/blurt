@@ -32,8 +32,8 @@ extension TranscriptsModel {
       return
     }
     reset()
-    let url = TranscriptStore.recordingsDirectory.appending(path: Self.recordingName(at: .now))
-    let realtime = RealtimeTranscriber.blurt(apiKey: apiKey)
+    let url = recordingsDirectory.appending(path: Self.recordingName(at: .now))
+    let realtime = makeLiveSession(apiKey)
     // One ordered feed from the recorder's queue to the socket: the recorder
     // yields each slice as it is mixed, and a single task sends them in turn.
     let (audio, feed) = AsyncStream.makeStream(of: Data.self)
@@ -72,7 +72,7 @@ extension TranscriptsModel {
   /// is: a session that outlives its recording must not write its turns into the
   /// next one's transcript, or end it when it fails.
   private func applyTurns(
-    from realtime: RealtimeTranscriber,
+    from realtime: any LiveTranscriptionSession,
     opened: Task<AsyncThrowingStream<RealtimeTurn, any Error>, Never>
   ) -> Task<Void, Never> {
     Task { [weak self] in

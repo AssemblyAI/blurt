@@ -264,8 +264,12 @@ final class AppCoordinator {
   }
 
   private func observePhases() -> Task<Void, Never> {
-    Task { [weak self] in
-      guard let phases = await self?.session.phaseStream() else {
+    // The key tap can take a press before this subscription lands; a replayed
+    // `.idle` behind it would read as that dictation's end and reset its gate
+    // (`syncAfterTerminalPhase`). Only `render` moves `lastPhase` (#413).
+    let shown = lastPhase
+    return Task { [weak self] in
+      guard let phases = await self?.session.phaseStream(alreadyShowing: shown) else {
         return
       }
       for await phase in phases {

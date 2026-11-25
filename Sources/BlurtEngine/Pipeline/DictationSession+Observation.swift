@@ -22,12 +22,23 @@ extension DictationSession {
   /// phase immediately, then every subsequent transition. Multiple streams can be
   /// active at once, so a debug view or test observer cannot disconnect the app's
   /// renderer.
-  public func phaseStream() -> AsyncStream<PipelinePhase> {
+  ///
+  /// `alreadyShowing` is the phase the subscriber already renders: when the
+  /// session is still at it, the opening yield is skipped. A coordinator that
+  /// subscribes from an unstructured task takes commands meanwhile, so a
+  /// replayed opening phase could land after a press it already accepted —
+  /// a fresh session's `.idle`, which is terminal, ended the iPhone's first
+  /// dictation that way (#413). Compared here, on the actor, as the
+  /// subscription is taken, the stale phase is never queued; a phase the
+  /// session moved to first still opens the stream.
+  public func phaseStream(alreadyShowing shown: PipelinePhase? = nil) -> AsyncStream<PipelinePhase> {
     let (stream, continuation) = AsyncStream.makeStream(of: PipelinePhase.self)
     currentID += 1
     let id = currentID
     continuations[id] = continuation
-    continuation.yield(phase)
+    if phase != shown {
+      continuation.yield(phase)
+    }
     continuation.onTermination = { [weak self] _ in
       Task { await self?.clearContinuation(id) }
     }

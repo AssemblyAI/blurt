@@ -324,7 +324,10 @@ selection" and "rewrite the selection" are its only callers, and it rides the ph
 transcript and the dictation's end in one order. `phaseStream()` yields the current
 phase immediately then
 every transition, and is **multi-observer** (one continuation per call), though hosts should still
-render from one consumer and project the phase into their own state.
+render from one consumer and project the phase into their own state. Both coordinators subscribe
+with `phaseStream(alreadyShowing:)`: the session skips the opening yield when it is still at the
+phase the host renders, so a fresh session's `.idle` can't arrive after a press the host already
+took and end that dictation (#413).
 
 A host-supplied `readinessCheck` closure can refuse a press before any capture begins — the app
 passes a key-presence check, so a missing API key surfaces as `.failed(.apiKeyMissing)` at press
@@ -398,7 +401,7 @@ process" (a browser hosts many unrelated tabs under one PID).
 The only place the engine is composed for the real app. It builds the concrete instances and owns a
 `DictationKeyTap` whose `onStart` → `session.submit(.press)`, `onStop` → `submit(.release)`,
 `onCancel` → `submit(.cancel)`, and `onRecordingDiscarded` → `submit(.cancelRecording)`, then
-observes `session.phaseStream()` to drive the overlay.
+observes `session.phaseStream(alreadyShowing:)` to drive the overlay.
 
 Any `PipelinePhase.setupBlocker` — today a missing API key — routes to the settings UI via its
 `onSetupBlocked` closure instead of an error flash. Which failures count as unfinished _setup_ rather
