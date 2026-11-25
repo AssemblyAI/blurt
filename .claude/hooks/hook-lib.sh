@@ -9,6 +9,16 @@
 # copy in each meant a change to the shape — or a python3 fallback — was three
 # edits, with a hook that silently resolved an empty path just no-opping.
 hook_file_path() {
-  python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))' \
+  hook_tool_input file_path
+}
+
+# Echo the `tool_input.command` of a Bash call, or nothing for any other tool.
+hook_command() {
+  hook_tool_input command
+}
+
+# Echo `tool_input.<$1>` from the payload on stdin, or nothing.
+hook_tool_input() {
+  python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get(sys.argv[1],""))' "$1" \
     2>/dev/null || true
 }

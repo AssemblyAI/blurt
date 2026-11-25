@@ -27,10 +27,10 @@ struct StreamingPCMPlayerTests {
   /// audio played out first depends on the machine; how long it may take in
   /// virtual time does not.
   private func drain(_ player: StreamingPCMPlayer, on clock: TestClock) async -> Duration {
-    let finished = Finished()
+    let finished = ValueBox(false)
     let draining = Task {
       await player.drain()
-      finished.set()
+      finished.value = true
     }
     while !finished.value {
       if let next = clock.sleepingFor.first {

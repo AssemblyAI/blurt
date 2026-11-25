@@ -115,27 +115,46 @@
       // raises it through Accessibility, which that rule doesn't gate (Peekaboo's
       // loop, MIT). A just-launched app answers once its AX side is up, hence
       // the retry rather than one call.
-      let raised = await KeyInjector.poll(
-        for: launchBudget,
-        every: .milliseconds(100),
-        clock: ContinuousClock()
-      ) {
-        await MainActor.run {
-          if isVerifiedFrontmost(app) {
-            return true
+      let raised = try await waitForFront(
+        name,
+        clock: ContinuousClock(),
+        look: {
+          await MainActor.run {
+            if isVerifiedFrontmost(app) {
+              return true
+            }
+            app.activate()
+            raise(app.processIdentifier)
+            return false
           }
-          app.activate()
-          raise(app.processIdentifier)
-          return false
-        }
+        },
+        frontmost: { isFrontmost(app.processIdentifier) }
+      )
+      return raised ? how : how + "; frontmost but its window wasn't on top"
+    }
+
+    /// The wait `open` ends on: `look` every 100 ms until it finds the app in
+    /// front or `launchBudget` has passed, answering whether it did. Past the
+    /// budget, an app that is `frontmost` but never owned the top window — its
+    /// window on another Space, or a window server slow to reorder — is in
+    /// front enough: the keystrokes go to it. Only an app that never came
+    /// forward fails. A cancel mid-wait throws `CancellationError` rather than
+    /// that failure: the command was abandoned, and the router ends it as such
+    /// (`SelectionSpeechRouter.execute`), not as an app that wouldn't come forward.
+    @MainActor
+    static func waitForFront(
+      _ name: String,
+      clock: some Clock<Duration>,
+      look: @Sendable () async -> Bool,
+      frontmost: @MainActor () -> Bool
+    ) async throws -> Bool {
+      if try await KeyInjector.poll(for: launchBudget, every: .milliseconds(100), clock: clock, until: look) {
+        return true
       }
-      // Frontmost but never owning the top window — its window on another
-      // Space, or a window server slow to reorder — is in front enough: the
-      // keystrokes go to it. Only an app that never came forward fails.
-      guard raised || isFrontmost(app.processIdentifier) else {
+      guard frontmost() else {
         throw VoiceCommandError.couldNotPerform("bring \(name) to the front")
       }
-      return raised ? how : how + "; frontmost but its window wasn't on top"
+      return false
     }
 
     /// The running or installed app named `name` — exactly, as `NameMatch`
