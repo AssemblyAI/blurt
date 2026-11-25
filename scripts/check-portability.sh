@@ -129,6 +129,13 @@ if [ -n "$UNTRACKED" ]; then
   printf '%s\n' "$UNTRACKED" | sed 's/^/  /'
 fi
 
+# Only the listed scripts still on disk: one deleted without `git rm` stays in the
+# index, and grep's "No such file" is the same exit 2 as a bad pattern below.
+PRESENT=()
+while IFS= read -r f; do
+  if [ -f "$f" ]; then PRESENT+=("$f"); fi
+done <<<"$FILES"
+
 VIOLATION=0
 for i in "${!PATTERNS[@]}"; do
   pattern=${PATTERNS[$i]}
@@ -138,8 +145,7 @@ for i in "${!PATTERNS[@]}"; do
   # rule that passes everything, which is how the first draft of this file shipped
   # eight silently-dead rules.
   status=0
-  # shellcheck disable=SC2086
-  hits=$(grep -nE "$pattern" $FILES) || status=$?
+  hits=$(grep -nHE "$pattern" "${PRESENT[@]}") || status=$?
   if [ "$status" -gt 1 ]; then
     echo "error: rule $i is not a valid regex (grep exit $status): $pattern" >&2
     exit 1

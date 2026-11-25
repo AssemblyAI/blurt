@@ -41,9 +41,15 @@ waits() {
     echo "error: the test scope matches no tracked files: ${SCOPE[*]}" >&2
     exit 1
   }
+  # Only the listed files still on disk: one deleted without `git rm` stays in the
+  # index, and awk aborts on the first file it cannot open.
+  local f present=()
+  while IFS= read -r f; do
+    if [ -f "$f" ]; then present+=("$f"); fi
+  done <<<"$files"
+  [ "${#present[@]}" -gt 0 ] || return 0
   # The pattern goes in through the environment: `awk -v` would process its
   # backslashes, turning `\.` into "any character" on one awk and not another.
-  # shellcheck disable=SC2086 # one path per line, no spaces in this tree
   PAT="$PATTERN" awk '
     BEGIN { pat = ENVIRON["PAT"] }
     FNR == 1 { prev = "" }
@@ -55,7 +61,7 @@ waits() {
       }
       prev = line
     }
-  ' $files
+  ' "${present[@]}"
 }
 
 hits="$(waits)"
