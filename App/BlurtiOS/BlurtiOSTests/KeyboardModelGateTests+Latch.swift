@@ -44,6 +44,11 @@ struct KeyboardModelLatchTests {
     defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
+    // A tap, on a held clock: on the wall clock a slow runner (ASan) can take
+    // longer than the hold threshold between micDown and micUp, and a hold's
+    // lift releases.
+    let start = Date()
+    model.now = { start }
     model.micDown()
     let theirs = UUID()
     rig.answer(.busy(theirs))
