@@ -1,0 +1,73 @@
+name: sim-boot-probe
+
+# Throwaway measurement, never merged: where a CI simulator's first boot
+# spends its 3.5–4+ minutes, and whether a freshly created device, or an
+# erased one, boots faster than the runner image's own. Runs only on a push
+# to this branch.
+on:
+  push:
+    branches: [claude/sim-boot-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [existing, erased, fresh]
+        rep: [1, 2]
+    steps:
+      - name: Boot a simulator and time each stage
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun simctl list runtimes
+          pick() {
+            xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          best = None
+          for rt, devs in json.load(sys.stdin)["devices"].items():
+              m = re.search(r"iOS-(\d+)-(\d+)", rt)
+              if not m:
+                  continue
+              v = (int(m.group(1)), int(m.group(2)))
+              for d in devs:
+                  if d["name"] == "iPhone 17" and (best is None or v > best[0]):
+                      best = (v, rt, d["udid"], d["deviceTypeIdentifier"])
+          print(best[1], best[2], best[3])
+          '
+          }
+          read -r runtime udid devtype <<<"$(pick)"
+          echo "runtime $runtime, image device $udid ($devtype)"
+          case "$MODE" in
+            erased)
+              t0=$(date +%s)
+              xcrun simctl erase "$udid"
+              echo "erase took $(($(date +%s) - t0))s"
+              ;;
+            fresh)
+              t0=$(date +%s)
+              udid="$(xcrun simctl create probe "$devtype" "$runtime")"
+              echo "create took $(($(date +%s) - t0))s: $udid"
+              ;;
+          esac
+          stamp() {
+            local start=$1
+            while IFS= read -r line; do echo "+$(($(date +%s) - start))s $line"; done
+          }
+          t0=$(date +%s)
+          xcrun simctl bootstatus "$udid" -b 2>&1 | stamp "$t0"
+          echo "FIRST BOOT ($MODE): $(($(date +%s) - t0))s"
+          t0=$(date +%s)
+          xcrun simctl launch "$udid" com.apple.Preferences 2>&1 | stamp "$t0"
+          echo "first app launch: $(($(date +%s) - t0))s"
+          xcrun simctl shutdown "$udid"
+          t0=$(date +%s)
+          xcrun simctl bootstatus "$udid" -b 2>&1 | stamp "$t0"
+          echo "SECOND BOOT ($MODE): $(($(date +%s) - t0))s"
