@@ -16,7 +16,10 @@
 # those pass) — so each one says why with `// wall-clock-ok: <reason>`, at the
 # end of its line or on the line above, and an unmarked one fails.
 #
-# Usage: check-test-clock.sh
+# Usage:
+#   check-test-clock.sh               every tracked test file
+#   check-test-clock.sh FILE...       just these (the PostToolUse hook's mode)
+#   check-test-clock.sh --self-test   the scan against known inputs
 
 set -euo pipefail
 
@@ -41,24 +44,76 @@ waits() {
     echo "error: the test scope matches no tracked files: ${SCOPE[*]}" >&2
     exit 1
   }
-  # The pattern goes in through the environment: `awk -v` would process its
-  # backslashes, turning `\.` into "any character" on one awk and not another.
-  # shellcheck disable=SC2086 # one path per line, no spaces in this tree
-  PAT="$PATTERN" awk '
-    BEGIN { pat = ENVIRON["PAT"] }
-    FNR == 1 { prev = "" }
-    {
-      line = $0
-      if (line ~ pat && line !~ /wall-clock-ok:/ && prev !~ /wall-clock-ok:/ \
-        && line !~ /^[[:space:]]*(\/\/|\*|\/\*)/) {
-        print FILENAME ":" FNR ":" line
-      }
-      prev = line
-    }
-  ' $files
+  # Only the listed files still on disk: one deleted without `git rm` stays in the
+  # index, and awk aborts on the first file it cannot open.
+  local f present=()
+  while IFS= read -r f; do
+    if [ -f "$f" ]; then present+=("$f"); fi
+  done <<<"$files"
+  [ "${#present[@]}" -gt 0 ] || return 0
+  unmarked "${present[@]}"
 }
 
-hits="$(waits)"
+# The wall-clock waits in FILE... not marked ok, as "path:line:text".
+#
+# The line above vouches for a wait only when it is a comment line carrying the
+# marker. A marked *wait* on the line above is no reason for this one: two sleeps
+# in a row, the first marked at its end, used to pass the second unmarked.
+unmarked() {
+  # The pattern goes in through the environment: `awk -v` would process its
+  # backslashes, turning `\.` into "any character" on one awk and not another.
+  PAT="$PATTERN" awk '
+    BEGIN { pat = ENVIRON["PAT"] }
+    FNR == 1 { above = 0 }
+    {
+      line = $0
+      comment = (line ~ /^[[:space:]]*(\/\/|\*|\/\*)/)
+      if (line ~ pat && line !~ /wall-clock-ok:/ && !above && !comment) {
+        print FILENAME ":" FNR ":" line
+      }
+      above = (comment && line ~ /wall-clock-ok:/)
+    }
+  ' "$@"
+}
+
+self_test() {
+  local dir failed=0 got want
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/test-clock.XXXXXX")"
+  # shellcheck disable=SC2064 # expand now: $dir is local
+  trap "rm -rf '$dir'" RETURN
+  cat >"$dir/Waits.swift" <<'SWIFT'
+try await Task.sleep(for: .seconds(1))  // wall-clock-ok: marked at its end
+// wall-clock-ok: marked on the comment line above
+try await Task.sleep(for: .seconds(2))
+try await Task.sleep(for: .seconds(3))  // wall-clock-ok: marks only itself
+try await Task.sleep(for: .seconds(4))
+// try await Task.sleep(for: .seconds(5))
+let clock = ContinuousClock()
+SWIFT
+  got="$(unmarked "$dir/Waits.swift" | cut -d: -f2)"
+  want="$(printf '%s\n' 5 7)"
+  if [ "$got" = "$want" ]; then
+    echo "  ok   flags unmarked waits; a marker covers its own line or the one below a comment"
+  else
+    echo "  FAIL flagged lines '$(echo "$got" | tr '\n' ' ')', expected '$(echo "$want" | tr '\n' ' ')'" >&2
+    failed=1
+  fi
+  return "$failed"
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+  self_test
+  exit $?
+fi
+
+if [ "$#" -gt 0 ]; then
+  # Just these files, tracked or not — the PostToolUse hook's mode. The tracked
+  # list alone missed exactly the file the hook fires on most: a test suite just
+  # written, which git doesn't list until it is staged.
+  hits="$(unmarked "$@")"
+else
+  hits="$(waits)"
+fi
 if [ -n "$hits" ]; then
   echo "error: tests wait on the wall clock without saying why:" >&2
   printf '%s\n' "$hits" | sed 's/^/  /' >&2

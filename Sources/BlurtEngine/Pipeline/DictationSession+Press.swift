@@ -129,7 +129,13 @@ extension DictationSession {
       // that can clear the request it recorded. Leaving it set let the flag
       // survive into the next press, which then read it after a perfectly good
       // `mic.start()` and cancelled itself.
-      if error is CancellationError {
+      //
+      // And whatever the error, once a cancel is recorded: a bring-up that fails
+      // outright while the cancel lands (the device open answering false, which
+      // `MicCapture` throws before its cancellation check) must neither repaint
+      // the claimed `.cancelled` as a red failure nor leave the request standing
+      // for the next press — the same "a cancel wins" rule as `performRelease`.
+      if error is CancellationError || cancelRequested || Task.isCancelled {
         if !consumeCancelRequest() { setPhase(.cancelled) }
         return
       }

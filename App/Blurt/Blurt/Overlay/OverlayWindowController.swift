@@ -348,17 +348,25 @@ final class OverlayWindowController {
   }
 
   private func reposition() {
-    guard let screen = NSScreen.main else {
+    guard let main = NSScreen.main else {
       return
     }
-    // All the placement policy — default bottom-center, the clearance, the
-    // pill-vs-panel shadow correction, and clamping a stale dragged origin back on
-    // screen — is the engine's `OverlayPlacement`, unit-tested there. This passes
-    // only what the shell owns: the panel size, the screen, and the shadow inset.
+    // All the placement policy — which screen, default bottom-center, the
+    // clearance, the pill-vs-panel shadow correction, and clamping a stale
+    // dragged origin back on screen — is the engine's `OverlayPlacement`,
+    // unit-tested there. This passes only what the shell owns: the panel size,
+    // the screens, and the shadow inset.
+    let customOrigin = Self.originStore.origin.map { CGPoint(x: $0.x - extraPanelWidth / 2, y: $0.y) }
+    let visibleFrame = OverlayPlacement.visibleFrame(
+      for: customOrigin,
+      panelSize: panel.frame.size,
+      among: NSScreen.screens.map(\.visibleFrame),
+      fallback: main.visibleFrame
+    )
     let origin = OverlayPlacement.panelOrigin(
       panelSize: panel.frame.size,
-      visibleFrame: screen.visibleFrame,
-      customOrigin: Self.originStore.origin.map { CGPoint(x: $0.x - extraPanelWidth / 2, y: $0.y) },
+      visibleFrame: visibleFrame,
+      customOrigin: customOrigin,
       shadowMargin: Self.shadowMargin
     )
     suppressOriginPersist = true

@@ -10,7 +10,7 @@ extension KeyboardModel {
   package var statusLine: VoiceNotice.Line? {
     // Read so the timed rows are evaluated again when the clock says so.
     _ = noticeTick
-    return VoiceNotice.line(
+    let line = VoiceNotice.line(
       for: VoiceNotice.Input(
         hasFullAccess: hasFullAccess,
         state: noticeState,
@@ -20,6 +20,12 @@ extension KeyboardModel {
         heldError: heldError
       )
     )
+    // A refused key term says why for a moment; a tap still does what the
+    // line under it says, so the words never change what the mic does.
+    guard termListFullAt != nil else {
+      return line
+    }
+    return VoiceNotice.Line(text: VoiceNotice.Copy.termsFull, tapOpens: line?.tapOpens ?? .press)
   }
 
   /// The record the line reads. A preview sets `isListening` by hand with no

@@ -92,7 +92,7 @@ struct SessionContractNumbersTests {
       VoiceNotice.Copy.fullAccess, VoiceNotice.Copy.tapToOpen, VoiceNotice.Copy.interrupted,
       VoiceNotice.Copy.openToStart, VoiceNotice.Copy.micDenied, VoiceNotice.Copy.noKey, VoiceNotice.Copy.noConsent,
       VoiceNotice.Copy.micBusy, VoiceNotice.Copy.micSilent, VoiceNotice.Copy.mediaReset, VoiceNotice.Copy.network,
-      VoiceNotice.Copy.stillTranscribing, VoiceNotice.Copy.copied,
+      VoiceNotice.Copy.stillTranscribing, VoiceNotice.Copy.copied, VoiceNotice.Copy.termsFull,
     ].map { row("status line", "\"\($0)\"") }
 
   private static func seconds(_ value: TimeInterval) -> String {

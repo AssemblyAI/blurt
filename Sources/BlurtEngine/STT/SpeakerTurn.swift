@@ -16,6 +16,11 @@ public struct SpeakerTurn: Sendable, Equatable {
   /// A labelled transcript ("Speaker A: …" paragraphs, as `LiveTranscript` and
   /// `FileTranscriber` write it) as turns — none unless every paragraph is in
   /// that shape, so prose is never mistaken for one.
+  ///
+  /// None, too, unless more than one speaker is named: both writers label a
+  /// transcript only then (`isMultiSpeaker`), so a monologue is saved as plain
+  /// text — and plain text that merely opens "Speaker notes: …" is prose, not a
+  /// turn by a speaker called "notes".
   public static func parse(_ text: String) -> [Self] {
     let paragraphs = text.components(separatedBy: "\n\n").filter { !$0.isEmpty }
     var turns: [Self] = []
@@ -30,7 +35,7 @@ public struct SpeakerTurn: Sendable, Equatable {
       let words = paragraph[paragraph.index(after: colon)...].trimmingCharacters(in: .whitespaces)
       turns.append(Self(speaker: label == "?" ? nil : String(label), text: words))
     }
-    return turns
+    return isMultiSpeaker(turns.map(\.speaker)) ? turns : []
   }
 
   /// Whether more than one speaker was told apart among `labels` — the rule

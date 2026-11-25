@@ -1,3 +1,4 @@
+import AssemblyAI
 import Testing
 
 @testable import BlurtiOSCore
@@ -32,6 +33,65 @@ struct KeyboardModelChipTests {
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
     #expect(model.selectedTermIsKnown)
+  }
+
+  /// The list is stored comma-separated: a chip for "Acme, Inc" used to add
+  /// "Acme" and "Inc", call the phrase known, and offer it as new again.
+  @Test("a highlight with a comma in it is no chip: its one tap could not add it as it stands")
+  func commaIsNoChip() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(KeyboardModel.termCandidate(from: "Acme, Inc") == nil)
+    let (model, _) = typingModel(before: "we met ", selected: "Acme, Inc")
+    model.hasFullAccess = true
+    model.contextChanged()
+    #expect(model.selectedTerm == nil)
+    #expect(!model.selectedTermIsKnown)
+    model.addSelectedTerm()
+    #expect(SharedStore.keyTerms.isEmpty)
+  }
+
+  /// A request carries the first `KeyTerms.termCap` terms, the user's own
+  /// first: a chip tap that added a 101st showed its ✓ for a word no dictation
+  /// would ever send. At the cap the chip refuses, and the line says why.
+  @Test("with the list at the cap the chip adds nothing and the status line says the list is full")
+  func chipAtTheCap() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let full = (0..<KeyTerms.termCap).map { "term\($0)" }
+    SharedStore.keyTerms = full
+    let (model, proxy) = typingModel(before: "we met ", selected: "Zed")
+    model.hasFullAccess = true
+    model.contextChanged()
+    #expect(model.selectedTerm == "Zed")
+    model.addSelectedTerm()
+    #expect(SharedStore.keyTerms == full)
+    #expect(!model.selectedTermIsKnown)
+    #expect(model.termSavedAt == nil)
+    #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
+    // A word the full list already has is still known, not refused.
+    proxy.selected = nil
+    model.contextChanged()
+    proxy.selected = "term7"
+    model.contextChanged()
+    #expect(model.selectedTermIsKnown)
+  }
+
+  @Test("with the list at the cap a typed term is refused and the field keeps what was typed")
+  func typedTermAtTheCap() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let full = (0..<KeyTerms.termCap).map { "term\($0)" }
+    SharedStore.keyTerms = full
+    let (model, _) = typingModel(before: "he said ")
+    model.hasFullAccess = true
+    model.beginAddingTerm()
+    model.termDraft = "Zed"
+    model.saveTerm()
+    #expect(SharedStore.keyTerms == full)
+    #expect(model.termDraft == "Zed")
+    #expect(model.termSavedAt == nil)
+    #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
   }
 
   @Test("the + coming back after a term was added from the chip keeps the highlight's word out of the chip")

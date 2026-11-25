@@ -56,6 +56,7 @@ extension KeyboardModel {
     dismissedSelection = nil
     termNotice?.cancel()
     termSavedAt = nil
+    termListFullAt = nil
     readSelection()
     hostBundleID = controller.flatMap(HostApp.bundleID(of:))
     KeyboardLog.appeared(

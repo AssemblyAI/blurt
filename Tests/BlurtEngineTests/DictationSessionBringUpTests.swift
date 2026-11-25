@@ -90,19 +90,41 @@ struct DictationSessionBringUpTests {
     // itself — one dead dictation for every cancelled bring-up.
     let mic = GatedStartMic()
     await mic.setThrowsIfCancelled(true)
-    let session = makeSession(transcriber: StubTranscriber(mode: .transcript("Hello world.")), mic: mic)
+    let session = await cancelledBringUp(on: mic)
 
+    // The proof that matters: the next press records normally.
+    await session.press()
+    #expect(await session.phase == .recording)
+  }
+
+  @Test("a cancel during a bring-up that then fails stays a cancel, and leaves no standing request")
+  func cancelledBringUpThatFailsStaysCancelled() async {
+    // `MicCapture.start()` throws its own `.audioCaptureFailed` when the device
+    // open answers false, before it checks for cancellation — so a cancel landing
+    // during the open can meet a failure rather than `CancellationError`. The
+    // catch used to report that failure over the claimed `.cancelled` and leave
+    // the request set, so the next press cancelled itself after a good start.
+    let mic = GatedStartMic()
+    await mic.setFailure(BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice))
+    let session = await cancelledBringUp(on: mic)
+
+    await mic.setFailure(nil)
+    await session.press()
+    #expect(await session.phase == .recording)
+  }
+
+  /// Presses, cancels once `mic`'s start is entered, then lets the start finish
+  /// however `mic` was set up to — and checks the cancel won and left no standing
+  /// request behind.
+  private func cancelledBringUp(on mic: GatedStartMic) async -> DictationSession {
+    let session = makeSession(transcriber: StubTranscriber(mode: .transcript("Hello world.")), mic: mic)
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()
     await session.cancel()
     await mic.allowStartToFinish()
     await pressed.value
-
     #expect(await session.phase == .cancelled)
     #expect(!session.cancelRequested)
-
-    // The proof that matters: the next press records normally.
-    await session.press()
-    #expect(await session.phase == .recording)
+    return session
   }
 }

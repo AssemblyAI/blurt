@@ -361,9 +361,19 @@ for i in "${!PATTERNS[@]}"; do
   # grep exits 1 on "no match" (the good case) and 2+ on a bad pattern. Those
   # are distinguished on purpose: `|| true` over both would turn a broken regex
   # into a rule that passes everything.
+  # Only the listed files still on disk: one deleted without `git rm` stays in the
+  # index, and grep's "No such file" is the same exit 2 as a bad pattern — every
+  # mid-refactor `rm` read as "rule 0 is not a valid regex". An array also keeps a
+  # path with a space whole, and -H prefixes the path even for a one-file scope,
+  # which the comment filter below needs to strip.
+  present=()
+  while IFS= read -r f; do
+    if [ -f "$f" ]; then present+=("$f"); fi
+  done <<<"$files"
+  [ "${#present[@]}" -gt 0 ] || continue
+
   status=0
-  # shellcheck disable=SC2086
-  hits=$(grep -nE "$pattern" $files) || status=$?
+  hits=$(grep -nHE "$pattern" "${present[@]}") || status=$?
   if [ "$status" -gt 1 ]; then
     echo "error: rule $i is not a valid regex (grep exit $status): $pattern" >&2
     exit 1

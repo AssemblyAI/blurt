@@ -168,6 +168,25 @@ judge() {
   return "$over"
 }
 
+# Measures and judges the files that exist; returns 1 if anything is over.
+#
+# A tracked file deleted from the working tree (`rm` without `git rm`, mid-refactor)
+# is still listed by git, and awk stops at the first file it cannot open — mawk and
+# macOS's awk alike — so every file after it went unmeasured while the process
+# substitution's failure was ignored: an over-limit file read as "budgets hold".
+# Skip what isn't there, and let a measuring failure fail.
+check_files() {
+  local f report
+  local present=()
+  for f in "$@"; do
+    if [ -f "$f" ]; then present+=("$f"); fi
+  done
+  [ "${#present[@]}" -gt 0 ] || return 0
+  report="$(measure "${present[@]}")" || return 1
+  [ -n "$report" ] || return 0
+  judge <<<"$report"
+}
+
 self_test() {
   local dir failed=0
   dir="$(mktemp -d "${TMPDIR:-/tmp}/swift-size.XXXXXX")"
@@ -220,6 +239,16 @@ SWIFT
   else
     echo "  ok   a 401-line file fails"
   fi
+  # A tracked file deleted from the working tree, listed ahead of an over-limit one.
+  local verdict
+  verdict="$(check_files "$dir/Deleted.swift" "$dir/Long.swift" 2>&1)" || true
+  case "$verdict" in
+    *"Long.swift is 401 lines"*) echo "  ok   a missing file is skipped, not the end of the list" ;;
+    *)
+      echo "  FAIL a missing file ahead of a 401-line file hid it: $verdict" >&2
+      failed=1
+      ;;
+  esac
   {
     echo "// swiftlint:disable file_length"
     cat "$dir/Long.swift"
@@ -257,7 +286,7 @@ else
 fi
 [ "${#files[@]}" -gt 0 ] || exit 0
 
-if judge < <(measure "${files[@]}"); then
+if check_files "${files[@]}"; then
   [ "$#" -gt 0 ] || echo "swift size budgets hold (file_length $FILE_LIMIT, type_body_length ~$TYPE_LIMIT)"
 else
   exit 1

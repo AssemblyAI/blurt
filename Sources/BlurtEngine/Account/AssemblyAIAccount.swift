@@ -111,6 +111,10 @@ public final class AssemblyAIAccount {
 
     case .empty:
       read = .signedOut
+      // A session dropped outside the account — the install reset sweeps the
+      // storage itself rather than calling `forget()` — is a new generation
+      // too, or a renewal parked on the network writes it back.
+      if case .signedIn = status { generation += 1 }
 
     case .unavailable:
       return

@@ -170,6 +170,14 @@ struct LiveRecordingTests {
     #expect(SpeakerTurn.parse("Plain words.").isEmpty)
   }
 
+  @Test("a monologue that opens like a label stays prose: only a multi-speaker transcript is labelled")
+  func speakerTurnParsingRefusesOneSpeaker() {
+    // A one-speaker transcript is saved as plain text (`isMultiSpeaker`), so
+    // these can only be what someone said, never turns to draw.
+    #expect(SpeakerTurn.parse("Speaker notes: bring the slides.").isEmpty)
+    #expect(SpeakerTurn.parse("Speaker one: hello.\n\nSpeaker one: again.").isEmpty)
+  }
+
   @Test("live turns come out structured, grouped by speaker, and match the saved text")
   func liveSpeakerTurns() {
     var live = LiveTranscript()
