@@ -11,6 +11,9 @@ xcuserdata/
 !.claude/hooks/
 !.claude/agents/
 !.claude/skills/
+# Hookify rules shared with the repo. hookify only loads files named
+# hookify.*.local.md, so these keep the suffix even though they're committed.
+!.claude/hookify.*.local.md
 .superpowers/
 # Per-developer agent scratch notes. A nested .remember/.gitignore is only ever
 # local, so name the directory here too — that way a fresh clone ignores it
