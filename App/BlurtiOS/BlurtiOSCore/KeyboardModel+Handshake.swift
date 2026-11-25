@@ -86,7 +86,8 @@ extension KeyboardModel {
     let command = KeyboardCommand(
       id: UUID(), kind: kind, priorText: isPress ? proxy?.documentContextBeforeInput : nil,
       selectedText: isPress ? proxy?.selectedText : nil, sentAt: now(), keyboard: KeyboardProcess.id,
-      seq: KeyboardProcess.nextSequence(), controllerID: controllerID, dictationID: dictation,
+      seq: KeyboardProcess.nextSequence(), controllerID: controllerID, documentID: proxy?.documentIdentifier,
+      dictationID: dictation,
       stateSequence: listeningState?.sequence)
     lastCommand = command
     transport(command)

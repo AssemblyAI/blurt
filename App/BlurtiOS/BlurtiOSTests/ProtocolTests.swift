@@ -107,16 +107,17 @@ struct ProtocolTests {
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-2"
     UIPasteboard.general.string = ""
-    let elsewhere = KeyboardRelayInjector(presser: { "kb-1" })
+    let elsewhere = KeyboardRelayInjector(presser: { ResultAddress(keyboard: "kb-1") })
     await #expect(throws: BlurtError.noEditableTarget) {
       try await elsewhere.insert("wrong app", after: nil, windowTitle: nil)
     }
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
     let clock = TestClock()
-    let same = KeyboardRelayInjector(presser: { "kb-2" }, clock: clock)
+    let same = KeyboardRelayInjector(presser: { ResultAddress(keyboard: "kb-2", controllerID: "c-2") }, clock: clock)
     let insert = Task { try await same.insert("right app", after: nil, windowTitle: nil) }
-    #expect(await takeResult(stepping: clock)?.recipient == "kb-2")
+    let taken = await takeResult(stepping: clock)
+    #expect(taken?.recipient == "kb-2" && taken?.controllerID == "c-2")
     try await insert.value
   }
 
@@ -247,6 +248,58 @@ struct KeyboardModelProtocolTests {
     deliver("four", to: KeyboardProcess.id)
     model.resultArrived()
     #expect(proxy.before == "Hi one four")
+  }
+
+  /// #346: the words were for the field the dictation was made in. Tapping
+  /// into another while they are transcribed — iOS keeping this controller
+  /// for it, or a new one coming up in the same process — must not move them.
+  @Test("a result for another field in this process is left for the app to copy out")
+  func resultForAnotherField() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let rig = KeyboardRig()
+    let model = rig.model
+    let proxy = rig.proxy
+    let fieldA = proxy.documentIdentifier
+    func deliver(_ text: String, controller: String?, document: UUID?) {
+      SharedStore.write(
+        DictationResult(
+          id: UUID(), text: text, deliveredAt: Date(), recipient: KeyboardProcess.id, controllerID: controller,
+          documentID: document),
+        forKey: BlurtShared.Key.result)
+    }
+    // The same controller, now over field B.
+    proxy.documentIdentifier = UUID()
+    deliver("for A", controller: model.controllerID, document: fieldA)
+    model.resultArrived()
+    #expect(proxy.before == "")
+    // Not taken: the app sees it still there and copies it out at its timeout.
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "for A")
+    // Another controller in this process — a new one for field B — leaves it too,
+    // including on appearing, which looks for words that landed while away.
+    let other = KeyboardRig(proxy: proxy)
+    other.model.resultArrived()
+    deliver("for A", controller: model.controllerID, document: nil)
+    other.model.resultArrived()
+    #expect(proxy.before == "")
+    // Back over field A, the words go in.
+    proxy.documentIdentifier = fieldA
+    deliver("for A", controller: model.controllerID, document: fieldA)
+    model.resultArrived()
+    #expect(proxy.before == "for A")
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+  }
+
+  @Test("a result naming no field — an older app build — goes to whichever field is up")
+  func resultForNoField() {
+    #expect(
+      DictationResult(id: UUID(), text: "x", deliveredAt: Date(), recipient: nil)
+        .isFor(controllerID: "any", documentID: UUID()))
+    let id = UUID()
+    let onlyController = DictationResult(
+      id: UUID(), text: "x", deliveredAt: Date(), recipient: nil, controllerID: "c", documentID: nil)
+    #expect(onlyController.isFor(controllerID: "c", documentID: id))
+    #expect(!onlyController.isFor(controllerID: "d", documentID: id))
   }
 
   @Test("the term field never claims a cursor move or a selection")

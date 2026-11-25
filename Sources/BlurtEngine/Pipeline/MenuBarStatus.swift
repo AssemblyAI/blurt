@@ -6,10 +6,16 @@
 /// transient error flash, so a handled `.failed` reads as `.idle` here — which
 /// also means the icon can't get stranded on a state the pill auto-reverts out
 /// of band (its error flash is timer-driven, not a follow-up phase).
+///
+/// One state isn't a dictation phase: `.recordingAudio`, the main window's
+/// Record button (or a meeting it auto-started) capturing the mic and Mac
+/// audio. That capture can run with the window closed, so the menu bar is
+/// where it stays visible (#345) — see `showing(recordingAudio:)`.
 public enum MenuBarStatus: Equatable, Sendable {
   case idle
   case recording
   case transcribing
+  case recordingAudio
 
   /// Template SF Symbol drawn in the menu bar. A stylized "B" (Blurt) at rest,
   /// filling in while recording — the same idle→fill idiom the mic glyphs used —
@@ -21,6 +27,7 @@ public enum MenuBarStatus: Equatable, Sendable {
     case .idle: "b.circle"
     case .recording: "b.circle.fill"
     case .transcribing: "waveform"
+    case .recordingAudio: "record.circle"
     }
   }
 
@@ -30,7 +37,16 @@ public enum MenuBarStatus: Equatable, Sendable {
     case .idle: "Blurt — idle"
     case .recording: "Blurt — recording"
     case .transcribing: "Blurt — transcribing"
+    case .recordingAudio: "Blurt — recording mic and Mac audio"
     }
+  }
+
+  /// This dictation status with a Record-button recording folded in: a
+  /// dictation in progress wins (it's the brief, foreground thing), and
+  /// otherwise a recording that's capturing shows — a paused one doesn't,
+  /// for the same honesty rule that keeps `.connecting` idle.
+  public func showing(recordingAudio isCapturing: Bool) -> MenuBarStatus {
+    self == .idle && isCapturing ? .recordingAudio : self
   }
 }
 

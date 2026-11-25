@@ -36,7 +36,7 @@ extension DictationCoordinator {
     case .press(let newDictation, let owner):
       Self.pendingPress.withLock {
         $0 = Press(
-          keyboard: command.keyboard,
+          address: ResultAddress(command),
           context: FocusedFieldContext(
             priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil))
       }
@@ -48,13 +48,21 @@ extension DictationCoordinator {
       session.submit(.press())
     case .release:
       stopAccepted = inFlight?.id
-      Self.claimedPress.withLock { $0.stopRecipient = decision.recipient }
+      Self.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
       session.submit(.release)
     case .cancel:
       stopAccepted = inFlight?.id
-      Self.claimedPress.withLock { $0.stopRecipient = decision.recipient }
+      Self.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
       session.submit(.cancel)
     }
+  }
+
+  /// Where an accepted stop sends the words: the field it came from — or, for a
+  /// keyboard build that never named its process, nowhere new, so the press's
+  /// field keeps them.
+  private static func stopAddress(_ command: KeyboardCommand, _ decision: CommandRouter.Decision) -> ResultAddress? {
+    guard decision.recipient != nil else { return nil }
+    return ResultAddress(command)
   }
 
   /// The phase the router decides on. A press just submitted is in flight
@@ -149,7 +157,7 @@ extension DictationCoordinator {
     inFlight = nil
     answers = nil
     stopAccepted = nil
-    Self.claimedPress.withLock { $0.stopRecipient = nil }
+    Self.claimedPress.withLock { $0.stopAddress = nil }
   }
 
   // MARK: The press the session takes

@@ -17,9 +17,10 @@
   /// fresh tap and aggregate device per recording.
   ///
   /// How: a Core Audio process tap on everything the system plays (Blurt's own
-  /// cue sounds excluded) joined to the default input device in a private
-  /// aggregate device. The **input device is the aggregate's only sub-device
-  /// and its clock**, with the tap drift-compensated against it — so a
+  /// cue sounds excluded) joined to the input device — the microphone pinned
+  /// in Settings, else the default input, as dictation resolves it — in a
+  /// private aggregate device. The **input device is the aggregate's only
+  /// sub-device and its clock**, with the tap drift-compensated against it — so a
   /// headset whose mic and speaker are one device isn't added twice, an output
   /// interface's own inputs never reach the mix, and switching the output
   /// mid-recording doesn't pull the clock away. One IOProc delivers both
@@ -108,15 +109,20 @@
     }
 
     private func teardown() {
-      if let writer { Self.log.notice("recorder stopping: \(writer.summary, privacy: .public)") }
       if let procID {
         AudioDeviceStop(aggregateID, procID)
         AudioDeviceDestroyIOProcID(aggregateID, procID)
         self.procID = nil
       }
       // Every callback already queued has run once this returns, so the file
-      // closes after its last write.
-      queue.sync { writer?.close() }
+      // closes after its last write. The summary is read here too, not before
+      // the IOProc stops: `MixWriter` is confined to `queue`, and its counters
+      // are written by every callback.
+      queue.sync {
+        guard let writer else { return }
+        Self.log.notice("recorder stopping: \(writer.summary, privacy: .public)")
+        writer.close()
+      }
       writer = nil
       if aggregateID != kAudioObjectUnknown {
         AudioHardwareDestroyAggregateDevice(aggregateID)
@@ -141,10 +147,13 @@
     }
 
     private func createAggregate() throws {
-      // The same default input the dictation recorder and the Settings picker
-      // resolve — one spelling of it (`AudioInputDevices`).
-      guard let input = AudioInputDevices.systemDefaultDevice?.uniqueID else {
-        throw RecorderError.coreAudio("default input", kAudioHardwareUnspecifiedError)
+      // The microphone Settings picked, the same pin dictation records from,
+      // and — when none is pinned or the pinned one isn't connected — the
+      // system default input, the same fallback dictation takes. One spelling
+      // of each (`MicDeviceStore`, `AudioInputDevices`).
+      let pinned = MicDeviceStore().selection.pinnedUID.flatMap(AudioInputDevices.device(forUID:))
+      guard let input = (pinned ?? AudioInputDevices.systemDefaultDevice)?.uniqueID else {
+        throw RecorderError.coreAudio("input device", kAudioHardwareUnspecifiedError)
       }
       let description: [String: Any] = [
         kAudioAggregateDeviceNameKey: "Blurt Recorder",

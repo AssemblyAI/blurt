@@ -45,6 +45,34 @@
       #expect(events.up.flags.contains(.maskCommand))
     }
 
+    @Test("⌘V and ⌘C are built on the key the layout resolved, not the US one")
+    func commandEventsTakeResolvedKey() throws {
+      // 0x2F is US "." — Dvorak's V key. 0x22 is US "i" — Dvorak's C key.
+      let paste = try #require(KeyInjector.cmdVEvents(virtualKey: 0x2F))
+      let copy = try #require(KeyInjector.cmdCEvents(virtualKey: 0x22))
+      for event in [paste.down, paste.up] {
+        #expect(event.getIntegerValueField(.keyboardEventKeycode) == 0x2F)
+        #expect(event.flags.contains(.maskCommand))
+      }
+      for event in [copy.down, copy.up] {
+        #expect(event.getIntegerValueField(.keyboardEventKeycode) == 0x22)
+        #expect(event.flags.contains(.maskCommand))
+      }
+    }
+
+    @MainActor
+    @Test("the machine's layout under ⌘ types V and C, each from its own key")
+    func layoutResolvesPasteAndCopyKeys() {
+      // Whatever this machine's layout is, ⌘V and ⌘C must resolve from it — not
+      // fall back — and to two different keys.
+      let layout = KeyboardLayout.current(commandHeld: true)
+      let paste = layout["v"]
+      let copy = layout["c"]
+      #expect(paste != nil)
+      #expect(copy != nil)
+      #expect(paste != copy)
+    }
+
     @Test("both Cmd-V events carry the command flag")
     func cmdVEventsCarryCommand() throws {
       let events = try #require(KeyInjector.cmdVEvents())
