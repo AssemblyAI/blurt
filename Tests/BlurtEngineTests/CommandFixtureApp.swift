@@ -49,6 +49,7 @@
         await MacDriver.becomeAccessory()
         _ = await MainActor.run { NSRunningApplication(processIdentifier: child.processIdentifier)?.activate() }
         for _ in 0..<50 where await fixture.isFrontmost() == false {
+          // wall-clock-ok: drives real hardware or a real app, which run on real time
           try await Task.sleep(for: .milliseconds(100))
         }
         try await fixture.requireFrontmost()
@@ -73,13 +74,15 @@
       try JSONDecoder().decode(State.self, from: Data(contentsOf: statePath))
     }
 
-    /// The fixture's state once `condition` holds, or its last state after two seconds.
+    /// The fixture's state once `condition` holds, or its last state after 30 s.
+    /// Every caller expects the condition to hold, so the bound only catches a hang.
     func state(until condition: (State) -> Bool) async throws -> State {
-      let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+      let deadline = ContinuousClock.now.advanced(by: .seconds(30))
       while ContinuousClock.now < deadline {
         if let state = try? state(), condition(state) {
           return state
         }
+        // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
         try await Task.sleep(for: .milliseconds(25))
       }
       return try state()

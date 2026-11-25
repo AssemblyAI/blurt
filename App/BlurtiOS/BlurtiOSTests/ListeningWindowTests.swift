@@ -62,7 +62,7 @@ struct ListeningWindowTests {
     #expect(rig.tasks.begun == [ListeningWindow.interruptionTask])
     // The source's own word on the same interruption is nothing new.
     rig.source.eventSink.yield(.interrupted(reason: "audioDeviceInUseByAnotherClient"))
-    try? await Task.sleep(for: .milliseconds(100))
+    try? await Task.sleep(for: .milliseconds(100))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(rig.endings == [true])
     #expect(rig.tasks.begun.count == 1)
   }

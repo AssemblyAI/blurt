@@ -37,9 +37,11 @@ This file adds only what is specific to Claude Code: the tooling wired up under 
 | `PreToolUse` → `protect-pbxproj.sh` | Blocks edits to `App/Blurt/Blurt.xcodeproj/project.pbxproj` (exit 2). Edit `App/Blurt/project.yml` and run `xcodegen generate` instead. (The iPhone project, `App/BlurtiOS/BlurtiOS.xcodeproj`, isn't committed at all: edit `App/BlurtiOS/project.yml`; every script regenerates it.)                                                                                        |
 | `PostToolUse` → `swift-format.sh`   | Formats every edited `*.swift` file with the repo's `.swift-format` config, so edits are CI-clean by construction. No-ops when the tool is absent.                                                                                                                                                                                                                            |
 | `PostToolUse` → `swiftlint.sh`      | Lints edited Swift files and surfaces violations immediately rather than at `check.sh` time.                                                                                                                                                                                                                                                                                  |
+| `PostToolUse` → `swift-budgets.sh`  | Runs `check-swift-size.sh` (SwiftLint's file and type-body length limits) and, for test files, `check-test-clock.sh` (a wall-clock wait must say why) on the edited file. Needs no toolchain, so unlike the two hooks above it works in the web sandbox, where those limits otherwise surfaced only on CI.                                                                    |
 
-The two `PostToolUse` hooks are silent no-ops off-Mac, which is exactly when `check.sh --portable`
-also skips Swift lint — so on the web, Swift formatting and lint are otherwise a pure CI concern.
+The `swift-format` and `swiftlint` hooks are silent no-ops off-Mac, which is exactly when
+`check.sh --portable` also skips Swift lint — so on the web, Swift formatting and lint are otherwise
+a pure CI concern.
 `check.yml`'s `format-patch` job softens that: it runs `swift-format` for real on every PR and
 publishes the resulting diff as a job summary and a `swift-format-patch` artifact, so the fix is
 `git apply` rather than a blind reflow.
@@ -48,7 +50,7 @@ publishes the resulting diff as a job summary and a `swift-format-patch` artifac
 checkable with no toolchain, so it flags over-long lines (reading the limit from `.swift-format`) and
 stays quiet whenever `swift-format` is present and about to reflow the file anyway. It is
 **deliberately not registered** in `settings.json`, so it never runs as shipped — enable it by adding
-a third `PostToolUse` entry beside the other two:
+a fourth `PostToolUse` entry beside the other three:
 
 ```json
 {

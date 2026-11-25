@@ -12,7 +12,7 @@ final class HangingTransport: GatewayStub {
 
   func data(for _: URLRequest) async throws -> (Data, URLResponse) {
     called.withLock { $0 = true }
-    try await Task.sleep(for: .seconds(60))
+    try await Task.sleep(for: .seconds(60))  // wall-clock-ok: a fake that waits until the test releases or cancels it
     throw URLError(.timedOut)
   }
 }

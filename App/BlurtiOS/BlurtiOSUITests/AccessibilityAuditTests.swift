@@ -122,8 +122,10 @@ final class AccessibilityAuditTests: XCTestCase {
       launchHome()
       let session = app.switches.firstMatch
       scrollTo(session)
-      session.tap()
-      XCTAssertTrue(app.buttons["Not now"].waitForExistence(timeout: 10), "Turning a session on should ask consent")
+      XCTAssertTrue(
+        Self.tap(session, until: app.buttons["Not now"], timeout: 10),
+        "Turning a session on should ask consent (\(Self.missedTapReport(session, in: app)))"
+      )
       try auditScrolling("consent sheet")
     }
   }
@@ -263,7 +265,7 @@ final class AccessibilityAuditTests: XCTestCase {
     // on a slow runner left `testConsent`'s switch off and no consent sheet.
     var frame = element.frame
     for _ in 0..<20 {
-      Thread.sleep(forTimeInterval: 0.2)
+      Thread.sleep(forTimeInterval: 0.2)  // wall-clock-ok: a UI test: the app under test runs on real time
       let now = element.frame
       if now == frame { break }
       frame = now
@@ -298,7 +300,7 @@ final class AccessibilityAuditTests: XCTestCase {
     // wrong (`audit`).
     var last = Self.textsOnScreen(of: app)
     for _ in 0..<20 {
-      Thread.sleep(forTimeInterval: 0.3)
+      Thread.sleep(forTimeInterval: 0.3)  // wall-clock-ok: a UI test: the app under test runs on real time
       let current = Self.textsOnScreen(of: app)
       if current == last {
         return current
@@ -338,7 +340,7 @@ final class AccessibilityAuditTests: XCTestCase {
     // mid-layout — the bottom rows of Settings' last page, on CI only — does
     // not repeat.
     if !issues.isEmpty {
-      Thread.sleep(forTimeInterval: 1)
+      Thread.sleep(forTimeInterval: 1)  // wall-clock-ok: a UI test: the app under test runs on real time
       let again = Set(try pass())
       issues = issues.filter(again.contains)
     }

@@ -66,12 +66,16 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     // Nothing to aim: the keyboard that asked is the target, read from `presser` at insert time.
   }
 
-  /// `secure` defaults to false, as `KeyInjector.insert`'s does, so a direct
-  /// caller (a test) describes an ordinary field without restating it; the
-  /// session always passes its real verdict through `InjectorProtocol`.
+  /// `security` defaults to `.ordinary`, as `KeyInjector.insert`'s does, so a
+  /// direct caller (a test) describes an ordinary field without restating it;
+  /// the session always passes its real verdict through `InjectorProtocol`.
+  /// Only `.secure` conceals here: the keyboard reads the field it is attached
+  /// to and says whether it holds a password (`isPasswordField`), and iOS has
+  /// no AX-opaque app whose fields could hide one, as the Mac does.
   package func insert(
-    _ text: String, after _: String?, windowTitle _: String?, secure: Bool = false
+    _ text: String, after _: String?, windowTitle _: String?, security: TargetSecurity = .ordinary
   ) async throws {
+    let secure = security == .secure
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.

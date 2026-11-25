@@ -66,15 +66,15 @@ struct ProtocolTests {
   /// and expiring, options UIKit doesn't read back — never lost.
   @Test(
     "with no keyboard on screen the words go to the clipboard and the phase is the quiet one",
-    arguments: [false, true])
-  func relayFallsBackToClipboard(secure: Bool) async {
+    arguments: [TargetSecurity.ordinary, .unknown, .secure])
+  func relayFallsBackToClipboard(security: TargetSecurity) async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = nil
     UIPasteboard.general.string = ""
     let injector = KeyboardRelayInjector()
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("hello there", after: nil, windowTitle: nil, secure: secure)
+      try await injector.insert("hello there", after: nil, windowTitle: nil, security: security)
     }
     #expect(UIPasteboard.general.string == "hello there")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
@@ -113,7 +113,7 @@ struct ProtocolTests {
     UIPasteboard.general.string = ""
     let elsewhere = KeyboardRelayInjector { ResultAddress(keyboard: "kb-1") }
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil, secure: false)
+      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil, security: .ordinary)
     }
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
@@ -136,9 +136,7 @@ struct ProtocolTests {
     SharedStore.keyboardInstance = "kb-1"
     let injector = KeyboardRelayInjector()
     let delivery = Task { try await injector.insert("never mind", after: nil, windowTitle: nil) }
-    for _ in 0..<100 where SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil {
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    #expect(await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil })
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "never mind")
     delivery.cancel()
     await #expect(throws: CancellationError.self) { try await delivery.value }

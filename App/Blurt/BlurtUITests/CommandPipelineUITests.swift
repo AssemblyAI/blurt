@@ -61,7 +61,7 @@ final class CommandPipelineUITests: BlurtUITestCase {
         ["Carrying out your command.", "Your command was carried out."].contains(pill.label),
         "The pill should say the command is working, got \(pill.label)"
       )
-      usleep(100_000)
+      usleep(100_000)  // wall-clock-ok: a UI test: the app under test runs on real time
     }
     waitForText(performed(in: harness), containing: "openApp(\"Notes\")", "The command should finish", timeout: 10)
     waitForLabel(notice(in: harness), equals: "Your command was carried out.", "Then the pill should say it's done")

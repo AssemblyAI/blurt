@@ -59,6 +59,7 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   }
 
   func close() async {
+    // wall-clock-ok: a delay the test asks for, modelling a slow close; zero by default
     if closeDelay > .zero { try? await Task.sleep(for: closeDelay) }
     tally.withLock { $0.closed += 1 }
     openFlag.store(false, ordering: .releasing)
@@ -68,6 +69,7 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   func start() async throws -> AsyncStream<Data> {
     tally.withLock { $0.started += 1 }
     guard isOpen else { throw BlurtError.audioCaptureFailed(underlying: ListeningSourceFailure.windowClosed) }
+    // wall-clock-ok: a delay the test asks for, modelling a slow close; zero by default
     if startDelay > .zero { try await Task.sleep(for: startDelay) }
     return AsyncStream { $0.finish() }
   }

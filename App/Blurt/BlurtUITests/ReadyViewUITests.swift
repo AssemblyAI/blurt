@@ -103,11 +103,11 @@ final class ReadyViewUITests: BlurtUITestCase {
     // is accessibility-hidden, so verify the real effect the copy has). Poll,
     // since the cross-process write lands a beat after the click.
     var copied: String?
-    let deadline = Date().addingTimeInterval(5)
+    let deadline = Date().addingTimeInterval(30)
     while Date() < deadline {
       copied = pasteboard.string(forType: .string)
       if copied == UITestIdentifiers.defaultCannedTranscript { break }
-      usleep(100_000)
+      usleep(100_000)  // wall-clock-ok: a UI test: the app under test runs on real time
     }
     XCTAssertEqual(
       copied,

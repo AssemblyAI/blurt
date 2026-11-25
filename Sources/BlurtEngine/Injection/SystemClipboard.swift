@@ -7,6 +7,9 @@
   /// comparison that gates the deferred restore lives here, behind the seam, so a
   /// fake never re-implements it.
   struct SystemClipboard: ClipboardAccess {
+    /// Arranges for a concealed leave-behind's expiry to run later.
+    typealias ExpiryScheduler = @Sendable (_ expire: @escaping @Sendable () -> Void) -> Void
+
     /// How long a concealed leave-behind stays for the paste by hand before it
     /// is cleared — a password manager's own copy window.
     static let concealedLifetime: Duration = .seconds(90)
@@ -28,6 +31,11 @@
     /// keep transient items. Empty data, like `transientType`.
     static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
 
+    /// Runs a concealed leave-behind's expiry once `concealedLifetime` has
+    /// passed. Injectable so tests can see an expiry was scheduled, and run it,
+    /// without waiting the lifetime out.
+    private let scheduleExpiry: ExpiryScheduler
+
     var lock: PasteboardLock { .system }
 
     // MARK: - NSPasteboard building blocks (also exercised directly by SystemClipboardTests)
@@ -35,6 +43,18 @@
     var changeCount: Int { NSPasteboard.general.changeCount }
 
     var ownWriteCount: Int { Self.ownWrites.load(ordering: .sequentiallyConsistent) }
+
+    init(scheduleExpiry: @escaping ExpiryScheduler = { Self.afterLifetime($0) }) {
+      self.scheduleExpiry = scheduleExpiry
+    }
+
+    /// The production `ExpiryScheduler`: `expire` after `concealedLifetime`.
+    static func afterLifetime(_ expire: @escaping @Sendable () -> Void) {
+      Task.detached {
+        try? await Task.sleep(for: Self.concealedLifetime)
+        expire()
+      }
+    }
 
     // Not transient: these words are meant to stay for a paste by hand, so a
     // clipboard manager keeping them is a feature here — unless they were
@@ -47,21 +67,31 @@
       guard concealed else {
         return
       }
-      let ours = changeCount
-      Task.detached { [self] in
-        try? await Task.sleep(for: Self.concealedLifetime)
-        clear(ifChangeCountIs: ours)
-      }
+      expireOurWrite()
     }
 
     func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void {
-      let saved = snapshot()
+      writeAndPrepareRestore(text, concealed: concealed, over: snapshot())
+    }
+
+    /// `writeAndPrepareRestore` over a snapshot already taken: internal so
+    /// tests can hand it the unreadable pasteboard (`nil`) the real one rarely
+    /// produces on demand.
+    func writeAndPrepareRestore(
+      _ text: String, concealed: Bool, over saved: PasteboardSnapshot?
+    ) -> @Sendable () -> Void {
       setString(text, transient: true, concealed: concealed)
       // Snapshot the change count our own write produced. If anything else writes
       // to the pasteboard before the restore fires (e.g. the user copies
       // something), the count moves and the restore leaves their newer contents
       // alone rather than clobbering them with the stale pre-paste snapshot.
       let ourChangeCount = changeCount
+      // With no snapshot the restore below leaves these words in place, so a
+      // secret's are given the same expiry as a concealed leave-behind's:
+      // nothing else would ever take a password off the clipboard.
+      if concealed, saved == nil {
+        expireOurWrite()
+      }
       return { [self] in
         // A nil snapshot means the pasteboard could not be read at all. There is
         // nothing to put back, so leave the transcript on the clipboard (the same
@@ -85,6 +115,15 @@
     }
 
     private func noteOwnWrite() { Self.ownWrites.add(1, ordering: .sequentiallyConsistent) }
+
+    /// Clears the write just made once `concealedLifetime` has passed, unless
+    /// something has written to the pasteboard since (`clear(ifChangeCountIs:)`).
+    private func expireOurWrite() {
+      let ours = changeCount
+      scheduleExpiry { [self] in
+        clear(ifChangeCountIs: ours)
+      }
+    }
 
     /// Snapshots the pasteboard, or `nil` when it can't be read at all
     /// (`pasteboardItems` is documented to return nil on error). Callers must treat

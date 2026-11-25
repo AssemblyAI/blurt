@@ -35,7 +35,7 @@ public struct RecentDictations: Equatable, Sendable {
     public let style: String?
     /// Whether this dictation may ride a later request's `stt_prompt`. False
     /// when the press could not tell whether it went into a password field
-    /// (`PressContext.TargetSecurity.unknown`): it still shows in the Recent
+    /// (`TargetSecurity.unknown`): it still shows in the Recent
     /// list and saved history, which stay on this device, but is never sent.
     let replayable: Bool
   }

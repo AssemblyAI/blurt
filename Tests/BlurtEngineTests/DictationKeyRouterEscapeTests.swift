@@ -111,6 +111,14 @@ struct DictationKeyRouterEscapeTests {
     #expect(router.handle(.down(trigger), at: .seconds(1)) == .start)
   }
 
+  @Test("a caller that doesn't pass inFlight has nothing in flight")
+  func inFlightDefaultsToNothing() {
+    // The default must be the inert answer: a host that never wires the
+    // question up would otherwise discard on every escape typed anywhere.
+    var router = router()
+    #expect(router.handle(escape, at: .zero) == .ignore)
+  }
+
   @Test("escape is not treated as a combo over a latched recording")
   func escapeIsNotACombo() {
     var router = router()

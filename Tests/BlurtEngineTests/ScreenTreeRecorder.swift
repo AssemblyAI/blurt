@@ -24,6 +24,7 @@
         let name = recording.name
         try await MacDriver.bringToFront(recording.app, with: performer)
         if let start = recording.start { await MacDriver.press(labelled: start, with: performer) }
+        // wall-clock-ok: drives real hardware or a real app, which run on real time
         try await Task.sleep(for: .seconds(2))
         let pid = try #require(await KeyInjector.frontmostApp()?.processIdentifier)
         // Its largest window: Mail's front one can be a blank new message.

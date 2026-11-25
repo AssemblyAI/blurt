@@ -3,8 +3,9 @@ import XCTest
 /// Every trigger key and what it can do, end to end through the real key tap
 /// (the harness drives its gate and callbacks — see `UITestHarnessView`): each
 /// key dictating, a key turned off, the read-aloud and ask keys, the dictation
-/// key interrupting a read, a key's own dictation style, and text shortcuts
-/// expanding in what's pasted. Read-aloud runs offline: the selection is
+/// key interrupting a read, a key's own dictation style, the Settings Keys tab
+/// that binds them, and text shortcuts expanding in what's pasted. Read-aloud
+/// runs offline: the selection is
 /// `UITestIdentifiers.cannedSelection`, and the stub speaker reports what it
 /// was asked to read on the harness's Spoken read-out.
 final class KeysAndReadAloudUITests: BlurtUITestCase {
@@ -114,6 +115,74 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
     setTranscript("Plain words.", in: harness)
     dictate(in: harness, expecting: "Plain words.", "Right ⌥ should dictate")
     XCTAssertEqual(sentStyle(in: harness), "—", "A key set to No custom style should send none")
+  }
+
+  // MARK: - The Settings Keys tab
+
+  /// The Keys tab has a key pop-up per action, and one activation pop-up. On
+  /// a reset launch right ⌘ dictates, and its pop-up offers None like every
+  /// other row; left ⌥ reads aloud; nothing asks.
+  func testKeysTabListsEveryAction() {
+    let keys = openKeys()
+
+    let actions = [
+      "Dictate", "Dictate: No custom style", KeyActionName.readAloud, KeyActionName.ask,
+      KeyActionName.rewrite, KeyActionName.compose, KeyActionName.command,
+    ]
+    for action in actions {
+      XCTAssertTrue(
+        keys.popUpButtons[UITestIdentifiers.actionKeyPicker(action)].exists,
+        "The tab should list a key pop-up for \(action)"
+      )
+    }
+    XCTAssertTrue(keys.popUpButtons[UITestIdentifiers.activationPicker].exists)
+    XCTAssertEqual(
+      keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)].value as? String, "Left Option"
+    )
+    XCTAssertEqual(keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.ask)].value as? String, "None")
+
+    let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
+    XCTAssertEqual(dictate.value as? String, "Right Command")
+    dictate.click()
+    XCTAssertTrue(dictate.menuItems["Right Command"].waitForExistence(timeout: 5))
+    XCTAssertTrue(dictate.menuItems["None"].exists, "Dictate can be set to None, like any action")
+    // Close the menu by re-choosing the current item, leaving the setting as it was.
+    dictate.menuItems["Right Command"].click()
+  }
+
+  /// Dictation moves to another key, and the key it left can take another
+  /// action: dictate with right ⌥, read aloud with right ⌘, and both stick.
+  func testDictationMovesToAnotherKey() {
+    let keys = openKeys()
+    let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
+    let read = keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)]
+
+    dictate.click()
+    app.menuItems["Right Option"].click()
+    read.click()
+    app.menuItems["Right Command"].click()
+
+    XCTAssertEqual(read.value as? String, "Right Command")
+    XCTAssertEqual(dictate.value as? String, "Right Option")
+  }
+
+  /// The activation mode persists: the tab shows it again after another pane.
+  func testActivationPersists() {
+    openKeys().popUpButtons[UITestIdentifiers.activationPicker].click()
+    app.menuItems["Hold"].click()
+
+    let settings = openSettingsWindow()
+    let reopened = selectSettingsTab(settings, named: UITestIdentifiers.keysSettingsTab)
+    XCTAssertEqual(
+      reopened.popUpButtons[UITestIdentifiers.activationPicker].value as? String,
+      "Hold",
+      "The mode should survive leaving the tab"
+    )
+  }
+
+  /// Opens Settings on the Keys tab and returns it.
+  private func openKeys() -> XCUIElement {
+    selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.keysSettingsTab)
   }
 
   // MARK: - Text shortcuts

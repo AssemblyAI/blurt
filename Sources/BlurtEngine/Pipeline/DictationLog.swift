@@ -141,7 +141,7 @@ public enum DictationLog {
   static let withheldTranscript = "(withheld: dictated into a password field)"
 
   /// What an entry holds in place of a transcript dictated into a field that
-  /// could not be checked for a password (`PressContext.TargetSecurity.unknown`).
+  /// could not be checked for a password (`TargetSecurity.unknown`).
   static let unverifiedTranscript = "(withheld: the field could not be checked for a password)"
 
   private static let logger = HostIdentity.current.logger("DictationLog")

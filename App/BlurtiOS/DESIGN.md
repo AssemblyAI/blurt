@@ -23,7 +23,9 @@ parity run reads Blurt's keyboard against; `Design/tokens.json` for every
 value the app's screens and the keyboard's own parts draw with. From the
 tokens, `scripts/design-tokens.swift` writes `BlurtDesign/DesignTokens.swift`
 (what the views read), the tables in this file marked `tokens:begin` /
-`tokens:end`, and the app's asset-catalog colour sets. Edit the JSON, run
+`tokens:end`, the app's asset-catalog colour sets, and the Mac app's
+`AccentColor`. The Mac compiles `DesignTokens.swift` too, so its brand
+palette (`Branding/BlurtBrand.swift`) is these tokens as well. Edit the JSON, run
 `scripts/design-sync.sh`, commit; `check.sh` runs `design-sync.sh --check`
 and fails on drift or on a design literal in a view (`// literal-ok:
 <reason>` for a genuine derivation).

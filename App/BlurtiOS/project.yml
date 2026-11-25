@@ -97,8 +97,9 @@ targets:
   # The component library: the generated design tokens, the type roles, the
   # brand colours, and the pieces every screen is built from (card, page, form,
   # eyebrow, button, wordmark, film grain). SwiftUI only — no BlurtiOSCore, no
-  # engine — so it reads as the design system and nothing else. iPhone only for
-  # now: the Mac app keeps its own Branding/. Static and extension-safe for the
+  # engine — so it reads as the design system and nothing else. iPhone only,
+  # but for the generated DesignTokens.swift, which the Mac app compiles too
+  # (its Branding/ reads the brand palette from it). Static and extension-safe for the
   # reasons BlurtiOSCore is: the keyboard links it too.
   BlurtDesign:
     type: framework.static

@@ -27,6 +27,7 @@
     /// its tree is switched on (`commandStarting`). The caller ends it.
     static func bringToFront(_ app: String, with performer: SystemVoiceCommandPerformer) async throws {
       _ = try await performer.perform(.openApp(app))
+      // wall-clock-ok: drives real hardware or a real app, which run on real time
       try await Task.sleep(for: .seconds(1))
       await performer.commandStarting()
     }

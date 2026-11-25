@@ -120,6 +120,10 @@ targets:
         # isolation, and genuinely off-main app code (the CGEventTap C callback,
         # the UI-test pipeline stubs) opts out with `nonisolated`.
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        # A package access identifier so the generated DesignTokens.swift (see
+        # `sources:`), whose declarations are `package` for the iPhone's
+        # BlurtDesign framework, compiles here as it is.
+        SWIFT_PACKAGE_NAME: Blurt
       configs:
         # The XCUITest harness + leak/hotkey test seams compile only when
         # UITEST_HOOKS is set (see the `#if UITEST_HOOKS` blocks). It's on for the
@@ -151,6 +155,10 @@ targets:
       # Shared with BlurtUITests: the single source of truth for UI-test
       # identifiers/sentinels (see Shared/UITestIdentifiers.swift).
       - path: Shared
+      # The design tokens both apps draw with, generated from
+      # App/BlurtiOS/Design/tokens.json by scripts/design-sync.sh: the brand
+      # palette here comes from the same file as the iPhone's (see BlurtBrand).
+      - path: ../BlurtiOS/BlurtDesign/DesignTokens.swift
       # The brand assets both apps ship (Design/brand), so neither app's folder
       # is a dependency of the other.
       - path: ../../Design/brand/AppIcon.icon

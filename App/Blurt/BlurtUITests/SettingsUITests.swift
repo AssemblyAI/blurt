@@ -1,10 +1,12 @@
 import XCTest
 
 /// Drives the Settings window: the AssemblyAI API-key sheet (connect / reject
-/// / cancel) reached from the account row, the Keys tab, the Read Aloud tab,
-/// the sound-cue pickers, and the key-terms field. All
-/// offline — the API-key submit is short-circuited in UI-test mode, so these
-/// never reach AssemblyAI or the real Keychain.
+/// / unreachable / cancel) reached from the account row, the microphone and
+/// sound-cue pickers, the Styles pane's enhanced-transcripts switch, and the
+/// Advanced pane. All offline — the API-key submit is short-circuited in
+/// UI-test mode, so these never reach AssemblyAI or the real Keychain. (The
+/// Keys tab is in `KeysAndReadAloudUITests`, the Read Aloud tab in
+/// `ReadAloudSettingsUITests`, the Vocabulary pane in `TextShortcutsUITests`.)
 final class SettingsUITests: BlurtUITestCase {
   /// Connecting a key dismisses the sheet and leaves the row showing the stored
   /// key's masked tail plus the "Change…" affordance.
@@ -69,20 +71,75 @@ final class SettingsUITests: BlurtUITestCase {
     )
   }
 
-  /// Dictation moves to another key, and the key it left can take another
-  /// action: dictate with right ⌥, read aloud with right ⌘, and both stick.
-  func testDictationMovesToAnotherKey() {
-    let keys = openKeys()
-    let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
-    let read = keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)]
+  /// A server that can't be reached is a retry, not a verdict on the key: the
+  /// sheet stays open with the inline error, and nothing is stored.
+  func testUnreachableServerShowsInlineErrorAndStoresNothing() {
+    let settings = openSettingsWindow()
+    let sheet = openKeyEditor(settings)
 
-    dictate.click()
-    app.menuItems["Right Option"].click()
-    read.click()
-    app.menuItems["Right Command"].click()
+    typeKey(UITestIdentifiers.unreachableAPIKey, into: sheet)
+    sheet.buttons[UITestIdentifiers.apiKeySave].click()
 
-    XCTAssertEqual(read.value as? String, "Right Command")
-    XCTAssertEqual(dictate.value as? String, "Right Option")
+    XCTAssertTrue(
+      sheet.staticTexts[UITestIdentifiers.apiKeyError].waitForExistence(timeout: 10),
+      "An unreachable server should show the inline error in the sheet"
+    )
+    sheet.buttons[UITestIdentifiers.apiKeyCancel].click()
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
+    XCTAssertTrue(
+      settings.buttons[UITestIdentifiers.apiKeyConnect].waitForExistence(timeout: 5),
+      "An unverified key must not be stored: the row should still offer to connect"
+    )
+    XCTAssertFalse(settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].exists)
+  }
+
+  /// The inline error describes the key that was submitted, so editing the
+  /// field clears it rather than leaving it under a key it no longer describes.
+  func testEditingTheKeyClearsTheError() {
+    let sheet = openKeyEditor(openSettingsWindow())
+    typeKey(UITestIdentifiers.invalidAPIKey, into: sheet)
+    sheet.buttons[UITestIdentifiers.apiKeySave].click()
+    let error = sheet.staticTexts[UITestIdentifiers.apiKeyError]
+    XCTAssertTrue(error.waitForExistence(timeout: 10), "A rejected key should show the inline error")
+
+    typeKey("x", into: sheet)
+
+    XCTAssertTrue(error.waitForNonExistence(timeout: 5), "Editing the key should clear the error")
+  }
+
+  /// "Get a Free Key" is offered only while no key is stored: once one is, the
+  /// user has clearly found the dashboard, and rotating doesn't need the link.
+  /// (Not clicked — it opens the browser.)
+  func testGetAFreeKeyIsOfferedOnlyBeforeAKeyIsStored() {
+    let settings = openSettingsWindow()
+    let first = openKeyEditor(settings)
+    XCTAssertTrue(
+      first.buttons[UITestIdentifiers.apiKeyGetKey].waitForExistence(timeout: 5),
+      "A first connect should offer the link to get a key"
+    )
+    first.buttons[UITestIdentifiers.apiKeyCancel].click()
+    XCTAssertTrue(first.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
+
+    connectValidKey(settings)
+    let rotating = openKeyEditor(settings, via: UITestIdentifiers.apiKeyChange)
+    XCTAssertTrue(rotating.buttons[UITestIdentifiers.apiKeySave].waitForExistence(timeout: 5))
+    XCTAssertFalse(
+      rotating.buttons[UITestIdentifiers.apiKeyGetKey].exists,
+      "Rotating a stored key shouldn't offer the link to get one"
+    )
+  }
+
+  /// Settings and the setup window host the same section, so a key connected
+  /// in one reaches the other's row rather than leaving it "Not connected".
+  func testKeyConnectedInSettingsReachesTheSetupWindow() {
+    connectValidKey(openSettingsWindow())
+
+    let setup = mainWindow()
+    XCTAssertTrue(
+      setup.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 10),
+      "The setup window's row should show the key connected in Settings"
+    )
+    XCTAssertFalse(setup.staticTexts[UITestIdentifiers.apiKeyNotConnected].exists)
   }
 
   /// The microphone picker exists and defaults to following the system input.
@@ -144,21 +201,54 @@ final class SettingsUITests: BlurtUITestCase {
   }
 
   /// Developer mode starts off (the UI-test launch resets persisted settings)
-  /// and a click switches it on. Matched by identifier rather than element type
-  /// so the test doesn't care whether AppKit exposes the SwiftUI switch as a
-  /// switch or a checkbox. The toggle lives on the Advanced pane, so switch to
-  /// that tab first.
-  func testDeveloperModeTogglesOn() {
+  /// and a click switches it on, growing the row that shows the logs — which
+  /// goes again when it's switched off. Matched by identifier rather than
+  /// element type so the test doesn't care whether AppKit exposes the SwiftUI
+  /// switch as a switch or a checkbox. The toggle lives on the Advanced pane, so
+  /// switch to that tab first. (Show in Finder isn't clicked: it opens Finder.)
+  func testDeveloperModeTogglesOnAndShowsTheLogsRow() {
     let settings = openSettingsWindow()
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
     let toggle = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Developer mode toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Developer mode should start switched off")
+    let showLogs = advanced.anyDescendant(identified: UITestIdentifiers.developerShowLogs)
+    XCTAssertFalse(showLogs.exists, "With developer mode off there are no logs to show")
 
     toggle.click()
 
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch developer mode on")
+    XCTAssertTrue(showLogs.waitForExistence(timeout: 5), "Developer mode should offer to show its logs")
+
+    toggle.click()
+    XCTAssertTrue(showLogs.waitForNonExistence(timeout: 5), "Switching off should remove the logs row")
+  }
+
+  /// Enhanced transcripts start on, with the dictation mode on Smart. The mode
+  /// and the styles only shape the enhanced rewrite, so switching it off
+  /// disables both, and switching it back on re-enables them.
+  func testEnhancedTranscriptsSwitchGatesModeAndStyles() {
+    let styles = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.stylesSettingsTab)
+    let enhanced = styles.anyDescendant(identified: UITestIdentifiers.enhancedTranscriptsToggle)
+    XCTAssertTrue(enhanced.waitForExistence(timeout: 10), "Enhanced transcripts toggle not found")
+    XCTAssertEqual("\(enhanced.value ?? "")", "1", "Enhanced transcripts should default ON")
+    let mode = styles.popUpButtons[UITestIdentifiers.rewriteModePicker]
+    let add = styles.buttons[UITestIdentifiers.styleProfileAdd]
+    XCTAssertTrue(mode.waitForExistence(timeout: 5), "Dictation mode picker not found")
+    XCTAssertEqual(mode.value as? String, "Smart", "Dictation mode should default to Smart")
+    XCTAssertTrue(mode.isEnabled)
+    XCTAssertTrue(add.isEnabled)
+
+    enhanced.click()
+    let off = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == false"), object: mode)
+    XCTAssertEqual(XCTWaiter.wait(for: [off], timeout: 5), .completed, "Switching off should disable the mode")
+    XCTAssertFalse(add.isEnabled, "Switching off should disable adding a style")
+
+    enhanced.click()
+    let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: mode)
+    XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 5), .completed, "Switching on should re-enable the mode")
+    XCTAssertTrue(add.isEnabled, "Switching on should re-enable adding a style")
   }
 
   /// UI-test builds are debug builds, which never start the Sparkle updater (a
@@ -279,113 +369,6 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
       "Cancel should return to the connected row"
-    )
-  }
-
-  // MARK: - Keys
-
-  /// The Keys tab has a key pop-up per action, and one activation pop-up. On
-  /// a reset launch right ⌘ dictates, and its pop-up offers None like every
-  /// other row; left ⌥ reads aloud; nothing asks.
-  func testKeysTabListsEveryAction() {
-    let keys = openKeys()
-
-    let actions = [
-      "Dictate", "Dictate: No custom style", KeyActionName.readAloud, KeyActionName.ask,
-      KeyActionName.rewrite, KeyActionName.compose, KeyActionName.command,
-    ]
-    for action in actions {
-      XCTAssertTrue(
-        keys.popUpButtons[UITestIdentifiers.actionKeyPicker(action)].exists,
-        "The tab should list a key pop-up for \(action)"
-      )
-    }
-    XCTAssertTrue(keys.popUpButtons[UITestIdentifiers.activationPicker].exists)
-    XCTAssertEqual(
-      keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.readAloud)].value as? String, "Left Option"
-    )
-    XCTAssertEqual(keys.popUpButtons[UITestIdentifiers.actionKeyPicker(KeyActionName.ask)].value as? String, "None")
-
-    let dictate = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate")]
-    XCTAssertEqual(dictate.value as? String, "Right Command")
-    dictate.click()
-    XCTAssertTrue(dictate.menuItems["Right Command"].waitForExistence(timeout: 5))
-    XCTAssertTrue(dictate.menuItems["None"].exists, "Dictate can be set to None, like any action")
-    // Close the menu by re-choosing the current item, leaving the setting as it was.
-    dictate.menuItems["Right Command"].click()
-  }
-
-  /// The activation mode persists: the tab shows it again after another pane.
-  func testActivationPersists() {
-    openKeys().popUpButtons[UITestIdentifiers.activationPicker].click()
-    app.menuItems["Hold"].click()
-
-    let settings = openSettingsWindow()
-    let reopened = selectSettingsTab(settings, named: UITestIdentifiers.keysSettingsTab)
-    XCTAssertEqual(
-      reopened.popUpButtons[UITestIdentifiers.activationPicker].value as? String,
-      "Hold",
-      "The mode should survive leaving the tab"
-    )
-  }
-
-  /// The Read Aloud tab's voice picker starts on the service's default voice.
-  func testVoicePickerDefaultsToJane() {
-    let pane = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.readAloudSettingsTab)
-    let voice = pane.popUpButtons[UITestIdentifiers.readAloudVoicePicker]
-    XCTAssertTrue(voice.waitForExistence(timeout: 5), "Voice picker not found")
-    XCTAssertEqual(voice.value as? String, "Jane")
-  }
-
-  /// Opens Settings on the Keys tab and returns it.
-  private func openKeys() -> XCUIElement {
-    selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.keysSettingsTab)
-  }
-
-  // MARK: - API-key helpers
-
-  /// Opens the API-key sheet from the settings row and returns it. `identifier`
-  /// picks the row button by its state: "Connect…" before a key exists,
-  /// "Change…" once one is stored.
-  private func openKeyEditor(
-    _ settings: XCUIElement,
-    via identifier: String = UITestIdentifiers.apiKeyConnect
-  ) -> XCUIElement {
-    let button = settings.buttons[identifier]
-    XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
-    button.click()
-    let sheet = settings.sheets.firstMatch
-    XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The API key sheet should open")
-    return sheet
-  }
-
-  /// Types into the sheet's key field. The field is focused on open, but a click
-  /// makes the target explicit rather than relying on default focus.
-  private func typeKey(_ key: String, into sheet: XCUIElement) {
-    let field = sheet.secureTextFields[UITestIdentifiers.apiKeyField]
-    XCTAssertTrue(field.waitForExistence(timeout: 5), "API key field not found in the sheet")
-    field.click()
-    field.typeText(key)
-  }
-
-  /// Drives the whole connect flow so tests about the *stored* state don't each
-  /// repeat it.
-  ///
-  /// Waits on the sheet's *disappearance*, not on the connected row's text: the
-  /// row sits behind the sheet and is already on screen when it's still modal,
-  /// so using it as the done signal lets the next step click a row button
-  /// through a live sheet.
-  private func connectValidKey(_ settings: XCUIElement) {
-    let sheet = openKeyEditor(settings)
-    typeKey(UITestIdentifiers.validAPIKey, into: sheet)
-    sheet.buttons[UITestIdentifiers.apiKeySave].click()
-    XCTAssertTrue(
-      sheet.waitForNonExistence(timeout: 10),
-      "Connecting a valid key should dismiss the sheet"
-    )
-    XCTAssertTrue(
-      settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
-      "Connecting a valid key should show the connected row"
     )
   }
 }

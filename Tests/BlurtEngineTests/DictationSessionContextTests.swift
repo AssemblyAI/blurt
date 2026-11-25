@@ -56,7 +56,7 @@ struct DictationSessionContextTests {
     #expect(await fixture.injector.insertedPrior == ["Hi Sam,"])
     #expect(await fixture.injector.insertedWindowTitles == ["Re: Q3 pricing"])
     // An ordinary field's words may stay on the clipboard as they are.
-    #expect(await fixture.injector.insertedSecure == [false])
+    #expect(await fixture.injector.insertedSecurity == [.ordinary])
     // Logged once the paste ended, with how it did.
     #expect(
       fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected, outcome: .pasted)])
@@ -245,7 +245,7 @@ struct DictationSessionContextTests {
     #expect(await injector.inserted == ["hunter2"])
     // …and the paste knows it is a secret, so a "Copied" leave-behind is
     // concealed rather than kept by a clipboard manager (#348).
-    #expect(await injector.insertedSecure == [true])
+    #expect(await injector.insertedSecurity == [.secure])
     // The request itself did go out unprimed; that is the cost of the deadline.
     #expect(await transcriber.receivedContexts == [nil])
     // But the late read was picked up in time for the decision that matters.
@@ -268,7 +268,7 @@ struct DictationSessionContextTests {
 
     #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
     #expect(await fixture.session.recentDictations.entries.isEmpty)
-    #expect(await fixture.injector.insertedSecure == [true])
+    #expect(await fixture.injector.insertedSecurity == [.secure])
   }
 
   @Test("history alone keeps the context worth carrying when the capture is empty")
@@ -314,8 +314,22 @@ struct DictationSessionContextTests {
 
     #expect(await session.phase == .pasted)
     #expect(await injector.inserted == ["Spoken anyway."])
+    // A read that never landed can't vouch for the field, so the paste is told
+    // it doesn't know — not that the field is ordinary, which a nil
+    // `capturedContext` used to read as.
+    #expect(await injector.insertedSecurity == [.unknown])
     #expect(await transcriber.receivedContexts == [nil])
     hung.signal()  // release the capture thread before the test ends
+  }
+
+  @Test("a capture that reached no focused element tells the paste it doesn't know the field's security")
+  func unreachableFieldIsUnknownToThePaste() async {
+    let fixture = makeSession(mode: .transcript("maybe a password"), field: .unreachable, frontmost: nil)
+
+    await fixture.session.dictate()
+
+    #expect(await fixture.injector.inserted == ["maybe a password"])
+    #expect(await fixture.injector.insertedSecurity == [.unknown])
   }
 
   /// The one case that runs `Seams.production`, so the closures the app actually

@@ -1,4 +1,4 @@
-#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/BlurtDesign/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run  // through scripts/design-sync.sh, which also formats the output and, with  // --check, fails on drift the way check.sh fails on a stale .pbxproj.
+#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/BlurtDesign/DesignTokens.swift` (the Mac app compiles it too), the generated tables in  // `App/BlurtiOS/DESIGN.md`, the iPhone app's asset-catalog colour sets, and the Mac app's AccentColor. Run  // through scripts/design-sync.sh, which also formats the output and, with  // --check, fails on drift the way check.sh fails on a stale .pbxproj.
 //
 //   swift scripts/design-tokens.swift [--root <dir>]
 //
@@ -35,6 +35,10 @@ let tokensPath = "App/BlurtiOS/Design/tokens.json"
 let swiftPath = "App/BlurtiOS/BlurtDesign/DesignTokens.swift"
 let designPath = "App/BlurtiOS/DESIGN.md"
 let catalogPath = "App/BlurtiOS/BlurtiOS/Assets.xcassets"
+let macAccent = (
+  path: "App/Blurt/Blurt/Assets.xcassets/AccentColor.colorset/Contents.json", light: "brand.green/700",
+  dark: "brand.green/400"
+)
 
 func fail(_ message: String) -> Never {
   FileHandle.standardError.write(Data("design-tokens: \(message)\n".utf8))
@@ -288,6 +292,23 @@ for gradient in gradients {
 }
 swift += "  ]\n}\n// swiftlint:enable type_body_length\n"
 
+// The initializer every colour above is written with. Here rather than beside the
+// iPhone's BlurtBrand so the Mac app, which compiles this file too, gets it
+// without UIKit.
+swift += """
+
+  extension Color {
+    /// `Color(hex: 0x1D1B16)`, the literal every colour token is written in.
+    /// `nonisolated` so the generated statics, which are nonisolated too, can call it.
+    package nonisolated init(hex: UInt32) {
+      self.init(
+        red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255
+      )
+    }
+  }
+
+  """
+
 extension Value {
   var isAlias: Bool {
     if case .alias = self { return true }
@@ -444,6 +465,13 @@ for (set, light, dark) in colorSets {
   write(
     catalog(light: rendered(lightToken), dark: rendered(darkToken)), to: "\(catalogPath)/\(set).colorset/Contents.json")
 }
+// The Mac app's accent: the two brand greens its BlurtBrand describes, light and
+// dark. AppKit's own chrome (toolbar selection, focus rings) reads only this
+// catalog colour, so it is generated too rather than kept in step by hand.
+guard let macLight = byQualified[macAccent.light], let macDark = byQualified[macAccent.dark] else {
+  fail("the Mac's AccentColor needs \(macAccent.light) and \(macAccent.dark)")
+}
+write(catalog(light: rendered(macLight), dark: rendered(macDark)), to: macAccent.path)
 print(
   "design-tokens: \(tokens.count) tokens, \(gradients.count) gradients → \(swiftPath), \(designPath) "
-    + "(\(replaced.count) blocks), \(colorSets.count) colour sets")
+    + "(\(replaced.count) blocks), \(colorSets.count) colour sets, the Mac's AccentColor")

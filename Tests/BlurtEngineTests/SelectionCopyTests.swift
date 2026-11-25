@@ -54,7 +54,7 @@ struct SelectionCopyTests {
       return pasteboard.answerCopy(with: "selected")()
     }
     let copying = Task { await copy.copySelection(maxCharacters: 100) }
-    try await Task.sleep(for: .milliseconds(50))
+    try await Task.sleep(for: .milliseconds(50))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(!posted.withLock { $0 })
     // The paste's restore, then its turn ends.
     pasteboard.ownWrite("user's clipboard")
