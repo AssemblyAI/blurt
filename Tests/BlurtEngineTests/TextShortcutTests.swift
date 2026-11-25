@@ -172,6 +172,20 @@ struct TextShortcutExpanderTests {
     }
   }
 
+  @Test(
+    "a shorter trigger spelled with hyphens or mixed separators never outranks a longer one",
+    arguments: ["a-s-a-p", "a. s. a. p.", "A.S.-A.P"])
+  func longestIgnoresAnySeparators(spelling: String) {
+    let asap = TextShortcut(trigger: spelling, expansion: "as soon as possible")
+    let reply = TextShortcut(
+      trigger: "asap reply", expansion: "I'll get back to you as soon as I can.")
+    for shortcuts in [[asap, reply], [reply, asap]] {
+      #expect(
+        TextShortcutExpander.expand("Sure, asap reply coming, asap.", using: shortcuts)
+          == "Sure, I'll get back to you as soon as I can. coming, as soon as possible.")
+    }
+  }
+
   @Test("an expansion is inserted literally and never re-expanded")
   func literalExpansion() {
     let tricky = TextShortcut(trigger: "price tag", expansion: "$1 \\0 personal email")
