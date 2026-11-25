@@ -78,10 +78,10 @@ pretty_xcodebuild
 # under the build rather than ahead of it. BLURT_IOS_BUILD_ONLY=1 stops after
 # the build: ios-check.sh's `analyze` step on CI, which needs the build log and
 # no simulator.
+# The build is for any simulator (IOS_SIM_BUILD), so it never waits on this one.
 XCODEBUILD_ARGS=(-project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS
-  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED"
-  "${IOS_SIM_SIGNING[@]}" "${TEST_FLAGS[@]}")
-xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" 2>&1 | tee "$BUILD_LOG" | "${PRETTY[@]}"
+  -derivedDataPath "$DERIVED" "${IOS_SIM_SIGNING[@]}" "${TEST_FLAGS[@]}")
+xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" "${IOS_SIM_BUILD[@]}" 2>&1 | tee "$BUILD_LOG" | "${PRETTY[@]}"
 if [ "${BLURT_IOS_BUILD_ONLY:-0}" = "1" ]; then
   echo "build log: $BUILD_LOG"
   exit 0
@@ -89,7 +89,8 @@ fi
 ios_wait_booted "$UDID"
 # Serial for the reason project.yml's scheme gives (the tests share one global
 # App Group override); said here too so no test plan or default can undo it.
-xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -resultBundlePath "$RESULTS" \
+xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -destination "platform=iOS Simulator,id=$UDID" \
+  -resultBundlePath "$RESULTS" \
   -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}"
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
