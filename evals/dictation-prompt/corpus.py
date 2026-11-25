@@ -76,11 +76,22 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from typing import Protocol, TypeVar
 
 import disfluency
 import metrics
 
 ROWS_API = "https://datasets-server.huggingface.co/rows"
+
+
+class _Row(Protocol):
+    """What `split` and `carve_validation` need of a row: whether it is held out."""
+
+    @property
+    def held_out(self) -> bool: ...
+
+
+_RowT = TypeVar("_RowT", bound=_Row)
 
 # Utterance-length window, in words of the reference. The floor drops examples too
 # short for a disfluency to matter; the ceiling drops material that stops looking
@@ -148,7 +159,9 @@ class Source:
 
     @property
     def fields(self) -> tuple[str, ...]:
-        return (self.input_field, self.target_field) if self.is_paired else (self.target_field,)
+        if self.input_field is None:
+            return (self.target_field,)
+        return (self.input_field, self.target_field)
 
 
 SOURCES: dict[str, Source] = {
@@ -421,7 +434,12 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
     working around the server still says so. Every other status (a 4xx) is a fact
     about the request or the dataset that waiting will not change.
     """
-    for attempt in range(1, _RATE_LIMIT_ATTEMPTS + 1):
+    # `while True` rather than `for attempt in range(...)`: the last attempt always
+    # returns or raises, and this shape says so to the type checker — no unreachable
+    # tail after the loop.
+    attempt = 0
+    while True:
+        attempt += 1
         try:
             with urllib.request.urlopen(  # noqa: S310 — fixed https endpoint
                 urllib.request.Request(url, headers=headers), timeout=60
@@ -459,7 +477,6 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
                 f"could not reach {ROWS_API} ({error.reason}). "
                 "Use --jsonl or --source builtin to work offline."
             ) from error
-    raise AssertionError("unreachable: the loop either returns or raises")
 
 
 def _pairs_from_rows(rows, source: Source, where: str, stt: dict[str, str] | None = None):
@@ -476,7 +493,7 @@ def _pairs_from_rows(rows, source: Source, where: str, stt: dict[str, str] | Non
         audio = voicearena.local_or_url(row)
         if stt is not None:
             yield stt[voicearena.cache_key(row)], reference, audio
-        elif source.is_paired:
+        elif source.input_field is not None:  # `is_paired`, spelled so mypy narrows it
             yield detag(_tidy(_field(row, source.input_field, where))), reference, audio
         else:
             # Reference-only: the injector fills the input side in `load`.
@@ -529,7 +546,7 @@ def _load_registered(
         template=template,
         seen=seen,
     )
-    detail = {
+    detail: dict[str, object] = {
         "dataset": spec.dataset,
         "config": spec.config,
         "split": spec.split,
@@ -639,7 +656,7 @@ def slice_size(value: float, total: int) -> int:
     return int(total * value) if value < 1 else int(value)
 
 
-def carve_validation(train: list[Utterance], size: float) -> tuple[list, list]:
+def carve_validation(train: list[_RowT], size: float) -> tuple[list[_RowT], list[_RowT]]:
     """Take the optimizer's valset off the front of train, returning (validation, train).
 
     Here rather than in the CLI so the tests exercise the carve the run performs
@@ -653,20 +670,20 @@ def carve_validation(train: list[Utterance], size: float) -> tuple[list, list]:
     reverse. With none in train this is the plain front-of-train slice.
     """
     count = slice_size(size, len(train))
-    held = [u for u in train if getattr(u, "held_out", False)]
-    others = [u for u in train if not getattr(u, "held_out", False)]
+    held = [u for u in train if u.held_out]
+    others = [u for u in train if not u.held_out]
     to_valset = held[: min(count, (len(held) + 1) // 2)]
     validation = to_valset + others[: count - len(to_valset)]
     return validation, held[len(to_valset) :] + others[count - len(to_valset) :]
 
 
 def split(
-    utterances: list[Utterance],
+    utterances: list[_RowT],
     seed: int,
     dev_size: float,
     test_size: float,
     search_share: float = 0.0,
-):
+) -> tuple[list[_RowT], list[_RowT], list[_RowT]]:
     """Shuffle once with a fixed seed, then slice into train / dev / test.
 
     Shuffling matters because dataset splits are often ordered by speaker or
@@ -706,8 +723,8 @@ def split(
         scale = total / (n_dev + n_test)
         n_dev, n_test = int(n_dev * scale), int(n_test * scale)
 
-    reserved = [u for u in shuffled if getattr(u, "held_out", False)]
-    rest = [u for u in shuffled if not getattr(u, "held_out", False)]
+    reserved = [u for u in shuffled if u.held_out]
+    rest = [u for u in shuffled if not u.held_out]
     released = reserved[: round(len(reserved) * search_share)]
     reserved = reserved[len(released) :]
     used = min(len(reserved), n_dev + n_test)

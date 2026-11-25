@@ -111,6 +111,19 @@ struct RewriteModeTests {
     #expect(object["rewrite_mode"] == nil)
   }
 
+  /// `transcribe` reads the mode once and hands it over; the config must not
+  /// read the setting again, or a flip in between sends one mode's instruction
+  /// with the other mode's `rewrite_mode`.
+  @Test("the mode a request was given is the one on the wire, not a fresh read of the setting")
+  func givenModeIsTheOneSent() throws {
+    let data = try makeTranscriber(apiKey: "test-key", rewriteMode: .fast)
+      .makeConfigData(
+        sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [], customStyle: nil, enhanced: true, mode: .smart)
+    let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    #expect(object["rewrite_mode"] as? String == DictationRewriteMode.smart.rawValue)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.base(for: .smart))
+  }
+
   // MARK: - helpers
 
   private func config(mode: RewriteMode, enhancedTranscripts: Bool = true) throws -> [String: Any] {

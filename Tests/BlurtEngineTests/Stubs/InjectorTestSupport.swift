@@ -13,12 +13,26 @@
   /// synchronous `@Sendable` seams like `postPaste`; the `Mutex` makes each
   /// `Sendable` conformance compiler-checked instead of `@unchecked`-asserted.
 
-  /// Some live application to stand in as the captured paste target.
+  /// A live application to stand in as the captured paste target: one of the
+  /// system's own, which run for the whole GUI session, so it can't exit between
+  /// the pick and `setTarget`.
+  ///
+  /// It used to be the first of `NSWorkspace.shared.runningApplications`, an
+  /// unordered pick. On a CI runner that can be a short-lived helper that exits
+  /// before `setTarget` resolves its pid, which then comes back nil: no target, so
+  /// no app identity for the same-window separator, and "a second dictation into
+  /// the same window" got `"Second."` instead of `" Second."`. (The test process
+  /// itself won't do: it isn't a registered app, so its pid resolves to nil too.)
+  /// Every caller stubs activation, so the target only has to resolve and keep its
+  /// pid — never come to the front — and the `#require` says so if it can't.
   func liveTargetApp() throws -> NSRunningApplication {
-    try #require(
-      NSWorkspace.shared.runningApplications.first {
-        $0.processIdentifier > 0 && !$0.isTerminated
-      })
+    let longLived = ["com.apple.dock", "com.apple.finder", "com.apple.loginwindow"]
+    let app = longLived.lazy.compactMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first }
+      .first { !$0.isTerminated }
+    let pinned = try #require(app, "no long-lived system app is running")
+    // What `KeyInjector.setTarget` will do with the pid: it has to come back.
+    #expect(NSRunningApplication(processIdentifier: pinned.processIdentifier) != nil)
+    return pinned
   }
 
   /// That application as the `CapturedFocus` `KeyInjector.setTarget` takes, so the
@@ -48,11 +62,10 @@
       },
       // Stub the activation. Omitting this defaulted to `KeyInjector.activate`, a
       // REAL `NSRunningApplication.activate()` — so this test yanked the
-      // developer's foreground app, and failed spuriously whenever
-      // `liveTargetApp()`'s unordered pick landed on a background-only process
-      // whose activate() returns false (the injector then throws `.targetAppLost`
-      // for reasons unrelated to separator logic). It needs a stable non-nil app
-      // identity, not activation.
+      // developer's foreground app, and failed spuriously whenever the target was
+      // a process whose activate() returns false (the injector then throws
+      // `.targetAppLost` for reasons unrelated to separator logic). It needs a
+      // stable non-nil app identity, not activation.
       activateTarget: { _ in true },
       secondsSinceUserInput: secondsSinceUserInput,
       clipboard: clip)

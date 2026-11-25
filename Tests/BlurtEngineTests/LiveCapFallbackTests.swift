@@ -108,6 +108,28 @@ struct LiveCapFallbackTests {
     #expect(isReleased(capture))
   }
 
+  @Test("a refused streaming body stops taking the recording, even if nothing tore it down")
+  func refusedBodyStopsTakingTheRecording() async throws {
+    // The writer can be mid-write when the 413 lands, so its cancel never
+    // reaches the body's producer. The fallback has to end that producer's
+    // feed itself: left open, it copied the rest of the recording into a body
+    // nobody reads, beside the fallback's own copy — and this read never
+    // ended before key up.
+    let transport = LiveCapTransport(
+      live: .audioTooLarge, answerAfterBytes: Self.refusalPoint, abandonsBody: true,
+      buffered: .transcript("all of it", rewrite: "All of it."))
+    let (dictation, capture) = startSpeaking(makeTranscriber(apiKey: "k", transport: transport))
+
+    let unread = try await transport.restOfAbandonedBody()
+    capture.yield(Self.after)
+    capture.finish()
+
+    #expect(try await dictation.value == "All of it.")
+    #expect(unread.range(of: Self.after) == nil)
+    let request = try #require(transport.bufferedRequests.first)
+    #expect(try audioPart(ofBuffered: #require(request.httpBody)) == Self.before + Self.after)
+  }
+
   @Test("a failed fallback surfaces its own error, not the 413")
   func failedFallbackSurfacesItsOwnError() async throws {
     let transport = LiveCapTransport(

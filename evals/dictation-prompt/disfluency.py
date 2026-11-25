@@ -25,6 +25,7 @@ unpunctuates, making formatting restoration part of the task.
 from __future__ import annotations
 
 import random
+from typing import Literal, assert_never
 
 import metrics
 
@@ -56,7 +57,8 @@ CORRECTIONS: tuple[str, ...] = ("I mean", "sorry", "or rather", "no wait")
 # is distributed — Switchboard is over half repetitions. Note the consequence:
 # corrections and restarts, the hard cases, are under-represented here relative to
 # a corpus like Disfl-QA that was built specifically to contain them.
-_OPERATIONS = ("filler", "repeat", "stutter", "false_start", "restart")
+Operation = Literal["filler", "repeat", "stutter", "false_start", "restart"]
+_OPERATIONS: tuple[Operation, ...] = ("filler", "repeat", "stutter", "false_start", "restart")
 _WEIGHTS = (46, 20, 14, 10, 10)
 
 
@@ -120,41 +122,43 @@ def inject(
     for index, token in enumerate(tokens):
         if rng.random() < event_rate:
             operation = rng.choices(_OPERATIONS, weights=_WEIGHTS)[0]
+            # False when the operator had nothing to work on here, so it isn't recorded.
+            applied = True
 
-            if operation == "filler":
-                out.append(rng.choice(FILLERS))
-            elif operation == "repeat":
-                bare = _word_shape(token)
-                if bare:
-                    out.append(bare.lower() if index else bare)
-                else:
-                    operation = "skipped"
-            elif operation == "stutter":
-                fragment = _stutter(token, rng)
-                if fragment:
-                    out.append(fragment)
-                else:
-                    operation = "skipped"
-            elif operation == "false_start":
-                # Abandon a word borrowed from elsewhere in the sentence, then
-                # correct back to the real one. The wrong word is always followed
-                # by an explicit correction marker, so the intended text is still
-                # unambiguous.
-                if borrowable:
-                    out.append(f"{rng.choice(borrowable).lower()}—")
-                    out.append(rng.choice(CORRECTIONS))
-                else:
-                    operation = "skipped"
-            elif operation == "restart":
-                # Re-run the last couple of words, the way someone does after
-                # losing the thread mid-clause.
-                restart = [shape for shape in map(_word_shape, out[-rng.randint(2, 3) :]) if shape]
-                if restart:
+            match operation:
+                case "filler":
+                    out.append(rng.choice(FILLERS))
+                case "repeat":
+                    bare = _word_shape(token)
+                    applied = bool(bare)
+                    if bare:
+                        out.append(bare.lower() if index else bare)
+                case "stutter":
+                    fragment = _stutter(token, rng)
+                    applied = fragment is not None
+                    if fragment:
+                        out.append(fragment)
+                case "false_start":
+                    # Abandon a word borrowed from elsewhere in the sentence, then
+                    # correct back to the real one. The wrong word is always followed
+                    # by an explicit correction marker, so the intended text is still
+                    # unambiguous.
+                    applied = bool(borrowable)
+                    if borrowable:
+                        out.append(f"{rng.choice(borrowable).lower()}—")
+                        out.append(rng.choice(CORRECTIONS))
+                case "restart":
+                    # Re-run the last couple of words, the way someone does after
+                    # losing the thread mid-clause.
+                    tail = out[-rng.randint(2, 3) :]
+                    restart = [shape for shape in map(_word_shape, tail) if shape]
+                    applied = bool(restart)
                     out.extend(word.lower() for word in restart)
-                else:
-                    operation = "skipped"
+                case _:
+                    # A new `Operation` without a case here fails mypy, not a run.
+                    assert_never(operation)
 
-            if operation != "skipped":
+            if applied:
                 operations.append(operation)
 
         out.append(token)

@@ -167,8 +167,11 @@ Brewfile                     Homebrew-managed check.sh tools — the whole toolc
 evals/                       offline decision support — the repo's only Python, none of it
                              shipped (see evals/README.md)
   dictation-prompt/          DSPy harness for tuning the dictation API's cleanup instruction;
-                             check.sh lints (ruff), format-checks (ruff format), and tests it
-  ruff.toml                  ruff config for the above — the repo's only Python config
+                             check.sh lints (ruff), format-checks (ruff format), type-checks
+                             (mypy), and tests it at 100% line + branch coverage
+  pyproject.toml, uv.lock    the evals' ruff / mypy / pytest / coverage.py config and their
+                             locked dev tools (uv sync --project evals --locked → evals/.venv)
+                             — the repo's only Python config
 .github/workflows/           check.yml (the gate, macos-26; its macos job runs check.sh, ui-tests the
                              UI suite and leak scan; its ios-build job builds the engine for the
                              iOS simulator, then the iPhone app with its keyboard, and runs
@@ -236,8 +239,10 @@ the two checks that genuinely need the build products stay behind them (step 12)
    helper or fixture). jscpd is pinned by the lockfile in `tools/jscpd` (`npm ci --prefix
 tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer decides what
    counts as a clone.
-5. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
-   `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
+5. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, `mypy`,
+   and pytest under coverage.py, gated at 100% line + branch coverage (`program.py`, the DSPy
+   adapter, excepted). Config in `evals/pyproject.toml`; the tools are locked in `evals/uv.lock`
+   (`uv sync --project evals --locked`). The suite needs no
    network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
    it is absent. Followed by **`release.test.sh`**, pure-bash unit tests for the release
    orchestrator's decision helpers.
@@ -301,13 +306,13 @@ there. In the sibling
 passes run the same tests. `codeql.yml`'s Swift analysis builds the iPhone app as well as the Mac
 one, so both are in its database. `check` fails unless `lint`, `macos`, `ui-tests` and all of
 them are green: `lint` may be skipped only for a docs-only change, and the others (with the
-ungated `compile` and `format-patch`) also for an evals-only one — nothing but Python, Markdown and `ruff.toml` under `evals/`, which no Swift build or
+ungated `compile` and `format-patch`) also for an evals-only one — nothing but files under `evals/` other than JSON, which no Swift build or
 test reads (`evals/**/*.json` still counts as Swift: `PlannerEvalTests` reads
 `evals/command-planner/cases.json`).
 
 - **`lint`** — `scripts/check.sh --lint-only`: every read-only check `check` runs before the build
   (swift-format, `swiftlint lint`, jscpd, design-sync, the invariants, the workflow, shell and
-  Markdown linters, ruff, pytest), then stop. `check` runs the same checks first but by design keeps
+  Markdown linters, ruff, mypy, pytest + coverage), then stop. `check` runs the same checks first but by design keeps
   going through the build, the tests, the UI suite and periphery before reporting, so in the month
   before this job existed every red `check` run was one of these checks surfacing 30–39 minutes in;
   `lint` reports them in minutes. `check` still runs them, so it remains a complete answer on its
@@ -437,7 +442,8 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
   (dependencies, sound catalog, site, shell portability), then actionlint, zizmor, prettier, xmllint,
-  markdownlint, shellcheck, shfmt, jscpd, ruff (lint + format check), pytest over the evals, and
+  markdownlint, shellcheck, shfmt, jscpd, ruff (lint + format check), mypy and pytest (with its
+  100% coverage gate) over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
   It skips the entire Swift side, and its closing line says so. **Run it before every push, Swift
