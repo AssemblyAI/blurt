@@ -23,7 +23,13 @@ struct StreamingPCMPlayerTests {
       player.enqueue(silence(seconds: 0.05))
       let start = ContinuousClock.now
       await player.drain()
-      #expect(ContinuousClock.now - start < .seconds(3), "rate \(rate)")
+      // With no output device the drain waits out its whole deadline (the
+      // 0.05 s at a sane rate, plus its slack), so the bound is that plus room
+      // for the scheduler, as in `drainIsBounded`: a flat 3 s left under a
+      // second of it, and a loaded runner overshot (3.39 s). A rate that
+      // trapped the drain would never finish at all.
+      let bound = Duration.seconds(0.05) + StreamingPCMPlayer.drainSlack + .seconds(2)
+      #expect(ContinuousClock.now - start < bound, "rate \(rate)")
     }
   }
 

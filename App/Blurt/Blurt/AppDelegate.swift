@@ -301,6 +301,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     pendingFileURLs = []
   }
 
+  /// Quitting — ⌘Q, logging out, a Sparkle relaunch — exits without running
+  /// `deinit` or resuming any task, so a recording in progress and the
+  /// debounced history save are finished here, before the process ends.
+  func applicationWillTerminate(_ notification: Notification) {
+    coordinator?.transcripts.prepareForExit()
+  }
+
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     // Blurt keeps running with the overlay pill after its window is closed;
     // the window reopens via ⌘, / the Dock.

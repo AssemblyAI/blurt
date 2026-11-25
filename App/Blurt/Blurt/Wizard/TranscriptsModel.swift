@@ -55,7 +55,8 @@ final class TranscriptsModel {
 
   let transcriber: FileTranscriber
   private let llm: TranscriptLLM
-  private let store: TranscriptStore
+  /// Internal, like `pendingSave`, `isLoaded` and `saveQueue`: `prepareForExit` reads them.
+  let store: TranscriptStore
   /// The key the model's own checks read — the same one the transcriber and
   /// the LLM are given, so a test's in-memory key is the only one consulted.
   let apiKey: @Sendable () -> String?
@@ -86,11 +87,12 @@ final class TranscriptsModel {
   /// abandoned one can't land on its successor (both may be "Recording …").
   @ObservationIgnored private var currentRun = UUID()
   @ObservationIgnored private var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
-  @ObservationIgnored private var pendingSave: Task<Void, Never>?
-  /// Whether the saved history has been read in. Until it has, nothing is
-  /// written: a save then would replace the file with only this session's
-  /// entries. The load's merge saves whatever arrived before it.
-  @ObservationIgnored private var isLoaded = false
+  @ObservationIgnored private(set) var pendingSave: Task<Void, Never>?
+  /// History writes, one at a time and in order, so an older list never lands last.
+  let saveQueue = DispatchQueue(label: HostIdentity.current.queueLabel("TranscriptStore"))
+  /// Whether the saved history has been read in. Until it has, nothing is written: a save
+  /// then would replace the file with this session's entries. The load's merge saves them.
+  @ObservationIgnored private(set) var isLoaded = false
 
   init(
     apiKey: @escaping @Sendable () -> String? = { APIKeyStore.current },
@@ -337,10 +339,10 @@ final class TranscriptsModel {
     pendingSave?.cancel()
     guard isLoaded else { return }
     let snapshot = history
-    pendingSave = Task { [store] in
+    pendingSave = Task { [store, saveQueue] in
       try? await Task.sleep(for: .milliseconds(300))
       guard !Task.isCancelled else { return }
-      await Task.detached(priority: .utility) { try? store.save(snapshot) }.value
+      saveQueue.async { try? store.save(snapshot) }
     }
   }
 }
