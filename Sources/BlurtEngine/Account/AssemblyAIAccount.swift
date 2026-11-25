@@ -1,6 +1,7 @@
-import AssemblyAI
-import Foundation
-import Observation
+public import AssemblyAI
+public import Foundation
+public import Observation
+import os
 
 /// "Sign in with AssemblyAI": the alternative to pasting a key. The member signs
 /// in and approves Blurt on AssemblyAI's consent page; Blurt trades the access

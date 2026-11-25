@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// The dictation upload's multipart envelope: boundaries, part headers, the
 /// `audio.pcm` filename, CRLF placement.

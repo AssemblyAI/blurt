@@ -1,5 +1,5 @@
 import AssemblyAI
-import Foundation
+public import Foundation
 import os
 
 /// Append-only JSONL log of completed transcripts at
@@ -88,7 +88,7 @@ public enum DictationLog {
     /// gave them. `DictationLogEntryTests` asserts every field, so a property
     /// added above and forgotten here fails there rather than quietly vanishing
     /// from the log.
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
       var container = encoder.container(keyedBy: CodingKeys.self)
       try container.encode(transcript, forKey: .transcript)
       try container.encode(ts, forKey: .ts)

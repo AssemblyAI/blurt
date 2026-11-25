@@ -61,7 +61,7 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
       mBytesPerPacket: 2, mFramesPerPacket: 1, mBytesPerFrame: 2,
       mChannelsPerFrame: 1, mBitsPerChannel: 16, mReserved: 0)
     var format: CMAudioFormatDescription?
-    CMAudioFormatDescriptionCreate(
+    unsafe CMAudioFormatDescriptionCreate(
       allocator: kCFAllocatorDefault, asbd: &description, layoutSize: 0, layout: nil,
       magicCookieSize: 0, magicCookie: nil, extensions: nil, formatDescriptionOut: &format)
     self.format = format
@@ -162,21 +162,21 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     let length = frames * 2
     var block: CMBlockBuffer?
     guard
-      CMBlockBufferCreateWithMemoryBlock(
+      unsafe CMBlockBufferCreateWithMemoryBlock(
         allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: length,
         blockAllocator: kCFAllocatorDefault, customBlockSource: nil, offsetToData: 0,
         dataLength: length, flags: kCMBlockBufferAssureMemoryNowFlag, blockBufferOut: &block) == noErr,
       let block
     else { return nil }
-    let copied = pcm.withUnsafeBytes { raw -> OSStatus in
+    let copied = unsafe pcm.withUnsafeBytes { raw -> OSStatus in
       guard let base = raw.baseAddress else { return -1 }
-      return CMBlockBufferReplaceDataBytes(
+      return unsafe CMBlockBufferReplaceDataBytes(
         with: base, blockBuffer: block, offsetIntoDestination: 0, dataLength: length)
     }
     guard copied == noErr else { return nil }
     var buffer: CMSampleBuffer?
     guard
-      CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+      unsafe CMAudioSampleBufferCreateReadyWithPacketDescriptions(
         allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: format,
         sampleCount: frames, presentationTimeStamp: time, packetDescriptions: nil,
         sampleBufferOut: &buffer) == noErr

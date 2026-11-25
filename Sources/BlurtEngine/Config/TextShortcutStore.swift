@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Storage for the user's text shortcuts (`TextShortcut`),
 /// as one JSON list in `UserDefaults` — Blurt's key and Blurt's limits.

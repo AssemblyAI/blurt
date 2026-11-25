@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// One saved transcript — a dictation, a read-aloud clip, a file the user
 /// brought, or a recording made with Record — as the main window's Recent list

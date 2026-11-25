@@ -1,5 +1,5 @@
-import AssemblyAI
-import Observation
+public import AssemblyAI
+public import Observation
 
 /// A shell's API-key surface, shared by the Mac app and the iPhone app (one copy
 /// each, kept in step by hand, until both were moved here). Owns the storage seam

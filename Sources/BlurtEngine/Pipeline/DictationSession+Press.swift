@@ -1,4 +1,5 @@
 import Dispatch
+import os
 
 // The press half of the pipeline — everything between the key going down and
 // `.recording` being claimed, including the mic bring-up that `.connecting`

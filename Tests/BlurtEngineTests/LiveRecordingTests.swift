@@ -19,17 +19,17 @@ struct LiveRecordingTests {
     var mic: [Float] = [0.25, 0.5]  // mono
     var system: [Float] = [0.5, 0.5, 1, 1]  // stereo, interleaved: two frames
     let list = AudioBufferList.allocate(maximumBuffers: 2)
-    defer { free(list.unsafeMutablePointer) }
-    mic.withUnsafeMutableBytes { micBytes in
-      system.withUnsafeMutableBytes { systemBytes in
-        list[0] = AudioBuffer(
+    defer { unsafe free(list.unsafeMutablePointer) }
+    unsafe mic.withUnsafeMutableBytes { micBytes in
+      unsafe system.withUnsafeMutableBytes { systemBytes in
+        unsafe list[0] = unsafe AudioBuffer(
           mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress)
-        list[1] = AudioBuffer(
+        unsafe list[1] = unsafe AudioBuffer(
           mNumberChannels: 2, mDataByteSize: UInt32(systemBytes.count), mData: systemBytes.baseAddress)
         let out = UnsafeMutablePointer<Float>.allocate(capacity: 8)
-        defer { out.deallocate() }
-        let frames = MixWriter.mix(list, into: out, capacity: 8)
-        #expect(Array(UnsafeBufferPointer(start: out, count: frames)) == [0.75, 1])
+        defer { unsafe out.deallocate() }
+        let frames = unsafe MixWriter.mix(list, into: out, capacity: 8)
+        unsafe #expect(Array(UnsafeBufferPointer(start: out, count: frames)) == [0.75, 1])
       }
     }
   }
@@ -38,12 +38,13 @@ struct LiveRecordingTests {
   func mixCapacity() {
     var mic: [Float] = [0.1, 0.2, 0.3, 0.4]
     let list = AudioBufferList.allocate(maximumBuffers: 1)
-    defer { free(list.unsafeMutablePointer) }
-    mic.withUnsafeMutableBytes { bytes in
-      list[0] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+    defer { unsafe free(list.unsafeMutablePointer) }
+    unsafe mic.withUnsafeMutableBytes { bytes in
+      unsafe list[0] = unsafe AudioBuffer(
+        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
       let out = UnsafeMutablePointer<Float>.allocate(capacity: 2)
-      defer { out.deallocate() }
-      #expect(MixWriter.mix(list, into: out, capacity: 2) == 2)
+      defer { unsafe out.deallocate() }
+      unsafe #expect(MixWriter.mix(list, into: out, capacity: 2) == 2)
     }
   }
 
@@ -61,13 +62,15 @@ struct LiveRecordingTests {
     var mic = [Float](repeating: 0.2, count: 480)
     var tap = [Float](repeating: 0.1, count: 960)
     let list = AudioBufferList.allocate(maximumBuffers: 2)
-    defer { free(list.unsafeMutablePointer) }
+    defer { unsafe free(list.unsafeMutablePointer) }
     for _ in 0..<100 {
-      mic.withUnsafeMutableBytes { micBytes in
-        tap.withUnsafeMutableBytes { tapBytes in
-          list[0] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress)
-          list[1] = AudioBuffer(mNumberChannels: 2, mDataByteSize: UInt32(tapBytes.count), mData: tapBytes.baseAddress)
-          writer.write(UnsafePointer(list.unsafeMutablePointer))
+      unsafe mic.withUnsafeMutableBytes { micBytes in
+        unsafe tap.withUnsafeMutableBytes { tapBytes in
+          unsafe list[0] = unsafe AudioBuffer(
+            mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress)
+          unsafe list[1] = unsafe AudioBuffer(
+            mNumberChannels: 2, mDataByteSize: UInt32(tapBytes.count), mData: tapBytes.baseAddress)
+          unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
         }
       }
     }
@@ -92,10 +95,11 @@ struct LiveRecordingTests {
     writer.close()
     var mic = [Float](repeating: 0.2, count: 160)
     let list = AudioBufferList.allocate(maximumBuffers: 1)
-    defer { free(list.unsafeMutablePointer) }
-    mic.withUnsafeMutableBytes { bytes in
-      list[0] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
-      writer.write(UnsafePointer(list.unsafeMutablePointer))
+    defer { unsafe free(list.unsafeMutablePointer) }
+    unsafe mic.withUnsafeMutableBytes { bytes in
+      unsafe list[0] = unsafe AudioBuffer(
+        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+      unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
     }
     #expect(emitted.withLock { $0 } == 0)
   }

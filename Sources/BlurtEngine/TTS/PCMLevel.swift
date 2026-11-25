@@ -11,12 +11,12 @@ enum PCMLevel {
   static func levels(of pcm: Data, windowFrames: Int) -> [Float] {
     let frames = pcm.count / 2
     guard frames > 0, windowFrames > 0 else { return [] }
-    return pcm.withUnsafeBytes { raw in
+    return unsafe pcm.withUnsafeBytes { raw in
       stride(from: 0, to: frames, by: windowFrames).map { start in
         let end = min(start + windowFrames, frames)
         var sum: Double = 0
         for index in start..<end {
-          let bits = raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self)
+          let bits = unsafe raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self)
           let sample = Double(Int16(littleEndian: bits)) / Double(Int16.max)
           sum += sample * sample
         }

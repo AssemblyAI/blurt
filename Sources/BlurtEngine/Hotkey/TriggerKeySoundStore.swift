@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Persists each trigger key's own start/stop cue voice, as set in the Sounds
 /// tab: keycode → `SoundPack.id`, one JSON object (`TriggerKeyMap`).

@@ -1,4 +1,5 @@
 import AssemblyAI
+import os
 
 /// Which of a response's two transcripts is pasted — the enhanced-transcripts
 /// switch, and the one place a rewrite that is not a rewrite of the speech

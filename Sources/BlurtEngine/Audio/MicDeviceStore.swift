@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Which input device dictation and the Record button's recorder
 /// (`SystemAudioRecorder`) record from: the system's default input (the

@@ -121,7 +121,7 @@
       AXUIElementSetMessagingTimeout(system, axMessagingTimeoutSeconds)
       var focusedRef: CFTypeRef?
       guard
-        AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+        unsafe AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
           == .success,
         let focusedRef
       else { return nil }
@@ -162,7 +162,7 @@
       // swiftlint:disable:next force_cast
       let value = ref as! AXValue
       var decoded = empty
-      guard AXValueGetValue(value, type, &decoded) else { return nil }
+      guard unsafe AXValueGetValue(value, type, &decoded) else { return nil }
       return decoded
     }
 
@@ -172,7 +172,7 @@
     private nonisolated static func selectedTextRange(of element: AXUIElement) -> CFRange? {
       var rangeRef: CFTypeRef?
       guard
-        AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
+        unsafe AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
           == .success,
         let rangeRef
       else { return nil }
@@ -185,10 +185,10 @@
     /// which differ only in the range they request and how they post-process it.
     private nonisolated static func string(of element: AXUIElement, in range: CFRange) -> String? {
       var range = range
-      guard let axRange = AXValueCreate(.cfRange, &range) else { return nil }
+      guard let axRange = unsafe AXValueCreate(.cfRange, &range) else { return nil }
       var sliceRef: CFTypeRef?
       guard
-        AXUIElementCopyParameterizedAttributeValue(
+        unsafe AXUIElementCopyParameterizedAttributeValue(
           element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
           == .success,
         let slice = sliceRef as? String
@@ -284,7 +284,7 @@
     /// destroys the trailing-whitespace signal `withLeadingSeparator` reads).
     private nonisolated static func rawStringValue(_ element: AXUIElement, _ attribute: String) -> String? {
       var ref: CFTypeRef?
-      guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
+      guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
         let value = ref as? String
       else { return nil }
       return value
@@ -293,7 +293,7 @@
     /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
     nonisolated static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
       var ref: CFTypeRef?
-      guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
+      guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
         let ref
       else { return nil }
       return axElement(ref)

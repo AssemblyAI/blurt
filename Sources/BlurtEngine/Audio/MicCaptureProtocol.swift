@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public protocol MicCaptureProtocol: Sendable {
   /// Begin capturing 16 kHz mono 16-bit PCM. Throws on permission/device failure.

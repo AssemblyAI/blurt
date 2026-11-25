@@ -37,11 +37,11 @@
       var address = AudioRoute.globalAddress(kAudioHardwarePropertyProcessObjectList)
       let system = AudioRoute.systemObject
       var dataSize: UInt32 = 0
-      guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &dataSize) == noErr, dataSize > 0 else {
+      guard unsafe AudioObjectGetPropertyDataSize(system, &address, 0, nil, &dataSize) == noErr, dataSize > 0 else {
         return []
       }
       var objects = [AudioObjectID](repeating: 0, count: Int(dataSize) / MemoryLayout<AudioObjectID>.size)
-      guard AudioObjectGetPropertyData(system, &address, 0, nil, &dataSize, &objects) == noErr else { return [] }
+      guard unsafe AudioObjectGetPropertyData(system, &address, 0, nil, &dataSize, &objects) == noErr else { return [] }
       return objects
     }
 
@@ -52,8 +52,8 @@
 
     private static func bundleID(of process: AudioObjectID) -> String? {
       var bundleID: Unmanaged<CFString>?
-      let status = AudioRoute.read(kAudioProcessPropertyBundleID, of: process, into: &bundleID)
-      guard status == noErr, let string = bundleID?.takeRetainedValue() as String?, !string.isEmpty else {
+      let status = unsafe AudioRoute.read(kAudioProcessPropertyBundleID, of: process, into: &bundleID)
+      guard status == noErr, let string = unsafe bundleID?.takeRetainedValue() as String?, !string.isEmpty else {
         return nil
       }
       return string

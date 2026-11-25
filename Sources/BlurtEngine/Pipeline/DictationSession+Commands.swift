@@ -1,3 +1,5 @@
+import Synchronization
+
 extension DictationSession {
   /// One host-initiated pipeline command, for `submit(_:)`. Mirrors the four
   /// async methods one-to-one; see each method's doc for semantics.

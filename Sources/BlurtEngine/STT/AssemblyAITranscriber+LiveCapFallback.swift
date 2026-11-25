@@ -1,5 +1,6 @@
 import AssemblyAI
 import Foundation
+import os
 
 // The over-cap fallback: what happens when the streaming route refuses a
 // recording because it ran past that route's 120 s cap. Split from

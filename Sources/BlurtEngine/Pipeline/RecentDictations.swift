@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// The in-memory ring of the most recent dictations. A pure value type — owned by
 /// `DictationSession` (see its `recentDictations`), pushed to the app through

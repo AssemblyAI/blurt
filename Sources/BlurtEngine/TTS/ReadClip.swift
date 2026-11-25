@@ -1,5 +1,5 @@
 #if os(macOS)
-  import Foundation
+  public import Foundation
   import Synchronization
 
   /// One finished read: what was read aloud, the audio as it played, and —
@@ -106,7 +106,7 @@
     }
 
     private static func littleEndian<Value: FixedWidthInteger>(_ value: Value) -> Data {
-      withUnsafeBytes(of: value.littleEndian) { Data($0) }
+      unsafe withUnsafeBytes(of: value.littleEndian) { unsafe Data($0) }
     }
   }
 #endif

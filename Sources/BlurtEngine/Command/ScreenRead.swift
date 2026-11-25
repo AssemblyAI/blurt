@@ -1,4 +1,5 @@
 import CoreFoundation
+import CoreGraphics
 
 /// What a screen read needs of one element of a window's tree: the
 /// Accessibility node it reads live (`AXRead.Node`), or one recorded from a

@@ -178,7 +178,7 @@ struct SelectionSpeakerTests {
 
   /// Starts a read or answer whose gateway call answers only after the stop,
   /// stops it mid-call, and checks it throws a cancellation and plays nothing.
-  private func expectStoppedAsGatewayAnswers(_ start: (SelectionSpeaker) -> Task<Void, Error>) async {
+  private func expectStoppedAsGatewayAnswers(_ start: (SelectionSpeaker) -> Task<Void, any Error>) async {
     let sink = RecordingSink()
     let transport = FakeSpeechTransport()
     let gateway = LateAnsweringTransport()
@@ -239,7 +239,7 @@ private final class HangingSpeechTransport: SpeechTransport, Sendable {
 
   var asked: Bool { state.withLock { $0 } }
 
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
+  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
     state.withLock { $0 = true }
     while true {
       try await Task.sleep(for: .milliseconds(5))

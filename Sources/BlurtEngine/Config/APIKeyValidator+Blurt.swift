@@ -1,5 +1,5 @@
-import AssemblyAI
-import Foundation
+public import AssemblyAI
+public import Foundation
 
 extension APIKeyValidator {
   /// AssemblyAI's key check as Blurt sends it: with `UserAgent.current`, the same

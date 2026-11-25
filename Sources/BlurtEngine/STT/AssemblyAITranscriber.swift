@@ -1,5 +1,5 @@
-import AssemblyAI
-import Foundation
+public import AssemblyAI
+public import Foundation
 import os
 
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.

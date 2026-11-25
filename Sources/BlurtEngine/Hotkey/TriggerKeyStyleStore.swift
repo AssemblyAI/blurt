@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Persists what each trigger key is set to (`TriggerKeyChoice`) — dictate
 /// with a style, read the selection aloud, ask about it, or nothing — as set in
