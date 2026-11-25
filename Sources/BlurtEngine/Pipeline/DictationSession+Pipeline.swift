@@ -65,7 +65,13 @@ extension DictationSession {
   /// Takes no audio: the recording was uploaded as it was captured, so the
   /// recorded blob's only remaining job — the too-short-clip check — belongs to
   /// `performRelease`, which can abandon the request without racing it.
-  func runTranscribeInject() async {
+  ///
+  /// `press` is the press this dictation belongs to, taken by `performRelease`
+  /// when it spawns this task, and the only press context anything below reads:
+  /// the paste separator, the remember decision, the transcript log and the
+  /// failure log. Never `pressContext`/`capturedContext`, which a cancel during
+  /// the paste frees a later press to replace while this task is still running.
+  func runTranscribeInject(press: PressContext?) async {
     // Times the full post-release hot path — dictation round trip plus the paste
     // (including the clipboard settle) — across every exit (empty transcript,
     // failure, cancel, or a completed paste).
@@ -73,12 +79,12 @@ extension DictationSession {
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
     // No context step here any more: `startUpload` resolved the press-time AX
     // read before it opened the request, because the streaming route needs the
-    // `config` part first. So `capturedContext` — which the paste separator and
-    // the log below both read — was set while the user was still speaking, and
-    // the release path goes straight to the transcript. This is the second half
-    // of the latency win: the old shape spent up to `contextWaitBudget` here,
-    // with the user watching the pill.
-    guard let text = await awaitUpload() else {
+    // `config` part first. So `press` — which the paste separator and the log
+    // below both read — was settled while the user was still speaking, and the
+    // release path goes straight to the transcript. This is the second half of
+    // the latency win: the old shape spent up to `contextWaitBudget` here, with
+    // the user watching the pill.
+    guard let text = await awaitUpload(press: press) else {
       return
     }
 
@@ -93,17 +99,12 @@ extension DictationSession {
     // `RecentDictations.Entry.spoken`).
     let expanded = TextShortcutExpander.expand(text, using: textShortcutsProvider())
     guard let spoken = text.trimmedNonEmpty(), let trimmed = expanded.trimmedNonEmpty() else {
-      setPhase(.idle)
+      setPhase(.idle, for: press)
       return
     }
     // Read once for every ending below: the remember decision, what the
     // developer-mode log may keep, and how the paste leaves the words on the
     // clipboard if it can't land (see `TargetSecurity`).
-    //
-    // This press's own context, held for the log after the paste: a cancel
-    // during the paste ends the phase without waiting for this task, so a new
-    // press can install its `pressContext` before the log line runs.
-    let press = pressContext
     let security = press?.targetSecurity ?? .unknown
     // What the developer-mode log may keep is decided here, before the paste,
     // never from whichever press is current by the time it is written: a
@@ -126,7 +127,7 @@ extension DictationSession {
     // with and this text was never typed anywhere.
     if handsBackTranscript {
       seams.logTranscript(loggable, press?.resolved, .handedBack(spoken))
-      setPhase(.handedBack(spoken))
+      setPhase(.handedBack(spoken), for: press)
       return
     }
     // Remember it as context for the *next* press before handing it on: the ring
@@ -155,7 +156,7 @@ extension DictationSession {
     // just joined, before injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
-    let outcome = await inject(expanded, security: security)
+    let outcome = await inject(expanded, security: security, press: press)
     seams.logTranscript(loggable, press?.resolved, outcome)
   }
 
@@ -177,8 +178,9 @@ extension DictationSession {
   /// precisely so a beachballing frontmost app cannot wedge `release()` or
   /// `cancel()`, and awaiting it on the actor here would hand that back.
   ///
-  /// Nothing is published back afterwards: `capturedContext` reads the same
-  /// `PressContext` this waits on, so the paste separator and the
+  /// Nothing is published back afterwards: the release path reads the same
+  /// `PressContext` this waits on (`performRelease` hands it to
+  /// `runTranscribeInject(press:)`), so the paste separator and the
   /// developer-mode log see the read whether or not the request gets anywhere —
   /// which is what `resolveCapturedContext` used to guarantee from the release
   /// side, and what a stored copy then needed a repair pass to keep true.
@@ -198,8 +200,8 @@ extension DictationSession {
       // didn't, rather than nothing: key terms and the recent turns never needed
       // the AX round trip that just timed out. Only the *request* falls back —
       // `pressKnown` asserts a `targetSecurity: .ordinary` it has no business
-      // asserting, and `capturedContext`, which is where the release path reads
-      // that flag, reads the resolved value and never this one.
+      // asserting, and the release path, which reads that verdict, reads the
+      // press's resolved value and never this one.
       return try await transcriber.transcribe(
         frames: frames,
         sampleRate: SyncSTTLimits.sampleRate,
@@ -221,8 +223,8 @@ extension DictationSession {
   }
 
   /// Waits for the request opened at press. Returns the transcript, or nil if
-  /// it failed (phase set to `.failed`).
-  private func awaitUpload() async -> String? {
+  /// it failed (phase set to `.failed`, logged against `press`).
+  private func awaitUpload(press: PressContext?) async -> String? {
     guard let inFlight = upload else {
       // Reached when a cancel cleared the handle while this task was suspended
       // in the context wait — `setPhase` abandons the upload on any terminal
@@ -237,7 +239,7 @@ extension DictationSession {
       // describes "the user spoke and nothing was uploaded" is invisible
       // otherwise, so it is surfaced rather than silently idled.
       if !Task.isCancelled {
-        setPhase(.failed(.sttFailed(underlying: DictationPipelineError.uploadNeverStarted)))
+        setPhase(.failed(.sttFailed(underlying: DictationPipelineError.uploadNeverStarted)), for: press)
       }
       return nil
     }
@@ -268,15 +270,15 @@ extension DictationSession {
       // nothing rather than a red pill reading "too short to transcribe" — the
       // floor is one policy with two enforcement points, not two behaviours.
       if case TranscriberError.audioTooShort = error {
-        setPhase(.idle)
+        setPhase(.idle, for: press)
         return nil
       }
       if let blurtError = error as? BlurtError {
         // e.g. `.apiKeyMissing` — surface it directly rather than burying it
         // inside `.sttFailed`.
-        setPhase(.failed(blurtError))
+        setPhase(.failed(blurtError), for: press)
       } else {
-        setPhase(.failed(.sttFailed(underlying: error)))
+        setPhase(.failed(.sttFailed(underlying: error)), for: press)
       }
       return nil
     }
@@ -323,18 +325,20 @@ extension DictationSession {
 
   /// The paste, answering how it ended for the log (`DictationLog.Entry.outcome`).
   /// `security` is the verdict the release path read once for this press —
-  /// not `capturedContext?.targetSecurity`, which a read that never landed
-  /// leaves nil and so reads as an ordinary field.
-  private func inject(_ text: String, security: TargetSecurity) async -> PipelinePhase {
-    setPhase(.injecting)
+  /// not `press?.resolved?.targetSecurity`, which a read that never landed
+  /// leaves nil and so reads as an ordinary field. `press` supplies the
+  /// separator's caret context and is whose failure gets logged.
+  private func inject(_ text: String, security: TargetSecurity, press: PressContext?) async -> PipelinePhase {
+    setPhase(.injecting, for: press)
     do {
       // A password field's words are pasted like any others, but if they end
       // up left on the clipboard instead they are left as the secret they are
       // — and so may a field the read couldn't vouch for (`TargetSecurity`).
+      let context = press?.resolved
       try await injector.insert(
         text,
-        after: capturedContext?.priorText,
-        windowTitle: capturedContext?.windowTitle,
+        after: context?.priorText,
+        windowTitle: context?.windowTitle,
         security: security
       )
       // A cancel() that landed in insert's final, non-cancellable stretch
@@ -345,7 +349,7 @@ extension DictationSession {
       }
       // The paste landed — show the quiet "pasted" notice (the mirror of the
       // "copied" notice below) rather than snapping straight back to idle.
-      setPhase(.pasted)
+      setPhase(.pasted, for: press)
       return .pasted
     } catch {
       // A cancel() landed mid-paste: it already set .cancelled (the injector
@@ -356,7 +360,7 @@ extension DictationSession {
         return .cancelled
       }
       let phase = Self.pasteOutcome(error)
-      setPhase(phase)
+      setPhase(phase, for: press)
       return phase
     }
   }

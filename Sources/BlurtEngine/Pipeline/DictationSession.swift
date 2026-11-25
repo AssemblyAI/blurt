@@ -87,7 +87,8 @@ public actor DictationSession {
   /// Internal so `+Pipeline` reaches it across the file split.
   let seams: Seams
 
-  /// The press-time capture, for `inject`'s separator decision and the log.
+  /// The current press's capture, for the press side's failure log. The
+  /// pipeline reads its own press instead (`runTranscribeInject(press:)`).
   ///
   /// Derived, not stored: `PressContext` already holds exactly one read per
   /// press, so a stored copy could only ever be a cache of it — and was, until
@@ -329,8 +330,11 @@ public actor DictationSession {
       setPhase(.idle)
       return
     }
+    // Which press the pipeline is for is decided once, here: it outlives this
+    // turn, and a later press may replace `pressContext` (`runTranscribeInject`).
+    let press = pressContext
     pipelineTask = Task { [weak self] in
-      await self?.runTranscribeInject()
+      await self?.runTranscribeInject(press: press)
     }
   }
 
