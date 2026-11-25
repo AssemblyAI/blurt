@@ -200,11 +200,10 @@ final class AccessibilityAuditTests: XCTestCase {
   /// Runs `body` at the default text size, then at the largest, and fails
   /// once with every finding from both.
   ///
-  /// `BLURT_AUDIT_TEXT_SIZE` (`default` or `largest`) keeps the run to one of
-  /// the two: CI splits the suite that way across two runners (check.yml's
-  /// ios-audits matrix, through ios-uitest.sh), so every screen is still
-  /// audited at both sizes, and a new test lands on both runners with no list
-  /// to keep. Any other value fails rather than auditing nothing.
+  /// `BLURT_AUDIT_TEXT_SIZE` (`default` or `largest`, through ios-uitest.sh)
+  /// keeps a run to one of the two, for iterating on one size by hand; CI
+  /// audits both, splitting the suite across runners by test instead. Any
+  /// other value fails rather than auditing nothing.
   private func atEachTextSize(_ body: () throws -> Void) throws {
     let selected = ProcessInfo.processInfo.environment["BLURT_AUDIT_TEXT_SIZE"] ?? ""
     let sizes = [([String](), "default text"), (Self.largestTextSize, "largest text")]

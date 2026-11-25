@@ -7,7 +7,7 @@
 #   BLURT_AUDIT_TEXT_SIZE=largest scripts/ios-uitest.sh   # one text size only (default|largest)
 #
 # Arguments (-only-testing: / -skip-testing:) select tests; CI's ios-audits
-# matrix splits the largest-size audits in two this way.
+# matrix splits the audits in two this way.
 #
 # XCUITests that launch the app onto each of its screens and run
 # `performAccessibilityAudit()` there (App/BlurtiOS/BlurtiOSUITests). Unlike the
@@ -58,8 +58,8 @@ if [ -d "$APP" ]; then
 else
   echo "note: no $APP to warm the simulator with; running the audits cold" >&2
 fi
-# BLURT_AUDIT_TEXT_SIZE keeps the run to one of the two text sizes (CI's
-# ios-audits matrix runs one per runner). xcodebuild hands any TEST_RUNNER_-
+# BLURT_AUDIT_TEXT_SIZE keeps the run to one of the two text sizes, for
+# iterating on one by hand. xcodebuild hands any TEST_RUNNER_-
 # prefixed variable to the test runner without the prefix.
 if [ -n "${BLURT_AUDIT_TEXT_SIZE:-}" ]; then
   echo "auditing at the $BLURT_AUDIT_TEXT_SIZE text size only"
