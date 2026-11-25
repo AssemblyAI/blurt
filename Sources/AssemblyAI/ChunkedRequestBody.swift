@@ -173,7 +173,18 @@ final class ChunkedRequestBody: @unchecked Sendable {
     // is still being written. Without it an abandoned dictation would leave the
     // writer feeding a request nobody is waiting for.
     defer { writer.cancel() }
-    let (responseData, response) = try await fetch(streamed, delegate)
+    let responseData: Data
+    let response: URLResponse
+    do {
+      (responseData, response) = try await fetch(streamed, delegate)
+    } catch {
+      // A producer failure closes the pipe on a body that stops mid-part, and
+      // what the transport makes of that — a dropped connection, a timeout — is
+      // a symptom of it, so the producer's error wins here too.
+      writer.cancel()
+      if let failure = producerFailure(in: await writer.result) { throw failure }
+      throw error
+    }
     // Cancel the writer rather than joining it, and do it before asking for its
     // outcome. The response can arrive while the body is still being written —
     // an early 401 or 429 is the whole reason the writer is a sibling task — and
@@ -181,28 +192,32 @@ final class ChunkedRequestBody: @unchecked Sendable {
     // without ever reporting itself writable. Joining first would then park here
     // indefinitely, with the `defer` above not yet reached.
     writer.cancel()
-    let outcome = await writer.result
     // A *producer* failure (the `config` part failing to encode, say) truncates
     // the body, and the server answers with some generic 4xx that doesn't name
-    // the cause — so that error wins. Everything else defers to the response.
-    //
-    // Which means the writer's own two error shapes are explicitly not
-    // preferred, because both are symptoms of the response rather than causes of
-    // it. `CancellationError` is this method cancelling its own writer above.
-    // Every `ChunkedUploadError` from the writer means the pipe went away — the
-    // transport tearing it down on the way to delivering an early status, which
-    // can beat that cancel. Preferring it turned an expired API key into "the
-    // upload connection closed before the recording finished sending", exactly
-    // the substitution this policy exists to prevent. What is left, and does
-    // win, is a producer failure: an unencodable `config` part surfaces as the
-    // `EncodingError` it is rather than as whatever 4xx a truncated body earns.
-    if case .failure(let error) = outcome, !(error is CancellationError),
-      !(error is ChunkedUploadError),
-      let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode)
-    {
-      throw error
-    }
+    // the cause — or, with nothing it can object to in what did arrive, even a
+    // 2xx — so that error wins whatever the status. Everything else defers to
+    // the response.
+    if let failure = producerFailure(in: await writer.result) { throw failure }
     return (responseData, response)
+  }
+
+  /// The writer's error if the *producer* raised it, else nil.
+  ///
+  /// The writer's own two error shapes are explicitly not producer failures,
+  /// because both are symptoms of the response rather than causes of it.
+  /// `CancellationError` is `send` cancelling its own writer. Every
+  /// `ChunkedUploadError` from the writer means the pipe went away — the
+  /// transport tearing it down on the way to delivering an early status, which
+  /// can beat that cancel. Preferring it turned an expired API key into "the
+  /// upload connection closed before the recording finished sending", exactly
+  /// the substitution this policy exists to prevent. What is left, and does
+  /// win, is a producer failure: an unencodable `config` part surfaces as the
+  /// `EncodingError` it is, and a too-short clip as the error its caller turns
+  /// into a quiet no-op, rather than as whatever a truncated body earns.
+  private static func producerFailure(in outcome: Result<Void, any Error>) -> (any Error)? {
+    guard case .failure(let error) = outcome, !(error is CancellationError), !(error is ChunkedUploadError)
+    else { return nil }
+    return error
   }
 
 }

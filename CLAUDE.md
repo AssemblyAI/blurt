@@ -61,9 +61,11 @@ It is no substitute for `swift-format`: indentation, wrapping, and every other r
 real tool, and `swift-format lint --strict` on CI remains the authority.
 
 `check.sh`'s shellcheck step covers `.claude/hooks/*.sh` as well as `scripts/*.sh` — the hooks run on
-every edit, so a quoting bug there corrupts a source file rather than merely failing a build. Both
-globs go in one invocation so `hook-lib.sh` and `release-lib.sh` are in the input set and the
-`source` lines resolve instead of raising SC1091. (`shfmt` still covers only `scripts/*.sh`.)
+every edit, so a quoting bug there corrupts a source file rather than merely failing a build. The
+repo-root `.shellcheckrc` (`external-sources` plus two `source-path`s) resolves the `source` lines
+however shellcheck is run, so linting one script alone is as clean as `check.sh`'s run over all of
+them — no SC1091 for a library that isn't on the command line. (`shfmt` still covers only
+`scripts/*.sh`.)
 
 ## Skills (`.claude/skills/`)
 
