@@ -74,12 +74,12 @@
       }
 
       func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
-        let (stream, continuation) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+        let (stream, feed) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
         guard !isClosed else {
-          continuation.finish()
+          feed.finish()
           return stream
         }
-        self.continuation = continuation
+        continuation = feed
         for _ in 0..<owed { next() }
         owed = 0
         return stream
