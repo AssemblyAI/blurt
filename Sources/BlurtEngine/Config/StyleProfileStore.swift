@@ -90,8 +90,9 @@ public struct StyleProfileStore {
   public static var limit: Int { HostIdentity.current.styleProfileLimit }
 
   /// The most UTF-8 bytes one profile's instructions may hold. The editors'
-  /// counters and the engine's trim (`CleanupInstruction.sendable(appending:)`)
-  /// all read this one constant, so they cannot disagree.
+  /// counters and the provider's trim (`BlurtAssemblyAI`'s
+  /// `CleanupInstruction.sendable(appending:)`) all read this one constant, so
+  /// they cannot disagree.
   ///
   /// No longer derived from an API limit: `config.llm_instruction` used to be
   /// capped at 2048 characters, and this was the ~390 bytes of headroom that left

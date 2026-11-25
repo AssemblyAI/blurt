@@ -35,7 +35,7 @@ package nonisolated struct ListeningWindowMachine: Sendable {
   /// `SharedStore.windowMinutes` as Settings last set it (`Event.windowMinutesChanged`):
   /// how long the window stays open after the last word.
   package private(set) var windowMinutes: Int
-  /// `SyncSTTLimits.maxAudioSeconds`: a dictation's start holds the window open
+  /// `RecordingLimits.maxAudioSeconds`: a dictation's start holds the window open
   /// at least this long, so a short window can't end a long dictation partway.
   package let maxAudioSeconds: TimeInterval
   // `state`, `sequence`, `windowUntil` and the three below are set from the

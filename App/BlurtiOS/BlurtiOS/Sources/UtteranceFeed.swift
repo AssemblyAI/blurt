@@ -35,8 +35,8 @@ nonisolated final class UtteranceFeed: Sendable {
   /// budget (`WindowedAudioSource.firstFrameTimeout`).
   static let startGraceSeconds = 3
   /// That second as 16 kHz mono 16-bit PCM.
-  static let silenceBytes = silenceSeconds * SyncSTTLimits.sampleRate * MemoryLayout<Int16>.size
-  static let startGraceBytes = startGraceSeconds * SyncSTTLimits.sampleRate * MemoryLayout<Int16>.size
+  static let silenceBytes = silenceSeconds * RecordingLimits.sampleRate * MemoryLayout<Int16>.size
+  static let startGraceBytes = startGraceSeconds * RecordingLimits.sampleRate * MemoryLayout<Int16>.size
 
   private let state = Mutex(State())
   private let levelsContinuation: AsyncStream<Float>.Continuation

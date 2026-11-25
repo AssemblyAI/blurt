@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The context→prompt contract. `text` reads exactly two fields of the context —
@@ -147,10 +149,10 @@ struct STTPromptTests {
     let prompt = STTPrompt.text(
       context: TranscriptionContext(appName: nil, priorText: nil, recentTranscripts: history)
     )
-    #expect(prompt.unicodeScalars.count <= STTPrompt.characterCap)
+    #expect(prompt.unicodeScalars.count <= DictationPrompt.characterCap)
     // A contiguous newest run, separators and all: the newest entry is last, and no
     // older one was skipped to squeeze a shorter one in behind it.
-    let kept = prompt.components(separatedBy: STTPrompt.turnSeparator)
+    let kept = prompt.components(separatedBy: DictationPrompt.separator)
     #expect(kept.last == history.last)
     #expect(kept == Array(history.suffix(kept.count)))
   }
@@ -166,7 +168,7 @@ struct STTPromptTests {
         appName: nil, priorText: "at the cursor", recentTranscripts: history
       )
     )
-    #expect(prompt.components(separatedBy: STTPrompt.turnSeparator).count == 121)
+    #expect(prompt.components(separatedBy: DictationPrompt.separator).count == 121)
     #expect(prompt.hasSuffix("\nat the cursor"))
   }
 
@@ -179,7 +181,7 @@ struct STTPromptTests {
     let prompt = STTPrompt.text(
       context: TranscriptionContext(appName: nil, priorText: nil, recentTranscripts: history)
     )
-    #expect(prompt.unicodeScalars.count <= STTPrompt.characterCap)
+    #expect(prompt.unicodeScalars.count <= DictationPrompt.characterCap)
   }
 
   @Test("the cap counts scalars, the unit the server counts")
@@ -194,8 +196,8 @@ struct STTPromptTests {
         appName: nil, priorText: String(repeating: family, count: 820)
       )
     )
-    #expect(prompt.unicodeScalars.count <= STTPrompt.characterCap)
-    #expect(prompt.count < STTPrompt.characterCap)  // graphemes alone would have fit
+    #expect(prompt.unicodeScalars.count <= DictationPrompt.characterCap)
+    #expect(prompt.count < DictationPrompt.characterCap)  // graphemes alone would have fit
   }
 
   @Test("a single over-long entry is clipped to the cap, keeping its tail")
@@ -209,9 +211,9 @@ struct STTPromptTests {
     let prompt = STTPrompt.text(
       context: TranscriptionContext(appName: nil, priorText: longPrior)
     )
-    #expect(prompt.unicodeScalars.count == STTPrompt.characterCap)
+    #expect(prompt.unicodeScalars.count == DictationPrompt.characterCap)
     #expect(prompt.hasSuffix("end"))
-    #expect(!prompt.contains(STTPrompt.turnSeparator))
+    #expect(!prompt.contains(DictationPrompt.separator))
   }
 
   @Test("an older entry that doesn't fit is dropped whole, never half-sent")
@@ -219,7 +221,7 @@ struct STTPromptTests {
     // Half a sentence read as continuous text is worse than a shorter prompt: the
     // model would take the truncation for how the speaker actually talks.
     // Sized so the two newer entries fit and this one cannot.
-    let old = String(repeating: "a", count: STTPrompt.characterCap - 6)
+    let old = String(repeating: "a", count: DictationPrompt.characterCap - 6)
     let prompt = STTPrompt.text(
       context: TranscriptionContext(
         appName: nil, priorText: "newest", recentTranscripts: [old, "middle"]

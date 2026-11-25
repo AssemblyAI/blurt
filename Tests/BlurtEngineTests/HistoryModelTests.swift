@@ -110,7 +110,7 @@ struct HistoryModelTests {
     let messages = try #require(body["messages"] as? [[String: String]])
     #expect(messages.first?["content"] == TranscriptLLM.titleInstruction)
     #expect(messages.last?["content"]?.count == TranscriptLLM.titleSourceCharacters)
-    #expect(body["model"] as? String == TranscriptLLM.model)
+    #expect(body["model"] as? String == TranscriptLLM.tier.gatewayModel)
   }
 
   @Test("no key, no title request")

@@ -89,7 +89,7 @@ package nonisolated enum VoiceNotice {
       handshake: Handshake,
       now: Date,
       heldError: PhaseSnapshot? = nil,
-      autoReleaseSeconds: TimeInterval = SyncSTTLimits.autoReleaseSeconds
+      autoReleaseSeconds: TimeInterval = RecordingLimits.autoReleaseSeconds
     ) {
       self.hasFullAccess = hasFullAccess
       self.state = state

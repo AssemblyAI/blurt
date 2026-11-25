@@ -52,7 +52,7 @@
 
     func recordSpoken(_ text: String) { spokenText = text }
 
-    func recordSpokenStyle(_ style: ReadAloudStyle) { spokenStyle = "\(style.voiceID) @ \(style.rate)" }
+    func recordSpokenStyle(_ style: ReadAloudStyle) { spokenStyle = "\(style.voiceID ?? "default") @ \(style.rate)" }
     func recordPlanned(_ command: String) { plannedCommand = command }
     func recordPerformed(_ step: String) { performedSteps.append(step) }
 

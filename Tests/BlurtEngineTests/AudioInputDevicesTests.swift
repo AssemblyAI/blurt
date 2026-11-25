@@ -194,7 +194,7 @@
       let byteCount = recorder.stopAndReadByteCount()
       #expect(byteCount > 0, "half a second of capture should deliver samples")
       #expect(
-        byteCount.isMultiple(of: SyncSTTLimits.bytesPerSample), "the capture must be whole S16LE samples")
+        byteCount.isMultiple(of: RecordingLimits.bytesPerSample), "the capture must be whole S16LE samples")
     }
   }
 #endif

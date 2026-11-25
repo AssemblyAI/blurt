@@ -45,6 +45,15 @@ struct AssemblyAISpeechSynthesizerTests {
     #expect(try body(#require(transport.requests.first))["voice_id"] as? String == "aai-titus")
   }
 
+  @Test("no voice, or one the service doesn't list, is sent as the default voice", arguments: [nil, "aai-gone"])
+  func defaultVoice(voiceID: String?) async throws {
+    let transport = FakeSpeechTransport { _ in (200, [Data([1, 0])]) }
+    var chunks = 0
+    for try await _ in synthesizer(transport).speech(for: "Read this.", voiceID: voiceID) { chunks += 1 }
+    #expect(chunks == 1)
+    #expect(try body(#require(transport.requests.first))["voice_id"] as? String == "aai-jane")
+  }
+
   @Test("a sample split across network reads is carried over whole")
   func carriesOddBytes() async throws {
     let transport = FakeSpeechTransport { _ in (200, [Data([1]), Data([0, 2, 0, 3]), Data([0])]) }

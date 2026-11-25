@@ -19,12 +19,12 @@ import Foundation
 /// know") trips the same test and costs that utterance its cleanup, nothing
 /// more. The match is on whole words: a reply whose letters merely sit inside
 /// an instruction word ("Done." in "abandoned") is speech.
-package enum RewriteGrounding {
+enum RewriteGrounding {
   /// An instruction sentence shorter than this, normalized, is something a
   /// person says ("No emojis") and is not held against a rewrite.
   static let sentenceFloor = 12
 
-  package static func isSpeech(_ rewrite: String, instruction: String?) -> Bool {
+  static func isSpeech(_ rewrite: String, instruction: String?) -> Bool {
     let words = normalized(rewrite)
     guard !words.isEmpty else {
       return false

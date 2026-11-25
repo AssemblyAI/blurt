@@ -52,7 +52,7 @@ extension KeyboardModel {
       guard let since = current.recordingSince else {
         return
       }
-      let countdownFrom = since.addingTimeInterval(SyncSTTLimits.autoReleaseSeconds - VoiceNotice.countdownWindow)
+      let countdownFrom = since.addingTimeInterval(RecordingLimits.autoReleaseSeconds - VoiceNotice.countdownWindow)
       noticeClock = Task { [weak self] in
         guard let self else {
           return

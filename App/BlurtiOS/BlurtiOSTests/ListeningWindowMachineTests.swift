@@ -15,7 +15,7 @@ struct ListeningWindowMachineTests {
   let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
   /// The setting's default, shorter than the longest dictation so the floor shows.
   let minutes = 15
-  let maxAudio = SyncSTTLimits.maxAudioSeconds
+  let maxAudio = RecordingLimits.maxAudioSeconds
   let held = Machine.State.open(1, idle: .held, utterance: false)
   let paused = Machine.State.interrupted(1, reason: .interrupted, resumable: true)
   let standDown = Effect.deactivateSession(skipIfInterrupted: false)

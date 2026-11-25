@@ -122,11 +122,13 @@ extension DictationSession {
       case .ordinary:
         text
       }
+    // The prompt the request carried, as the transcriber reports it, for the log.
+    let sentPrompt = transcriber.contextPrompt(for: press?.resolved)
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.
     if handsBackTranscript {
-      seams.logTranscript(loggable, press?.resolved, .handedBack(spoken))
+      seams.logTranscript(loggable, press?.resolved, .handedBack(spoken), sentPrompt)
       setPhase(.handedBack(spoken), for: press)
       return
     }
@@ -157,7 +159,7 @@ extension DictationSession {
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded, security: security, press: press)
-    seams.logTranscript(loggable, press?.resolved, outcome)
+    seams.logTranscript(loggable, press?.resolved, outcome, sentPrompt)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
@@ -187,7 +189,7 @@ extension DictationSession {
   func startUpload(frames: AsyncStream<Data>) {
     // Lifted out of the actor so the task body captures Sendable values rather
     // than isolated state, the same move `performPress` makes for `transcriber`.
-    // `SyncSTTLimits.sampleRate` needs no such hoist — it is a static on an
+    // `RecordingLimits.sampleRate` needs no such hoist — it is a static on an
     // enum, and neither does `contextWaitBudget`.
     let transcriber = transcriber
     let press = pressContext
@@ -204,7 +206,7 @@ extension DictationSession {
       // press's resolved value and never this one.
       return try await transcriber.transcribe(
         frames: frames,
-        sampleRate: SyncSTTLimits.sampleRate,
+        sampleRate: RecordingLimits.sampleRate,
         context: resolved ?? press?.pressKnown
       )
     }
@@ -276,7 +278,7 @@ extension DictationSession {
       if Task.isCancelled {
         return nil
       }
-      // The producer refused to close a body below `SyncSTTLimits.minPCMBytes`.
+      // The producer refused to close a body below `RecordingLimits.minPCMBytes`.
       // `performRelease` normally catches that first and idles quietly; when the
       // producer gets there first instead, the outcome has to be the same
       // nothing rather than a red pill reading "too short to transcribe" — the

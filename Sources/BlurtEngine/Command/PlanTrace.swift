@@ -29,13 +29,19 @@ public final class PlanTrace: Sendable {
     // Nothing to set up: the snapshot starts empty and the planner fills it.
   }
 
-  func record(prompt: String, model: String, promptVersion: String) {
+  func record(prompt: String, promptVersion: String) {
     state.withLock { snapshot in
       snapshot.prompt = prompt
-      snapshot.model = model
       snapshot.promptVersion = promptVersion
     }
   }
 
-  func record(reply: String) { state.withLock { $0.replies.append(reply) } }
+  /// A reply, and the model the provider says wrote it: the engine asks for a
+  /// tier (`ChatModelTier`), so only the reply can name the model.
+  func record(reply: String, model: String?) {
+    state.withLock { snapshot in
+      snapshot.replies.append(reply)
+      if let model { snapshot.model = model }
+    }
+  }
 }
