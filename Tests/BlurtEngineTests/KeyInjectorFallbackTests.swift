@@ -28,14 +28,14 @@
       "a cancel landing during the frontmost wait aborts without the copy fallback",
       .timeLimit(.minutes(1)))
     func cancelDuringFrontmostWaitLeavesClipboard() async throws {
-      // The production wait's shape: the cancel lands mid-poll, the sleep throws,
-      // and `poll` reports "not frontmost" — which on its own reads as
-      // `.targetAppLost` and would take the copy fallback (#334).
+      // The production wait's shape: the cancel lands mid-poll and the sleep
+      // throws, so `poll` throws `CancellationError` — which must not read as
+      // `.targetAppLost` and take the copy fallback (#334).
       try await expectCancelMidActivationLeavesClipboard(
         activate: { _ in true },
         waitUntilFrontmost: { cancel in
           cancel()
-          return await KeyInjector.poll(
+          return try await KeyInjector.poll(
             for: .seconds(30),
             every: .milliseconds(10),
             clock: ContinuousClock()  // wall-clock-ok: the production poll's shape is what this tests
@@ -50,7 +50,7 @@
     /// touched — the abort happened before both the paste and the copy fallback.
     private func expectCancelMidActivationLeavesClipboard(
       activate: @escaping @Sendable (_ cancel: @Sendable () -> Void) -> Bool,
-      waitUntilFrontmost: @escaping @Sendable (_ cancel: @Sendable () -> Void) async -> Bool
+      waitUntilFrontmost: @escaping @Sendable (_ cancel: @Sendable () -> Void) async throws -> Bool
     ) async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let posted = ValueBox<Bool>(false)
@@ -60,7 +60,7 @@
         pasteSettleDuration: .zero,
         postPaste: posted.recordingPaste,
         activateTarget: { _ in activate(cancel) },
-        waitForTargetActivation: { _ in await waitUntilFrontmost(cancel) },
+        waitForTargetActivation: { _ in try await waitUntilFrontmost(cancel) },
         clipboard: clip
       )
       await injector.setTarget(try liveTargetFocus())

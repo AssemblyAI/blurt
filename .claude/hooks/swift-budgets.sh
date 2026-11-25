@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# PostToolUse hook: SwiftLint's size limits and the test-clock ratchet, on the
-# file just edited.
+# PostToolUse hook: SwiftLint's size limits, the lint-lite rules
+# (check-swift-lint-lite.sh) and the test-clock ratchet, on the file just edited.
 #
 # Both are checks check.sh --portable already runs, moved to the moment of the
 # edit: a file that crosses file_length or type_body_length is cheaper to split
@@ -30,6 +30,8 @@ findings=""
 case "$rel" in
   Sources/* | Tests/* | App/Blurt/Blurt/* | App/Blurt/BlurtUITests/* | App/BlurtiOS/*)
     findings+="$(bash "$root/scripts/check-swift-size.sh" "$file" 2>&1 | grep '^error\|^ ' || true)"
+    lite="$(bash "$root/scripts/check-swift-lint-lite.sh" "$file" 2>/dev/null || true)"
+    findings+="${lite:+${findings:+$'\n'}$lite}"
     ;;
 esac
 case "$rel" in
