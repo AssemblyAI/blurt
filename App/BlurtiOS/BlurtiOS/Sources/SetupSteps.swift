@@ -46,7 +46,7 @@ struct SetupSteps<KeyStep: View>: View {
             "In Settings, go to Apps › Blurt › Keyboards, turn on Blurt, then Allow Full Access. "
               + "Full Access is what lets the keyboard send your words to Blurt."
           )
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
+          .bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.muted)
           Button("Open Settings") { SystemSettings.open() }.buttonStyle(BrandButtonStyle(role: .secondary))
         }
       }
@@ -74,10 +74,13 @@ private struct SetupRow<Action: View>: View {
   var body: some View {
     HStack(alignment: .top, spacing: DesignTokens.Metrics.appStackGap) {
       Eyebrow(number, color: done ? BlurtBrand.accent : BlurtBrand.muted)
-        .frame(width: DesignTokens.Metrics.appSetupNumberWidth, alignment: .leading)
+        // At least the column's width, and never narrower than the number:
+        // at a large text size "01" would otherwise break over two lines.
+        .fixedSize()
+        .frame(minWidth: DesignTokens.Metrics.appSetupNumberWidth, alignment: .leading)
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
         HStack {
-          Text(title).font(BlurtType.body(DesignTokens.Typography.sizeBody)).foregroundStyle(BlurtBrand.text)
+          Text(title).bodyFont(DesignTokens.Typography.sizeBody).foregroundStyle(BlurtBrand.text)
           if done { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent) }
         }
         if !done { action() }

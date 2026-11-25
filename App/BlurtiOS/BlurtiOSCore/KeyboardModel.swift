@@ -107,6 +107,10 @@ package final class KeyboardModel {
   /// The clock, injected so a test can move it: the handshake's stamps and
   /// deadlines, the gate's stamps and every freshness check read it.
   @ObservationIgnored package var now: () -> Date = { Date() }
+  /// What the model's timers sleep on — the handshake's ticks, the notice's
+  /// dwell and clock, the term's check, the leave's grace and the heartbeat —
+  /// so a test steps them instead of waiting them out. Real time otherwise.
+  @ObservationIgnored package var clock: any Clock<Duration> = ContinuousClock()
   @ObservationIgnored private let clockStart = Date()
   /// How `openApp` asks the application object, once the responder chain
   /// reaches it: a test's capture in place of really opening the app.

@@ -34,7 +34,7 @@ extension View {
     scrollContentBackground(.hidden)
       .page()
       .listRowBackground(BlurtBrand.cardFill)
-      .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+      .bodyFont(DesignTokens.Typography.sizeBody)
       .foregroundStyle(BlurtBrand.text)
       .tint(BlurtBrand.accent)
   }
@@ -53,7 +53,7 @@ package struct Eyebrow: View {
 
   package var body: some View {
     Text(text.uppercased())
-      .font(BlurtType.mono(DesignTokens.Typography.sizeEyebrow, weight: .medium))
+      .monoFont(DesignTokens.Typography.sizeEyebrow, weight: .medium)
       .tracking(DesignTokens.Typography.trackingEyebrow)
       .foregroundStyle(color)
   }
@@ -74,7 +74,7 @@ package struct BrandButtonStyle: ButtonStyle {
 
   package func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(BlurtType.mono(DesignTokens.Typography.sizeCta, weight: .medium))
+      .monoFont(DesignTokens.Typography.sizeCta, weight: .medium)
       .tracking(DesignTokens.Typography.trackingCta)
       .textCase(.uppercase)
       .foregroundStyle(role == .primary ? BlurtBrand.ctaText : BlurtBrand.text)
@@ -109,7 +109,7 @@ extension View {
   /// The brand's input: the page colour inside the card, 8 pt corners, the
   /// card's hairline, the body face.
   package func brandInput() -> some View {
-    font(BlurtType.body(DesignTokens.Typography.sizeBody))
+    bodyFont(DesignTokens.Typography.sizeBody)
       .foregroundStyle(BlurtBrand.text)
       .padding(.horizontal, DesignTokens.Metrics.appChipPadX)
       .padding(.vertical, DesignTokens.Metrics.appInputPadY)
@@ -121,7 +121,7 @@ extension View {
 
   /// The brand's small print under a card: the caption size, muted.
   package func brandFootnote() -> some View {
-    font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+    bodyFont(DesignTokens.Typography.sizeCaption)
       .foregroundStyle(BlurtBrand.muted)
       .fixedSize(horizontal: false, vertical: true)
   }
@@ -158,7 +158,7 @@ package struct Wordmark: View {
         .accessibilityLabel("Blurt")
     } else {
       Text("blurt")
-        .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+        .headingFont(DesignTokens.Typography.sizeTitle)
         .foregroundStyle(tint)
     }
   }

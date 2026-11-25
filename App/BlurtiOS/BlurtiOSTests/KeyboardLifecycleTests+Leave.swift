@@ -24,6 +24,8 @@ extension KeyboardLifecycleTests {
     defer { withExtendedLifetime(observer) {} }
     let rig = KeyboardRig()
     let model = rig.model
+    // The grace never passes here, so only the answer can end presence.
+    model.clock = TestClock()
     model.appeared()
     #expect(await eventually { posts.seen == 1 })
     let dictation = rig.latchRecording()
@@ -53,15 +55,23 @@ extension KeyboardLifecycleTests {
     SharedStore.autoDictate = false
     let rig = KeyboardRig()
     let model = rig.model
+    let clock = TestClock()
+    model.clock = clock
     model.appeared()
     rig.latchRecording()
     model.disappeared()
     // The stop's own deadline tick aside, so the grace alone is what ends it.
     model.cancelTicks()
     #expect(SharedStore.keyboardPresence?.onScreen == true)
-    #expect(!(await eventually(.milliseconds(500)) { SharedStore.keyboardPresence?.onScreen == false }))
-    #expect(
-      await eventually(.seconds(KeyboardModel.leaveGrace + 1)) { SharedStore.keyboardPresence?.onScreen == false })
+    let grace = Duration.seconds(KeyboardModel.leaveGrace)
+    await clock.waitUntilSleeping(for: grace)
+    // Short of the grace, the leave is still waiting on the clock.
+    let short = Duration.milliseconds(100)
+    clock.advance(by: grace - short)
+    #expect(clock.sleepingFor == [short])
+    #expect(SharedStore.keyboardPresence?.onScreen == true)
+    clock.advance(by: short)
+    #expect(await eventually { SharedStore.keyboardPresence?.onScreen == false })
     #expect(model.leaving == nil && SharedStore.keyboardSeenAt == nil)
   }
 

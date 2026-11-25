@@ -178,8 +178,9 @@ extension KeyboardModel {
     termSavedAt = Date()
     termNotice?.cancel()
     let saved = selectedTerm
+    let clock = clock
     termNotice = Task { [weak self] in
-      try? await Task.sleep(for: .seconds(Self.termNoticeDwell))
+      try? await clock.sleep(for: .seconds(Self.termNoticeDwell))
       guard !Task.isCancelled, let self else { return }
       termSavedAt = nil
       if thenDismissChip, let saved, let current = selectedTerm,

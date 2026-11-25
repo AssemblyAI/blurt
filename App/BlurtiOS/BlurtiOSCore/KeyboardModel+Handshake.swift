@@ -134,7 +134,7 @@ extension KeyboardModel {
       let due = sentAt.addingTimeInterval(delay)
       return Task { [weak self] in
         guard let self else { return }
-        try? await Task.sleep(for: .seconds(max(0, due.timeIntervalSince(now()))))
+        try? await clock.sleep(for: .seconds(max(0, due.timeIntervalSince(now()))))
         guard !Task.isCancelled else { return }
         tick()
       }

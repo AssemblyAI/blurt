@@ -67,6 +67,18 @@ however shellcheck is run, so linting one script alone is as clean as `check.sh`
 them — no SC1091 for a library that isn't on the command line. (`shfmt` still covers only
 `scripts/*.sh`.)
 
+## Hookify rules (`.claude/hookify.*.local.md`)
+
+Warn-only rules for the [hookify](https://github.com/anthropics/claude-plugins-official) plugin,
+each from a mistake that cost real time. They need hookify installed and do nothing without it. They
+keep hookify's `.local.md` suffix — the only name it loads — and `.gitignore` opts them back in.
+
+| Rule                          | Fires on                                                  | Why                                                                                                       |
+| ----------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `warn-zsh-unsplit-vars`       | `for x in $VAR;` / `git checkout … $VAR`                  | zsh doesn't word-split `$VAR`: a resolve committed conflict markers, and a cleanup loop deleted nothing   |
+| `warn-swift-edited-via-shell` | `sed -i` / python `write_text` / `>` into a `.swift` file | the swift-format and swiftlint hooks fire only on Edit/Write, so the file goes unformatted to CI          |
+| `warn-blind-ours-theirs`      | `git checkout --ours` / `--theirs`                        | keeping one side whole can drop another PR's change to the same file — check what else landed on it first |
+
 ## Skills (`.claude/skills/`)
 
 - **`check`** — how to decide whether the repo is green, including the macOS-only guard and the
@@ -131,7 +143,8 @@ The simulator records through the Mac's microphone (`SimulatorAudioSource`), so 
 needs macOS to allow the **Simulator** app the microphone (Privacy & Security › Microphone) and
 the right input under the Simulator's I/O › Audio Input — a refused microphone records silence
 rather than failing. `scripts/ios-check.sh` runs the iPhone's quality gates (tests with the
-`BlurtiOSCore` coverage floor, `swiftlint analyze`, periphery, the probe build); `check.sh` runs it
+`BlurtiOSCore` coverage floor, the accessibility audits (`scripts/ios-uitest.sh`), `swiftlint
+analyze`, periphery, the probe build); `check.sh` runs it
 itself when this Mac has the matching runtime.
 
 ## Permissions
@@ -141,5 +154,5 @@ itself when this Mac has the matching runtime.
 `scripts/check.sh` with and without `--portable` or `--lint-only`, the standalone checks it runs
 (`check-invariants.sh`, `check-portability.sh`, `check-release-notes.sh`, `design-sync.sh --check`,
 `mutate.sh --list`), `scripts/dev-build.sh`, and the iPhone scripts:
-`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`). If you find yourself
+`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`, `ios-uitest.sh`). If you find yourself
 prompted for a command that belongs in that set, add it there rather than working around it.

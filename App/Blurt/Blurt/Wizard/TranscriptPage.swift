@@ -301,6 +301,10 @@ private struct TranscriptFacetMenu: View {
       Label("View", systemImage: "sparkles")
     }
     .help("Show the transcript or a task on it")
+    // In the toolbar only the icon shows, and AppKit names the button after
+    // it ("Sparkle") rather than the label's title.
+    .accessibilityLabel("View")
+    .accessibilityValue(model.selection.title)
     .accessibilityIdentifier(UITestIdentifiers.facetPicker)
     .popover(isPresented: $isEditingCustom, arrowEdge: .bottom) { customEditor }
   }

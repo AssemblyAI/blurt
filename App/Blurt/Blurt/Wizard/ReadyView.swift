@@ -285,6 +285,11 @@ struct ReadyView: View {
             ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
       }
       .help(filter == .all ? "Show one kind of entry" : "Showing \(filter.title.lowercased())")
+      // Named outright, as the View menu is: the toolbar shows only the icon,
+      // and AppKit otherwise names the button after the symbol.
+      .accessibilityLabel("Filter")
+      // The filled icon says a filter is on; this says it to VoiceOver.
+      .accessibilityValue(filter.title)
       .accessibilityIdentifier(UITestIdentifiers.libraryFilterMenu)
     }
     ToolbarItem {

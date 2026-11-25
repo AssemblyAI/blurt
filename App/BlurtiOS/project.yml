@@ -337,6 +337,25 @@ targets:
         TEST_TARGET_NAME: BlurtiOS
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+  # The accessibility audits: XCUITests that launch the app onto each of its
+  # screens (debug launch flags, BlurtiOSApp.swift) and run
+  # `performAccessibilityAudit()` on it. Their own scheme, like the probe's, so
+  # the unit-test run, its sanitizer passes and the periphery scan never see
+  # them; ios-check.sh runs them as a gate.
+  BlurtiOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BlurtiOSUITests
+    dependencies:
+      - target: BlurtiOS
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.iphone.uitests
+        TEST_TARGET_NAME: BlurtiOS
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
 # XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
 # needs a shared one. Building the app builds the keyboard it embeds; testing
 # runs the unit tests against it.
@@ -368,3 +387,14 @@ schemes:
       config: Debug
       targets:
         - BlurtiOSProbe
+  BlurtiOSUITests:
+    build:
+      targets:
+        BlurtiOS: all
+        BlurtiOSUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BlurtiOSUITests

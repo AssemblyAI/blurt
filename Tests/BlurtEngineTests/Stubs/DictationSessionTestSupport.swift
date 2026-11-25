@@ -208,16 +208,40 @@ func waitForMicStart(_ fixture: SessionFixture) async throws {
   }
 }
 
+/// Feeds `fixture`'s session phases to `router`, returning the wiring for the
+/// caller to cancel once the first phase has landed. Every subscription opens
+/// with the session's current phase, and a hand-back press that opens the mic
+/// before that replay lands takes the replayed idle for its own request's end
+/// — a race a real hold delay used to hide, and a stepped one doesn't.
+@MainActor
+func wirePhases(of fixture: SessionFixture, to router: SelectionSpeechRouter) async -> Task<Void, Never> {
+  let (landed, signal) = AsyncStream.makeStream(of: Void.self)
+  let phases = Task {
+    for await phase in await fixture.session.phaseStream() {
+      router.sessionPhaseChanged(phase)
+      signal.finish()
+    }
+  }
+  for await _ in landed {}
+  return phases
+}
+
 /// One held hand-back press of right ⌥ through `router` — a rewrite's
 /// instruction or a command — recorded by `fixture`'s session and let go, the
 /// session's phases wired to the router first. Returns that wiring, for the
 /// caller to cancel.
+///
+/// `clock` is the router's: the press becomes a hold when its hold timer fires,
+/// so the timer is stepped here rather than waited out — a real 300 ms timer
+/// behind a bounded poll is what failed on a loaded CI runner.
 @MainActor
-func speakHeldPress(_ router: SelectionSpeechRouter, on fixture: SessionFixture) async throws -> Task<Void, Never> {
-  let phases = Task {
-    for await phase in await fixture.session.phaseStream() { router.sessionPhaseChanged(phase) }
-  }
+func speakHeldPress(
+  _ router: SelectionSpeechRouter, on fixture: SessionFixture, clock: TestClock
+) async throws -> Task<Void, Never> {
+  let phases = await wirePhases(of: fixture, to: router)
   router.press(key: .rightOption)
+  await clock.waitUntilSleeping(for: SelectionSpeechRouting.holdDelay)
+  clock.advance(by: SelectionSpeechRouting.holdDelay)
   try await waitForMicStart(fixture)
   router.submit(.release)
   return phases
