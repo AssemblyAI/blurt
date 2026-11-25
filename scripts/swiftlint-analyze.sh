@@ -56,15 +56,30 @@ esac
 SHARDS="$(mktemp -d "${TMPDIR:-/tmp}/blurt-analyze.XXXXXX")"
 trap 'rm -rf "$SHARDS"' EXIT
 
-git ls-files -- "$@" | { grep '\.swift$' || true; } | sort \
-  | awk -v n="$JOBS" -v dir="$SHARDS" '{ print > (dir "/shard." (NR % n)) }'
+# Absolute paths, and only those the log compiles. SwiftLint looks a file's
+# compile command up by its URL, keyed on the absolute paths in the log, and
+# skips any file it finds none for without a word — so a relative path, or a
+# file the build never compiled, is silently not analyzed. (The first version
+# of this script passed relative paths, and both platforms' analyze passed in
+# a second having read nothing.) Selecting the files the log names is the same
+# test SwiftLint applies, done here where an empty result can fail loudly.
+git ls-files -- "$@" | { grep '\.swift$' || true; } | sed "s|^|$REPO_ROOT/|" | sort -u >"$SHARDS/candidates"
+tr ' ' '\n' <"$LOG" | { grep '\.swift$' || true; } | sort -u >"$SHARDS/compiled"
+comm -12 "$SHARDS/candidates" "$SHARDS/compiled" >"$SHARDS/files"
 
-FILES="$({ cat "$SHARDS"/shard.* 2>/dev/null || true; } | wc -l | tr -d ' ')"
-if [ "$FILES" -eq 0 ]; then
+CANDIDATES="$(wc -l <"$SHARDS/candidates" | tr -d ' ')"
+FILES="$(wc -l <"$SHARDS/files" | tr -d ' ')"
+if [ "$CANDIDATES" -eq 0 ]; then
   echo "swiftlint-analyze: no tracked Swift files under: $*" >&2
   exit 2
 fi
-echo "swiftlint analyze: $FILES files in $(find "$SHARDS" -name 'shard.*' | wc -l | tr -d ' ') processes"
+if [ "$FILES" -eq 0 ]; then
+  echo "swiftlint-analyze: $LOG compiles none of the $CANDIDATES Swift files under: $*" >&2
+  echo "  (not a build log, or its paths aren't under $REPO_ROOT) — nothing would be analyzed" >&2
+  exit 2
+fi
+awk -v n="$JOBS" -v dir="$SHARDS" '{ print > (dir "/shard." (NR % n)) }' "$SHARDS/files"
+echo "swiftlint analyze: $FILES of $CANDIDATES files (the rest aren't in this build) in $(find "$SHARDS" -name 'shard.*' | wc -l | tr -d ' ') processes"
 
 PIDS=()
 for shard in "$SHARDS"/shard.*; do
