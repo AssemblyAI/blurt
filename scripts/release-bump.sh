@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Bump CFBundleShortVersionString + CFBundleVersion in project.yml,
-# regenerate the xcodeproj, and commit. Does not tag or push — that's
+# Bump CFBundleShortVersionString + CFBundleVersion in project.yml, scaffold the
+# release notes, and commit. The project and Info.plist are generated from
+# project.yml at build time, so there is nothing to regenerate here. Does not tag or push — that's
 # release-publish.sh's job.
 #
 # Usage: scripts/release-bump.sh X.Y.Z
@@ -19,7 +20,6 @@ NEW_VERSION="$1"
 is_semver "$NEW_VERSION" || die "version must be X.Y.Z (got: $NEW_VERSION)"
 
 step "Preflight"
-require_tools xcodegen
 [ -f "$PROJECT_YML" ] || die "not found: $PROJECT_YML"
 
 require_clean_tree "bumping"
@@ -62,9 +62,6 @@ VERIFY_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
 [ "$VERIFY_VERSION" = "$NEW_VERSION" ] || die "edit failed: short version is $VERIFY_VERSION, expected $NEW_VERSION"
 [ "$VERIFY_BUILD" = "$NEW_BUILD" ] || die "edit failed: build is $VERIFY_BUILD, expected $NEW_BUILD"
 
-step "xcodegen"
-(cd "$APP_DIR" && xcodegen generate --quiet)
-
 # The notes the update window will show. Scaffolded here with the commits since
 # the previous release as context and a TODO that check.sh fails on, so the bump
 # PR can't merge until a person has written them — reviewing that PR is the
@@ -79,10 +76,7 @@ else
 fi
 
 step "Commit"
-# xcodegen regenerates the (tracked) Info.plist from project.yml's version
-# properties, so it must be committed alongside the project files — otherwise
-# the bump leaves it dirty and the next build/publish trips the clean-tree gate.
-git -C "$REPO_ROOT" add "$PROJECT_YML" "$APP_DIR/Blurt.xcodeproj" "$APP_DIR/Blurt/Info.plist" "$NOTES_FILE"
+git -C "$REPO_ROOT" add "$PROJECT_YML" "$NOTES_FILE"
 git -C "$REPO_ROOT" commit -m "chore: bump to v$NEW_VERSION"
 
 step "Next steps"

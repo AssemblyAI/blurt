@@ -95,10 +95,9 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
    fails here rather than leaving a gate that enforces a reversed decision. Then
    SwiftLint's size budgets counted without SwiftLint
    (`scripts/check-swift-size.sh`: `file_length` 400, `type_body_length` ~250,
-   with notes for files near either), the test-clock rule
+   with notes for files near either) and the test-clock rule
    (`scripts/check-test-clock.sh`: every fixed sleep or real clock in a test
-   carries a `// wall-clock-ok: <reason>`), and the Mac pbxproj's repo-root folder named `blurt`. All
-   `--portable` too
+   carries a `// wall-clock-ok: <reason>`). All `--portable` too
 3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
    failures) — both source-only
 4. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
@@ -111,7 +110,7 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
 6. `swift test` with `-warnings-as-errors`
 7. engine line-coverage gate (≥88%, `Tests/` excluded — see `MIN_COVERAGE`)
 8. ThreadSanitizer + AddressSanitizer test passes
-9. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
+9. `xcodegen generate` for the Mac project (generated, never committed)
 10. codesign-skipped app build (warnings-as-errors)
 11. **CI only:** `scripts/uitest.sh` (the XCUITest bundle) and `scripts/leaks.sh`
     (whole-app leak check). Both drive the real app and seize the keyboard and

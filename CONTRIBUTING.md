@@ -95,6 +95,7 @@ separate, normally-locked keychain used only by releases — see
 If you'd rather not set up a certificate, build ad-hoc signed instead:
 
 ```bash
+(cd App/Blurt && xcodegen generate)   # the project isn't committed
 xcodebuild -project App/Blurt/Blurt.xcodeproj -scheme Blurt \
   -configuration Debug-Local -destination 'platform=macOS,arch=arm64' \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES build
@@ -109,9 +110,9 @@ that a change compiles and launches; `dev-build.sh` is the better daily loop.
 
 ### After editing `App/Blurt/project.yml`
 
-Run `xcodegen generate` and commit the regenerated `Blurt.xcodeproj/project.pbxproj`
-alongside it. `check.sh` fails on drift between the two. Never hand-edit the
-`.pbxproj` — it's generated.
+Commit just the yml. Neither app's Xcode project is committed: every script
+that builds runs `xcodegen generate` first, so there is nothing to regenerate
+by hand (run it yourself only if you want to open the project in Xcode).
 
 ### The iPhone app
 

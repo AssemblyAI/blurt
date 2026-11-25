@@ -25,7 +25,7 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
 # "green" in the CI sense — the Swift build, tests, sanitizers, coverage gate,
-# xcodegen drift check, and app build are all SKIPPED; CI on macos-26 stays the
+# and app build are all SKIPPED; CI on macos-26 stays the
 # authority. Without the flag, a missing toolchain fails fast here instead of
 # exploding at `swift test`.
 #
@@ -505,34 +505,11 @@ check_test_clock() {
 }
 run_check "wall-clock waits in tests say why" check_test_clock
 
-# The Mac project's repo-root folder reference must be named `blurt`. xcodegen
-# names it after the checkout directory, so a project regenerated in a worktree
-# (blurt-wt-foo/) commits that name, and CI's drift check reads it as stale (#392).
-# The drift check itself needs xcodegen; this one line doesn't.
-check_pbxproj_root_name() {
-  local ref
-  ref="$(grep -E 'lastKnownFileType = folder; name = [^;]*; path = \.\./\.\.;' \
-    App/Blurt/Blurt.xcodeproj/project.pbxproj || true)"
-  if [ -z "$ref" ]; then
-    echo "error: no repo-root folder reference (path = ../..) in the Mac pbxproj; update this check" >&2
-    return 1
-  fi
-  if ! grep -q 'name = blurt;' <<<"$ref"; then
-    echo "error: the Mac pbxproj names its repo-root folder after a worktree, not 'blurt':" >&2
-    printf '  %s\n' "$ref" >&2
-    echo "       regenerate it from a checkout named blurt (or fix the name by hand) and commit" >&2
-    return 1
-  fi
-  echo "the pbxproj's repo-root folder is named blurt"
-}
-run_check "pbxproj repo-root folder name" check_pbxproj_root_name
-
 # The design's one source (App/BlurtiOS/Design/tokens.json) and everything
 # generated from it — BlurtDesign/DesignTokens.swift (the Mac app compiles it too),
 # DESIGN.md's token tables, both apps' colour sets — must agree, and the keyboard's views must carry no
 # design literal that belongs in the tokens. scripts/design-sync.sh --check
-# regenerates into .build/ and diffs, the same shape as the xcodegen drift
-# check further down. It runs scripts/design-tokens.swift as a `swift` script,
+# regenerates into .build/ and diffs. It runs scripts/design-tokens.swift as a `swift` script,
 # which --portable mode does without.
 if [ "$PORTABLE" -eq 0 ]; then
   run_check "design tokens in sync (scripts/design-sync.sh --check)" bash scripts/design-sync.sh --check
@@ -760,11 +737,11 @@ run_check "release notes (release-notes)" bash scripts/check-release-notes.sh
 # ten-minute build on a run already known to be red; ^C is right there, and CI
 # wants both answers regardless.
 if [ "$PORTABLE" -eq 1 ]; then
-  echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
-  echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
+  echo "==> portable mode: skipping swift test, coverage gate, sanitizers, app build,"
+  echo "    UI tests, leaks, swiftlint analyze, periphery"
 elif [ "$LINT_ONLY" -eq 1 ]; then
-  echo "==> lint-only mode: skipping swift test, coverage gate, sanitizers, xcodegen"
-  echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
+  echo "==> lint-only mode: skipping swift test, coverage gate, sanitizers, app build,"
+  echo "    UI tests, leaks, swiftlint analyze, periphery"
 else
   echo "==> swift test (BlurtEngine)"
   cd "$REPO_ROOT"
@@ -886,31 +863,8 @@ else
   # assertions in MemoryLeakTests.swift.)
   run_sanitizer_pass address asan
 
-  echo "==> xcodegen (App/Blurt)"
-  cd "$APP_DIR"
-  PBXPROJ="Blurt.xcodeproj/project.pbxproj"
-  if command -v xcodegen >/dev/null 2>&1; then
-    # Drift check: regenerating must not change the on-disk project. If it does,
-    # the committed .pbxproj is stale vs project.yml — fail and ask for a commit.
-    BEFORE="$(shasum "$PBXPROJ" 2>/dev/null || true)"
-    xcodegen generate --quiet
-    AFTER="$(shasum "$PBXPROJ" 2>/dev/null || true)"
-    if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
-      echo "error: $PBXPROJ is out of sync with project.yml; run 'xcodegen generate' and commit it"
-      # What changed, and by which XcodeGen: CI installs whichever Homebrew
-      # has, so a new release can move the output with no project.yml change
-      # (a #415 run hit this drift on a main whose App/Blurt was unchanged and
-      # passed two minutes earlier, with nothing to say why).
-      echo "xcodegen $(xcodegen --version 2>/dev/null || echo '(version unknown)')"
-      git --no-pager diff --stat -- "$PBXPROJ" || true
-      git --no-pager diff -- "$PBXPROJ" | head -n 80 || true
-      exit 1
-    fi
-  else
-    echo "note: xcodegen not installed; skipping project regeneration"
-  fi
-
-  # The app build, by scripts/mac-static.sh (its `build` step, which says how
+  # The app build, by scripts/mac-static.sh (its `build` step, which generates
+  # the project from App/Blurt/project.yml — it isn't committed — and says how
   # and why it is signed as it is). Its raw log is kept in $APP_BUILD_LOG for
   # `swiftlint analyze` below; the exit trap installed at the top removes it.
   APP_BUILD_LOG="$(mktemp -t blurt-build)"
@@ -956,9 +910,8 @@ else
     # exactly one place. It needs a GUI session (a windowserver), which the
     # macos-26 CI runner provides.
     #
-    # This cd is the one that matters: the app build above left us in $APP_DIR.
-    # Both scripts run as `bash …`, i.e. in a child process that can't move this
-    # shell's cwd, so nothing needs to re-cd between them.
+    # Both scripts run as `bash …` from the repo root, i.e. in a child process
+    # that can't move this shell's cwd, so nothing needs to re-cd between them.
     cd "$REPO_ROOT"
     bash scripts/uitest.sh
 

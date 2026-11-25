@@ -66,7 +66,9 @@ packages:
     path: ../..
   # The app's one remote package: the in-place updater (see ARCHITECTURE.md → Updates).
   # Pinned to an exact version so an update to the updater is a reviewed diff
-  # here and in Package.resolved, never a silent float. The engine stays
+  # here, never a silent float; the exact pin fully determines resolution, so no
+  # Package.resolved is committed (the generated project, where Xcode writes
+  # one, isn't either). The engine stays
   # dependency-free; check.sh allows this URL and nothing else.
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle

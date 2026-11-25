@@ -22,12 +22,13 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 
 export OS_ACTIVITY_MODE=disable
 
-# For `pretty_xcodebuild`, as dev-build.sh does. (check.sh keeps its own copy on
+# For `pretty_xcodebuild` and `generate_mac_project`, as dev-build.sh does. (check.sh keeps its own copy on
 # purpose — see the `die_check` note there.)
 # shellcheck source=scripts/release-lib.sh
 source "$REPO_ROOT/scripts/release-lib.sh"
 
 pretty_xcodebuild
+generate_mac_project
 
 echo "==> xcodebuild test (BlurtUITests)"
 cd "$APP_DIR"

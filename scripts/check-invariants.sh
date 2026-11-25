@@ -10,11 +10,10 @@
 #
 # This file carries the subset of that table a regex can decide. It is not the
 # whole table and cannot be: some entries are structural (the SPM-dependency
-# guard parses project.yml's `packages:` block, so it stays in check.sh), some
-# are already mechanized elsewhere (the pbxproj drift check, the PreToolUse
-# hook), and some are genuinely undecidable from a grep — the "no filler-word
-# clause" rule is about the *transcription prompt*, while `CleanupInstruction`'s
-# rewrite instruction legitimately names filler sounds, and no pattern separates
+# guard parses project.yml's `packages:` block, so it stays in check.sh), and
+# some are genuinely undecidable from a grep — the "no filler-word clause" rule
+# is about the *transcription prompt*, while `CleanupInstruction`'s rewrite
+# instruction legitimately names filler sounds, and no pattern separates
 # those two without also flagging the correct one. A rule that fires on correct
 # code gets routed around, so those stay prose and stay in review.
 #
@@ -78,7 +77,7 @@ ENGINE="Sources/*.swift"
 # The app scope is `App/`, not `App/Blurt/`: there is a second app spec now
 # (the iOS app), and a scope pinned to one app silently stops covering the
 # next one.
-APP="App/*.swift App/*.yml App/*.plist :!App/Blurt/Blurt.xcodeproj :!App/BlurtiOS/BlurtiOSTests"
+APP="App/*.swift App/*.yml App/*.plist :!App/BlurtiOS/BlurtiOSTests"
 TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*.swift"
 # The keyboard extension and what it compiles or links — its own sources,
 # BlurtDesign, and BlurtiOSCore: iOS lets no keyboard use the microphone, and the

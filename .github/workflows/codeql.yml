@@ -85,16 +85,24 @@ jobs:
           persist-credentials: false
 
       # Cache the resolved SwiftPM checkouts so we don't re-clone the SDKs'
-      # full git history on every run. Keyed on the pinned Package.resolved, so a
-      # dependency bump busts the cache. restore-keys lets an older cache seed a
-      # partial hit when the pins change.
+      # full git history on every run. Keyed on project.yml, where the Mac app
+      # pins Sparkle with exactVersion, so a dependency bump busts the cache.
+      # restore-keys lets an older cache seed a partial hit when the pins change.
       - name: Cache SwiftPM checkouts
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.DERIVED }}/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('App/Blurt/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ hashFiles('App/Blurt/project.yml') }}
           restore-keys: |
             spm-${{ runner.os }}-
+
+      # Neither app's project is committed — both are generated from their
+      # project.yml — so generate them before resolving and before tracing starts.
+      - name: Generate both apps' projects (untraced)
+        run: |
+          brew install xcodegen
+          (cd App/Blurt && xcodegen generate --quiet)
+          (cd App/BlurtiOS && xcodegen generate --quiet)
 
       # Resolve dependencies BEFORE codeql init, so the git clones run natively
       # (arm64) and untraced. CodeQL's Swift tracer runs the build as an x86_64
@@ -110,23 +118,13 @@ jobs:
             -derivedDataPath "$DERIVED" \
             -resolvePackageDependencies
 
-      # The iPhone app's project is generated, not committed (see check.yml's
-      # ios-build), so generate it before tracing starts. It has no remote
-      # packages to resolve — only the local engine.
-      - name: Generate the iPhone app's project (untraced)
-        working-directory: App/BlurtiOS
-        run: |
-          brew install xcodegen
-          xcodegen generate --quiet
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
         with:
           languages: swift
           build-mode: manual
 
-      # build-mode: manual — build the committed Blurt.xcodeproj directly (no
-      # xcodegen: it's checked in and drift-checked by the `check` workflow).
+      # build-mode: manual — build the Blurt.xcodeproj generated above.
       # Generic destination (no arch pin) so the build produces a universal binary
       # (arm64 + x86_64). CI runners are arm64 only, so the x86_64 slice is not
       # tested here — community testing / manual verification on Intel hardware.

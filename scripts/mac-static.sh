@@ -41,6 +41,10 @@ wants() { case " $STEPS " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
 if wants analyze; then require_tools --hint='scripts/bootstrap.sh installs it' swiftlint; fi
 if wants periphery; then require_tools --hint='scripts/bootstrap.sh installs it' periphery; fi
 
+# The build and periphery's scan both open App/Blurt/Blurt.xcodeproj, which is
+# generated rather than committed; `analyze` reads only the build log.
+if wants build || wants periphery; then generate_mac_project; fi
+
 LOG="${BLURT_MAC_BUILD_LOG:-}"
 if [ -z "$LOG" ]; then
   LOG="$(mktemp "${TMPDIR:-/tmp}/blurt-build.XXXXXX")"
