@@ -143,7 +143,7 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
 off CI, when an iPhone simulator on this Xcode's iOS runtime exists — `scripts/ios-check.sh`: the
 tests with `BlurtiOSCore`'s coverage gate, `swiftlint analyze`, the probe build and periphery over
 the iPhone project. Without that runtime it is skipped with a note (the closing `ok` line says so)
-and CI's `ios-build` job, which runs the same script, is the authority; `check.sh` then runs
+and CI's `ios-build`, `ios-audits` and `ios-static` jobs, which run the same script's steps, are the authority; `check.sh` then runs
 `scripts/ios-typecheck.sh` instead, which typechecks the iPhone targets against the Mac Catalyst
 frameworks — the stand-in for a Mac with only the Command Line Tools. Locally, `scripts/ios-test.sh` runs `BlurtiOSTests` on a
 simulator when Xcode is installed and enforces `BlurtiOSCore`'s line-coverage floor (`MIN_IOS_COVERAGE`, 88%;

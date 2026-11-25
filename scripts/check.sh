@@ -964,9 +964,10 @@ if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1
   # captured above. Runs every analyzer rule .swiftlint.yml lists — unused imports
   # (the one dead-code gap periphery doesn't cover), captured variables, untyped
   # array inits; unused declarations are periphery's. False positives on AVFoundation/OSLog imports
-  # are suppressed via always_keep_imports in .swiftlint.yml.
-  run_check "swiftlint analyze" \
-    swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
+  # are suppressed via always_keep_imports in .swiftlint.yml. Split across
+  # processes by scripts/swiftlint-analyze.sh: SwiftLint analyzes one file at a
+  # time, and this step alone was 8.5 of the macos job's ~20 minutes.
+  run_check "swiftlint analyze" "$REPO_ROOT/scripts/swiftlint-analyze.sh" "$APP_BUILD_LOG"
 fi
 
 if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ]; then

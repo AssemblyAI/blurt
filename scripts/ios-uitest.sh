@@ -26,15 +26,20 @@ source "$REPO_ROOT/scripts/ios-lib.sh"
 
 ios_require_device ios-uitest
 echo "auditing on $NAME"
-ios_wait_booted "$UDID"
+# Booting under the build, as ios-test.sh does; waited for before the run.
+ios_boot_async "$UDID"
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
 ios_resolve_packages "$IOS_DERIVED"
 RESULTS="$IOS_DERIVED/BlurtiOSUITests-$(date +%Y%m%d-%H%M%S).xcresult"
 pretty_xcodebuild
-# Serial: every test relaunches the one app on the one simulator.
-xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSUITests \
-  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED" \
-  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES \
+XCODEBUILD_ARGS=(-project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSUITests
+  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED"
+  "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES)
+xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" 2>&1 | "${PRETTY[@]}"
+ios_wait_booted "$UDID"
+# Serial: every test relaunches the one app on the one simulator. Any extra
+# arguments (-only-testing:…) select tests, so they go to the run.
+xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -resultBundlePath "$RESULTS" \
   -parallel-testing-enabled NO -collect-test-diagnostics never "$@" 2>&1 | "${PRETTY[@]}"
 echo "results: $RESULTS"

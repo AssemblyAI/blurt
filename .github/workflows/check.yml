@@ -354,12 +354,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # The simulator build, the unit tests and the periphery scan (which rebuilds
-    # after them) now take 22-29 minutes on macos-26, so 30 started cancelling
-    # healthy runs, main's included (Nov 2026). 45 left headroom for a slow
-    # runner without letting a hung simulator burn an hour; the accessibility
-    # audits (scripts/ios-uitest.sh) add a few minutes on top, hence 55.
-    timeout-minutes: 55
+    # The engine's simulator build, then the iPhone unit tests with BlurtiOSCore's
+    # coverage gate and the probe's build: ~12 minutes once the audits, analyze
+    # and periphery moved to ios-audits and ios-static (together this job took
+    # 40–48 minutes, check.yml's long pole, Nov 2026). 30 leaves headroom for a
+    # slow runner's first simulator boot.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout blurt
@@ -376,36 +376,82 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
             build
 
-      - name: Install XcodeGen
-        # Just the one formula, not `brew bundle --file=Brewfile`: the iPhone
-        # app's project is the only thing this job generates, and installing the
-        # other eleven tools would cost more than the build it precedes. xcodegen
-        # is in the Brewfile too, so this is the version check.sh uses.
-        run: brew install xcodegen
+      - name: Install XcodeGen and xcbeautify
+        # Just the formulas this job uses, not `brew bundle --file=Brewfile`: the
+        # iPhone app's project is the only thing it generates, and installing the
+        # other tools would cost more than the build they precede. Both are in
+        # the Brewfile too, so these are the versions check.sh uses.
+        run: brew install xcodegen xcbeautify
 
-      - name: Install the iPhone gates' tools
-        # swiftlint for `swiftlint analyze`, periphery for the unused-code scan,
-        # xcbeautify for the build output; all in the Brewfile too, so these are
-        # the versions check.sh uses. The project itself is generated, not
-        # committed (people open App/Blurt's; this one is regenerated a second
-        # before every build by ios-test.sh, so it can never go stale).
-        run: brew install swiftlint periphery xcbeautify
-
-      - name: Build the iPhone app and its keyboard, and run its quality gates
+      - name: Run the iPhone unit tests and build the probe
         working-directory: blurt
-        # scripts/ios-check.sh — the iPhone's check.sh: BlurtiOSTests (warnings
-        # as errors, BlurtiOSCore's coverage gate) on whichever iPhone simulator
-        # the runner has (scripts/ios-lib.sh picks), the accessibility audits
-        # (BlurtiOSUITests) on the same simulator, then `swiftlint analyze`
-        # over that from-scratch build's log, then periphery. Ad hoc signing: the
+        # scripts/ios-check.sh's `test` and `probe` steps: BlurtiOSTests
+        # (warnings as errors, BlurtiOSCore's coverage gate) on whichever iPhone
+        # simulator the runner has (scripts/ios-lib.sh picks), then the probe's
+        # XCUITest bundle compiled over that build. Ad hoc signing: the
         # simulator accepts it and, unlike no signing, it embeds the App Group
         # entitlement.
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh
+        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
+
+  # The iPhone accessibility audits (BlurtiOSUITests, scripts/ios-uitest.sh):
+  # `performAccessibilityAudit()` on every screen at two text sizes, ~14
+  # minutes of test on top of its own build. A job of its own, beside ios-build,
+  # as the Mac's UI suite is beside `macos`: it needs nothing another job builds.
+  ios-audits:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    # ~22 minutes (Nov 2026): the build, then the audits; 40 for a slow runner.
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Run the iPhone accessibility audits
+        working-directory: blurt
+        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh uitest
+
+  # The iPhone code's static gates: `swiftlint analyze` (every analyzer rule)
+  # over a from-scratch build of the app and its tests — ios-check.sh's
+  # `analyze` step builds them itself when run without `test`, no simulator
+  # needed — then periphery's own build and scan. Off ios-build's critical
+  # path, where analyze alone was 13.6 minutes.
+  ios-static:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    # ~15 minutes (Nov 2026): the build, analyze split across the runner's
+    # cores (scripts/swiftlint-analyze.sh), periphery; 35 for a slow runner.
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install the iPhone static gates' tools
+        # xcodegen for the project, swiftlint for `swiftlint analyze`, periphery
+        # for the unused-code scan, xcbeautify for the build output; all in the
+        # Brewfile too, so these are the versions check.sh uses.
+        run: brew install xcodegen swiftlint periphery xcbeautify
+
+      - name: Run swiftlint analyze and periphery over the iPhone app
+        working-directory: blurt
+        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh analyze periphery
 
   # The iPhone suite under each sanitizer, as check.sh runs the engine's. A job
   # of its own, one runner per sanitizer, rather than more steps in ios-build:
-  # each is a full instrumented rebuild, and ios-build already takes most of
-  # its timeout. The coverage gate runs in ios-build's plain pass only.
+  # each is a full instrumented rebuild, which would put it back on the run's
+  # critical path. The coverage gate runs in ios-build's plain pass only.
   ios-sanitizers:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
@@ -439,7 +485,9 @@ jobs:
   # `check` (and the old one to `macos`) puts every gate below behind the one
   # required context with no repo-settings change — `ios-build`,
   # `ios-sanitizers` and `lint` included, which `gate` asserted but nothing
-  # required.
+  # required. `ios-audits` and `ios-static`, split out of `ios-build` to run
+  # beside it, are asserted here too, so the split moved no gate out from
+  # under the required status.
   #
   # Always-runs, so a *skipped* gate can't be mistaken for a pass. GitHub reports
   # a skipped required check to branch protection as successful, so anything that
@@ -457,22 +505,34 @@ jobs:
   # superseded run now ends cancelled, not failed. (Nothing is lost: each
   # merge-queue commit already passed `check` as its merge group.)
   check:
-    needs: [changes, lint, macos, ui-tests, ios-build, ios-sanitizers]
+    needs:
+      [
+        changes,
+        lint,
+        macos,
+        ui-tests,
+        ios-build,
+        ios-audits,
+        ios-static,
+        ios-sanitizers,
+      ]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the lint, macOS, UI, iOS and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, UI, iOS, iOS-audit, iOS-static and iOS-sanitizer gates ran or were intentionally skipped
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           UI_RESULT: ${{ needs.ui-tests.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
+          IOS_AUDITS_RESULT: ${{ needs.ios-audits.result }}
+          IOS_STATIC_RESULT: ${{ needs.ios-static.result }}
           IOS_SANITIZERS_RESULT: ${{ needs.ios-sanitizers.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-audits=$IOS_AUDITS_RESULT ios-static=$IOS_STATIC_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -498,4 +558,6 @@ jobs:
           assert_gate macOS "$MACOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "UI suite" "$UI_RESULT" "$SWIFT_CHANGED"
           assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
+          assert_gate "iOS audits" "$IOS_AUDITS_RESULT" "$SWIFT_CHANGED"
+          assert_gate "iOS static" "$IOS_STATIC_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT" "$SWIFT_CHANGED"
