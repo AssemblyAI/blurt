@@ -49,14 +49,25 @@ if [ -f "$config" ]; then
 fi
 
 # Report every offender with its width, so the fix doesn't need a second pass to
-# find them. awk counts characters, matching swift-format's column semantics for
-# the ASCII these sources are in.
-findings="$(awk -v lim="$limit" 'length > lim { printf "  %d: %d columns\n", FNR, length }' "$file")"
+# find them. Counted in characters, as swift-format counts columns — not awk's
+# `length`, which is bytes in mawk and macOS's awk: the sources' em dashes are
+# three bytes each, so a comment exactly at the limit read as 124 columns.
+findings="$(
+  python3 -c '
+import sys
+limit = int(sys.argv[1])
+with open(sys.argv[2], encoding="utf-8", errors="replace") as source:
+    for number, line in enumerate(source, 1):
+        width = len(line.rstrip("\r\n"))
+        if width > limit:
+            print(f"  {number}: {width} columns")
+' "$limit" "$file"
+)"
 
 if [ -n "$findings" ]; then
   {
     echo "Lines over $limit columns in $file (swift-format lint --strict fails CI on these):"
-    printf '%s' "$findings"
+    printf '%s\n' "$findings"
     echo "  Reflow them — swift-format isn't installed here, so CI is the only other check."
   } >&2
   exit 2
