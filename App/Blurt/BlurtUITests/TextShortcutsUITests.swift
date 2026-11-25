@@ -2,9 +2,9 @@ import XCTest
 
 /// Drives the Settings window's text-shortcut table (on the Vocabulary pane)
 /// and its editor sheet: add, edit, delete, remove with −, and the
-/// duplicate-phrase refusal. Offline — the pane only reads
-/// and writes `UserDefaults`, which the UI-test launch resets, so every case
-/// starts from an empty list.
+/// duplicate-phrase refusal — plus the key-terms field above it. Offline — the
+/// pane only reads and writes `UserDefaults`, which the UI-test launch resets,
+/// so every case starts from an empty list.
 final class TextShortcutsUITests: BlurtUITestCase {
   /// The whole lifecycle of one shortcut, asserted through the list the sheet
   /// writes back to — so the store write, the `@AppStorage` refresh and the
@@ -82,6 +82,26 @@ final class TextShortcutsUITests: BlurtUITestCase {
     )
   }
 
+  // MARK: - Key terms
+
+  /// The key-terms field shares the pane. What's typed there is kept: leaving
+  /// the pane and coming back finds it as it was left, not blank.
+  func testKeyTermsPersistAcrossPanes() {
+    let pane = openTextShortcutsPane()
+    let field = pane.anyDescendant(identified: UITestIdentifiers.keyTermsField)
+    XCTAssertTrue(field.waitForExistence(timeout: 10), "Key terms field not found")
+    field.click()
+    field.typeText("Kubernetes, Blurt")
+
+    let reopened = selectSettingsTab(
+      selectSettingsTab(pane, named: UITestIdentifiers.generalSettingsTab),
+      named: UITestIdentifiers.vocabularySettingsTab
+    )
+    let again = reopened.anyDescendant(identified: UITestIdentifiers.keyTermsField)
+    XCTAssertTrue(again.waitForExistence(timeout: 10), "Key terms field not found after switching panes")
+    XCTAssertEqual(again.value as? String, "Kubernetes, Blurt", "Typed key terms should survive leaving the pane")
+  }
+
   // MARK: - Helpers
 
   private func openTextShortcutsPane() -> XCUIElement {
@@ -109,7 +129,7 @@ final class TextShortcutsUITests: BlurtUITestCase {
   }
 
   /// Adds one shortcut through the sheet, waiting on the sheet's disappearance
-  /// for the reason on `SettingsUITests.connectValidKey`.
+  /// for the reason on `connectValidKey` (`BlurtUITestCase+Windows`).
   private func addShortcut(in pane: XCUIElement, trigger: String, expansion: String) {
     let sheet = openSheet(in: pane, via: UITestIdentifiers.textShortcutAdd)
     fill(trigger, into: UITestIdentifiers.textShortcutTrigger, in: sheet)
