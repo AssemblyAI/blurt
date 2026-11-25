@@ -39,7 +39,7 @@ struct DictationLogEntryTests {
 
   @Test("a transcript dictated into a password field is withheld: the entry says so, and holds no word of it")
   func withholdsSecureTranscript() {
-    let secure = TranscriptionContext(appName: "1Password", priorText: nil, targetIsSecure: true)
+    let secure = TranscriptionContext(appName: "1Password", priorText: nil, targetSecurity: .secure)
     let entry = DictationLog.makeEntry(transcript: "hunter2 correct horse", context: secure, now: Date())
     #expect(entry.transcript == DictationLog.withheldTranscript)
     #expect(entry.app == "1Password")

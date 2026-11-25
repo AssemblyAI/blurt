@@ -54,21 +54,23 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// reads to the model as one continuing dialogue rather than N unrelated clips.
   public let recentTranscripts: [String]
 
-  /// Whether the capture **refused** to read the focused field — a password input,
-  /// or an element with an unreadable role (`FocusCapture.mustRedactContents` fails
-  /// closed). **Local only, not sent.** It exists to stop the *outgoing* half of
-  /// the same leak the read guard covers: a transcript dictated *into* a secure
-  /// field is the secret, so `DictationSession` declines to remember it as history
-  /// rather than replaying it as an `stt_prompt` line in every later
-  /// dictation. Nil focus signals mean "we read nothing"; this means "we refused".
-  public let targetIsSecure: Bool
-
-  /// Whether the capture could not reach a focused element at all
-  /// (`FocusedFieldContext.securityUnknown`), so it cannot say whether the target
-  /// is a password field. **Local only, not sent.** The dictation is still
-  /// remembered for the Recent list, but marked never to be replayed in
-  /// `stt_prompt` (`RecentDictations.Entry.replayable`).
-  public let targetSecurityUnknown: Bool
+  /// Whether the focused field is a password input, as the capture read it
+  /// (`FocusedFieldContext.security`). **Local only, not sent.** A three-way
+  /// verdict:
+  ///
+  /// - `.secure`: the capture **refused** to read the field — a password input,
+  ///   or an element with an unreadable role (`FocusCapture.mustRedactContents`
+  ///   fails closed). It exists to stop the *outgoing* half of the same leak the
+  ///   read guard covers: a transcript dictated *into* a secure field is the
+  ///   secret, so `DictationSession` declines to remember it as history rather
+  ///   than replaying it as an `stt_prompt` line in every later dictation. Nil
+  ///   focus signals mean "we read nothing"; this means "we refused".
+  /// - `.unknown`: the capture could not reach a focused element at all, so it
+  ///   cannot say whether the target is a password field. The dictation is still
+  ///   remembered for the Recent list, but marked never to be replayed in
+  ///   `stt_prompt` (`RecentDictations.Entry.replayable`).
+  /// - `.ordinary`: neither.
+  public let targetSecurity: TargetSecurity
 
   /// User-configured domain vocabulary (names, jargon, product names), sourced
   /// from `KeyTermsStore`. Like `recentTranscripts` this isn't per-utterance
@@ -102,13 +104,14 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// request with it. Readers that care about the focused field read its fields
   /// (`priorText`, `windowTitle`, …), never the context's presence.
   ///
-  /// `targetIsSecure` counts, even though it is a `Bool` rather than content: the
-  /// session collapses an empty snapshot to `nil`, and a secure target reduced to
-  /// `nil` would be indistinguishable from an ordinary one — so the transcript
-  /// would be remembered as history after all, which is the one thing the flag
-  /// exists to prevent. `targetSecurityUnknown` counts for the same reason.
+  /// A `targetSecurity` other than `.ordinary` counts, even though it is a verdict
+  /// rather than content: the session collapses an empty snapshot to `nil`, and a
+  /// secure target reduced to `nil` would be indistinguishable from an ordinary
+  /// one — so the transcript would be remembered as history after all, which is
+  /// the one thing the verdict exists to prevent. `.unknown` counts for the same
+  /// reason.
   public var isEmpty: Bool {
-    !targetIsSecure && !targetSecurityUnknown && keyTerms.isEmpty && recentTranscripts.isEmpty
+    targetSecurity == .ordinary && keyTerms.isEmpty && recentTranscripts.isEmpty
       && [appName, windowTitle, fieldLabel, priorText, selectedText, styleInstructions].allSatisfy { field in
         field.trimmedNonEmpty() == nil
       }
@@ -124,8 +127,7 @@ public struct TranscriptionContext: Sendable, Equatable {
     keyTerms: [String] = [],
     textShortcuts: [TextShortcut] = [],
     styleInstructions: String? = nil,
-    targetIsSecure: Bool = false,
-    targetSecurityUnknown: Bool = false
+    targetSecurity: TargetSecurity = .ordinary
   ) {
     self.appName = appName
     self.windowTitle = windowTitle
@@ -136,7 +138,6 @@ public struct TranscriptionContext: Sendable, Equatable {
     self.keyTerms = keyTerms
     self.textShortcuts = textShortcuts
     self.styleInstructions = styleInstructions
-    self.targetIsSecure = targetIsSecure
-    self.targetSecurityUnknown = targetSecurityUnknown
+    self.targetSecurity = targetSecurity
   }
 }

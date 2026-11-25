@@ -270,7 +270,7 @@ public enum DictationLog {
     outcome: PipelinePhase? = nil
   ) -> Entry {
     Entry(
-      transcript: context?.targetIsSecure == true ? withheldTranscript : transcript,
+      transcript: context?.targetSecurity == .secure ? withheldTranscript : transcript,
       ts: now.formatted(timestampFormat),
       app: context?.appName,
       window: context?.windowTitle,

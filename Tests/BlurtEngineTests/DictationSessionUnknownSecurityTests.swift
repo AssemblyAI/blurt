@@ -17,7 +17,7 @@ struct DictationSessionUnknownSecurityTests {
     selectedText: nil,
     windowTitle: "1Password",
     fieldLabel: "Password",
-    isSecure: true
+    security: .secure
   )
 
   @Test("a dictation released before the read lands is kept in Recent but never replayed")
@@ -59,10 +59,10 @@ struct DictationSessionUnknownSecurityTests {
     // Electron app, whose login form is as invisible as its chat box. The flag
     // must survive the empty collapse, and the dictation must stay in Recent
     // without riding the next request's `stt_prompt`.
-    #expect(FocusedFieldContext.unreachable.securityUnknown)
-    #expect(!FocusedFieldContext.unreachable.isSecure)
-    #expect(!FocusedFieldContext.empty.securityUnknown)
-    #expect(!TranscriptionContext(appName: nil, priorText: nil, targetSecurityUnknown: true).isEmpty)
+    #expect(FocusedFieldContext.unreachable.security == .unknown)
+    #expect(FocusedFieldContext.empty.security == .ordinary)
+    #expect(!TranscriptionContext(appName: nil, priorText: nil, targetSecurity: .unknown).isEmpty)
+    #expect(TranscriptionContext(appName: nil, priorText: nil, targetSecurity: .ordinary).isEmpty)
     let fixture = makeSession(mode: .transcript("hunter2"), field: .unreachable)
 
     for _ in 1...2 {
@@ -72,7 +72,7 @@ struct DictationSessionUnknownSecurityTests {
     #expect(await fixture.injector.inserted == ["hunter2", "hunter2"])
     #expect(await fixture.session.recentDictations.entries.map(\.text) == ["hunter2", "hunter2"])
     let contexts = await fixture.transcriber.receivedContexts
-    #expect(contexts.first??.targetSecurityUnknown == true)
+    #expect(contexts.first??.targetSecurity == .unknown)
     // Dictation #2 went out with no history: #1 was never replayable.
     #expect(contexts.allSatisfy { $0?.recentTranscripts.isEmpty == true })
     #expect(contexts.allSatisfy { STTPrompt.text(context: $0).isEmpty })
