@@ -25,8 +25,10 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   private static let log = HostIdentity.current.logger("Relay")
 
   /// How long a password field's words stay on the clipboard when no keyboard
-  /// took them: the Mac's `SystemClipboard.concealedLifetime`, as an iOS expiry.
-  package static let secureClipboardLifetime: TimeInterval = 90
+  /// took them: `TargetSecurity.concealedClipboardLifetime`, as an iOS expiry.
+  private static let secureClipboardLifetime = TimeInterval(
+    TargetSecurity.concealedClipboardLifetime.components.seconds
+  )
 
   /// The field the words are for: the one that sent the accepted stop, else
   /// the one whose press started the dictation (`DictationCoordinator`). A nil
@@ -75,7 +77,7 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   package func insert(
     _ text: String, after _: String?, windowTitle _: String?, security: TargetSecurity = .ordinary
   ) async throws {
-    let secure = security == .secure
+    let secure = security.conceals(inAXOpaqueApp: false)
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.

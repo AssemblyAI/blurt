@@ -122,9 +122,12 @@ jobs:
           path: blurt
           persist-credentials: false
 
-      - name: Install build tools
-        working-directory: blurt
-        run: brew bundle --file=Brewfile
+      - name: Install the linters
+        # The Brewfile less periphery, xcodegen and xcbeautify, which only the
+        # build half of check.sh uses — the rule the iOS jobs follow. check.sh
+        # skips a linter it can't find with a note rather than failing, so a
+        # linter added to the Brewfile (and to check.sh) belongs here too.
+        run: brew install actionlint markdownlint-cli2 node prettier shellcheck shfmt swiftlint uv zizmor
 
       - name: Install jscpd
         working-directory: blurt
@@ -531,22 +534,18 @@ jobs:
   # macOS: `swift test` builds for the host, and every job above runs on one.
   # A macOS-only symbol that escapes its `#if os(macOS)` fence therefore passes
   # `macos` and breaks the iOS app, which is why this job exists and why the
-  # required `check` job asserts it. It builds the library alone, for the
-  # simulator SDK — `xcodebuild` rather than `swift build`, because
-  # cross-compiling needs the SDK/destination handling xcodebuild owns, and it
-  # resolves the package
-  # straight from the checkout, no project needed. `generic/platform=iOS
-  # Simulator` builds against the runner's default (latest installed) simulator
-  # SDK without naming a device or pinning an iOS version. The scheme is the
-  # package's own `BlurtEngine` product scheme, so only the library builds; the
-  # test target stays a macOS (`swift test`) concern.
+  # required `check` job asserts it. The iPhone app links the `BlurtEngine`
+  # product (App/BlurtiOS/project.yml), so the test step's simulator build
+  # compiles the engine for iOS and fails on such a symbol the same way; a
+  # separate library-only build ahead of it compiled the engine a second time,
+  # for every simulator architecture, into DerivedData nothing reused.
   ios-build:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # The engine's simulator build, then the iPhone unit tests with BlurtiOSCore's
-    # coverage gate and the probe's build: ~13 minutes once the audits, analyze
-    # and periphery moved to ios-audits and ios-static (together this job took
+    # The iPhone unit tests (the engine's simulator build among them) with
+    # BlurtiOSCore's coverage gate, and the probe's build: ~13 minutes once the
+    # audits, analyze and periphery moved to ios-audits and ios-static (together this job took
     # 40–48 minutes, check.yml's long pole, Nov 2026). 30 leaves headroom for a
     # slow runner's first simulator boot.
     timeout-minutes: 30
@@ -557,14 +556,6 @@ jobs:
         with:
           path: blurt
           persist-credentials: false
-
-      - name: Build BlurtEngine for iOS
-        working-directory: blurt
-        run: |
-          xcodebuild -scheme BlurtEngine \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
-            build
 
       - name: Install XcodeGen and xcbeautify
         # Just the formulas this job uses, not `brew bundle --file=Brewfile`: the

@@ -137,13 +137,6 @@ public enum DictationLog {
   // than polling the filesystem and hoping.
   static let queue = DispatchQueue(label: HostIdentity.current.queueLabel("DictationLog"))
 
-  /// What an entry holds in place of a transcript dictated into a password field.
-  static let withheldTranscript = "(withheld: dictated into a password field)"
-
-  /// What an entry holds in place of a transcript dictated into a field that
-  /// could not be checked for a password (`TargetSecurity.unknown`).
-  static let unverifiedTranscript = "(withheld: the field could not be checked for a password)"
-
   private static let logger = HostIdentity.current.logger("DictationLog")
 
   /// Deletes both halves of the developer-mode log — the transcript corpus and
@@ -259,8 +252,9 @@ public enum DictationLog {
   /// a field was correctly absent or the write had failed outright.
   ///
   /// A transcript dictated into a password field is the password, so it is
-  /// never written: the entry says only that it was withheld. The same rule
-  /// keeps it out of the recent-dictations ring (`DictationSession`), and
+  /// never written: the entry says only that it was withheld (the pipeline has
+  /// applied `loggable(_:security:)` already). The same rule keeps it out of the
+  /// recent-dictations ring (`DictationSession`), and
   /// `FocusCapture.mustRedactContents` already keeps the field's own text out.
   static func makeEntry(
     transcript: String,

@@ -16,7 +16,9 @@
 # those pass) — so each one says why with `// wall-clock-ok: <reason>`, at the
 # end of its line or on the line above, and an unmarked one fails.
 #
-# Usage: check-test-clock.sh
+# Usage: check-test-clock.sh            every tracked test file
+#        check-test-clock.sh FILE...    just these, less any outside the test
+#                                       scope (the PostToolUse hook's mode)
 
 set -euo pipefail
 
@@ -35,12 +37,26 @@ SCOPE=(
 # itself or on a comment line just above it counts: a trailing comment would push
 # many of these lines past swift-format's 120 columns.
 waits() {
-  local files
-  files="$(git ls-files -- "${SCOPE[@]}")"
-  [ -n "$files" ] || {
-    echo "error: the test scope matches no tracked files: ${SCOPE[*]}" >&2
-    exit 1
-  }
+  local files="" f pat
+  if [ "$#" -gt 0 ]; then
+    # A pathspec's `*` crosses `/`, and so does a `[[ == ]]` pattern's.
+    for f in "$@"; do
+      for pat in "${SCOPE[@]}"; do
+        # shellcheck disable=SC2053 # $pat is a glob on purpose
+        if [[ ${f#"$REPO_ROOT"/} == $pat ]]; then
+          files+="$f"$'\n'
+          break
+        fi
+      done
+    done
+    [ -n "$files" ] || return 0
+  else
+    files="$(git ls-files -- "${SCOPE[@]}")"
+    [ -n "$files" ] || {
+      echo "error: the test scope matches no tracked files: ${SCOPE[*]}" >&2
+      exit 1
+    }
+  fi
   # The pattern goes in through the environment: `awk -v` would process its
   # backslashes, turning `\.` into "any character" on one awk and not another.
   # shellcheck disable=SC2086 # one path per line, no spaces in this tree
@@ -58,7 +74,7 @@ waits() {
   ' $files
 }
 
-hits="$(waits)"
+hits="$(waits "$@")"
 if [ -n "$hits" ]; then
   echo "error: tests wait on the wall clock without saying why:" >&2
   printf '%s\n' "$hits" | sed 's/^/  /' >&2
@@ -68,4 +84,4 @@ if [ -n "$hits" ]; then
   echo "       '// wall-clock-ok: <reason>' at the end of the line or on the line above." >&2
   exit 1
 fi
-echo "every wall-clock wait in the tests says why"
+[ "$#" -gt 0 ] || echo "every wall-clock wait in the tests says why"

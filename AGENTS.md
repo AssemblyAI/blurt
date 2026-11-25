@@ -300,8 +300,8 @@ script in its `macos` job — steps 10 and 11 in `ui-tests`, in parallel — so 
 `check.sh` matches CI by construction. The one status branch protection requires is the summary
 job named `check`, which fails unless every gate below passed or was skipped by design. One more
 job **is** gated, because
-`check.sh` cannot cover it: **`ios-build`** compiles the engine for the iOS simulator
-(`xcodebuild -scheme BlurtEngine -destination 'generic/platform=iOS Simulator'`), which is the only
+`check.sh` cannot cover it: **`ios-build`** compiles the engine for the iOS simulator, as part of
+the iPhone app's build (which links the `BlurtEngine` product), which is the only
 place a macOS-only symbol that escaped its `#if os(macOS)` fence gets caught — `swift test` builds
 for the host, and every other job runs on a Mac. With its siblings **`ios-audits`** and
 **`ios-static`** it then runs **`scripts/ios-check.sh`**'s steps in parallel, which hold

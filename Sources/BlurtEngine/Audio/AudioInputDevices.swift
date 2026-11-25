@@ -102,6 +102,19 @@ public enum AudioInputDevices {
     return device
   }
 
+  /// The device to record from: the pinned device when its UID still resolves
+  /// (`AVCaptureDevice.uniqueID` is the CoreAudio device UID on macOS, the
+  /// same string `MicDeviceStore` persists), else the system default input —
+  /// the same per-capture fallback `MicCapture.resolveInput` applies. Nil when
+  /// the machine has no input at all. One spelling for dictation's
+  /// `CaptureSessionRecorder` and the Record button's `SystemAudioRecorder`.
+  static func device(forPinnedUID pinnedUID: String?) -> AVCaptureDevice? {
+    if let pinnedUID, let pinned = device(forUID: pinnedUID) {
+      return pinned
+    }
+    return systemDefaultDevice
+  }
+
   /// `AVCaptureDevice.transportType` as the `UInt32` four-character code
   /// `AudioTransport` matches against CoreAudio's `kAudioDeviceTransportType*`
   /// constants. Bit-pattern converted rather than numerically: these are packed

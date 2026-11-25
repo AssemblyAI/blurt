@@ -138,7 +138,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
 
     session.beginConfiguration()
     defer { session.commitConfiguration() }
-    if let device = Self.device(forPinnedUID: pinnedUID) {
+    if let device = AudioInputDevices.device(forPinnedUID: pinnedUID) {
       let input = try AVCaptureDeviceInput(device: device)
       if session.canAddInput(input) {
         session.addInput(input)
@@ -187,19 +187,6 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
         continuation.resume(with: Result { try CaptureSessionRecorder(pinnedUID: pinnedUID) })
       }
     }
-  }
-
-  /// The device the session records from: the pinned device when its UID still
-  /// resolves (`AVCaptureDevice.uniqueID` is the CoreAudio device UID on
-  /// macOS, the same string `MicDeviceStore` persists), else the default input
-  /// — the same per-capture fallback `MicCapture.resolveInput` applies, kept
-  /// here too so the race where the device vanishes between resolution and
-  /// build degrades identically. Nil when the machine has no input at all.
-  private static func device(forPinnedUID pinnedUID: String?) -> AVCaptureDevice? {
-    if let pinnedUID, let pinned = AudioInputDevices.device(forUID: pinnedUID) {
-      return pinned
-    }
-    return AudioInputDevices.systemDefaultDevice
   }
 
   /// Opens the device and starts capture, answering false when there is no

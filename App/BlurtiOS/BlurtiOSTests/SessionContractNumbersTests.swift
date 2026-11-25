@@ -251,16 +251,15 @@ struct SessionContractNumbersTests {
         == "com.apple.mobilenotes")
   }
 
-  @Test("hop return: open and live goes back; a keeper expected waits for pip or the cap")
+  @Test("hop return: open and live goes back; a keeper expected waits for pip")
   func hopReturn() {
     let open = ListeningState(launchID: UUID(), sequence: 1, window: .open, micLive: true)
     let pip = ListeningState(launchID: UUID(), sequence: 2, window: .open, idle: .pip, micLive: true)
     let opening = ListeningState(launchID: UUID(), sequence: 1, window: .opening)
-    #expect(HopReturn.isReady(open, keeperExpected: false, capPassed: false))
-    #expect(!HopReturn.isReady(open, keeperExpected: true, capPassed: false))
-    #expect(HopReturn.isReady(pip, keeperExpected: true, capPassed: false))
-    #expect(HopReturn.isReady(open, keeperExpected: true, capPassed: true))
-    #expect(!HopReturn.isReady(opening, keeperExpected: false, capPassed: true))
+    #expect(HopReturn.isReady(open, keeperExpected: false))
+    #expect(!HopReturn.isReady(open, keeperExpected: true))
+    #expect(HopReturn.isReady(pip, keeperExpected: true))
+    #expect(!HopReturn.isReady(opening, keeperExpected: false))
   }
 
   @Test("log subsystem: the keyboard logs under the app's, read through one constant")

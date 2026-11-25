@@ -106,21 +106,9 @@ extension DictationSession {
     let press = pressContext
     let security = press?.targetSecurity ?? .unknown
     // What the developer-mode log may keep is decided here, before the paste,
-    // never from whichever press is current by the time it is written: a
-    // password field's transcript is withheld outright, and an unknown target's
-    // too, since a read that never landed leaves the log no context to decide
-    // from. The same for a hand-back's spoken request as for a pasted dictation.
-    let loggable =
-      switch security {
-      case .secure:
-        DictationLog.withheldTranscript
-
-      case .unknown:
-        DictationLog.unverifiedTranscript
-
-      case .ordinary:
-        text
-      }
+    // never from whichever press is current by the time it is written. The same
+    // for a hand-back's spoken request as for a pasted dictation.
+    let loggable = DictationLog.loggable(text, security: security)
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.

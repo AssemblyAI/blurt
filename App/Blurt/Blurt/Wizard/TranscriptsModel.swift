@@ -132,10 +132,10 @@ final class TranscriptsModel {
       guard let self else {
         return
       }
-      let added = Set(history.map(\.id))
-      history += loaded.filter { !added.contains($0.id) }
+      let savedMeanwhile = !history.isEmpty
+      history = TranscriptStore.merging(history, saved: loaded)
       isLoaded = true
-      if !added.isEmpty { save() }
+      if savedMeanwhile { save() }
       await titleUntitled()
     }
   }
