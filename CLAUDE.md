@@ -1,8 +1,31 @@
 # CLAUDE.md
 
 This repository's canonical agent instructions live in [`AGENTS.md`](./AGENTS.md) — read that first.
-It is tool-agnostic and covers the architecture, the settled decisions you must not reintroduce, the
-conventions, and how to verify a change.
+It is tool-agnostic and covers the repository map, the settled decisions you must not reintroduce,
+the conventions, and how to verify a change. How each part of the pipeline and the app shell works
+lives in [`ARCHITECTURE.md`](./ARCHITECTURE.md): don't read it front to back — open the section for
+the code you are about to change (`AGENTS.md`'s "Architecture reference" indexes it).
+
+## Getting a PR to green fast
+
+A `check.yml` run takes ~37 minutes, so the time to merge is mostly the number of runs a PR needs.
+
+1. **Run `scripts/check.sh --portable` before every push, Swift changes included.** It catches jscpd
+   (copy/paste), invariant, shell, workflow and Markdown failures that otherwise cost a CI run. On a
+   Mac, `scripts/check.sh --lint-only` adds swift-format, `swiftlint lint` and design-sync in
+   minutes.
+2. **Know what only CI checks from a web sandbox**: `swiftlint lint` (not installed here — read
+   `.swiftlint.yml` before writing Swift), periphery (a property assigned but never read is the
+   usual catch), `scripts/design-sync.sh --check` (after touching `App/BlurtiOS/Design/tokens.json`
+   or a keyboard view), swift-format, the build and every test.
+3. **Watch the `lint` job first.** It runs `check.sh --lint-only` and turns red in minutes; `check`
+   runs the same checks but reports them only at the end of its build and tests.
+4. **Push once per batch.** Each push cancels the run in progress and restarts the clock. When a run
+   goes red, fix everything it names — apply the `swift-format-patch` artifact rather than guessing
+   at a reflow — then push.
+
+`AGENTS.md` › Verifying your work › Working without a macOS toolchain has the same rules in
+tool-agnostic form.
 
 This file adds only what is specific to Claude Code: the tooling wired up under `.claude/`.
 
@@ -127,6 +150,8 @@ itself when this Mac has the matching runtime.
 
 `.claude/settings.json` pre-allows the read-only and verification commands this repo needs
 (`swift test`, `swift build`, `xcodegen generate`, the Debug `xcodebuild` invocation, the linters,
-`scripts/check.sh` with and without `--portable`, `scripts/dev-build.sh`, and the iPhone scripts:
+`scripts/check.sh` with and without `--portable` or `--lint-only`, the standalone checks it runs
+(`check-invariants.sh`, `check-portability.sh`, `check-release-notes.sh`, `design-sync.sh --check`,
+`mutate.sh --list`), `scripts/dev-build.sh`, and the iPhone scripts:
 `ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`). If you find yourself
 prompted for a command that belongs in that set, add it there rather than working around it.

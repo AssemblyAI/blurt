@@ -230,7 +230,8 @@ installs as `Blurt Dev.app` under its own bundle id, so it sits beside a
 released Blurt instead of replacing it.
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) has the full local setup — prerequisites,
 what each script does, signing — and how changes land;
-[`AGENTS.md`](./AGENTS.md) has the architecture notes.
+[`AGENTS.md`](./AGENTS.md) and [`ARCHITECTURE.md`](./ARCHITECTURE.md) have the
+architecture notes.
 
 ## Architecture
 
