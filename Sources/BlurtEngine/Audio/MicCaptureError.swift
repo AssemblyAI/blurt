@@ -1,3 +1,5 @@
+import Foundation
+
 /// The capture-specific faults `MicCapture.start()` wraps in
 /// `BlurtError.audioCaptureFailed`, whose description interpolates them into
 /// the overlay's error pill — so each message must read like a sentence, not
@@ -9,7 +11,7 @@
 /// is at the lint file-length budget, and this enum is pure — unlike the
 /// hardware-bound actor it serves, the coverage gate counts it, and the message
 /// tests keep it green.
-enum MicCaptureError: CaptureFailureWording {
+enum MicCaptureError: LocalizedError, CaptureFailureWording {
   /// The active audio route reported no usable input device.
   case noInputDevice
   /// The recorder started but the input never confirmed real signal within
