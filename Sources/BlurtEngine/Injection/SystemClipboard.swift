@@ -107,11 +107,18 @@
     /// Puts `saved` back, unless something wrote to the pasteboard since
     /// `expected` was read: a newer copy by the user survives. Shared by the
     /// paste path and the read-aloud copy fallback (`SelectionCopy`).
+    ///
+    /// A concealed snapshot gets a fresh expiry once it is back. Whatever was
+    /// going to clear it — `write`'s own timer for a password field's
+    /// leave-behind, or a password manager's for its copy — keyed on the change
+    /// count before this paste, so it now finds a different one and skips the
+    /// clear, and the secret would stay on the pasteboard for good.
     func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
       guard changeCount == expected else {
         return
       }
       restore(saved)
+      if saved.isConcealed { expireOurWrite() }
     }
 
     private func noteOwnWrite() { Self.ownWrites.add(1, ordering: .sequentiallyConsistent) }
@@ -216,7 +223,12 @@
       }
 
       if !rebuilt.isEmpty {
-        pasteboard.clearContents()
+        // A restored secret stays on this Mac, as `setString` keeps a new one.
+        if saved.isConcealed {
+          pasteboard.prepareForNewContents(with: .currentHostOnly)
+        } else {
+          pasteboard.clearContents()
+        }
         // `writeObjects` can refuse the batch; fall through to the text floor
         // rather than leaving the pasteboard empty.
         if pasteboard.writeObjects(rebuilt) {
@@ -237,9 +249,7 @@
       // valid `NSPasteboardItem`s is a programming error, not a runtime condition,
       // and NSPasteboard offers no way to test a write before clearing.
       if let plainText = saved.plainText {
-        pasteboard.clearContents()
-        pasteboard.setString(plainText, forType: .string)
-        pasteboard.setData(Data(), forType: Self.transientType)
+        setString(plainText, transient: true, concealed: saved.isConcealed)
       }
     }
   }

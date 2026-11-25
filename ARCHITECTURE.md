@@ -379,7 +379,9 @@ The restore is deliberately conservative: `SystemClipboard.snapshot()` returns `
 pasteboard can't be read at all (distinct from it being _empty_), and `restore` builds the
 replacement items before clearing, so a snapshot it can't reproduce leaves the clipboard alone
 instead of emptying it. Promised (lazily provided) representations can't be copied, so restoring
-those degrades to the plain-text floor rather than a byte-faithful round trip.
+those degrades to the plain-text floor rather than a byte-faithful round trip. A snapshot holding a
+secret (`ConcealedType`) goes back kept to this Mac and with a fresh `concealedLifetime` expiry: the
+clear that was due for it keyed on the change count before the paste, so it would now skip.
 
 It first activates the captured target app; if that app has terminated or won't activate, it leaves
 the transcript on the clipboard and throws `.targetAppLost`, which the pipeline degrades to the quiet
@@ -1088,7 +1090,9 @@ renewal suspends twice on the network, so a `generation` counter makes one that
 wakes after a sign-out, reset or new sign-in write nothing; `signOut()` waits out a renewal in
 flight first, starts none while it talks to the server, and keeps a sign-in that lands meanwhile. A
 sign-in whose key the Keychain refuses puts the earlier session back and revokes the grant it just
-minted. An unreadable session item (a locked Keychain) is looked at again every five minutes, and the
+minted. A sign-in over a session item that can't be read replaces it, since refusing would fail every
+sign-in for as long as it stays unreadable; a key refused then rolls back to no session. An
+unreadable session item (a locked Keychain) is looked at again every five minutes, and the
 loop re-reads the status each pass. `signOut()` ends the connection server-side (`POST /api/v2/oauth/api-key/revoke`) and
 only then forgets it here; a revoke the server couldn't confirm (503) leaves everything in place and
 returns an inline report so the user can retry (`SignInFailure.failureReport` makes the same

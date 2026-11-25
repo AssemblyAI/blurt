@@ -179,10 +179,15 @@ public final class AssemblyAIAccount {
   }
 
   /// Writes a new sign-in's session and key, or neither: when the Keychain
-  /// refuses the key, the session item goes back to what it held before. An
-  /// item that can't be read is refused outright: its contents couldn't be put
-  /// back, and a rollback to "nothing" would delete a session that may still
-  /// be the only way to renew or revoke an earlier grant.
+  /// refuses the key, the session item goes back to what it held before.
+  ///
+  /// An item that can't be read is replaced: the user just signed in again on
+  /// purpose, and refusing would fail every sign-in for as long as the item
+  /// stays unreadable (an ACL prompt denied, an item a differently signed
+  /// build wrote), with no way out from the sign-in flow. Its contents can't
+  /// be put back if the key is then refused, so that rollback is to nothing:
+  /// the grant this sign-in minted is revoked either way, and the unreadable
+  /// session renewed nothing this build could use.
   private func storeSignIn(_ session: SignInSession, key: String) -> Bool {
     let previous: SignInSession?
     switch store.load {
@@ -193,7 +198,8 @@ public final class AssemblyAIAccount {
       previous = nil
 
     case .unavailable:
-      return false
+      Self.log.notice("replacing a sign-in session item that can't be read")
+      previous = nil
     }
     guard store.save(session) else {
       return false
