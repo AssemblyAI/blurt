@@ -383,8 +383,9 @@ already in the list shows a quiet ✓ from the start, so selecting anything
 tells you whether Blurt has it; a tap on that ✓ puts the + back. Highlight
 another word and the chip is back for it. The selection is read off the host
 field on every change (`selectionDidChange`, `textDidChange`); what counts as
-a word is trimmed, one line, at most 48 characters (`termCandidate`, tested),
-and only with Full Access, since the list lives in the App Group. The chip
+a word is trimmed, one line, at most 48 characters, with no comma — the list
+is stored comma-separated, so a comma would split it in two (`termCandidate`,
+tested) — and only with Full Access, since the list lives in the App Group. The chip
 grows from the trailing end towards the line, to `addterm/chip-max-width` at
 most, so the status line keeps its room; a longer word truncates. **Hold the
 chip** (0.6 s, the system's long press, so a touch the system takes away

@@ -34,6 +34,22 @@ struct KeyboardModelChipTests {
     #expect(model.selectedTermIsKnown)
   }
 
+  /// The list is stored comma-separated: a chip for "Acme, Inc" used to add
+  /// "Acme" and "Inc", call the phrase known, and offer it as new again.
+  @Test("a highlight with a comma in it is no chip: its one tap could not add it as it stands")
+  func commaIsNoChip() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(KeyboardModel.termCandidate(from: "Acme, Inc") == nil)
+    let (model, _) = typingModel(before: "we met ", selected: "Acme, Inc")
+    model.hasFullAccess = true
+    model.contextChanged()
+    #expect(model.selectedTerm == nil)
+    #expect(!model.selectedTermIsKnown)
+    model.addSelectedTerm()
+    #expect(SharedStore.keyTerms.isEmpty)
+  }
+
   @Test("the + coming back after a term was added from the chip keeps the highlight's word out of the chip")
   func dismissAfterAdd() {
     let suite = ScratchSuite()

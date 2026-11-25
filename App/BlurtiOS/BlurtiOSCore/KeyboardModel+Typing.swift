@@ -16,9 +16,13 @@ extension KeyboardModel {
 
   /// A selection as a key term: trimmed, on one line, short enough to be a
   /// name or a phrase. Nil when it is none of those, or nothing is selected.
+  /// Never one with a comma: the list is stored comma-separated
+  /// (`SharedStore.keyTerms`), so "Acme, Inc" would come back as two terms —
+  /// the chip's one tap would add "Acme" and "Inc", call the phrase known,
+  /// and offer it again as new the next time it was highlighted.
   package static func termCandidate(from selected: String?) -> String? {
     guard let trimmed = selected.trimmedNonEmpty(), trimmed.count <= termLengthCap,
-      !trimmed.contains(where: \.isNewline)
+      !trimmed.contains(where: \.isNewline), !trimmed.contains(",")
     else {
       return nil
     }
