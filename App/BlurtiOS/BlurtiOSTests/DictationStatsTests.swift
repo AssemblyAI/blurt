@@ -22,10 +22,11 @@ struct DictationStatsTests {
     #expect(stats.secondsSpoken == 2)
   }
 
-  @Test("words are linguistic words, not whitespace runs")
-  func wordCount() {
-    #expect(DictationStats.wordCount(of: "Well — don't stop, okay?") == 4)
-    #expect(DictationStats.wordCount(of: "") == 0)
+  @Test("a dictation's words are the engine's: a lone dash between them isn't one")
+  func wordsAreTheEngines() {
+    var stats = DictationStats()
+    stats.record("Well — don't stop, okay?", spokenFor: 1)
+    #expect(stats.words == 4)
   }
 
   @Test("time saved is the typing time at the speed, less the time spent talking, never negative")

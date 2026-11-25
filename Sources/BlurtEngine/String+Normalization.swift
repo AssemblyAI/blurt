@@ -37,18 +37,22 @@ extension String {
 }
 
 extension StringProtocol {
-  /// How many whitespace-separated words the text holds — the one definition
-  /// of a word, for read-aloud's chunking and the Library's counts. A single
-  /// pass over the scalars: no array of words, and no grapheme segmentation,
-  /// on a transcript that can run to tens of thousands of words.
-  var wordCount: Int {
+  // periphery:ignore - public for the iOS app's dictation stats (App/BlurtiOS), which the Mac scan doesn't index.
+  /// How many words the text holds: whitespace-separated runs with a letter or
+  /// digit in them, so a lone "—" or "…" between words isn't one. The one
+  /// definition of a word, for read-aloud's chunking, the Library's counts and
+  /// the iPhone's dictation stats. A single pass over the scalars: no array of
+  /// words, and no grapheme segmentation, on a transcript that can run to tens
+  /// of thousands of words. Text written without spaces between words counts
+  /// as one word per run.
+  public var wordCount: Int {
     var count = 0
-    var inWord = false
+    var counted = false
     for scalar in unicodeScalars {
       if scalar.properties.isWhitespace {
-        inWord = false
-      } else if !inWord {
-        inWord = true
+        counted = false
+      } else if !counted, scalar.properties.isAlphabetic || scalar.properties.numericType != nil {
+        counted = true
         count += 1
       }
     }

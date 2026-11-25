@@ -1,3 +1,4 @@
+import BlurtEngine
 import Foundation
 
 /// Lifetime totals for the Dictate tab's stats card: dictations, words, and
@@ -24,16 +25,6 @@ package nonisolated struct DictationStats: Codable, Equatable, Sendable {
 
   package init() {
     // Nothing to set: every tally starts at zero.
-  }
-
-  /// Linguistic words, not whitespace runs, so punctuation and languages
-  /// written without spaces count sensibly.
-  package static func wordCount(of text: String) -> Int {
-    var count = 0
-    text.enumerateSubstrings(in: text.startIndex..., options: [.byWords, .substringNotRequired]) { _, _, _, _ in
-      count += 1
-    }
-    return count
   }
 
   package static func load(from defaults: UserDefaults = .standard) -> Self {
@@ -73,7 +64,8 @@ package nonisolated struct DictationStats: Codable, Equatable, Sendable {
   /// since that's what wasn't typed) and how long the user spoke. Empty text
   /// isn't a dictation.
   package mutating func record(_ text: String, spokenFor seconds: Double) {
-    let count = Self.wordCount(of: text)
+    // The engine's one definition of a word, which the Mac's Library counts by too.
+    let count = text.wordCount
     guard count > 0 else {
       return
     }

@@ -55,6 +55,14 @@ extension FileTranscriptionTests {
     #expect(recording.wordCount == 2)
   }
 
+  @Test("a word needs a letter or digit: a lone dash, ellipsis or emoji isn't one")
+  func wordsNeedALetterOrDigit() {
+    #expect("Well — don't stop, okay?".wordCount == 4)
+    #expect("Wait … 3 more 🙂".wordCount == 3)
+    #expect("— … !".wordCount == 0)
+    #expect("e.g. well-known".wordCount == 2)
+  }
+
   @Test("a history that won't decode is moved aside, not overwritten")
   func corruptStore() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: "TranscriptStoreTests-\(UUID())")
