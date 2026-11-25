@@ -19,9 +19,17 @@ permissions:
   contents: read
 
 jobs:
-  # Cheap gate: decide whether anything outside docs/ changed. docs/ is prose
-  # (excluded from the lint checks) and can't affect the build or tests, so a
-  # docs-only change skips the expensive macOS job below.
+  # Cheap gate: decide what kind of change this is, so each job runs only when it
+  # can find something.
+  #   code  — anything outside docs/. docs/ is prose (excluded from the lint
+  #           checks) and can't affect the build or tests, so a docs-only change
+  #           skips every macOS job below.
+  #   swift — anything outside docs/ and outside the evals' Python, Markdown and
+  #           ruff config. An evals-only change (a prompt harness, a scorer) can't
+  #           move a Swift build or test either, so it runs only `lint` — which
+  #           carries ruff and pytest — and skips the ~37-minute Swift/iOS jobs.
+  #           evals/**/*.json stays `swift`: PlannerEvalTests reads
+  #           evals/command-planner/cases.json as a fixture.
   #
   # Why a skipped job rather than `paths-ignore`: `check` is a required status
   # check on main. `paths-ignore` filters the whole workflow, so the required
@@ -32,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      swift: ${{ steps.filter.outputs.swift }}
     steps:
       - name: Checkout blurt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,7 +65,7 @@ jobs:
             range="" # first push / unknown base: run the full check to be safe
           fi
           if [ -z "$range" ]; then
-            echo "code=true" >>"$GITHUB_OUTPUT"; exit 0
+            { echo "code=true"; echo "swift=true"; } >>"$GITHUB_OUTPUT"; exit 0
           fi
           # `|| true` is the safety property, not tidiness: this step runs under
           # `bash -e`, so a failing git diff (an unreachable base sha after a
@@ -74,10 +83,54 @@ jobs:
           else
             echo "code=false" >>"$GITHUB_OUTPUT" # docs-only — skip the heavy job
           fi
+          # Same fail-open shape: an empty `changed` counts as Swift.
+          swiftish="$(printf '%s\n' "$nondocs" \
+            | grep -vE '^evals/.*\.(py|md|toml)$' | grep -v '^$' || true)"
+          if [ -z "$changed" ] || [ -n "$swiftish" ]; then
+            echo "swift=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "swift=false" >>"$GITHUB_OUTPUT" # docs/evals only — lint covers it
+          fi
+
+  # The read-only checks alone (`check.sh --lint-only`: swift-format, swiftlint,
+  # jscpd, design-sync, the invariants, the shell/workflow/Markdown linters, ruff,
+  # pytest, …), so their findings turn the PR red in minutes. `check` runs the
+  # same checks first but, by design, carries on through the build, the tests,
+  # the UI suite and periphery before its exit trap reports — in the month this
+  # job was added for, every red `check` run was one of these checks, surfacing
+  # 30–39 minutes in. `check` keeps running them too, so it stays a complete
+  # answer on its own; this job only moves the bad news earlier. It is also the
+  # only job an evals-only change runs (see `changes`).
+  lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install build tools
+        working-directory: blurt
+        run: brew bundle --file=Brewfile
+
+      - name: Install jscpd
+        working-directory: blurt
+        run: npm ci --prefix tools/jscpd
+
+      - name: Run check.sh --lint-only
+        working-directory: blurt
+        env:
+          CI: "true"
+        run: scripts/check.sh --lint-only
 
   check:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
     # The UI suite alone is ~17 minutes (47 tests, driving every trigger key and
     # read-aloud end to end) on top of the engine suite, the leak run and the
@@ -133,7 +186,7 @@ jobs:
   # same error in ~2, which is the whole point.
   compile:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
     timeout-minutes: 15
 
@@ -168,7 +221,7 @@ jobs:
   #   gh run download <id> -n swift-format-patch && git apply swift-format.patch
   format-patch:
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    if: github.event_name == 'pull_request' && needs.changes.outputs.swift == 'true'
     runs-on: macos-26
     timeout-minutes: 10
 
@@ -237,7 +290,7 @@ jobs:
   # test target stays a macOS (`swift test`) concern.
   ios-build:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
     # The simulator build, the unit tests and the periphery scan (which rebuilds
     # after them) now take 22-29 minutes on macos-26, so 30 started cancelling
@@ -291,7 +344,7 @@ jobs:
   # its timeout. The coverage gate runs in ios-build's plain pass only.
   ios-sanitizers:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
@@ -320,8 +373,10 @@ jobs:
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`
   # failure — silently bypasses the entire macOS gate on a green-looking PR.
   # This job runs whenever the run wasn't cancelled — on a failed or skipped
-  # `needs` too — and fails unless `check` either succeeded or was skipped *by
-  # the docs-only design* (changes.outputs.code == 'false').
+  # `needs` too — and fails unless each gate either succeeded or was skipped
+  # *by design*: `lint` only for a docs-only change
+  # (changes.outputs.code == 'false'), the Swift/iOS gates for a docs- or
+  # evals-only one (changes.outputs.swift == 'false').
   #
   # `!cancelled()`, not `always()`: on a push to main the concurrency group is
   # `check-refs/heads/main`, so each merge cancels the run before it — and
@@ -331,42 +386,46 @@ jobs:
   # merge-queue commit already passed `check` as its merge group.)
   #
   # NOTE: this only protects the repo once branch protection requires `gate`
-  # instead of (or as well as) `check` — that's a repo settings change.
+  # instead of (or as well as) `check` — that's a repo settings change. Until it
+  # does, an evals-only PR is held only by `lint`, which is not required either.
   gate:
-    needs: [changes, check, ios-build, ios-sanitizers]
+    needs: [changes, lint, check, ios-build, ios-sanitizers]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the macOS, iOS and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, iOS and iOS-sanitizer gates ran or were intentionally skipped
         env:
+          LINT_RESULT: ${{ needs.lint.result }}
           CHECK_RESULT: ${{ needs.check.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
           IOS_SANITIZERS_RESULT: ${{ needs.ios-sanitizers.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
+          SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT check=$CHECK_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
           fi
-          # Same rule for both platform gates: green, or skipped only because the
-          # change was docs-only. Written once so the iOS gate can't drift into
-          # a looser reading than the macOS one.
+          # One rule for every gate: green, or skipped only when the filter output
+          # named in $3 says there was nothing for it to check. Written once so no
+          # gate can drift into a looser reading than the others.
           assert_gate() {
             case "$2" in
               success) echo "$1 gate passed" ;;
               skipped)
-                if [ "$CODE_CHANGED" = "false" ]; then
-                  echo "docs-only change; $1 gate intentionally skipped"
+                if [ "$3" = "false" ]; then
+                  echo "$1 gate intentionally skipped (nothing in its scope changed)"
                 else
-                  echo "error: $1 gate was skipped but code changed" >&2
+                  echo "error: $1 gate was skipped but code in its scope changed" >&2
                   exit 1
                 fi
                 ;;
               *) echo "error: $1 gate result was '$2'" >&2; exit 1 ;;
             esac
           }
-          assert_gate macOS "$CHECK_RESULT"
-          assert_gate iOS "$IOS_RESULT"
-          assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT"
+          assert_gate lint "$LINT_RESULT" "$CODE_CHANGED"
+          assert_gate macOS "$CHECK_RESULT" "$SWIFT_CHANGED"
+          assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
+          assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT" "$SWIFT_CHANGED"

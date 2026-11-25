@@ -7,7 +7,8 @@
 # The read-only checks run to completion and report together at the bottom rather
 # than stopping at the first failure — see `run_check` below.
 # `check.sh --portable` runs only the platform-independent subset (for Linux /
-# web sandboxes with no macOS toolchain) — see the flag parsing below.
+# web sandboxes with no macOS toolchain) and `check.sh --lint-only` only the
+# read-only checks that precede the Swift build — see the flag parsing below.
 # The whole-app integration steps (the XCUITest suite and the leak scan) take
 # over the keyboard and screen, so they run on CI only; set
 # BLURT_INTEGRATION_TESTS=1 to include them locally — see the gate further down.
@@ -26,13 +27,28 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 # xcodegen drift check, and app build are all SKIPPED; CI on macos-26 stays the
 # authority. Without the flag, a missing toolchain fails fast here instead of
 # exploding at `swift test`.
+#
+# --lint-only: run every read-only check that precedes the Swift build (the
+# --portable set plus swift-format, swiftlint lint, design-sync and, off CI, the
+# iOS typecheck) and stop before `swift test`. Minutes rather than half an hour,
+# which is the point: every red `check` run in the month before this flag existed
+# was one of these checks, reported 30–39 minutes in because the full run carries
+# on through the build, the tests and the UI suite before its exit trap prints
+# the list. CI's `lint` job runs this so the same findings turn a PR red in
+# minutes; the full `check` job still runs everything. It needs the Swift
+# toolchain (design-sync runs a `swift` script), so it is a Mac mode; a green
+# run says nothing about the build, the tests, swiftlint analyze or periphery.
 PORTABLE=0
-if [ "${1:-}" = "--portable" ]; then
-  PORTABLE=1
-elif [ -n "${1:-}" ]; then
-  echo "error: unknown argument '$1' (the only flag is --portable)" >&2
-  exit 2
-fi
+LINT_ONLY=0
+case "${1:-}" in
+  "") ;;
+  --portable) PORTABLE=1 ;;
+  --lint-only) LINT_ONLY=1 ;;
+  *)
+    echo "error: unknown argument '$1' (the flags are --portable and --lint-only)" >&2
+    exit 2
+    ;;
+esac
 
 if [ "$PORTABLE" -eq 0 ] && ! command -v swift >/dev/null 2>&1; then
   echo "error: no Swift toolchain found (Linux or web sandbox?)." >&2
@@ -221,7 +237,7 @@ run_check() {
 
 # External-dependencies guard. The engine is dependency-free by rule. Each app
 # carries the local BlurtEngine package plus the remote packages allowlisted for
-# *that* spec below — Sparkle, the Mac app's updater (AGENTS.md → Updates);
+# *that* spec below — Sparkle, the Mac app's updater (ARCHITECTURE.md → Updates);
 # KeyboardKit, the iPhone keyboard's engine (App/BlurtiOS/README.md →
 # Dependencies) — each pinned with `exactVersion:` on the line after its url.
 # A third-party dependency is the single biggest supply-chain risk, so fail the
@@ -313,7 +329,7 @@ run_check "no-external-dependencies guard" check_no_external_deps
 # into `grep -q` under pipefail, an early match could leave simctl writing into
 # a closed pipe and read as "no runtime".
 IOS_GATES=0
-if [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && ! is_ci; then
   IOS_SDK_VERSION="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true)"
   IOS_RUNTIMES="$(xcrun simctl list runtimes available 2>/dev/null || true)"
   if [ -n "$IOS_SDK_VERSION" ] && grep -q "^iOS $IOS_SDK_VERSION " <<<"$IOS_RUNTIMES"; then
@@ -328,6 +344,8 @@ fi
 # absent; CI's ios-build job builds and tests the real thing.
 if [ "$IOS_GATES" -eq 1 ]; then
   echo "==> ios-typecheck skipped: ios-check builds App/BlurtiOS for real below"
+elif [ "$LINT_ONLY" -eq 1 ] && is_ci; then
+  echo "==> ios-typecheck skipped: CI's ios-build job builds App/BlurtiOS for real"
 elif [ -d "$(xcrun --show-sdk-path 2>/dev/null)/System/iOSSupport/System/Library/Frameworks/UIKit.framework" ]; then
   run_check "ios-typecheck (App/BlurtiOS, Mac Catalyst stand-in)" "$REPO_ROOT/scripts/ios-typecheck.sh"
 else
@@ -675,6 +693,9 @@ run_check "release notes (release-notes)" bash scripts/check-release-notes.sh
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
+elif [ "$LINT_ONLY" -eq 1 ]; then
+  echo "==> lint-only mode: skipping swift test, coverage gate, sanitizers, xcodegen"
+  echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
 else
   if command -v xcbeautify >/dev/null 2>&1; then
     PRETTY=(xcbeautify --quiet)
@@ -898,7 +919,7 @@ fi
 # the build, but not each other. Each takes minutes — periphery runs its own
 # xcodebuild — so having a swiftlint-analyze finding hide every periphery finding
 # is the most expensive version of the one-red-run-at-a-time problem in this file.
-if [ "$PORTABLE" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1 ]; then
+if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1 ]; then
   # The app build above cds into App/Blurt; come back before reading the log.
   cd "$REPO_ROOT"
   # Analyzer rules need the compiler invocations, so feed them the build log
@@ -909,7 +930,7 @@ if [ "$PORTABLE" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1 ]; then
     swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
 fi
 
-if [ "$PORTABLE" -eq 0 ]; then
+if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ]; then
   if tool_ready periphery 'brew install periphery'; then
     # --strict promotes any unused-code finding to a non-zero exit.
     # Periphery does its own xcodebuild + index — separate from the build above
@@ -924,7 +945,7 @@ fi
 # with a note, as the UI suite is, and CI stays the authority.
 if [ "$IOS_GATES" -eq 1 ]; then
   run_check "ios-check (App/BlurtiOS tests, coverage, analyze, periphery)" "$REPO_ROOT/scripts/ios-check.sh"
-elif [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+elif [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && ! is_ci; then
   IOS_SKIPPED=1
   echo "==> ios-check skipped: no iOS ${IOS_SDK_VERSION:-?} simulator runtime (xcodebuild -downloadPlatform iOS)"
 fi
@@ -935,6 +956,8 @@ fi
 if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
   if [ "$PORTABLE" -eq 1 ]; then
     echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
+  elif [ "$LINT_ONLY" -eq 1 ]; then
+    echo "==> ok (read-only checks only — Swift build/tests, swiftlint analyze and periphery NOT run)"
   elif [ "${INTEGRATION:-0}" -eq 0 ]; then
     # Say it at the end too, where the reader is deciding whether this run means
     # "green": everything else passed, but the UI suite and leak scan did not run.
