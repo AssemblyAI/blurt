@@ -94,7 +94,7 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// whichever of `start` and `finish` comes first. It ends after
   /// `Termination`, or throws if the connection fails; once the session has
   /// closed it is over. One consumer: it is a single stream.
-  public nonisolated let turns: AsyncThrowingStream<RealtimeTurn, any Error>
+  nonisolated public let turns: AsyncThrowingStream<RealtimeTurn, any Error>
   private let turnFeed: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation
   private let session: URLSession
   /// The session's lifecycle, and its socket while it has one.
