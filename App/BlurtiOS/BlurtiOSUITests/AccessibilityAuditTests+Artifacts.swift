@@ -7,6 +7,10 @@ extension AccessibilityAuditTests {
   /// content scrolling under it.
   static let scrollEdge: CGFloat = 44
 
+  /// The class of a word-suggestion slot in the bar above Apple's keyboard,
+  /// as the audit names it.
+  static let predictionCell = "TUIPredictionViewCell"
+
   /// The audit findings the type's comment explains, and nothing broader.
   static func isKnownArtifact(
     _ issue: XCUIAccessibilityAuditIssue,
@@ -16,6 +20,11 @@ extension AccessibilityAuditTests {
   ) -> Bool {
     let partialDynamicType = issue.auditType == .dynamicType && issue.compactDescription.contains("partially")
     if atDefaultSize, partialDynamicType || issue.auditType == .textClipped {
+      return true
+    }
+    // Apple's keyboard, not Blurt's screen: the class name is the only thing
+    // that tells its suggestion slots apart from a Blurt element.
+    if issue.detailedDescription.contains(predictionCell) {
       return true
     }
     guard let element = issue.element else {
