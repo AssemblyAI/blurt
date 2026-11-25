@@ -7,11 +7,18 @@ observable UI rather than mocking views.
 ## What's covered
 
 - **Settings page** — `SettingsUITests`: the real Settings window's API-key flow
-  (save / reject / reveal, and the change → cancel round-trip back to the saved
-  row), the hotkey picker, and the sound picker.
-- **Text shortcuts** — `TextShortcutsUITests`: the Settings pane's add / edit /
-  delete round-trip through the editor sheet, and a duplicate phrase (differing
-  only in case and separators) leaving Save disabled.
+  (save / reject / unreachable / reveal, an edit clearing the error, "Get a Free
+  Key" only before a key is stored, the change → cancel round-trip back to the
+  saved row, and a key connected in Settings reaching the setup window), the
+  microphone and sound pickers, the Styles pane's enhanced-transcripts switch
+  gating the dictation mode and styles, and the Advanced pane (developer mode and
+  its logs row, the experimental switches, the disabled updater, reset's
+  confirmation). The Keys tab is in `KeysAndReadAloudUITests`, the Read Aloud
+  tab in `ReadAloudSettingsUITests`.
+- **Vocabulary** — `TextShortcutsUITests`: the Settings pane's add / edit /
+  delete round-trip through the editor sheet, a duplicate phrase (differing
+  only in case and separators) leaving Save disabled, and key terms surviving a
+  pane switch.
 - **Menu bar** — `MenuBarUITests`: the `MenuBarExtra` status item, its
   discoverability line, and the Open / Settings / Quit actions.
 - **Recording audio** — `DictationPipelineUITests`: the harness drives

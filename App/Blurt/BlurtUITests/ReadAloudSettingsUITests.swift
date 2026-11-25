@@ -62,6 +62,13 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
     XCTAssertEqual(reopened.popUpButtons[UITestIdentifiers.readAloudSpeedPicker].value as? String, "1.5×")
   }
 
+  /// The voice picker starts on the service's default voice.
+  func testVoicePickerDefaultsToJane() {
+    let voice = readAloudTab().popUpButtons[UITestIdentifiers.readAloudVoicePicker]
+    XCTAssertTrue(voice.waitForExistence(timeout: 5), "Voice picker not found")
+    XCTAssertEqual(voice.value as? String, "Jane")
+  }
+
   /// With no key reading aloud or asking, the controls are disabled; a key
   /// that asks enables them again.
   func testControlsFollowTheKeys() {
