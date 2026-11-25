@@ -15,7 +15,7 @@
     func noEditableTargetLeavesPlainWords() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(
-        pasteSettleDuration: .zero, postPaste: { true }, hasEditableTarget: { false }, clipboard: clip)
+        pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: clip)
 
       await #expect(throws: BlurtError.noEditableTarget) {
         try await injector.insert("dictated text")
@@ -31,7 +31,7 @@
     func secureLeaveBehindIsConcealed() async throws {
       let noTarget = FakeClipboard(string: "user-clipboard")
       let unfocused = KeyInjector(
-        pasteSettleDuration: .zero, postPaste: { true }, hasEditableTarget: { false }, clipboard: noTarget)
+        pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: noTarget)
       await #expect(throws: BlurtError.noEditableTarget) {
         try await unfocused.insert("hunter2", secure: true)
       }
@@ -40,7 +40,7 @@
 
       // The keystroke couldn't be built: the same leave-behind, by the third path.
       let noKeystroke = FakeClipboard(string: "user-clipboard")
-      let unposted = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: noKeystroke)
+      let unposted = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in false }, clipboard: noKeystroke)
       await #expect(throws: BlurtError.targetAppLost) {
         try await unposted.insert("hunter2", secure: true)
       }
@@ -54,7 +54,7 @@
       let seen = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
+        postPaste: { _ in
           seen.value = clip.isConcealed
           return true
         },

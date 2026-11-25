@@ -51,6 +51,9 @@
     /// in the meantime (so a user copy during the paste-settle window survives).
     /// Call the returned action once the paste has settled. `concealed` as above.
     func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void
+    /// Serializes a paste against Blurt's other turns on this pasteboard
+    /// (`SelectionCopy`'s copy) — see `PasteboardLock`.
+    var lock: PasteboardLock { get }
   }
 
   /// `ClipboardAccess` backed by the real `NSPasteboard.general`. The change-count
@@ -60,6 +63,8 @@
     /// How long a concealed leave-behind stays for the paste by hand before it
     /// is cleared — a password manager's own copy window.
     static let concealedLifetime: Duration = .seconds(90)
+
+    var lock: PasteboardLock { .system }
 
     // Not transient: these words are meant to stay for a paste by hand, so a
     // clipboard manager keeping them is a feature here — unless they were
