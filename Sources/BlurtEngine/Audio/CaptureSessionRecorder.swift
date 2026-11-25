@@ -96,7 +96,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// this stream — later yields are dropped rather than accumulated. The one
   /// exception is deliberate: after the streaming route refuses a recording past
   /// its cap, `relay` keeps reading to the end of the recording, into the copy
-  /// the buffered fallback sends (`AssemblyAITranscriber+LiveCapFallback.swift`).
+  /// the buffered fallback sends (the AssemblyAI SDK's `DictationClient+LiveCapFallback.swift`).
   /// That copy lives there, on the upload's task — never here, under this
   /// lock. So no backlog forms in this stage at all; check `streamedBody` for
   /// the one that does.

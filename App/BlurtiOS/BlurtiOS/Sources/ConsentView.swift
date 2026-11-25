@@ -49,6 +49,9 @@ struct ConsentView: View {
       } footer: {
         Text("The context helps AssemblyAI spell names right and continue your sentence.")
       }
+      // Wrapped to full height, so the end of what the user agrees to can't be
+      // cut off at the largest text sizes (`WrappingLabelStyle`).
+      .labelStyle(.wrapping)
       Section {
         Link("AssemblyAI's privacy policy", destination: AIConsent.privacyPolicyURL)
       }

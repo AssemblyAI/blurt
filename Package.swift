@@ -63,15 +63,23 @@ let package = Package(
   // iOS 18 is the era-matching floor for macOS 15: the engine's `Synchronization`
   // imports (`Mutex`) need it, and nothing portable here wants anything newer.
   // The macOS-only capture, injection, Accessibility and TCC files are fenced
-  // behind `#if os(macOS)`; the pipeline, STT client and settings stores compile
+  // behind `#if os(macOS)`; the pipeline, provider seams and settings stores compile
   // for both platforms. CI's `ios-build` job is what keeps that true.
   platforms: [.macOS(.v15), .iOS(.v18)],
   products: [
     .library(name: "BlurtEngine", targets: ["BlurtEngine"]),
-    // The AssemblyAI API client the engine is built on: transport, wire types,
-    // key validation. Foundation only, no Blurt policy, so it can become a
-    // standalone SDK. See Sources/AssemblyAI/README.md.
+    // The AssemblyAI API client: transport, wire types, the dictation, TTS,
+    // LLM Gateway, realtime and async clients, key validation and OAuth.
+    // Foundation only, no Blurt code, so another speech project can use it on
+    // its own. See Sources/AssemblyAI/README.md.
     .library(name: "AssemblyAI", targets: ["AssemblyAI"]),
+    // The provider package that runs the engine on AssemblyAI: conforms the
+    // SDK to the engine's provider seams (`TranscriberProtocol`,
+    // `SpeechSynthesizing`, `ChatCompleting`, key validation) and applies
+    // Blurt's choices on the way (prompt, cleanup instruction, key terms,
+    // User-Agent). The engine imports neither this nor the SDK, so another
+    // provider's package can sit beside it. See Sources/BlurtAssemblyAI/README.md.
+    .library(name: "BlurtAssemblyAI", targets: ["BlurtAssemblyAI"]),
   ],
   targets: [
     .target(
@@ -81,10 +89,15 @@ let package = Package(
     ),
     .target(
       name: "BlurtEngine",
-      dependencies: ["AssemblyAI"],
       // The engine's developer guide lives next to the code it documents. SwiftPM
       // has no rule for a stray .md inside a target, so declare it excluded rather
       // than let it land in the target's unhandled-files list.
+      exclude: ["README.md"],
+      swiftSettings: strictSettings
+    ),
+    .target(
+      name: "BlurtAssemblyAI",
+      dependencies: ["BlurtEngine", "AssemblyAI"],
       exclude: ["README.md"],
       swiftSettings: strictSettings
     ),
@@ -98,7 +111,7 @@ let package = Package(
     ),
     .testTarget(
       name: "BlurtEngineTests",
-      dependencies: ["BlurtEngine", "AssemblyAI", "CommandFixture"],
+      dependencies: ["BlurtEngine", "AssemblyAI", "BlurtAssemblyAI", "CommandFixture"],
       swiftSettings: strictSettings
     ),
   ]

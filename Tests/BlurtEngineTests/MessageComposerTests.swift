@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("MessageComposer")
@@ -23,7 +24,7 @@ struct MessageComposerTests {
     #expect(text == "Hey Dan, we should have a way to just speak instructions.")
 
     let request = try #require(sent.value)
-    #expect(request.url == ReadAloudLLM.endpoint)
+    #expect(request.url == GatewayChatClient.endpoint)
     #expect(request.timeoutInterval == MessageComposer.timeout)
     let body = try #require(request.httpBody)
     let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])

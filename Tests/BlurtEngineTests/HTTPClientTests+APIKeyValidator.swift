@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 // The `APIKeyValidator` half of the `HTTPClientTests` suite. Kept on the same

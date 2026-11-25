@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// A signed-in key dictates against the host its sign-in configured; anything

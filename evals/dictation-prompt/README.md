@@ -10,7 +10,7 @@ how well they turn a disfluent transcript back into the text the speaker meant t
 
 The Python here is offline decision support — nothing in it ships inside the app. It is still
 gated by `scripts/check.sh`, which runs ruff (format and lint), mypy, and the `test_*.py` suites
-under a 100% coverage gate (config in [`../pyproject.toml`](../pyproject.toml)). All of it is
+under a 95% coverage gate (config in [`../pyproject.toml`](../pyproject.toml)). All of it is
 platform-independent, so they run in the `--portable` subset too — an eval change can be
 verified off-Mac. A harness whose own correctness is unchecked is a bad instrument.
 
@@ -415,7 +415,7 @@ measured worse on the other, so a winner replaces only its own mode's instructio
 
 The winning string goes into the request's `config.llm_instruction`, next to the `prompt`
 field that steers transcription. The Swift side is
-`Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where the field is an optional
+`Sources/BlurtAssemblyAI/AssemblyAITranscriber.swift`, where the field is an optional
 string — omitting it is what selects the service default.
 
 Store it **verbatim**, exactly as the run emitted it. The harness scores instructions through

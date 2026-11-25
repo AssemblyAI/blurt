@@ -1,4 +1,4 @@
-import AssemblyAI
+import BlurtEngine
 import Foundation
 
 // The presence contract and the shared word lists, split out of
@@ -39,8 +39,8 @@ nonisolated extension SharedStore {
   /// `BlurtKeyTerms`, comma-separated) but in the App Group, so the keyboard
   /// can add one on the spot and the app reads it on the very next press.
   package static var keyTerms: [String] {
-    get { KeyTerms.parse(defaults.string(forKey: keyTermsKey) ?? "") }
-    set { defaults.set(KeyTerms.join(newValue), forKey: keyTermsKey) }
+    get { KeyTermList.parse(defaults.string(forKey: keyTermsKey) ?? "") }
+    set { defaults.set(KeyTermList.join(newValue), forKey: keyTermsKey) }
   }
 
   /// `BlurtKeyTerms` — spelled out here rather than imported from the engine so

@@ -1,6 +1,5 @@
 #if os(macOS)
   import AVFoundation
-  import AssemblyAI
   import CoreAudio
   import Foundation
   import os
@@ -35,7 +34,7 @@
     }
 
     /// 100 ms of 16 kHz 16-bit mono: what `onPCM` is handed at a time.
-    static let handOffBytes = RealtimeTranscriber.chunkBytes
+    static let handOffBytes = Int(SystemAudioRecorder.outputSampleRate) / 10 * SyncSTTLimits.bytesPerSample
 
     private var file: AVAudioFile?
     private let converter: AVAudioConverter

@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// Long articles: reading starts after the first sentence, text goes to the

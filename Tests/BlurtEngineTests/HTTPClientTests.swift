@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// Tests for the HTTP-backed API clients. The `AssemblyAITranscriber` cases live

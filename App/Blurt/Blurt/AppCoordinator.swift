@@ -1,5 +1,6 @@
 import AppKit
 import AssemblyAI
+import BlurtAssemblyAI
 import BlurtEngine
 import Foundation
 import Observation
@@ -196,6 +197,7 @@ final class AppCoordinator {
     guard let seams = triggerKeySeams else {
       return SelectionSpeechRouter(
         session: session,
+        services: .assemblyAI(),
         // Every read is kept, findable and playable from the Recent list.
         clips: ReadClipSink(directory: TranscriptStore.readAloudDirectory) { [weak self] clip in
           Task { @MainActor in self?.transcripts.saveReadClip(clip) }
