@@ -103,8 +103,9 @@
     /// Waits until the app activation has actually become visible to
     /// `NSWorkspace` before editability is checked and Cmd-V is posted. Kept
     /// injectable so tests that stub activation don't depend on the host's live
-    /// foreground app.
-    private let waitForTargetActivation: @Sendable (NSRunningApplication) async -> Bool
+    /// foreground app. Throws `CancellationError` when the insert is cancelled
+    /// mid-wait; `false` means only that the app never came frontmost.
+    private let waitForTargetActivation: @Sendable (NSRunningApplication) async throws -> Bool
 
     /// Whether the process is trusted for Accessibility. Posting the synthesized
     /// Cmd-V requires it (macOS 10.14+); without it `CGEvent.post` is silently
@@ -165,7 +166,7 @@
       postPaste: @escaping @Sendable (CGKeyCode) -> Bool,
       resolvePasteKey: @escaping @Sendable () async -> CGKeyCode = { KeyInjector.ansiV },
       activateTarget: @escaping @Sendable (NSRunningApplication) -> Bool = KeyInjector.activate,
-      waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async -> Bool = { _ in true },
+      waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async throws -> Bool = { _ in true },
       isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
       hasEditableTarget: @escaping @Sendable () -> Bool = { true },
       isAXOpaqueApp: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
@@ -202,16 +203,18 @@
     /// fails — pasting into whatever currently has focus would land the
     /// keystrokes in the wrong place. (`performInsert` puts the transcript on the
     /// clipboard before letting this error propagate, so the words survive.)
+    /// A cancel landing during the frontmost wait throws `CancellationError`
+    /// instead, which `performInsert` lets through without that fallback.
     /// Takes the target as a parameter (the caller's snapshot) rather than
     /// re-reading `targetApp`, so a `setTarget` racing in across the settle
     /// sleep can't swap it mid-paste.
-    private func activateTargetApp(_ target: NSRunningApplication?) async throws(BlurtError) {
+    private func activateTargetApp(_ target: NSRunningApplication?) async throws {
       guard let target else {
         return
       }
       guard !target.isTerminated else { throw BlurtError.targetAppLost }
       guard activateTarget(target) else { throw BlurtError.targetAppLost }
-      guard await waitForTargetActivation(target) else { throw BlurtError.targetAppLost }
+      guard try await waitForTargetActivation(target) else { throw BlurtError.targetAppLost }
     }
 
     public func insert(
@@ -311,12 +314,12 @@
       let finalText = resolved.text
       do {
         try await activateTargetApp(target)
+      } catch let cancel as CancellationError {
+        // A cancel that landed during the frontmost wait (`poll` throws it): a
+        // cancel, not a lost app, so abort without touching the clipboard, the
+        // same as the gate below (#334).
+        throw cancel
       } catch {
-        // A cancel that landed during the frontmost wait reads as "never came
-        // frontmost" (`poll` returns false on a cancelled sleep), so it arrives
-        // here as `.targetAppLost`. It is a cancel, not a lost app: abort without
-        // touching the clipboard, the same as the gate below (#334).
-        try Task.checkCancellation()
         // The target app quit or refused activation between capture and paste.
         // Transcription already succeeded, so leave the words on the clipboard —
         // the pipeline degrades this to the quiet "copied" notice instead of a
