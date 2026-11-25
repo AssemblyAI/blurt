@@ -37,11 +37,7 @@ struct LiveRecordingTests {
   @Test("the mix is capped at the buffer's capacity")
   func mixCapacity() {
     var mic: [Float] = [0.1, 0.2, 0.3, 0.4]
-    let list = AudioBufferList.allocate(maximumBuffers: 1)
-    defer { unsafe free(list.unsafeMutablePointer) }
-    unsafe mic.withUnsafeMutableBytes { bytes in
-      unsafe list[0] = unsafe AudioBuffer(
-        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+    unsafe withMonoList(&mic) { list in
       let out = UnsafeMutablePointer<Float>.allocate(capacity: 2)
       defer { unsafe out.deallocate() }
       unsafe #expect(MixWriter.mix(list, into: out, capacity: 2) == 2)
@@ -94,14 +90,23 @@ struct LiveRecordingTests {
     }
     writer.close()
     var mic = [Float](repeating: 0.2, count: 160)
-    let list = AudioBufferList.allocate(maximumBuffers: 1)
-    defer { unsafe free(list.unsafeMutablePointer) }
-    unsafe mic.withUnsafeMutableBytes { bytes in
-      unsafe list[0] = unsafe AudioBuffer(
-        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+    unsafe withMonoList(&mic) { list in
       unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
     }
     #expect(emitted.withLock { $0 } == 0)
+  }
+
+  /// A one-buffer `AudioBufferList` over `samples`, a mono cycle, for `body` —
+  /// the setup the capacity and after-close tests share.
+  @unsafe
+  private func withMonoList(_ samples: inout [Float], _ body: (UnsafeMutableAudioBufferListPointer) -> Void) {
+    let list = AudioBufferList.allocate(maximumBuffers: 1)
+    defer { unsafe free(list.unsafeMutablePointer) }
+    unsafe samples.withUnsafeMutableBytes { bytes in
+      unsafe list[0] = unsafe AudioBuffer(
+        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+      body(list)
+    }
   }
 
   // MARK: - Live transcript
