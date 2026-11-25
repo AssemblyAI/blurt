@@ -17,8 +17,9 @@
     /// Uses the full `snapshot()`/`restore()` primitives rather than just the string
     /// flavor: snapshotting only `.string` and then clearing unconditionally meant
     /// running these tests wiped a developer's real clipboard whenever it held an
-    /// image, a file, or styled text.
-    private func withClipboardRestored(_ body: () throws -> Void) rethrows {
+    /// image, a file, or styled text. Internal so the suite's extensions in
+    /// other files (`SystemClipboardTests+Expiry.swift`) share it.
+    func withClipboardRestored(_ body: () throws -> Void) rethrows {
       let clip = SystemClipboard()
       let saved = clip.snapshot()
       defer {

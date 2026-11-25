@@ -31,7 +31,7 @@ actor GatedInjector: InjectorProtocol {
     // The gate doesn't model a target: every insert goes through it.
   }
 
-  func insert(_: String, after _: String?, windowTitle _: String?, secure _: Bool) async throws {
+  func insert(_: String, after _: String?, windowTitle _: String?, security _: TargetSecurity) async throws {
     await gate.enter()
     if honorsCancellation { try Task.checkCancellation() }
     onRecord()

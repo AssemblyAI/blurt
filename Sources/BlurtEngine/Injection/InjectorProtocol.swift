@@ -12,11 +12,12 @@ public protocol InjectorProtocol: Sendable {
   /// `windowTitle` is the focused window's title at that same press-time capture —
   /// used to recognize a *continuing* dictation into the same window when
   /// `priorText` is unreadable (see `InsertionSeparator.basis`); nil when the
-  /// window exposes no title. `secure` is a dictation into a password field
-  /// (`TranscriptionContext.targetIsSecure`): words the injector can't land
-  /// and leaves for a paste by hand are a secret, so they must not linger
-  /// where a clipboard manager or the next app keeps them.
-  func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) async throws
+  /// window exposes no title. `security` is the press-time verdict on whether
+  /// the target is a password field (`PressContext.targetSecurity`): words the
+  /// injector can't land and leaves for a paste by hand may be a secret, and
+  /// then must not linger where a clipboard manager or the next app keeps them
+  /// (`TargetSecurity.conceals(inAXOpaqueApp:)` says when).
+  func insert(_ text: String, after priorText: String?, windowTitle: String?, security: TargetSecurity) async throws
   /// Insert text wherever focus is now, leaving the pinned target (`setTarget`)
   /// as it is: a voice command's typed step, after its earlier steps brought
   /// another app forward. No separator, as `replaceSelection`'s paste has none.
@@ -27,6 +28,6 @@ extension InjectorProtocol {
   /// A host with no notion of a target app (the iPhone keyboard) has no other
   /// focus to insert at.
   public func insertAtFocus(_ text: String) async throws {
-    try await insert(text, after: nil, windowTitle: nil, secure: false)
+    try await insert(text, after: nil, windowTitle: nil, security: .ordinary)
   }
 }

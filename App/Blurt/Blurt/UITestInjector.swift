@@ -10,7 +10,7 @@
     func setTarget(_: CapturedFocus?) {
       // Nothing to aim at: the stub pastes into the harness, not a focused app.
     }
-    func insert(_ text: String, after _: String?, windowTitle _: String?, secure _: Bool) async {
+    func insert(_ text: String, after _: String?, windowTitle _: String?, security _: TargetSecurity) async {
       await MainActor.run { UITestState.shared.recordPaste(text) }
     }
   }
