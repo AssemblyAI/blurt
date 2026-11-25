@@ -758,7 +758,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {winner_instruction}\n")
     print(
         "Ship it by replacing `CleanupInstruction.text` in\n"
-        "  Sources/BlurtEngine/STT/CleanupInstruction.swift, which is what\n"
+        "  Sources/BlurtAssemblyAI/CleanupInstruction.swift, which is what\n"
         "`AssemblyAITranscriber` sends as `config.llm_instruction`.\n"
         "Store it verbatim: this harness scores instructions in the same envelope the\n"
         "service applies them in, so a hand-tidied copy is an unscored string."

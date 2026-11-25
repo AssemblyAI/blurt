@@ -121,11 +121,13 @@ extension DictationSession {
       case .ordinary:
         text
       }
+    // The prompt the request carried, as the transcriber reports it, for the log.
+    let sentPrompt = transcriber.contextPrompt(for: press?.resolved)
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.
     if handsBackTranscript {
-      seams.logTranscript(loggable, press?.resolved, .handedBack(spoken))
+      seams.logTranscript(loggable, press?.resolved, .handedBack(spoken), sentPrompt)
       setPhase(.handedBack(spoken))
       return
     }
@@ -156,7 +158,7 @@ extension DictationSession {
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded, security: security)
-    seams.logTranscript(loggable, press?.resolved, outcome)
+    seams.logTranscript(loggable, press?.resolved, outcome, sentPrompt)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.

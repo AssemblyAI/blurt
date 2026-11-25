@@ -85,6 +85,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   // MARK: - Dictation request
 
+  /// `config.stt_prompt` for `context` (`STTPrompt`): what the request sends,
+  /// and what the developer-mode log records.
+  public func contextPrompt(for context: TranscriptionContext?) -> String {
+    STTPrompt.text(context: context)
+  }
+
   public func transcribe(
     frames: AsyncStream<Data>,
     sampleRate: Int,
@@ -104,7 +110,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let mode = instructionMode(enhanced: enhanced)
     let config = makeConfig(
       sampleRate: sampleRate,
-      sttPrompt: STTPrompt.text(context: context),
+      sttPrompt: contextPrompt(for: context),
       keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []),
       customStyle: context?.styleInstructions,
       enhanced: enhanced,

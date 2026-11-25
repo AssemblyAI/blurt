@@ -1,3 +1,5 @@
+import BlurtEngine
+
 /// The cleanup instruction sent as `config.llm_instruction` (see
 /// `AssemblyAITranscriber.DictationConfig`). The service applies it to the
 /// verbatim transcript with its own rewrite model, inside the same
@@ -85,7 +87,7 @@
 /// not a verbatim transcript.
 ///
 /// Exercised by `Tests/BlurtEngineTests/CleanupInstructionTests.swift`.
-package enum CleanupInstruction {
+enum CleanupInstruction {
   /// The sentence in `text` that pins punctuation and capitalization. Left
   /// as-is it beats a style like "no capitals, no commas" even with the
   /// preamble's precedence clause: the model keeps the standard punctuation the
@@ -180,7 +182,7 @@ package enum CleanupInstruction {
   ///
   /// `mode` picks the base: `smartText` for Smart, `text` for Fast — each tuned on, and
   /// measured against, the model that mode runs (see `smartText`).
-  package static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
+  static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
     guard let style = custom.trimmedNonEmpty() else {
       return base(for: mode)
     }

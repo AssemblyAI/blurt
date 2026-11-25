@@ -58,9 +58,20 @@ public protocol TranscriberProtocol: Sendable {
   /// real request pays setup as before. Declared here (not only in the default
   /// extension) so it dispatches dynamically through `any TranscriberProtocol`.
   func warmUp() async
+
+  /// The contextual prompt this transcriber sends for `context` — the text
+  /// before the utterance, exactly as it goes on the wire, trimming included —
+  /// for the developer-mode log (`DictationLog`), which would otherwise have to
+  /// know the provider's field and its limits to rebuild it. Empty when it sends
+  /// none. Declared here, like `warmUp()`, so it dispatches dynamically through
+  /// `any TranscriberProtocol`.
+  func contextPrompt(for context: TranscriptionContext?) -> String
 }
 
 extension TranscriberProtocol {
+  /// Empty default: a transcriber that sends no prompt (e.g. test stubs) logs none.
+  public func contextPrompt(for _: TranscriptionContext?) -> String { "" }
+
   /// No-op default: a transcriber with nothing to pre-open (e.g. test stubs)
   /// inherits this and `DictationSession` can call `warmUp()` unconditionally.
   public func warmUp() {

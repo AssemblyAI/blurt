@@ -579,11 +579,14 @@ Streaming TTS API (`BlurtAssemblyAI`'s `AssemblyAISpeechSynthesizer` over the SD
 Every LLM client below sends through the engine's `GatewayConnection` (a `ChatCompleting` the host
 supplies: AssemblyAI's LLM Gateway, through the SDK's `GatewayChatClient`). A selection is read in pieces (`ListeningChunks`: a short first
 piece, so reading starts after a paragraph, then about 1,500 characters each, at paragraph or
-sentence ends), one request each, rewritten first when skip-jargon is on; the next piece is asked
+sentence ends, cut where the provider says its voice reads a cut best —
+`SpeechSynthesizing.sentences(of:maxCharacters:)`, the SDK's `SpeechSegmenter` on AssemblyAI), one request each, rewritten first when skip-jargon is on; the next piece is asked
 for only once less than 30 s of audio is queued (`SelectionSpeaker.bufferTarget`), so a long
 article (up to 100,000 characters) starts quickly and is synthesized only as far as it is heard;
-the voices offered are the English ones on the docs' Voices page (`ReadAloudVoice.catalog`), since a
-read sends no `language` and a catalog voice would otherwise speak its own.
+the voices offered are the provider's (`SpeechSynthesizing.voices`): on AssemblyAI the English ones on
+the docs' Voices page (`BlurtAssemblyAI`'s `ReadAloudVoice.assemblyAI`), since a read sends no
+`language` and a catalog voice would otherwise speak its own. The setting stores a voice id, or none
+for the provider's default, and the provider speaks its default for an id it doesn't list.
 
 **Rewrite** rides the same routing as ask, up to the hand-back: a rewrite key's press reads the
 selection, records a spoken instruction ("make it more formal") with `pressHandingBack`, and the
@@ -736,7 +739,7 @@ open. Any press abandons a command before its next step. No key takes commands b
 
 ## Contextual prompt and key terms
 
-`Sources/BlurtEngine/STT/STTPrompt.swift` builds the string passed as the dictation
+`Sources/BlurtAssemblyAI/STTPrompt.swift` builds the string passed as the dictation
 request's `config.stt_prompt` — it steers the _transcription_, not the LLM rewrite (that's
 the request's separate `llm_instruction`). It's unit-tested in
 `Tests/BlurtEngineTests/STTPromptTests.swift`.

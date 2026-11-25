@@ -7,8 +7,10 @@ import Foundation
 /// and the rest are asked for only as the listening reaches them.
 ///
 /// Whole paragraphs are packed into a chunk while they fit; a paragraph too
-/// long for one is cut at sentence ends (`SpeechSegmenter`), so a chunk never
-/// starts or ends mid-sentence and the rewrite sees whole thoughts.
+/// long for one is cut at sentence ends by the voice's own rule
+/// (`SpeechSynthesizing.sentences(of:maxCharacters:)`, handed in as
+/// `sentences`), so a chunk never starts or ends mid-sentence and the rewrite
+/// sees whole thoughts.
 enum ListeningChunks {
   /// Big enough that a chunk is a few paragraphs (a minute or two of speech),
   /// small enough that its rewrite comes back in a second or two.
@@ -17,7 +19,10 @@ enum ListeningChunks {
   static let firstMaxCharacters = 400
 
   static func chunks(
-    of text: String, maxCharacters: Int = maxCharacters, firstMaxCharacters: Int = firstMaxCharacters
+    of text: String,
+    maxCharacters: Int = maxCharacters,
+    firstMaxCharacters: Int = firstMaxCharacters,
+    sentences: (String, Int) -> [String]
   ) -> [String] {
     var chunks: [String] = []
     var current = ""
@@ -26,7 +31,7 @@ enum ListeningChunks {
       let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !trimmed.isEmpty else { continue }
       let pieces =
-        trimmed.count <= limit ? [trimmed] : SpeechSegmenter.segments(of: trimmed, maxCharacters: limit)
+        trimmed.count <= limit ? [trimmed] : sentences(trimmed, limit)
       for (index, piece) in pieces.enumerated() {
         let separator = current.isEmpty ? "" : (index == 0 ? "\n\n" : " ")
         if current.count + separator.count + piece.count > limit, !current.isEmpty {

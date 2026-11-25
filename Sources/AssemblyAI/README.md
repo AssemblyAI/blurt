@@ -18,7 +18,9 @@ imports neither.
 | `ErrorResponse`, `AssemblyAIError`     | The dictation API's two documented error shapes, with `error_code` when present, and the client's errors.                                               |
 | `KeyTerms`                             | Key terms for `keyterms_prompt`: fit a clean list to the field's two caps.                                                                              |
 | `DictationLimits`                      | What a recording may be: the 16 kHz geometry, the 20-minute cap, and the ~80 ms floor below which nothing is transcribed.                               |
+| `DictationPrompt`                      | `stt_prompt`: fit passages to the field's 4096-scalar cap, oldest dropped first.                                                                        |
 | `SpeechClient`                         | The streaming TTS API: one `POST /v1/speech` per piece, its PCM read as it arrives.                                                                     |
+| `SpeechSegmenter`                      | Cut text at sentence ends for `SpeechClient`, the voice's measured rule.                                                                                |
 | `GatewayChatClient`                    | The LLM Gateway: one `POST /v1/chat/completions`, answered whole.                                                                                       |
 | `APIKeyValidator`                      | A cheap authenticated check that tells a rejected key from one it couldn't verify.                                                                      |
 | `OAuthAuthorization`                   | One "Sign in with AssemblyAI" attempt: PKCE verifier, `state`, consent URL, callback.                                                                   |

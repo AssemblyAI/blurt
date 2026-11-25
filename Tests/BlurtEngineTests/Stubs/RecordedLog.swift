@@ -13,6 +13,8 @@ final class RecordedLog: Sendable {
     let context: TranscriptionContext?
     /// The phase the dictation ended in, which the log names.
     let outcome: PipelinePhase
+    /// The contextual prompt the transcriber reported sending.
+    var prompt = ""
   }
 
   struct Failure: Sendable {
@@ -33,8 +35,10 @@ final class RecordedLog: Sendable {
   /// aggregate on, and the readable form for an assertion.
   var failureNames: [String] { failures.map(\.error.diagnosticName) }
 
-  func recordTranscript(_ text: String, context: TranscriptionContext?, outcome: PipelinePhase) {
-    state.withLock { $0.transcripts.append(Transcript(text: text, context: context, outcome: outcome)) }
+  func recordTranscript(_ text: String, context: TranscriptionContext?, outcome: PipelinePhase, prompt: String = "") {
+    state.withLock {
+      $0.transcripts.append(Transcript(text: text, context: context, outcome: outcome, prompt: prompt))
+    }
   }
 
   func recordFailure(_ error: BlurtError, context: TranscriptionContext?) {

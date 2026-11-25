@@ -50,15 +50,17 @@ public enum DictationLog {
     /// Selected text (the dictation replaced it), when any. Local to this file:
     /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
-    /// The `config.stt_prompt` string sent for this utterance (`STTPrompt`):
-    /// the user's recent dictations oldest-first, then `prior`, newline-joined.
-    /// Built here from `context` (rather than threaded through from the
-    /// transcriber) so the log always reflects what was actually sent, even for
-    /// calls that construct an entry directly from a context. Worth recording
+    /// The contextual prompt sent for this utterance, as the transcriber
+    /// reports it (`TranscriberProtocol.contextPrompt(for:)`; on AssemblyAI,
+    /// `config.stt_prompt`: the user's recent dictations oldest-first, then
+    /// `prior`, newline-joined). Taken from the transcriber rather than rebuilt
+    /// here, so the log records what the provider sent — its field, its limits,
+    /// its trimming — without the engine knowing any of them. Worth recording
     /// separately from `prior` because it is the only record of how much history
-    /// the request carried and of what the 4096-scalar fit dropped — and
-    /// because this string is trimmed where `prior` is raw (see it). Empty when
-    /// no prompt was sent, and `encode(to:)` then omits the key.
+    /// the request carried and of what the provider's fit dropped — and because
+    /// this string is trimmed where `prior` is raw (see it). Empty when no prompt
+    /// was sent, and `encode(to:)` then omits the key, still named `stt_prompt`
+    /// on disk so the corpus reads the same.
     let sttPrompt: String
     /// The key terms handed to the transcriber for this utterance —
     /// the request's other steering field, so the log accounts for both.
@@ -218,6 +220,7 @@ public enum DictationLog {
   static func append(
     transcript: String,
     context: TranscriptionContext? = nil,
+    contextPrompt: String = "",
     outcome: PipelinePhase? = nil,
     store: DeveloperModeStore = DeveloperModeStore(),
     rewriteMode: @escaping @Sendable () -> RewriteMode? = { requestedRewriteMode() },
@@ -225,7 +228,10 @@ public enum DictationLog {
   ) {
     // The settings are read behind the gate, like everything else the entry carries.
     gated(store: store) { now in
-      write(transcript: transcript, to: url, now: now, context: context, rewriteMode: rewriteMode(), outcome: outcome)
+      write(
+        transcript: transcript, to: url, now: now, context: context, contextPrompt: contextPrompt,
+        rewriteMode: rewriteMode(), outcome: outcome
+      )
     }
   }
 
@@ -253,8 +259,8 @@ public enum DictationLog {
 
   /// One log entry as a value: which parts of the context are carried, how the
   /// timestamp is formatted, and the two steering fields — the contextual prompt
-  /// and the keyterms list — mirroring what the transcriber actually sends, because both
-  /// are built here through the same builders the request uses. Split from `write`
+  /// the transcriber reports sending, and the keyterms list cleaned the way the
+  /// engine cleans every list. Split from `write`
   /// so all of that is assertable directly rather than through a temp file and a
   /// substring search over the encoded line — a search that read the same whether
   /// a field was correctly absent or the write had failed outright.
@@ -266,6 +272,7 @@ public enum DictationLog {
   static func makeEntry(
     transcript: String,
     context: TranscriptionContext?,
+    contextPrompt: String = "",
     now: Date,
     rewriteMode: RewriteMode? = nil,
     outcome: PipelinePhase? = nil
@@ -278,7 +285,7 @@ public enum DictationLog {
       field: context?.fieldLabel,
       prior: context?.priorText,
       selected: context?.selectedText,
-      sttPrompt: STTPrompt.text(context: context),
+      sttPrompt: contextPrompt,
       keyterms: KeyTermList.normalized(context?.keyTerms ?? []),
       rewriteMode: rewriteMode.map { $0.rawValue.lowercased() },
       outcome: outcome.map(outcomeName)
@@ -327,11 +334,15 @@ public enum DictationLog {
     to url: URL,
     now: Date,
     context: TranscriptionContext? = nil,
+    contextPrompt: String = "",
     rewriteMode: RewriteMode? = nil,
     outcome: PipelinePhase? = nil
   ) {
     appendLine(
-      makeEntry(transcript: transcript, context: context, now: now, rewriteMode: rewriteMode, outcome: outcome),
+      makeEntry(
+        transcript: transcript, context: context, contextPrompt: contextPrompt, now: now,
+        rewriteMode: rewriteMode, outcome: outcome
+      ),
       to: url
     )
   }

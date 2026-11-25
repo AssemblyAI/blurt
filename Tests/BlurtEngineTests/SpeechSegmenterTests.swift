@@ -1,6 +1,6 @@
 import Testing
 
-@testable import BlurtEngine
+@testable import AssemblyAI
 
 @Suite("SpeechSegmenter")
 struct SpeechSegmenterTests {

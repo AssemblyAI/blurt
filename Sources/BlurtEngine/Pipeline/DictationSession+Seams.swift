@@ -58,9 +58,11 @@ extension DictationSession {
     /// switch inside `DictationLog.append`, which also dispatches the file I/O
     /// off this actor.
     /// The third argument: the phase the dictation ended in, which the log
-    /// names (`DictationLog.outcomeName`).
-    var logTranscript: @Sendable (String, TranscriptionContext?, PipelinePhase) -> Void = { text, context, outcome in
-      DictationLog.append(transcript: text, context: context, outcome: outcome)
+    /// names (`DictationLog.outcomeName`). The fourth: the contextual prompt the
+    /// transcriber reports sending (`TranscriberProtocol.contextPrompt(for:)`).
+    var logTranscript: @Sendable (String, TranscriptionContext?, PipelinePhase, String) -> Void = {
+      text, context, outcome, prompt in
+      DictationLog.append(transcript: text, context: context, contextPrompt: prompt, outcome: outcome)
     }
 
     /// Records a failure in the sibling error log, from the one place every

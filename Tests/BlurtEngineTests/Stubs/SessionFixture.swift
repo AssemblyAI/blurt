@@ -54,7 +54,7 @@ func testSeams(
   DictationSession.Seams(
     captureFrontmost: { frontmost },
     captureFieldContext: { field },
-    logTranscript: { log.recordTranscript($0, context: $1, outcome: $2) },
+    logTranscript: { log.recordTranscript($0, context: $1, outcome: $2, prompt: $3) },
     logFailure: { log.recordFailure($0, context: $1) }
   )
 }

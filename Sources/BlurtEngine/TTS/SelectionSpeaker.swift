@@ -29,6 +29,11 @@
     /// Where each read's audio is kept and who hears about it; nil keeps none.
     private let clips: ReadClipSink?
 
+    /// The provider's voice for `id`, its default for nil or an unknown id.
+    func voice(for id: String?) -> ReadAloudVoice? {
+      synthesizer.voices.first { $0.id == id } ?? synthesizer.voices.first
+    }
+
     /// The speaker `services` provide: their voice, and their LLM for the
     /// listening rewrite and the spoken answers.
     init(services: SpeechServices, clips: ReadClipSink? = nil) {
@@ -102,7 +107,7 @@
     private func speak(
       _ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?, request: String?
     ) async throws {
-      let pieces = ListeningChunks.chunks(of: text)
+      let pieces = ListeningChunks.chunks(of: text) { synthesizer.sentences(of: $0, maxCharacters: $1) }
       guard !pieces.isEmpty else {
         return
       }
