@@ -476,8 +476,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # ~17 minutes (Nov 2026): the boot and the build, then half the audits
-    # at both sizes; 35 for a slow runner.
+    # ~17–20 minutes (Nov 2026): the boot and the build, then half the
+    # audits at both sizes; 35 for a slow runner. Split by measured time, not
+    # by count: b's six took 469 s to a's 340, so Words moved to a.
+    # Rebalance from the "Executed N tests … in S seconds" line of each.
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -491,6 +493,7 @@ jobs:
               -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeepOpen
               -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeyEntry
               -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testSettings
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testWords
           - shard: b
             selection: >-
               -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testConsent
@@ -499,6 +502,7 @@ jobs:
               -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeepOpen
               -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeyEntry
               -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testSettings
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testWords
 
     steps:
       - name: Checkout blurt
