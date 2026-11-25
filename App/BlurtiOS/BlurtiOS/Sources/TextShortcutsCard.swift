@@ -1,6 +1,5 @@
 import BlurtDesign
 import BlurtEngine
-import BlurtiOSCore
 import SwiftUI
 
 /// The text shortcuts, each with its ×, over two fields that add one. The
@@ -54,6 +53,12 @@ struct TextShortcutsCard: View {
           }
         }
         .brandInput()
+      if TextShortcut.isTaken(trigger, by: takenKeys) {
+        Text("Another shortcut already uses this phrase.")
+          .bodyFont(DesignTokens.Typography.sizeCaption)
+          .foregroundStyle(BlurtBrand.errorOrange)
+          .fixedSize(horizontal: false, vertical: true)
+      }
       TextField("Type this (me@example.com)", text: $expansion, axis: .vertical)
         .lineLimit(1...4)  // literal-ok: the field's rows
         .textInputAutocapitalization(.never)
@@ -71,8 +76,12 @@ struct TextShortcutsCard: View {
     }
   }
 
+  /// Every shortcut's match key: a phrase one of them holds is refused, as on
+  /// the Mac, rather than silently replacing that shortcut.
+  private var takenKeys: Set<String> { Set(shortcuts.map { TextShortcut.matchKey(for: $0.trigger) }) }
+
   private var canAdd: Bool {
-    WordsEdit.canAddShortcut(trigger: trigger, expansion: expansion)
+    TextShortcut.canSave(trigger: trigger, expansion: expansion, otherKeys: takenKeys)
       && shortcuts.count < TextShortcutStore.shortcutLimit
   }
 
@@ -80,7 +89,7 @@ struct TextShortcutsCard: View {
     guard canAdd else {
       return
     }
-    store.shortcuts = WordsEdit.addingShortcut(trigger: trigger, expansion: expansion, to: shortcuts)
+    store.shortcuts = [TextShortcut(trigger: trigger, expansion: expansion)] + shortcuts
     trigger = ""
     expansion = ""
     focus = nil
