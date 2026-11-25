@@ -49,6 +49,37 @@ public enum OverlayPlacement {
     )
   }
 
+  /// The visible frame to place the panel in: that of the connected screen a
+  /// dragged `customOrigin` puts most of the panel on, else `fallback` (the
+  /// shell's `NSScreen.main`). With no dragged origin the pill follows the
+  /// active screen, so that is `fallback` too.
+  ///
+  /// The clamp in `origin` is for an origin left on a monitor since unplugged.
+  /// Given only the active screen, it also caught a pill dragged onto a second
+  /// display that is still connected: working on the first display, the next
+  /// dictation pinned the pill to that display's edge nearest the second — a
+  /// place the user never put it — and the drag could never stick.
+  public static func visibleFrame(
+    for customOrigin: CGPoint?,
+    panelSize: CGSize,
+    among visibleFrames: [CGRect],
+    fallback: CGRect
+  ) -> CGRect {
+    guard let customOrigin else {
+      return fallback
+    }
+    let panel = CGRect(origin: customOrigin, size: panelSize)
+    var best: (frame: CGRect, area: CGFloat)?
+    for frame in visibleFrames {
+      let overlap = frame.intersection(panel)
+      let area = overlap.isNull ? 0 : overlap.width * overlap.height
+      if area > (best?.area ?? 0) {
+        best = (frame: frame, area: area)
+      }
+    }
+    return best?.frame ?? fallback
+  }
+
   /// Resolves the panel's origin: the user's dragged `customOrigin` clamped
   /// fully back onto the current screen, or — when the pill has never been
   /// moved — the default placement, horizontally centered with its bottom edge
