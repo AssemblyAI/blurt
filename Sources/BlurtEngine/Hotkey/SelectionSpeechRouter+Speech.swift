@@ -11,7 +11,7 @@ import os
     /// a cue sound plays it. A newer pick cuts off the one still playing.
     public func previewSample() {
       let style = ReadAloudStyleStore(defaults: defaults).style
-      let name = ReadAloudVoice.voice(id: style.voiceID)?.name ?? "your voice"
+      let name = speaker.voice(for: style.voiceID)?.name ?? "your voice"
       let sample = style.verbatim
       preview?.cancel()
       preview = Task { [weak self, speaker] in

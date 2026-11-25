@@ -1,40 +1,19 @@
-/// A voice read-aloud can speak with: its `voice_id` in a TTS request and the
-/// name the Settings picker shows.
+/// A voice read-aloud can speak with: its id in a TTS request and the name the
+/// Settings picker shows.
 ///
-/// `catalog` is the English voices from the TTS docs' Voices page
-/// (https://www.assemblyai.com/docs/tts/voices). English only, because a read
-/// sends no `language`: without one a catalog voice speaks the language it was
-/// recorded in, so a Spanish voice would read an English selection as Spanish.
-/// The built-in voices are always loaded on the server; any other voice loads
-/// when a session first opens with it, so its first read after a quiet spell
-/// starts a little later.
+/// Which voices there are is the provider's to say
+/// (`SpeechSynthesizing.voices`; `BlurtAssemblyAI`'s `ReadAloudVoice.assemblyAI`
+/// lists AssemblyAI's), so the engine holds the shape and no catalog.
 public struct ReadAloudVoice: Sendable, Equatable, Identifiable {
   public enum Group: String, Sendable, CaseIterable {
     case builtIn = "Built-in"
     case library = "Voice Library"
   }
 
-  /// The service's own default, `aai-jane`, so an untouched install sounds as
-  /// a session with no `voice_id` would.
-  public static let defaultID = "aai-jane"
-
-  public static let catalog: [Self] =
-    [
-      "Jane", "Alba", "Anna", "Charles", "Eve", "George", "Jean", "Mary", "Michael", "Paul", "Vera",
-    ].map { builtIn($0) }
-    + [
-      ("Aaliyah", "American"), ("Abdiel", nil), ("Annabelle", "American"), ("April", "American"),
-      ("Audrey", "American"), ("Buford", "British"), ("Carrie", "British"), ("Cloyd", "British"),
-      ("Dorsey", nil), ("Ernest", "American"), ("Ewald", "American"), ("Gunnar", nil),
-      ("Hailey", "American"), ("Kyla", "American"), ("Lilla", "British"), ("Nancy", "British"),
-      ("Percival", "British"), ("Peter", "American"), ("Sara", "American"), ("Steven", "Australian"),
-      ("Titus", "American"), ("Troy", "Scottish"), ("Yasmin", "British"),
-    ].map { library($0.0, accent: $0.1) }
-
-  /// The `voice_id` query parameter: an AssemblyAI library slug.
+  /// The id the provider's TTS request names the voice by.
   public let id: String
   public let name: String
-  /// The accent the docs list for a library voice ("British"), or nil.
+  /// The accent the provider lists for the voice ("British"), or nil.
   public let accent: String?
   public let group: Group
 
@@ -43,19 +22,11 @@ public struct ReadAloudVoice: Sendable, Equatable, Identifiable {
     accent.map { "\(name) (\($0))" } ?? name
   }
 
-  /// The catalog entry for `id`, or nil for an id that isn't one.
-  public static func voice(id: String) -> Self? {
-    catalog.first { $0.id == id }
+  /// A voice named `name`, which the provider's requests call `id`.
+  public init(id: String, name: String, accent: String?, group: Group) {
+    self.id = id
+    self.name = name
+    self.accent = accent
+    self.group = group
   }
-
-  private static func builtIn(_ name: String) -> Self {
-    Self(id: slug(name), name: name, accent: nil, group: .builtIn)
-  }
-
-  private static func library(_ name: String, accent: String?) -> Self {
-    Self(id: slug(name), name: name, accent: accent, group: .library)
-  }
-
-  /// The docs' slugs are `aai-` and the lowercased name, for every voice listed.
-  private static func slug(_ name: String) -> String { "aai-" + name.lowercased() }
 }

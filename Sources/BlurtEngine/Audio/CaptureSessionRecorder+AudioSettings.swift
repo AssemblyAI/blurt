@@ -9,7 +9,7 @@
     /// keys the retired WAV recorder asked of its file, so capture still lands in
     /// upload-ready S16LE with no resample pass anywhere.
     ///
-    /// Every number comes from `SyncSTTLimits`, which also owns the byte math the
+    /// Every number comes from `RecordingLimits`, which also owns the byte math the
     /// upload side applies to the result. They are one contract: a stereo or
     /// 8-bit recorder would silently halve or double every duration the pipeline
     /// computes. Device-free, so `MicCaptureFormatTests` can assert it despite
@@ -19,9 +19,9 @@
     static func audioSettings() -> [String: Any] {
       [
         AVFormatIDKey: kAudioFormatLinearPCM,
-        AVSampleRateKey: Double(SyncSTTLimits.sampleRate),
-        AVNumberOfChannelsKey: SyncSTTLimits.channelCount,
-        AVLinearPCMBitDepthKey: SyncSTTLimits.bitDepth,
+        AVSampleRateKey: Double(RecordingLimits.sampleRate),
+        AVNumberOfChannelsKey: RecordingLimits.channelCount,
+        AVLinearPCMBitDepthKey: RecordingLimits.bitDepth,
         AVLinearPCMIsFloatKey: false,
         AVLinearPCMIsBigEndianKey: false,
       ]

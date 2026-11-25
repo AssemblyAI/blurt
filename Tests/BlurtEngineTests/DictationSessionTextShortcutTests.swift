@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("DictationSession text shortcuts", .timeLimit(.minutes(1)))

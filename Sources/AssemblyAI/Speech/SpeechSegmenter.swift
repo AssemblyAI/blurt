@@ -1,8 +1,8 @@
-/// Cuts text at sentence ends — what `ListeningChunks` uses to split a
-/// paragraph too long for one piece, so a piece never starts or ends
-/// mid-sentence.
+/// Cuts text at sentence ends, for text too long for one `SpeechClient`
+/// request: a piece that starts or ends mid-sentence is spoken with the wrong
+/// intonation at the cut.
 ///
-/// The rule is the one the AssemblyAI agent runtime measured
+/// The rule is the one the AssemblyAI agent runtime measured for this voice
 /// (`aai-runtime/src/providers/tts/assemblyai-segment.ts`):
 ///
 /// - **Cut at sentence ends only.** Terminal punctuation plus any closing
@@ -15,7 +15,7 @@
 ///
 /// `maxCharacters` only splits a runaway sentence, such as a paragraph with no
 /// punctuation.
-enum SpeechSegmenter {
+public enum SpeechSegmenter {
   /// A sentence end: terminal punctuation plus closers, looking ahead for
   /// whitespace or the end so "3.5" and "v1.2" don't match. Curly closers are
   /// included because a typographic `.”` is the common case, not an edge case.
@@ -24,7 +24,8 @@ enum SpeechSegmenter {
 
   static let minWords = 2
 
-  static func segments(of text: String, maxCharacters: Int = 400) -> [String] {
+  /// `text` cut at sentence ends into segments of at most `maxCharacters`.
+  public static func segments(of text: String, maxCharacters: Int = 400) -> [String] {
     var sentences: [String] = []
     var start = text.startIndex
     for match in unsafe text.matches(of: boundary) {
@@ -46,7 +47,7 @@ enum SpeechSegmenter {
     var pending = ""
     for sentence in sentences {
       pending = pending.isEmpty ? sentence : pending + " " + sentence
-      if pending.wordCount >= minWords {
+      if wordCount(pending) >= minWords {
         merged.append(pending)
         pending = ""
       }
@@ -74,5 +75,10 @@ enum SpeechSegmenter {
     }
     if let tail = String(rest).trimmedNonEmpty() { pieces.append(tail) }
     return pieces
+  }
+
+  /// How many whitespace-separated words `text` holds.
+  static func wordCount(_ text: String) -> Int {
+    text.split(whereSeparator: \.isWhitespace).count
   }
 }

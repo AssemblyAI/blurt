@@ -34,11 +34,11 @@ struct SessionContractNumbersTests {
       row("leaving with a stop out", "`KeyboardModel.leaveGrace` \(seconds(KeyboardModel.leaveGrace))"),
       row("readiness lease", "`ListeningState.lease` \(seconds(ListeningState.lease))"),
       row("window lifetime", "`ListeningWindowMachine.untilStopped` \(ListeningWindowMachine.untilStopped)"),
-      row("window lifetime", "`SyncSTTLimits.maxAudioSeconds` \(seconds(SyncSTTLimits.maxAudioSeconds))"),
+      row("window lifetime", "`RecordingLimits.maxAudioSeconds` \(seconds(RecordingLimits.maxAudioSeconds))"),
       row("interruption → resume", "`ListeningWindow.resumePoll` \(milliseconds(ListeningWindow.resumePoll))"),
       row("background task", "`BlurtShared.releaseBackgroundTask` \(seconds(BlurtShared.releaseBackgroundTask))"),
       row("owner watchdog", "`BlurtShared.ownerWatchdog` \(seconds(BlurtShared.ownerWatchdog))"),
-      row("owner watchdog", "`SyncSTTLimits.autoReleaseSeconds` \(seconds(SyncSTTLimits.autoReleaseSeconds))"),
+      row("owner watchdog", "`RecordingLimits.autoReleaseSeconds` \(seconds(RecordingLimits.autoReleaseSeconds))"),
       row("press ack", "`BlurtShared.pressDeadline` \(seconds(BlurtShared.pressDeadline))"),
       row("stop ack", "`BlurtShared.stopDeadline` \(seconds(BlurtShared.stopDeadline))"),
       row(
@@ -157,7 +157,7 @@ struct SessionContractNumbersTests {
   func windowLifetime() {
     #expect(ListeningWindowMachine.untilStopped == 0)
     #expect(ListeningWindowMachine.secondsPerMinute == 60)
-    #expect(SyncSTTLimits.maxAudioSeconds == 1_200)
+    #expect(RecordingLimits.maxAudioSeconds == 1_200)
   }
 
   @Test("command freshness and result freshness")
@@ -177,7 +177,7 @@ struct SessionContractNumbersTests {
   func staleness() {
     #expect(PhaseSnapshot.noticeStaleAfter == 3)
     #expect(PhaseSnapshot.inFlightStaleAfter == 1_210)
-    #expect(SyncSTTLimits.autoReleaseSeconds == 1_195)
+    #expect(RecordingLimits.autoReleaseSeconds == 1_195)
   }
 
   @Test("notice dwell: pasted a little longer than the Mac's, copied and error longer still")

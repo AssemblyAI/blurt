@@ -1,40 +1,33 @@
-/// Limits imposed by the Sync STT model behind AssemblyAI's dictation API
-/// (the dictation service forwards audio to Sync unchanged, so its caps apply
-/// end to end). `DictationSession` auto-releases a held hotkey just before the
-/// recording cap so a long press never records audio the API would reject.
+/// How Blurt records a dictation: the capture geometry, the longest a held key
+/// records before it auto-releases, and the shortest tap worth sending.
 ///
-/// Two routes, two caps. The **streaming** route every dictation starts on,
-/// `/v1/transcribe/live`, accepts at most 120 s (server-side since
-/// 2026-10-14); the **buffered** route, `/v1/transcribe`, accepts 20 minutes
-/// and 256 MB. The recording cap below is the buffered route's, and a
-/// recording that outlives the streaming route's is finished and sent there
-/// whole — the AssemblyAI SDK's `DictationClient+LiveCapFallback.swift`. The 120 s figure has
-/// no constant: nothing on the client acts on it, the route enforces it with a
-/// `413`, and that response is the trigger.
-public enum SyncSTTLimits {
-  /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry the API
-  /// expects. The single definition shared by `MicCapture` (which records at
+/// These are the engine's own policy, and they name no provider. What the
+/// speech API accepts is the provider SDK's to state (the AssemblyAI SDK's
+/// `DictationLimits`: the route's sample rate, its 20-minute cap and the clip
+/// length below which it transcribes nothing), and `RecordingLimitsTests` pins
+/// that every number here sits inside those. A provider whose limits differ is
+/// a change to that test's expectations, not a hidden mismatch.
+public enum RecordingLimits {
+  /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry Blurt records
+  /// and sends. The single definition shared by `MicCapture` (which records at
   /// this rate) and `DictationSession` (which declares it on the request), so
   /// the recorded and declared rates can't drift apart.
   public static let sampleRate = 16_000
 
-  /// Maximum recording length (seconds): 20 minutes, the buffered route's
-  /// documented cap. Raised from 120 s in #251. Only the first 120 s of it fit
-  /// the streaming route; a longer recording is refused there and sent whole to
-  /// `/v1/transcribe`, which is why a recording past two minutes is held in
-  /// memory (`DictationClient.maxBufferedAudioBytes`) until it is sent — ~38 MB
-  /// at this cap.
+  /// Maximum recording length (seconds): 20 minutes, as long as the provider
+  /// accepts (raised from 120 s in #251). How the provider carries a recording
+  /// that long — on AssemblyAI, a recording past the streaming route's 120 s is
+  /// held in memory and sent whole to the buffered route, ~38 MB at this cap —
+  /// is the SDK's (`DictationClient+LiveCapFallback.swift`).
   /// The alternative to that copy is putting this back to 120, so a held key
   /// auto-releases just inside the streaming route's cap.
   public static let maxAudioSeconds: Double = 1_200
 
-  /// Minimum audio duration worth sending (seconds). Not a rejection
-  /// threshold: measured against `/v1/transcribe/live` (2026-09-09) the route
-  /// answers 20/50/80 ms clips with 200 and an empty `text`, so a recording
-  /// below this — an accidental ultra-brief tap — is dropped as a silent no-op
-  /// to avoid paying for a request that transcribes nothing, not to avoid an
-  /// error. Set a hair above the model's documented ~80 ms floor for margin,
-  /// which is also where words first appear in the sweep.
+  /// Minimum audio duration worth sending (seconds). A recording below this —
+  /// an accidental ultra-brief tap — is dropped as a silent no-op rather than
+  /// paying for a request that transcribes nothing: the provider answers such a
+  /// clip with an empty transcript, not an error. Set a hair above the floor
+  /// the provider states, for margin.
   public static let minAudioSeconds: Double = 0.1
 
   /// The sample form of `minAudioSeconds` — see there for what the route

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("ReadAloudStyleStore")
@@ -41,10 +42,11 @@ struct ReadAloudStyleStoreTests {
     #expect(store.style.rate == ReadAloudStyleStore.defaultSpeed)
   }
 
-  @Test("untouched, the voice is the service's own default, aai-jane")
+  @Test("untouched, no voice is named, so the provider speaks its default, aai-jane")
   func defaultVoice() {
-    #expect(ReadAloudStyleStore(defaults: freshDefaults()).style.voiceID == "aai-jane")
-    #expect(ReadAloudVoice.voice(id: ReadAloudStyleStore.defaultVoiceID)?.group == .builtIn)
+    #expect(ReadAloudStyleStore(defaults: freshDefaults()).style.voiceID == nil)
+    #expect(ReadAloudVoice.assemblyAIVoice(id: nil).id == "aai-jane")
+    #expect(ReadAloudVoice.assemblyAIVoice(id: nil).group == .builtIn)
   }
 
   @Test("a chosen voice reads back")
@@ -55,24 +57,29 @@ struct ReadAloudStyleStoreTests {
     #expect(store.style.voiceID == "aai-yasmin")
   }
 
-  /// The retired bare name, a voice the service would refuse with 3012, and blank.
-  @Test("a voice the catalog doesn't list reads as the default", arguments: ["jane", "aai-nonexistent", ""])
-  func staleVoice(stale: String) {
+  @Test("a blank voice slot names no voice")
+  func blankVoice() {
     let defaults = freshDefaults()
     let store = ReadAloudStyleStore(defaults: defaults)
-    defaults.set(stale, forKey: ReadAloudStyleStore.voiceDefaultsKey)
-    #expect(store.style.voiceID == ReadAloudStyleStore.defaultVoiceID)
+    defaults.set("  ", forKey: ReadAloudStyleStore.voiceDefaultsKey)
+    #expect(store.style.voiceID == nil)
   }
 
-  @Test("the catalog: unique aai- slugs, built-ins first, every voice labelled")
+  /// The retired bare name, a voice the service would refuse with 3012, and blank.
+  @Test("a voice the catalog doesn't list resolves to the default", arguments: ["jane", "aai-nonexistent", ""])
+  func staleVoice(stale: String) {
+    #expect(ReadAloudVoice.assemblyAIVoice(id: stale).id == ReadAloudVoice.assemblyAIDefaultID)
+  }
+
+  @Test("the catalog: unique aai- slugs, built-ins first, the default leading, every voice labelled")
   func catalog() {
-    let ids = ReadAloudVoice.catalog.map(\.id)
+    let ids = ReadAloudVoice.assemblyAI.map(\.id)
     #expect(Set(ids).count == ids.count)
     #expect(ids.allSatisfy { $0.hasPrefix("aai-") && $0 == $0.lowercased() })
-    #expect(ReadAloudVoice.catalog.filter { $0.group == .builtIn }.count == 11)
-    #expect(ReadAloudVoice.catalog.first?.id == ReadAloudVoice.defaultID)
-    #expect(ReadAloudVoice.voice(id: "aai-steven")?.label == "Steven (Australian)")
-    #expect(ReadAloudVoice.voice(id: "aai-gunnar")?.label == "Gunnar")
+    #expect(ReadAloudVoice.assemblyAI.filter { $0.group == .builtIn }.count == 11)
+    #expect(ReadAloudVoice.assemblyAI.first?.id == ReadAloudVoice.assemblyAIDefaultID)
+    #expect(ReadAloudVoice.assemblyAIVoice(id: "aai-steven").label == "Steven (Australian)")
+    #expect(ReadAloudVoice.assemblyAIVoice(id: "aai-gunnar").label == "Gunnar")
   }
 
   @Test("the default speed is one the picker offers")

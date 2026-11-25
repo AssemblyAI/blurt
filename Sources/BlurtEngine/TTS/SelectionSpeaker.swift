@@ -102,7 +102,7 @@
     private func speak(
       _ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?, request: String?
     ) async throws {
-      let pieces = ListeningChunks.chunks(of: text)
+      let pieces = ListeningChunks.chunks(of: text) { synthesizer.sentences(of: $0, maxCharacters: $1) }
       guard !pieces.isEmpty else {
         return
       }
@@ -165,6 +165,11 @@
       let reply = try await llm.answer(request, about: selection.trimmingCharacters(in: .whitespacesAndNewlines))
       try Task.checkCancellation()
       try await speak(reply, style: style.verbatim, onLevel: onLevel, request: request)
+    }
+
+    /// The provider's voice for `id`, its default for nil or an unknown id.
+    func voice(for id: String?) -> ReadAloudVoice? {
+      synthesizer.voices.first { $0.id == id } ?? synthesizer.voices.first
     }
 
     /// A writer for this read's clip, when clips are kept and the file opens.

@@ -50,15 +50,17 @@ public enum DictationLog {
     /// Selected text (the dictation replaced it), when any. Local to this file:
     /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
-    /// The `config.stt_prompt` string sent for this utterance (`STTPrompt`):
-    /// the user's recent dictations oldest-first, then `prior`, newline-joined.
-    /// Built here from `context` (rather than threaded through from the
-    /// transcriber) so the log always reflects what was actually sent, even for
-    /// calls that construct an entry directly from a context. Worth recording
+    /// The contextual prompt sent for this utterance, as the transcriber
+    /// reports it (`TranscriberProtocol.contextPrompt(for:)`; on AssemblyAI,
+    /// `config.stt_prompt`: the user's recent dictations oldest-first, then
+    /// `prior`, newline-joined). Taken from the transcriber rather than rebuilt
+    /// here, so the log records what the provider sent — its field, its limits,
+    /// its trimming — without the engine knowing any of them. Worth recording
     /// separately from `prior` because it is the only record of how much history
-    /// the request carried and of what the 4096-scalar fit dropped — and
-    /// because this string is trimmed where `prior` is raw (see it). Empty when
-    /// no prompt was sent, and `encode(to:)` then omits the key.
+    /// the request carried and of what the provider's fit dropped — and because
+    /// this string is trimmed where `prior` is raw (see it). Empty when no prompt
+    /// was sent, and `encode(to:)` then omits the key, still named `stt_prompt`
+    /// on disk so the corpus reads the same.
     let sttPrompt: String
     /// The key terms handed to the transcriber for this utterance —
     /// the request's other steering field, so the log accounts for both.
@@ -138,59 +140,8 @@ public enum DictationLog {
   // than polling the filesystem and hoping.
   static let queue = DispatchQueue(label: HostIdentity.current.queueLabel("DictationLog"))
 
-  private static let logger = HostIdentity.current.logger("DictationLog")
-
-  /// Deletes both halves of the developer-mode log — the transcript corpus and
-  /// the sibling error log — and the directory they share once it's empty. The
-  /// file half of a full reset (`InstallReset`), matching what
-  /// `scripts/reset-lib.sh` removes: a preinstall state has neither file,
-  /// and the logs are the one place transcripts are written to disk, so leaving
-  /// them behind would be the most sensitive half of the reset going undone.
-  ///
-  /// A file that isn't there is a success, not a failure — that's the state
-  /// being asked for, and it's the normal case for anyone who never switched
-  /// developer mode on. False means a file exists and couldn't be removed.
-  ///
-  /// The directory removal is deliberately conditional on it being empty: it is
-  /// `~/Library/Logs/<host>`, and anything else that ended up there is not this
-  /// function's to delete.
-  ///
-  /// Internal, like every other step of the sweep: `InstallReset` is the door
-  /// the shell uses, so this needs no more reach than the engine itself.
-  @discardableResult
-  static func removeStoredLogs() -> Bool {
-    removeStoredLogs(dictations: defaultURL, errors: defaultErrorURL, commands: defaultCommandURL)
-  }
-
-  /// The addressable half of `removeStoredLogs()`, taking every URL for the
-  /// reason `append` takes one: otherwise the only way to exercise this is
-  /// against the developer's real `~/Library/Logs`. No defaults: one on
-  /// `commands` had every test that named the other two delete the real
-  /// command log, each `swift test` (2026-11-04).
-  @discardableResult
-  static func removeStoredLogs(dictations: URL, errors: URL, commands: URL) -> Bool {
-    let manager = FileManager.default
-    var allRemoved = true
-    for url in [dictations, errors, commands] where manager.fileExists(atPath: url.path(percentEncoded: false)) {
-      do {
-        try manager.removeItem(at: url)
-      } catch {
-        allRemoved = false
-        // The name only, never the absolute path — it carries the user's account
-        // name, and this is the system-wide log.
-        let reason = error.localizedDescription
-        logger.error(
-          "removing \(url.lastPathComponent, privacy: .public) failed: \(reason, privacy: .public)"
-        )
-      }
-    }
-    let directory = dictations.deletingLastPathComponent()
-    let remaining = try? manager.contentsOfDirectory(atPath: directory.path(percentEncoded: false))
-    if remaining?.isEmpty == true {
-      try? manager.removeItem(at: directory)
-    }
-    return allRemoved
-  }
+  /// Internal so the removal sweep (`DictationLog+Removal.swift`) logs to the same category.
+  static let logger = HostIdentity.current.logger("DictationLog")
 
   // .sortedKeys keeps the on-disk JSONL deterministic (stable diff for tests
   // and post-hoc grep).
@@ -211,6 +162,7 @@ public enum DictationLog {
   static func append(
     transcript: String,
     context: TranscriptionContext? = nil,
+    contextPrompt: String = "",
     outcome: PipelinePhase? = nil,
     store: DeveloperModeStore = DeveloperModeStore(),
     rewriteMode: @escaping @Sendable () -> RewriteMode? = { requestedRewriteMode() },
@@ -218,7 +170,15 @@ public enum DictationLog {
   ) {
     // The settings are read behind the gate, like everything else the entry carries.
     gated(store: store) { now in
-      write(transcript: transcript, to: url, now: now, context: context, rewriteMode: rewriteMode(), outcome: outcome)
+      write(
+        transcript: transcript,
+        to: url,
+        now: now,
+        context: context,
+        contextPrompt: contextPrompt,
+        rewriteMode: rewriteMode(),
+        outcome: outcome
+      )
     }
   }
 
@@ -246,8 +206,8 @@ public enum DictationLog {
 
   /// One log entry as a value: which parts of the context are carried, how the
   /// timestamp is formatted, and the two steering fields — the contextual prompt
-  /// and the keyterms list — mirroring what the transcriber actually sends, because both
-  /// are built here through the same builders the request uses. Split from `write`
+  /// the transcriber reports sending, and the keyterms list cleaned the way the
+  /// engine cleans every list. Split from `write`
   /// so all of that is assertable directly rather than through a temp file and a
   /// substring search over the encoded line — a search that read the same whether
   /// a field was correctly absent or the write had failed outright.
@@ -261,6 +221,7 @@ public enum DictationLog {
     transcript: String,
     context: TranscriptionContext?,
     now: Date,
+    contextPrompt: String = "",
     rewriteMode: RewriteMode? = nil,
     outcome: PipelinePhase? = nil
   ) -> Entry {
@@ -272,7 +233,7 @@ public enum DictationLog {
       field: context?.fieldLabel,
       prior: context?.priorText,
       selected: context?.selectedText,
-      sttPrompt: STTPrompt.text(context: context),
+      sttPrompt: contextPrompt,
       keyterms: KeyTermList.normalized(context?.keyTerms ?? []),
       rewriteMode: rewriteMode.map { $0.rawValue.lowercased() },
       outcome: outcome.map(outcomeName)
@@ -321,11 +282,19 @@ public enum DictationLog {
     to url: URL,
     now: Date,
     context: TranscriptionContext? = nil,
+    contextPrompt: String = "",
     rewriteMode: RewriteMode? = nil,
     outcome: PipelinePhase? = nil
   ) {
     appendLine(
-      makeEntry(transcript: transcript, context: context, now: now, rewriteMode: rewriteMode, outcome: outcome),
+      makeEntry(
+        transcript: transcript,
+        context: context,
+        now: now,
+        contextPrompt: contextPrompt,
+        rewriteMode: rewriteMode,
+        outcome: outcome
+      ),
       to: url
     )
   }

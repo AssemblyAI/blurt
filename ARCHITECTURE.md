@@ -27,7 +27,7 @@ LPCM — the exact geometry the dictation API wants — and the delegate accumul
 bytes onto the feed `start()` returns, which is what the chunked upload drains while the user is
 still speaking — no temp file, no read-back, and no resampling or float-conversion pass. `stop()`
 answers a **byte count**, not the audio: the recording has already gone out by then, so all the
-release path needs is whether there was enough of it to send (`SyncSTTLimits.minPCMBytes`).
+release path needs is whether there was enough of it to send (`RecordingLimits.minPCMBytes`).
 Accumulating the blob as well cost a second `memcpy` of every byte inside the capture lock and
 retained a duplicate of the whole utterance until release. The one copy of the recording that does
 exist now lives in the transcriber, not here: the upload layer keeps it, off the capture lock, to
@@ -270,7 +270,7 @@ transcript. The _response_
 is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The streaming
 route accepts audio from ~80 ms up to **120 s** (server-side ~30 s inference deadline); the buffered
 route accepts up to **20 minutes** / 256 MB. Blurt records for up to the buffered route's 20 minutes
-(`SyncSTTLimits.maxAudioSeconds`, raised from 120 s in #251), and that cap backs
+(`RecordingLimits.maxAudioSeconds`, raised from 120 s in #251), and that cap backs
 `DictationSession`'s auto-release timeout, so a held hotkey stops before it (at 1195 s).
 
 #### The over-cap fallback
@@ -300,7 +300,7 @@ on every dictation over two minutes once #251 raised the recording cap. Now:
 `/v1/transcribe` is documented — <https://assemblyai.com/docs/api-reference/dictation-api/transcribe.md>
 — which is what licenses calling it under "The reference is the source of truth". AssemblyAI's Python and
 Node SDKs are getting the same fallback to the same spec. The alternative, if the copy isn't wanted, is putting
-`SyncSTTLimits.maxAudioSeconds` back to 120, so the auto-release stops a held key just inside the
+`RecordingLimits.maxAudioSeconds` back to 120, so the auto-release stops a held key just inside the
 streaming route's cap; raising that cap server-side would make the fallback unnecessary.
 
 Every wire constant was swept against the live route on 2026-09-09 (the keyterms list at 2048 chars and the
@@ -346,8 +346,10 @@ protocols are: called as statics, the captured context's _value_ was whatever ap
 frontmost during a test run (so only its arrival could be asserted), every press paid a real AX
 round trip, and the log wrote to the user's real `~/Library/Logs/Blurt`. STT errors that are already
 `BlurtError` surface verbatim; others
-are wrapped in `.sttFailed`. The pipeline is just transcribe → inject, and an empty transcript
-returns to `.idle` without injecting.
+are wrapped in `.sttFailed` — a `URLError.cancelled` included, unless the pipeline itself was
+cancelled: a request the system dropped fails rather than leaving the phase on `.transcribing`, where
+no press can start. The pipeline is just transcribe → inject, and an empty transcript returns to
+`.idle` without injecting.
 
 Four perceived-latency choices to preserve:
 
@@ -572,18 +574,22 @@ the pill goes back to a steady state still under way and never replays a dictati
 (`CueReprimeSchedule`): dictation's at the next press or terminal phase, read-aloud's at once unless a
 capture is running. `SelectionSpeechRouter` takes any `ReadAloudSpeaker` (`SelectionSpeaker` in
 production), which is how the UI tests run read and ask offline; a stopped read's cancelled request
-reads as a cancellation, never a failure. The voice comes through the engine's
+reads as a cancellation, never a failure (and a request the system dropped, which nobody stopped,
+as a failure). The voice comes through the engine's
 `SpeechSynthesizing` seam (`SpeechServices.synthesizer`), and Blurt's is AssemblyAI's documented
 Streaming TTS API (`BlurtAssemblyAI`'s `AssemblyAISpeechSynthesizer` over the SDK's `SpeechClient`:
 `POST https://tts.us.assemblyai.com/v1/speech`, `voice_id`, the audio read as the response streams).
 Every LLM client below sends through the engine's `GatewayConnection` (a `ChatCompleting` the host
 supplies: AssemblyAI's LLM Gateway, through the SDK's `GatewayChatClient`). A selection is read in pieces (`ListeningChunks`: a short first
 piece, so reading starts after a paragraph, then about 1,500 characters each, at paragraph or
-sentence ends), one request each, rewritten first when skip-jargon is on; the next piece is asked
+sentence ends, cut where the provider says its voice reads a cut best —
+`SpeechSynthesizing.sentences(of:maxCharacters:)`, the SDK's `SpeechSegmenter` on AssemblyAI), one request each, rewritten first when skip-jargon is on; the next piece is asked
 for only once less than 30 s of audio is queued (`SelectionSpeaker.bufferTarget`), so a long
 article (up to 100,000 characters) starts quickly and is synthesized only as far as it is heard;
-the voices offered are the English ones on the docs' Voices page (`ReadAloudVoice.catalog`), since a
-read sends no `language` and a catalog voice would otherwise speak its own.
+the voices offered are the provider's (`SpeechSynthesizing.voices`): on AssemblyAI the English ones on
+the docs' Voices page (`BlurtAssemblyAI`'s `ReadAloudVoice.assemblyAI`), since a read sends no
+`language` and a catalog voice would otherwise speak its own. The setting stores a voice id, or none
+for the provider's default, and the provider speaks its default for an id it doesn't list.
 
 **Rewrite** rides the same routing as ask, up to the hand-back: a rewrite key's press reads the
 selection, records a spoken instruction ("make it more formal") with `pressHandingBack`, and the
@@ -736,7 +742,7 @@ open. Any press abandons a command before its next step. No key takes commands b
 
 ## Contextual prompt and key terms
 
-`Sources/BlurtEngine/STT/STTPrompt.swift` builds the string passed as the dictation
+`Sources/BlurtAssemblyAI/STTPrompt.swift` builds the string passed as the dictation
 request's `config.stt_prompt` — it steers the _transcription_, not the LLM rewrite (that's
 the request's separate `llm_instruction`). It's unit-tested in
 `Tests/BlurtEngineTests/STTPromptTests.swift`.
@@ -1051,7 +1057,9 @@ that stopped the rest (`StepRecord`, from `VoiceCommandPerforming.perform`'s not
 error's stable name and full text; and the total time. A failed command also goes to `errors.jsonl`
 as `command.<name>`, so one file holds every failure. A command a press abandoned is logged with the
 outcome `abandoned` and the steps that ran before it stopped, never as a failure — a request a cancel
-reached first answers `URLError.cancelled`, which is treated as the cancellation it is. **Saying a complaint to the key** ("that last command didn't work", "that's wrong" —
+reached first answers `URLError.cancelled`, which is treated as the cancellation it is — but only
+when the job was cancelled (`Error.isAbandonment`): the same error on a job nobody cancelled is a
+request the system dropped, and fails like any other. **Saying a complaint to the key** ("that last command didn't work", "that's wrong" —
 `CommandFeedback`, short utterances only) isn't planned: it's logged as a feedback entry naming the
 last command's id, and as `command.userReported` in `errors.jsonl`, and the pill says "Noted". The
 reset sweep (`removeStoredLogs`, `scripts/reset-lib.sh`) removes all three files.

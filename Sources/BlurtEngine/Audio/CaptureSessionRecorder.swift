@@ -49,7 +49,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     /// How many bytes the delegate has delivered. A count, not the bytes: the
     /// recording goes out on `frames` as it is captured, so nothing downstream
     /// reads the audio back — the release path only needs to know whether there
-    /// was enough of it to send (`SyncSTTLimits.minPCMBytes`). Accumulating the
+    /// was enough of it to send (`RecordingLimits.minPCMBytes`). Accumulating the
     /// blob as well cost a second `memcpy` of every byte inside this lock, plus
     /// `Data`'s geometric reallocation, and retained a duplicate of the whole
     /// utterance (~3.7 MB at the recording cap) until release.

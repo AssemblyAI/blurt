@@ -47,18 +47,18 @@
       /// `@Sendable`, so it registers each session from no particular actor.
       nonisolated private static let current = Mutex<UITestLiveSession?>(nil)
 
+      /// Every turn released, from the session's creation, as
+      /// `RealtimeTranscriber`'s are: a turn released before the recording reads any
+      /// waits in the stream, so a press is never lost to that race, and a
+      /// session ended before `start` leaves a stream that has already ended.
+      nonisolated let turns: AsyncThrowingStream<RealtimeTurn, any Error>
+      private let feed: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation
       private var script: [RealtimeTurn]
-      private var continuation: AsyncThrowingStream<RealtimeTurn, any Error>.Continuation?
-      /// Turns asked for before the recording read any (`next` ahead of
-      /// `start`), released as soon as it does: a press is never lost to that
-      /// race.
-      private var owed = 0
-      /// Finished or cancelled: like `RealtimeTranscriber`, a session closed
-      /// before `start` opens nothing, so a Stop that comes first can't wait
-      /// on a stream that never ends.
-      private var isClosed = false
 
       private init(script: [RealtimeTurn]) {
+        let (stream, continuation) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
+        turns = stream
+        feed = continuation
         self.script = script
       }
 
@@ -74,16 +74,8 @@
         current.withLock { $0 }
       }
 
-      func start() -> AsyncThrowingStream<RealtimeTurn, any Error> {
-        let (stream, feed) = AsyncThrowingStream.makeStream(of: RealtimeTurn.self)
-        guard !isClosed else {
-          feed.finish()
-          return stream
-        }
-        continuation = feed
-        for _ in 0..<owed { next() }
-        owed = 0
-        return stream
+      func start() {
+        // Nothing to open: `turns` has been there since the session began.
       }
 
       func send(_: Data) {
@@ -91,35 +83,24 @@
       }
 
       func finish() {
-        end(throwing: nil)
+        feed.finish()
       }
 
       func cancel() {
-        end(throwing: nil)
+        feed.finish()
       }
 
-      /// Releases the script's next turn, or owes it until the recording reads
-      /// its turns.
+      /// Releases the script's next turn.
       func next() {
         guard !script.isEmpty else {
           return
         }
-        guard let reading = continuation else {
-          owed += 1
-          return
-        }
-        reading.yield(script.removeFirst())
+        feed.yield(script.removeFirst())
       }
 
       /// Fails the session mid-recording, as a dropped connection does.
       func fail() {
-        end(throwing: URLError(.networkConnectionLost))
-      }
-
-      private func end(throwing error: (any Error)?) {
-        isClosed = true
-        continuation?.finish(throwing: error)
-        continuation = nil
+        feed.finish(throwing: URLError(.networkConnectionLost))
       }
     }
 
