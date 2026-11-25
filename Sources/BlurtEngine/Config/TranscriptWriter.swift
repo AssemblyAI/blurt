@@ -1,4 +1,4 @@
-import Foundation
+import Dispatch
 
 /// Writes the history one list at a time, in the order asked. Each write is an
 /// atomic rename, so two left to run side by side could finish in either order,
