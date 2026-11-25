@@ -680,7 +680,10 @@ line execute?" but "is it _asserted_?" — a surviving mutant is a behaviour cha
 to. Its default target list is the files already at or near 100% coverage, which is exactly where the
 coverage number has nothing left to say. It stays out of `check.sh` deliberately: a run is minutes,
 and survivors need judgement (an _equivalent_ mutant cannot change behaviour, so no test can catch
-it), and a required gate that reports unactionable failures is one people learn to skip.
+it), and a required gate that reports unactionable failures is one people learn to skip. To run the whole set without tying
+up a Mac, start the `mutate` workflow (`.github/workflows/mutate.yml`) from the Actions tab: it splits
+the mutants across eight macOS runners (`--shard K/N`), and its `report` job lists every survivor and
+goes red while any remain. It never runs on pull requests.
 
 **Swift Testing traps that CI has caught more than once.** Nothing here can be typechecked without a
 macOS toolchain, so when you're writing tests from a Linux / web sandbox these are the ones that cost
