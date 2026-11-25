@@ -169,7 +169,7 @@ struct FileTranscriptionTests {
     #expect(reply == "- Point one")
     let body = try #require(
       try JSONSerialization.jsonObject(with: captured.withLock { $0 }) as? [String: Any])
-    #expect(body["model"] as? String == TranscriptLLM.model)
+    #expect(body["model"] as? String == TranscriptLLM.tier.gatewayModel)
     let messages = try #require(body["messages"] as? [[String: String]])
     #expect(messages.first?["role"] == "system")
     #expect(messages.first?["content"] == TranscriptTransform.keyPoints.instruction)

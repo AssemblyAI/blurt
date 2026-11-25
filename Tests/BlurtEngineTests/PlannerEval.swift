@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The eval's corpus, scoring and run, apart from the tests that drive them.
@@ -232,7 +233,7 @@ enum PlannerEval {
     let order = Dictionary(cases.enumerated().map { ($1.id, $0) }) { first, _ in first }
     verdicts.sort { order[$0.id, default: 0] < order[$1.id, default: 0] }
     return Report(
-      model: VoiceCommandPlanner.model,
+      model: VoiceCommandPlanner.tier.gatewayModel,
       promptVersion: VoiceCommandPlanner.promptVersion,
       passed: verdicts.count { $0.passed },
       total: verdicts.count,

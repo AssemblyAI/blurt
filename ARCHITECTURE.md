@@ -27,7 +27,7 @@ LPCM — the exact geometry the dictation API wants — and the delegate accumul
 bytes onto the feed `start()` returns, which is what the chunked upload drains while the user is
 still speaking — no temp file, no read-back, and no resampling or float-conversion pass. `stop()`
 answers a **byte count**, not the audio: the recording has already gone out by then, so all the
-release path needs is whether there was enough of it to send (`SyncSTTLimits.minPCMBytes`).
+release path needs is whether there was enough of it to send (`RecordingLimits.minPCMBytes`).
 Accumulating the blob as well cost a second `memcpy` of every byte inside the capture lock and
 retained a duplicate of the whole utterance until release. The one copy of the recording that does
 exist now lives in the transcriber, not here: the upload layer keeps it, off the capture lock, to
@@ -270,7 +270,7 @@ transcript. The _response_
 is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The streaming
 route accepts audio from ~80 ms up to **120 s** (server-side ~30 s inference deadline); the buffered
 route accepts up to **20 minutes** / 256 MB. Blurt records for up to the buffered route's 20 minutes
-(`SyncSTTLimits.maxAudioSeconds`, raised from 120 s in #251), and that cap backs
+(`RecordingLimits.maxAudioSeconds`, raised from 120 s in #251), and that cap backs
 `DictationSession`'s auto-release timeout, so a held hotkey stops before it (at 1195 s).
 
 #### The over-cap fallback
@@ -300,7 +300,7 @@ on every dictation over two minutes once #251 raised the recording cap. Now:
 `/v1/transcribe` is documented — <https://assemblyai.com/docs/api-reference/dictation-api/transcribe.md>
 — which is what licenses calling it under "The reference is the source of truth". AssemblyAI's Python and
 Node SDKs are getting the same fallback to the same spec. The alternative, if the copy isn't wanted, is putting
-`SyncSTTLimits.maxAudioSeconds` back to 120, so the auto-release stops a held key just inside the
+`RecordingLimits.maxAudioSeconds` back to 120, so the auto-release stops a held key just inside the
 streaming route's cap; raising that cap server-side would make the fallback unnecessary.
 
 Every wire constant was swept against the live route on 2026-09-09 (the keyterms list at 2048 chars and the

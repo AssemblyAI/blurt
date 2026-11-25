@@ -20,9 +20,10 @@ public import Foundation
 ///
 /// The wire contract — the route, the 120 s cap and its `/v1/transcribe`
 /// fallback, and the rule that every request is one the reference describes —
-/// is `DictationClient`'s, documented there. The ~80 ms floor on a recording is
-/// Blurt's own (`SyncSTTLimits.minPCMBytes`); the `User-Agent` naming Blurt is
-/// `UserAgent`'s.
+/// is `DictationClient`'s, documented there, and what a recording may be is
+/// `DictationLimits`'. The floor this sends with is Blurt's own
+/// (`RecordingLimits.minPCMBytes`), checked against the API's by
+/// `fitsRecordingLimits`; the `User-Agent` naming Blurt is `UserAgent`'s.
 public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Latency instrumentation for the dictation round-trip. Findable via:
   ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
@@ -58,17 +59,29 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     enhancedTranscripts: (@Sendable () -> Bool)? = nil,
     rewriteMode: (@Sendable () -> RewriteMode)? = nil
   ) {
+    assert(Self.fitsRecordingLimits, "RecordingLimits must fit the dictation API's DictationLimits")
     self.apiKeyProvider = apiKeyProvider
     self.client = DictationClient(
       baseURL: baseURL,
       transport: transport,
       userAgent: UserAgent.current,
-      minimumAudioBytes: SyncSTTLimits.minPCMBytes,
+      minimumAudioBytes: RecordingLimits.minPCMBytes,
       log: Self.log
     )
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
     self.rewriteMode = rewriteMode ?? { RewriteModeStore().mode }
   }
+
+  /// Whether the engine's recording policy (`RecordingLimits`) fits what the
+  /// dictation API accepts (`DictationLimits`): the same sample rate, a cap no
+  /// longer than the API's, and a floor no shorter than the one below which it
+  /// transcribes nothing. The engine names no provider, so this is where its
+  /// numbers meet AssemblyAI's: asserted when a transcriber is built, and pinned
+  /// by `RecordingLimitsTests`.
+  static let fitsRecordingLimits =
+    RecordingLimits.sampleRate == DictationLimits.sampleRate
+    && RecordingLimits.maxAudioSeconds <= DictationLimits.maxAudioSeconds
+    && RecordingLimits.minAudioSeconds >= DictationLimits.minAudioSeconds
 
   // MARK: - Dictation request
 

@@ -9,7 +9,7 @@ import Testing
 /// Collapses the setup the session suites otherwise repeat.
 func makeSession(
   mode: StubTranscriber.Mode = .transcript("Hello world."),
-  maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
+  maxRecordingSeconds: Double = RecordingLimits.autoReleaseSeconds,
   field: FocusedFieldContext = .empty,
   frontmost: CapturedFocus? = nil,
   keyTerms: [String] = [],
@@ -91,7 +91,7 @@ func makeSession(
   transcriber: any TranscriberProtocol,
   mic: any MicCaptureProtocol = StubMicCapture(),
   injector: any InjectorProtocol = StubInjector(),
-  maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
+  maxRecordingSeconds: Double = RecordingLimits.autoReleaseSeconds,
   // wall-clock-ok: the production clock, for tests that aren't about its timers
   clock: any Clock<Duration> = ContinuousClock(),
   keyTerms: [String] = [],

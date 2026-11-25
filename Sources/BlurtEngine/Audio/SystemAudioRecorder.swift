@@ -46,7 +46,7 @@
 
     /// The rate everything leaves at: dictation's 16 kHz, which is what a live
     /// session takes too (AssemblyAI's realtime API), and plenty for speech.
-    public static let outputSampleRate = Double(SyncSTTLimits.sampleRate)
+    public static let outputSampleRate = Double(RecordingLimits.sampleRate)
     static let log = HostIdentity.current.logger("Recorder")
 
     private var tapID = AudioObjectID(kAudioObjectUnknown)

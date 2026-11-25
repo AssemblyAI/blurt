@@ -62,7 +62,7 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Pipeline/PipelinePhase.swift"
   "Sources/BlurtEngine/Pipeline/RecordingCueGate.swift"
   "Sources/BlurtEngine/STT/STTPrompt.swift"
-  "Sources/BlurtEngine/STT/SyncSTTLimits.swift"
+  "Sources/BlurtEngine/STT/RecordingLimits.swift"
   "Sources/BlurtEngine/String+Normalization.swift"
   # Control Your Mac's decisions: the reply parser and its checks, name
   # matching and the destructive guard, the screen read over any tree, the

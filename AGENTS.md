@@ -95,13 +95,15 @@ not only by `ios-check.sh`. `App/BlurtiOS/README.md` ("Testing on a phone") is t
 ```text
 Sources/AssemblyAI/          the AssemblyAI SDK (README.md there): HTTPTransport +
                              ChunkedRequestBody, Dictation/ (DictationClient with the over-cap
-                             fallback, wire types, multipart framing, KeyTerms), Speech/
+                             fallback, wire types, multipart framing, KeyTerms,
+                             DictationLimits), Speech/
                              (SpeechClient, streaming TTS), Gateway/ (GatewayChatClient, the LLM
                              Gateway), Realtime/, Async/, OAuth/, APIKeyValidator. No Blurt code:
                              usable on its own in another project
 Sources/BlurtAssemblyAI/     the provider package (README.md there): runs the engine on the SDK —
-                             AssemblyAITranscriber (Blurt's request policy), the TTS and LLM
-                             adapters (SpeechServices.assemblyAI()), FileTranscriber, the
+                             AssemblyAITranscriber (Blurt's request policy, RewriteGrounding),
+                             the TTS and LLM adapters (SpeechServices.assemblyAI(), the gateway
+                             model per ChatModelTier), FileTranscriber, the
                              realtime glue, the key check, Account/ (Sign in with AssemblyAI)
 Sources/BlurtEngine/         the engine (dependency-free Swift package; imports no provider)
   README.md                  the engine's developer guide (quick start, seams, error table)
@@ -136,9 +138,10 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package; imports 
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log,
                              TextShortcut (the on-device phrase expansion)
   Providers/                 the provider seams beside TranscriberProtocol: SpeechSynthesizing,
-                             ChatCompleting + GatewayConnection, KeyValidation, SpeechServices
+                             ChatCompleting + GatewayConnection + ChatModelTier, KeyValidation,
+                             SpeechServices
   STT/                       TranscriberProtocol, TranscriptionContext, STTPrompt,
-                             CleanupInstruction, SyncSTTLimits, LiveTranscript
+                             CleanupInstruction, RecordingLimits, LiveTranscript
   TTS/                       read-aloud: SelectionSpeaker (over any SpeechSynthesizing),
                              ListeningChunks, SpeechSegmenter, StreamingPCMPlayer +
                              PCMSchedule, SelectionCopy, ReadAloudLLM (the skip-jargon rewrite

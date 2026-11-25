@@ -39,7 +39,7 @@ public protocol TranscriberProtocol: Sendable {
   /// thing still runs one way: the caller decides the context, then feeds audio,
   /// and the transcriber holds no reference to whatever assembled either.
   ///
-  /// A recording that ends below `SyncSTTLimits.minPCMBytes` may throw
+  /// A recording that ends below `RecordingLimits.minPCMBytes` may throw
   /// `TranscriberError.audioTooShort`, which the pipeline treats as nothing
   /// said. Every other failure surfaces as `BlurtError.sttFailed`, except a
   /// `BlurtError` (`.apiKeyMissing`), which surfaces as itself.

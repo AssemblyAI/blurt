@@ -17,6 +17,7 @@ imports neither.
 | `DictationConfig`, `DictationResponse` | The dictation API's `config` part and response, with only documented keys.                                                                              |
 | `ErrorResponse`, `AssemblyAIError`     | The dictation API's two documented error shapes, with `error_code` when present, and the client's errors.                                               |
 | `KeyTerms`                             | Key terms for `keyterms_prompt`: fit a clean list to the field's two caps.                                                                              |
+| `DictationLimits`                      | What a recording may be: the 16 kHz geometry, the 20-minute cap, and the ~80 ms floor below which nothing is transcribed.                               |
 | `SpeechClient`                         | The streaming TTS API: one `POST /v1/speech` per piece, its PCM read as it arrives.                                                                     |
 | `GatewayChatClient`                    | The LLM Gateway: one `POST /v1/chat/completions`, answered whole.                                                                                       |
 | `APIKeyValidator`                      | A cheap authenticated check that tells a rejected key from one it couldn't verify.                                                                      |

@@ -34,7 +34,7 @@
     }
 
     /// 100 ms of 16 kHz 16-bit mono: what `onPCM` is handed at a time.
-    static let handOffBytes = Int(SystemAudioRecorder.outputSampleRate) / 10 * SyncSTTLimits.bytesPerSample
+    static let handOffBytes = Int(SystemAudioRecorder.outputSampleRate) / 10 * RecordingLimits.bytesPerSample
 
     private var file: AVAudioFile?
     private let converter: AVAudioConverter

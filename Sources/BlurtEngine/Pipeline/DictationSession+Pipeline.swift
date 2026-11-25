@@ -185,7 +185,7 @@ extension DictationSession {
   func startUpload(frames: AsyncStream<Data>) {
     // Lifted out of the actor so the task body captures Sendable values rather
     // than isolated state, the same move `performPress` makes for `transcriber`.
-    // `SyncSTTLimits.sampleRate` needs no such hoist — it is a static on an
+    // `RecordingLimits.sampleRate` needs no such hoist — it is a static on an
     // enum, and neither does `contextWaitBudget`.
     let transcriber = transcriber
     let press = pressContext
@@ -202,7 +202,7 @@ extension DictationSession {
       // that flag, reads the resolved value and never this one.
       return try await transcriber.transcribe(
         frames: frames,
-        sampleRate: SyncSTTLimits.sampleRate,
+        sampleRate: RecordingLimits.sampleRate,
         context: resolved ?? press?.pressKnown
       )
     }
@@ -262,7 +262,7 @@ extension DictationSession {
       if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
         return nil
       }
-      // The producer refused to close a body below `SyncSTTLimits.minPCMBytes`.
+      // The producer refused to close a body below `RecordingLimits.minPCMBytes`.
       // `performRelease` normally catches that first and idles quietly; when the
       // producer gets there first instead, the outcome has to be the same
       // nothing rather than a red pill reading "too short to transcribe" — the

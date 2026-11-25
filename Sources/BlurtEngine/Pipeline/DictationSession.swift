@@ -62,7 +62,7 @@ public actor DictationSession {
   let textShortcutsProvider: @Sendable () -> [TextShortcut]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
-  /// `SyncSTTLimits`) — recording past it would only produce audio the
+  /// `RecordingLimits`) — recording past it would only produce audio the
   /// endpoint rejects, so we stop early and transcribe what we have.
   let maxRecordingSeconds: Double
   /// Clock the auto-release timer and the context-wait budget (`+Pipeline`)
@@ -176,7 +176,7 @@ public actor DictationSession {
     mic: any MicCaptureProtocol,
     transcriber: any TranscriberProtocol,
     injector: any InjectorProtocol,
-    maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
+    maxRecordingSeconds: Double = RecordingLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     pressStyleProvider: (@Sendable (TriggerKey?) -> PressStyle)? = nil,
@@ -325,7 +325,7 @@ public actor DictationSession {
     // floor is enforced on the producer's side too — `streamedBody` refuses to
     // write the closing boundary below `minPCMBytes` — leaving this as the
     // quiet path to `.idle`, not the only thing keeping a tap off the wire.
-    guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
+    guard recordedBytes >= RecordingLimits.minPCMBytes else {
       setPhase(.idle)
       return
     }

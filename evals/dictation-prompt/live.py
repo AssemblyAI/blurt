@@ -57,7 +57,7 @@ from corpus import Utterance
 #: The dictation endpoint. Same host `AssemblyAITranscriber` posts to.
 DICTATION_URL = "https://dictation.assemblyai.com/v1/transcribe/live"
 
-#: What the service expects, and what `SyncSTTLimits` records on the Swift side.
+#: What the service expects, and what `RecordingLimits` records on the Swift side.
 SAMPLE_RATE = 16_000
 
 
