@@ -50,7 +50,10 @@ final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
     try audit("live recording, two speakers", into: &found)
 
     main.buttons[UITestIdentifiers.liveRecordingPause].click()
-    let paused = main.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Paused'")).firstMatch
+    // The status line is one Text around a live timer: "Paused" can come
+    // through as its value rather than its label, as TranscriptionUITests reads it.
+    let paused = main.staticTexts
+      .matching(NSPredicate(format: "label CONTAINS 'Paused' OR value CONTAINS 'Paused'")).firstMatch
     XCTAssertTrue(paused.waitForExistence(timeout: 5), "Pause should say so")
     try audit("live recording, paused", into: &found)
 
