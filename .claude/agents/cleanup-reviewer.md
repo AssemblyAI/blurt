@@ -37,8 +37,9 @@ exactly two fields of `TranscriptionContext` (`recentTranscripts`, then `priorTe
 the other fields are captured on purpose for work that never reaches the API** — paste
 spacing, the injector's window identity, the developer-mode log. `appName`,
 `windowTitle`, `fieldLabel` and `selectedText` are not unused just because
-`STTPrompt` ignores them. Nor is `targetIsSecure`, which no request carries: it
-is what stops a password dictated into a secure field being remembered as history. The
+`STTPrompt` ignores them. Nor is `targetSecurity`, which no request carries: its
+three-way verdict (`.secure` / `.unknown` / `.ordinary`) is what stops a password
+dictated into a secure field being remembered as history. The
 key-terms read is not unused either: it feeds `KeyTerms`, the request's separate
 `config.keyterms_prompt` list. Do not propose deleting any of them, folding the key terms back
 into the context as a `Keywords:` clause, or dropping the `context:` parameter.

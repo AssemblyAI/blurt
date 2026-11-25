@@ -231,7 +231,7 @@ public struct OAuthClient: Sendable {
     request.httpMethod = "POST"
     request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
-    if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
+    request.setUserAgent(userAgent)
     request.httpBody = Data(Self.formEncoded(fields).utf8)
 
     let (status, data) = try await send(request)
@@ -263,7 +263,7 @@ public struct OAuthClient: Sendable {
     request.httpMethod = "POST"
     request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
-    if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
+    request.setUserAgent(userAgent)
     return request
   }
 

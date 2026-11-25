@@ -1,4 +1,3 @@
-public import AssemblyAI
 public import Observation
 
 /// A shell's API-key surface, shared by the Mac app and the iPhone app (one copy
@@ -19,7 +18,7 @@ public final class APIKeyModel {
   /// UI tests inject an in-memory store so the real key is never touched.
   @ObservationIgnored private let keyStore: any APIKeyGateway
   /// The validate-then-save flow over `keyStore`. Carries the injected validator:
-  /// AssemblyAI's real network check in production, an offline stub under UI
+  /// the provider's real network check in production, an offline stub under UI
   /// testing — both through the one submit path, so there's no test-only branch
   /// here.
   @ObservationIgnored private let submission: APIKeySubmission
@@ -40,7 +39,8 @@ public final class APIKeyModel {
   /// it; `refreshStatus()` is how `hasAPIKey` catches up afterwards.
   public var storage: any APIKeyGateway { keyStore }
 
-  /// `validateKey` defaults to the real AssemblyAI check; UI tests inject an
+  /// `validateKey` is the provider's key check: a provider package supplies it
+  /// (`BlurtAssemblyAI`'s `APIKeyModel(keyStore:)`), and UI tests inject an
   /// offline validator so the settings flow needs no network.
   ///
   /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.current`),
@@ -49,9 +49,7 @@ public final class APIKeyModel {
   @preconcurrency
   public init(
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    validateKey: @escaping @Sendable (String) async -> APIKeyValidator.Result = { key in
-      await APIKeyValidator.blurt().validate(key)
-    }
+    validateKey: @escaping @Sendable (String) async -> KeyValidation
   ) {
     self.keyStore = keyStore
     self.submission = APIKeySubmission(keyStore: keyStore, validate: validateKey)

@@ -36,7 +36,7 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   accumulating the blob as well copied every byte a second time inside the
   capture lock and held a duplicate of the whole utterance until release.
 - **One copy of the recording exists, for one reason.** The transcriber keeps it
-  (`relay`, `AssemblyAITranscriber+LiveCapFallback.swift`), on the upload's task
+  (`relay`, the SDK's `DictationClient+LiveCapFallback.swift`), on the upload's task
   and never in `MicCapture`'s capture lock, solely to back the documented
   `/v1/transcribe` fallback when `/v1/transcribe/live` refuses a recording past
   its 120 s cap (`413` with `error_code: "audio_too_large"`). That narrowed the
@@ -67,17 +67,19 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   (`AssemblyAI/Realtime/RealtimeTranscriber.swift`, the only file the gate
   exempts): a meeting or call transcribed live, partials and all. It never
   carries a dictation, so it is not a door back to streaming dictation.
-  Read-aloud's TTS client (`TTS/AssemblyAISpeechSynthesizer.swift`) is a
+  Read-aloud's TTS client (the SDK's `Speech/SpeechClient.swift`) is a
   streaming HTTP response, and it speaks text, never transcribes.
 - **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
   as `config.llm_instruction` (`CleanupInstruction`). No LLM Gateway
   client for dictation, no `StylerProtocol`, no post-transcription styling
   stage. The first gateway client in the tree is the read-aloud
-  feature's (`TTS/ReadAloudLLM.swift`, one of two files `check-invariants.sh`
-  exempts from this rule): the skip-jargon listening rewrite of a selection, and
+  feature's (`TTS/ReadAloudLLM.swift`; like every client below it sends through
+  the engine's provider-neutral `GatewayConnection`, and the gateway URL lives
+  only in the SDK's `Gateway/GatewayChatClient.swift`, the one file
+  `check-invariants.sh` exempts from this rule): the skip-jargon listening rewrite of a selection, and
   the spoken answer to a request about one. It never cleans up a dictation, so
   it is not a door back to a cleanup pass. The second is file transcription's
-  (`STT/TranscriptTransform.swift`, also exempt): summary, key points and the
+  (`STT/TranscriptTransform.swift`, through the same connection): summary, key points and the
   other stock transforms over a saved transcript. It is never in the
   dictation path and nothing it writes is pasted: it runs only on a history
   entry the user opens and asks for a task, past dictations included. The

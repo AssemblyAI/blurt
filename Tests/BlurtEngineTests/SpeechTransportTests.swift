@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The TTS client's failures through the fake transport, and the production
@@ -51,7 +52,7 @@ struct SpeechTransportTests {
   @Test("an error body with a message but no code reports the message")
   func messageWithoutCode() {
     let body = Data(#"{"message":"Slow down"}"#.utf8)
-    #expect(AssemblyAISpeechSynthesizer.failure(status: 429, body: body) == "Slow down")
+    #expect(SpeechClient.failure(status: 429, body: body) == "Slow down")
   }
 
   // MARK: - The URLSession path
@@ -97,7 +98,7 @@ struct SpeechTransportTests {
   func urlSessionCancelledBeforeStart() async throws {
     ScriptedSpeechProtocol.play(.respond(status: 200, chunks: [Data([1, 0])], finishes: false))
     let session = session()
-    let request = try AssemblyAISpeechSynthesizer.request(for: "Read this.", voiceID: "v", apiKey: "k")
+    let request = try SpeechClient().request(for: "Read this.", voiceID: "v", apiKey: "k")
     let attempt = Task {
       unsafe withUnsafeCurrentTask { unsafe $0?.cancel() }
       return try await session.stream(request)
@@ -129,7 +130,7 @@ struct SpeechTransportTests {
   func delegateSettlesOnce() async throws {
     let (_, feed) = AsyncThrowingStream<Data, any Error>.makeStream()
     let delegate = SpeechStreamDelegate(body: feed)
-    let url = AssemblyAISpeechSynthesizer.endpoint
+    let url = SpeechClient.endpoint
     let head = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
     let response: HTTPURLResponse = try await withCheckedThrowingContinuation { continuation in
       #expect(delegate.arm(continuation))

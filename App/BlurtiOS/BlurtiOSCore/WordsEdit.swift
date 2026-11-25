@@ -1,9 +1,10 @@
 import AssemblyAI
+import BlurtEngine
 
 /// The Words tab's edits, apart from its views: what adding a key term does to
-/// the list it joins. The list's own rules — parsing and the request's caps
-/// (`KeyTerms`) — are the AssemblyAI SDK's. A text shortcut's rule is the
-/// engine's (`TextShortcut.canSave`), shared with the Mac.
+/// the list it joins. Parsing is the engine's (`KeyTermList`), the request's
+/// caps the AssemblyAI SDK's (`KeyTerms`). A text shortcut's rule is the
+/// engine's too (`TextShortcut.canSave`), shared with the Mac.
 package nonisolated enum WordsEdit {
   /// `terms` with whatever `draft` holds added at the end: one term, or several
   /// separated by commas. Duplicates of a term already there drop
@@ -18,7 +19,7 @@ package nonisolated enum WordsEdit {
       return terms
     }
     let known = Set(terms.map { $0.lowercased() })
-    let fresh = KeyTerms.parse(draft).filter { !known.contains($0.lowercased()) }
+    let fresh = KeyTermList.parse(draft).filter { !known.contains($0.lowercased()) }
     return terms + fresh.prefix(room)
   }
 }

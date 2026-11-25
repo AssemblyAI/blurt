@@ -3,6 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The rewrite mode's decode rule, store round-trip, and what each mode puts on

@@ -1,6 +1,6 @@
 import AppKit
 import AuthenticationServices
-import BlurtEngine
+import BlurtAssemblyAI
 
 /// Runs the browser half of "Sign in with AssemblyAI": opens the consent page in
 /// a web authentication session and hands the redirect to `AssemblyAIAccount`,

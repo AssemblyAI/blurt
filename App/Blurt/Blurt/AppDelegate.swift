@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import BlurtAssemblyAI
 import BlurtEngine
 import Foundation
 import Observation

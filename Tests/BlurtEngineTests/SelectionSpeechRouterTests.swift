@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// The router that carries out `SelectionSpeechRouting`'s decisions: the
@@ -25,7 +26,13 @@ struct SelectionSpeechRouterTests {
       return RecordingSink()
     }
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: speaker, readSelection: { selection }, defaults: defaults
+      session: fixture.session,
+      speaker: speaker,
+      rewriter: SelectionRewriter(gateway: .unused),
+      composer: MessageComposer(gateway: .unused),
+      planner: VoiceCommandPlanner(gateway: .unused),
+      readSelection: { selection },
+      defaults: defaults
     )
     return (router, fixture)
   }
