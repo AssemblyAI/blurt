@@ -1,12 +1,12 @@
-import AssemblyAI
 import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
-/// domain words (names, jargon, product names) sent as the dictation request's
-/// keyterms list (`config.keyterms_prompt`, see the SDK's `KeyTerms`), so the model
-/// favors those exact spellings. They used to ride the transcription `prompt` as
-/// a `Keywords: a, b, c.` clause instead; a flat list is the field the API
-/// provides for exactly this, so that is what they are now.
+/// domain words (names, jargon, product names) handed to the transcriber on
+/// every dictation (`TranscriptionContext.keyTerms`; AssemblyAI's
+/// `config.keyterms_prompt`), so the model favors those exact spellings. They
+/// used to ride the transcription `prompt` as a `Keywords: a, b, c.` clause
+/// instead; a flat list is the field the API provides for exactly this, so that
+/// is what they are now.
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
 /// than the Keychain. The transcription pipeline reads the parsed list via
@@ -22,7 +22,7 @@ import Foundation
 /// normalizing on write fought the text field, because the trimmed value was
 /// pushed back into the binding as an external change and a trailing space was
 /// deleted as the user typed it. Normalization lives on the read side instead
-/// (`raw` trims, `KeyTerms.parse` trims and dedupes), so a blank field still reads back
+/// (`raw` trims, `KeyTermList.parse` trims and dedupes), so a blank field still reads back
 /// as "no terms". See the note on `KeyTermsStepView.text`.
 public struct KeyTermsStore {
   /// `UserDefaults` key for the raw, comma-separated string the user typed.
@@ -39,11 +39,11 @@ public struct KeyTermsStore {
     defaults.string(forKey: Self.defaultsKey).trimmedNonEmpty()
   }
 
-  /// The stored terms parsed into a clean list (`KeyTerms.parse`): split on
+  /// The stored terms parsed into a clean list (`KeyTermList.parse`): split on
   /// commas, trimmed, with blanks and duplicates removed (case-insensitively,
   /// keeping first spelling).
   var terms: [String] {
-    KeyTerms.parse(raw)
+    KeyTermList.parse(raw)
   }
 
   init(defaults: UserDefaults = .standard) {

@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtAssemblyAI
 import BlurtEngine
 import Foundation
 import Observation
@@ -78,7 +79,7 @@ final class TranscriptsModel {
   /// Plays saved audio from the Recent list and the sheet.
   let player = ClipPlayer()
   /// Reads a task result aloud (`TranscriptsModel+Playback.swift`).
-  let reader = TextReader()
+  let reader = TextReader(services: .assemblyAI())
   /// The task result being read aloud now, if any.
   var readingFacet: TranscriptFacet?
   /// Whether that reading's first word has played; before, it's preparing.

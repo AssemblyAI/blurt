@@ -187,6 +187,7 @@ struct SettingsView: View {
         showsTypingTest = true
       } label: {
         Label("How fast can you type?", systemImage: "keyboard")
+          .labelStyle(.wrapping)
       }
       .foregroundStyle(BlurtBrand.accent)
       if typingSpeed > 0 {

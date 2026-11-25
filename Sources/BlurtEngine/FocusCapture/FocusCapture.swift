@@ -31,7 +31,7 @@
     /// nothing (Electron apps commonly do). Not `.empty`: that describes an
     /// ordinary field with nothing in it, and here there is no telling whether
     /// the field is a password input, so the dictation must not be replayed as
-    /// later request context (`FocusedFieldContext.securityUnknown`). Each field
+    /// later request context (`FocusedFieldContext.security`). Each field
     /// is independently best-effort. Requires the same Accessibility permission
     /// the app already holds for paste injection, so it adds no new prompt.
     ///
@@ -78,7 +78,7 @@
         selectedText: selected,
         windowTitle: clip(windowTitle(of: element), to: 120),
         fieldLabel: clip(fieldLabel(of: element), to: 80),
-        isSecure: isSecure
+        security: isSecure ? .secure : .ordinary
       )
     }
 

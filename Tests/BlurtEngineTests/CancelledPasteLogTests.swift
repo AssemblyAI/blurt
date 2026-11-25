@@ -15,7 +15,7 @@ struct CancelledPasteLogTests {
     selectedText: nil,
     windowTitle: "Sign In",
     fieldLabel: "Password",
-    isSecure: true
+    security: .secure
   )
 
   @Test("a password field's transcript stays withheld when the next press lands mid-paste")

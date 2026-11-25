@@ -1,6 +1,7 @@
 #if UITEST_HOOKS
 
   import AssemblyAI
+  import BlurtAssemblyAI
   import BlurtEngine
   import Foundation
   import Synchronization

@@ -1,4 +1,4 @@
-import Foundation
+package import Foundation
 
 /// Persists the "enhanced transcripts" switch in `UserDefaults`. On by
 /// default; the Settings window's Transcription section flips it.
@@ -32,11 +32,11 @@ public struct EnhancedTranscriptsStore {
   /// Read-only for the same reason as `DeveloperModeStore.isEnabled`: the Settings
   /// toggle writes the slot through `@AppStorage`, so a setter here had no
   /// production caller. Seed the slot to change the switch.
-  var isEnabled: Bool {
+  package var isEnabled: Bool {
     defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue
   }
 
-  init(defaults: UserDefaults = .standard) {
+  package init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }
 }

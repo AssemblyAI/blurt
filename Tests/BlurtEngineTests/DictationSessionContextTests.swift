@@ -26,7 +26,7 @@ struct DictationSessionContextTests {
     selectedText: nil,
     windowTitle: "1Password",
     fieldLabel: "Password",
-    isSecure: true
+    security: .secure
   )
 
   @Test("the press-time capture reaches the transcriber, the injector, and the log")
@@ -210,7 +210,7 @@ struct DictationSessionContextTests {
     // target (Electron, Java, Office — `FocusCapture` makes ~6 serial round
     // trips, each capped at ~1 s) therefore misses it routinely.
     //
-    // Missing it must not cost the `targetIsSecure` flag, or the dictation
+    // Missing it must not cost the `.secure` verdict, or the dictation
     // would be written into `recentDictations` and replayed in `stt_prompt` on
     // every later dictation this launch. `PressContext` is what keeps the read
     // reachable after the deadline, and this is the test that says so. (A read
@@ -249,24 +249,24 @@ struct DictationSessionContextTests {
     // The request itself did go out unprimed; that is the cost of the deadline.
     #expect(await transcriber.receivedContexts == [nil])
     // But the late read was picked up in time for the decision that matters.
-    #expect(await session.capturedContext?.targetIsSecure == true)
+    #expect(await session.capturedContext?.targetSecurity == .secure)
     #expect(await session.recentDictations.entries.isEmpty)
   }
 
   @Test("a secure capture with no readable text is still carried, not collapsed to nil")
   func secureCaptureSurvivesTheEmptyCollapse() async {
-    // `isEmpty` has to count `targetIsSecure`: a secure field yields no prior or
+    // `isEmpty` has to count `targetSecurity`: a secure field yields no prior or
     // selected text, so without that the snapshot would collapse to `nil` on the
-    // way through `contextStream` and the guard above would never see the flag.
+    // way through `contextStream` and the guard above would never see the verdict.
     let secure = FocusedFieldContext(
-      priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, isSecure: true
+      priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, security: .secure
     )
-    #expect(!TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true).isEmpty)
+    #expect(!TranscriptionContext(appName: nil, priorText: nil, targetSecurity: .secure).isEmpty)
     let fixture = makeSession(mode: .transcript("hunter2"), field: secure, frontmost: nil)
 
     await fixture.session.dictate()
 
-    #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
+    #expect(await fixture.transcriber.receivedContexts.first??.targetSecurity == .secure)
     #expect(await fixture.session.recentDictations.entries.isEmpty)
     #expect(await fixture.injector.insertedSecurity == [.secure])
   }

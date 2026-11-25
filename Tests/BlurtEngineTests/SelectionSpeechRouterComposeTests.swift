@@ -38,7 +38,9 @@ struct SelectionSpeechRouterComposeTests {
     let router = SelectionSpeechRouter(
       session: fixture.session,
       speaker: GatedSpeaker(),
+      rewriter: SelectionRewriter(gateway: .unused),
       composer: composer,
+      planner: VoiceCommandPlanner(gateway: .unused),
       // A compose press never reads the selection: this would fail it if it did.
       readSelection: {
         Issue.record("a compose press read the selection")

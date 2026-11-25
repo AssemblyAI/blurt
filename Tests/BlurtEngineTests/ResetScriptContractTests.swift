@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// `scripts/reset-lib.sh` hard-codes the names Blurt stores things under — bash

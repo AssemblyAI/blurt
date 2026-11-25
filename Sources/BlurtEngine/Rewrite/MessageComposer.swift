@@ -6,7 +6,7 @@
 /// hand-back press's spoken instructions (`.handedBack`), which it writes
 /// *from*, never pastes. Dictation cleanup stays the dictation API's
 /// server-side rewrite (AGENTS.md's settled decisions).
-public struct MessageComposer: MessageComposing, GatewayClient {
+struct MessageComposer: MessageComposing, GatewayClient {
   /// The rewrite key's model (`SelectionRewriter.model`): writing, where the
   /// larger model earns its latency.
   static let model = SelectionRewriter.model
@@ -46,7 +46,7 @@ public struct MessageComposer: MessageComposing, GatewayClient {
   /// The gateway call, key and transport bound in.
   private let gateway: GatewayConnection
 
-  public init(gateway: GatewayConnection) {
+  init(gateway: GatewayConnection) {
     self.gateway = gateway
   }
 
@@ -59,7 +59,7 @@ public struct MessageComposer: MessageComposing, GatewayClient {
     return "<app>\(app)</app>\n\n\(spoken)"
   }
 
-  public func compose(_ instructions: String, for app: String?) async throws -> String {
+  func compose(_ instructions: String, for app: String?) async throws -> String {
     let reply = try await gateway.send(
       ReadAloudLLM.chat(
         system: Self.instruction,

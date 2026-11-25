@@ -232,6 +232,10 @@ targets:
         product: AssemblyAI
       - package: Sparkle
         product: Sparkle
+      # The provider package that runs the engine on AssemblyAI (the
+      # transcriber, read-aloud's voice and LLM, sign-in).
+      - package: BlurtEngine
+        product: BlurtAssemblyAI
     postBuildScripts:
       - name: Install to /Applications
         script: |

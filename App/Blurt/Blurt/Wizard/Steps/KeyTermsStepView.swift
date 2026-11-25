@@ -23,7 +23,7 @@ struct KeyTermsStepView: View {
   private var text = ""
 
   var body: some View {
-    let terms = KeyTerms.parse(text)
+    let terms = KeyTermList.parse(text)
     let sent = KeyTerms.fitted(terms).count
     Section {
       // A vertical-axis TextField gives a native placeholder (`prompt`) and grows
