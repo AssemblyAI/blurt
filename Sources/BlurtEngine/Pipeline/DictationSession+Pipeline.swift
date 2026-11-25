@@ -259,9 +259,21 @@ extension DictationSession {
     } catch {
       // A cancel() that landed mid-request already tore this task down and set
       // .cancelled; the transport then surfaces a cancellation-shaped error
-      // (URLError(.cancelled) / CancellationError). Leave the claimed phase
-      // alone rather than repainting the user's cancel as a red failure.
-      if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+      // (URLError(.cancelled) / CancellationError), or whatever else it was
+      // failing with. Leave the claimed phase alone rather than repainting the
+      // user's cancel as a red failure.
+      //
+      // `Task.isCancelled` alone, never the error's shape (`isCancellationShaped`),
+      // the rule `Error.isAbandonment` states for a catch that has only the
+      // error to go on. The one route that tears this request down mid-flight
+      // is `cancel()`, which cancels `pipelineTask` before its `setPhase(.cancelled)`
+      // abandons the upload, in the same actor turn. So a cancellation-shaped
+      // error on a task nobody cancelled is a request the system dropped. Taking
+      // that for a cancel left the phase on `.transcribing`, which no press can
+      // start from: the dictation key was dead until relaunch, the pipeline's
+      // form of the router's wedge (#342). It fails as `.sttFailed` instead,
+      // like any other dropped request.
+      if Task.isCancelled {
         return nil
       }
       // The producer refused to close a body below `SyncSTTLimits.minPCMBytes`.
