@@ -28,8 +28,10 @@ extension FocusCapture {
     /// `kAXSelectedText`. Electron apps such as Claude.app answer the
     /// system-wide focus query with `cannotComplete`; once a voice command has
     /// set `AXManualAccessibility` they answer it with a web area instead, which
-    /// still exposes no selected text (nor do Sublime Text and Zed). Only here
-    /// may the caller fall back to copying (`SelectionCopy`).
+    /// still exposes no selected text (nor do Sublime Text and Zed). Only an
+    /// element that could hide a text selection reads this way
+    /// (`selectionRead`), and only here may the caller fall back to copying
+    /// (`SelectionCopy`).
     case unreadable
   }
 
@@ -38,6 +40,14 @@ extension FocusCapture {
   /// typed password can't leak. Independent of editability: the same role is in
   /// `editableRoles`, so a password field still *receives* the paste.
   static let secureFieldRole = "AXSecureTextField"
+
+  /// AX roles whose element can hold a text selection without exposing it: text
+  /// controls, a web area (Electron, a browser's lazy tree), a generic group (a
+  /// `contenteditable` composer), and the bare window a custom-drawn editor
+  /// (Sublime Text, Zed) reports as focused.
+  static let selectionHidingRoles: Set<String> = [
+    "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXWebArea", "AXGroup", "AXWindow",
+  ]
 
   /// The whole password-redaction decision `captureFieldContext` acts on: may this
   /// focused element's contents be read into the STT request at all?
@@ -97,12 +107,22 @@ extension FocusCapture {
 
   /// How `captureSelectedText` reads what the focused element answered for its
   /// selection, once a bare caret has been ruled out. `raw` nil means the element
-  /// answered nothing at all — not an empty selection but an unreadable one, so
-  /// the copy fallback gets its chance (#342). A read that holds nothing visible
-  /// is a definite "no selection".
-  static func selectionRead(_ raw: String?, maxChars: Int) -> SelectionRead {
+  /// answered nothing at all. On an element that could hide a text selection
+  /// (`selectionHidingRoles`, or no role at all) that is an unreadable one, so
+  /// the copy fallback gets its chance (#342). On any other — Finder's file
+  /// list, an outline, a button — it is a definite "no selection": a ⌘C there
+  /// would copy the selected item, a file's name read aloud in place of a
+  /// dictation. A read that holds nothing visible is a definite "no selection"
+  /// too. `role` is a closure so the hot path, an answered read, never pays its
+  /// Accessibility round trip.
+  static func selectionRead(
+    _ raw: String?, role: @autoclosure () -> String?, maxChars: Int
+  ) -> SelectionRead {
     guard let raw else {
-      return .unreadable
+      guard let reported = role() else {
+        return .unreadable
+      }
+      return selectionHidingRoles.contains(reported) ? .unreadable : .noSelection
     }
     return selectionText(raw, maxChars: maxChars).map(SelectionRead.text) ?? .noSelection
   }

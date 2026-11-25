@@ -164,14 +164,14 @@ struct FocusCaptureTests {
 
   @Test("a selection read with visible text is that text, edges kept")
   func selectionReadText() {
-    #expect(FocusCapture.selectionRead("First line.\n", maxChars: 100) == .text("First line.\n"))
-    #expect(FocusCapture.selectionRead("abcdefgh", maxChars: 3) == .text("abc"))
+    #expect(FocusCapture.selectionRead("First line.\n", role: "AXTextArea", maxChars: 100) == .text("First line.\n"))
+    #expect(FocusCapture.selectionRead("abcdefgh", role: "AXTextArea", maxChars: 3) == .text("abc"))
   }
 
   @Test("a selection read holding nothing visible is a definite no selection")
   func selectionReadEmpty() {
-    #expect(FocusCapture.selectionRead("", maxChars: 100) == FocusCapture.SelectionRead.noSelection)
-    #expect(FocusCapture.selectionRead(" \n\u{200B}", maxChars: 100) == FocusCapture.SelectionRead.noSelection)
+    #expect(FocusCapture.selectionRead("", role: "AXTextArea", maxChars: 100) == .noSelection)
+    #expect(FocusCapture.selectionRead(" \n\u{200B}", role: "AXTextArea", maxChars: 100) == .noSelection)
   }
 
   /// An Electron web area (once `AXManualAccessibility` is on), Sublime Text and
@@ -179,7 +179,19 @@ struct FocusCaptureTests {
   /// selection" kept the copy fallback from ever running there (#342).
   @Test("an element that answers no selected text at all is unreadable, so the copy fallback runs")
   func selectionReadUnanswered() {
-    #expect(FocusCapture.selectionRead(nil, maxChars: 100) == .unreadable)
+    for role in ["AXWebArea", "AXWindow", "AXTextArea", "AXGroup"] {
+      #expect(FocusCapture.selectionRead(nil, role: role, maxChars: 100) == .unreadable)
+    }
+    #expect(FocusCapture.selectionRead(nil, role: nil, maxChars: 100) == .unreadable)
+  }
+
+  /// Finder's file list answers no selected text either, but a ⌘C there copies
+  /// the selected file, and its name would be read aloud in place of a dictation.
+  @Test("an element that can't hold a text selection answers none as no selection, so nothing is copied")
+  func selectionReadUnansweredNonText() {
+    for role in ["AXOutline", "AXList", "AXTable", "AXButton", "AXRow"] {
+      #expect(FocusCapture.selectionRead(nil, role: role, maxChars: 100) == .noSelection)
+    }
   }
 
   // MARK: visibleTextOrNil
