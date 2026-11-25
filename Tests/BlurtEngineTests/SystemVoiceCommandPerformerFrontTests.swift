@@ -4,21 +4,6 @@
 
   @testable import BlurtEngine
 
-  /// Carries every step out as `open`'s wait for an app that never comes forward,
-  /// on `clock`: the production wait without a live app to launch.
-  private struct NeverForwardPerformer: VoiceCommandPerforming {
-    let clock: TestClock
-
-    func screenContext() -> ScreenContext { ScreenContext(appName: nil) }
-
-    func perform(_: VoiceCommandStep) async throws -> String? {
-      _ = try await SystemVoiceCommandPerformer.waitForFront(
-        "Slack", clock: clock, look: { false }, frontmost: { false }
-      )
-      return nil
-    }
-  }
-
   /// `SystemVoiceCommandPerformer`'s wait for an opened app to come forward, on a
   /// `TestClock`, through the router's `execute` as a command runs it: an app
   /// that never comes forward fails the command, and a cancel during the wait
@@ -26,6 +11,21 @@
   @MainActor
   @Suite("SystemVoiceCommandPerformer · coming forward", .timeLimit(.minutes(1)))
   struct SystemVoiceCommandPerformerFrontTests {
+    /// Carries every step out as `open`'s wait for an app that never comes forward,
+    /// on `clock`: the production wait without a live app to launch.
+    private struct NeverForwardPerformer: VoiceCommandPerforming {
+      let clock: TestClock
+
+      func screenContext() -> ScreenContext { ScreenContext(appName: nil) }
+
+      func perform(_: VoiceCommandStep) async throws -> String? {
+        _ = try await SystemVoiceCommandPerformer.waitForFront(
+          "Slack", clock: clock, look: { false }, frontmost: { false }
+        )
+        return nil
+      }
+    }
+
     private static let interval: Duration = .milliseconds(100)
     private static let looks = Int(SystemVoiceCommandPerformer.launchBudget / interval)
 
