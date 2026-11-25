@@ -92,6 +92,15 @@ ios_require_device() {
   NAME="${picked#*	}"
 }
 
+# ios_boot_async UDID → starts booting the simulator and returns at once, so
+# the boot runs under the build that follows; ios_wait_booted then waits for
+# whatever is left of it. A fresh CI simulator spends 2–11 minutes in its
+# first boot (data migration), which used to come before the build rather
+# than beside it.
+ios_boot_async() {
+  xcrun simctl boot "$1" >/dev/null 2>&1 &
+}
+
 # ios_wait_booted UDID → boots the simulator if needed and waits for it.
 ios_wait_booted() {
   xcrun simctl boot "$1" 2>/dev/null || true

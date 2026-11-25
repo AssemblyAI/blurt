@@ -1,6 +1,7 @@
 import XCTest
 
-/// The Library with entries, and an open transcript in each of its views.
+/// The Library with entries, its menus open, its Delete confirmation, and an
+/// open transcript in each of its views.
 final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
   override var extraLaunchArguments: [String] {
     [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.seedHistoryLaunchArgument]
@@ -31,6 +32,35 @@ final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
     )
     XCTAssertTrue(app.descendants(matching: .any).matching(result).firstMatch.waitForExistence(timeout: 10))
     try audit("transcript page, Meeting notes", into: &found)
+    assertNoAccessibilityIssues(found)
+  }
+
+  /// The Library's menus while open — the toolbar's Filter and a row's
+  /// context menu — and the confirmation its Delete… asks for, cancelled.
+  func testLibraryMenusAndDeleteConfirmation() throws {
+    var found: [String] = []
+    let main = mainWindow()
+    let dictation = row(titled: UITestIdentifiers.seededDictationText)
+    XCTAssertTrue(dictation.waitForExistence(timeout: 10))
+
+    main.menuButtons[UITestIdentifiers.libraryFilterMenu].click()
+    XCTAssertTrue(app.menuItems["Recordings"].waitForExistence(timeout: 5), "The Filter menu should open")
+    try audit("Library, Filter menu open", into: &found)
+    app.typeKey(.escape, modifierFlags: [])
+
+    dictation.rightClick()
+    let deleteItem = app.menuItems["Delete…"]
+    XCTAssertTrue(deleteItem.waitForExistence(timeout: 5), "A row's context menu should open")
+    try audit("Library, row context menu open", into: &found)
+    deleteItem.click()
+
+    // Scoped to the window's sheet: a bare "Delete" also matches the Touch Bar's.
+    let confirmation = main.sheets.firstMatch
+    XCTAssertTrue(confirmation.buttons["Delete"].waitForExistence(timeout: 5), "Delete… should ask first")
+    try audit("Library, Delete confirmation", into: &found)
+    app.typeKey(.escape, modifierFlags: [])
+    XCTAssertTrue(confirmation.waitForNonExistence(timeout: 5), "Escape should cancel the confirmation")
+    XCTAssertTrue(dictation.exists, "Cancelling deletes nothing")
     assertNoAccessibilityIssues(found)
   }
 }

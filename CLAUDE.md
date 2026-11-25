@@ -156,5 +156,6 @@ itself when this Mac has the matching runtime.
 `scripts/check.sh` with and without `--portable` or `--lint-only`, the standalone checks it runs
 (`check-invariants.sh`, `check-portability.sh`, `check-release-notes.sh`, `design-sync.sh --check`,
 `mutate.sh --list`), `scripts/dev-build.sh`, and the iPhone scripts:
-`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`, `ios-uitest.sh`). If you find yourself
+`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`, `ios-uitest.sh`, and the split-out
+static gates, `swiftlint-analyze.sh` and `mac-static.sh`). If you find yourself
 prompted for a command that belongs in that set, add it there rather than working around it.
