@@ -209,6 +209,10 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+      # The provider package that runs the engine on AssemblyAI: the app's
+      # transcriber and key check. The keyboard never transcribes, so only here.
+      - package: BlurtEngine
+        product: BlurtAssemblyAI
       # Linked and embedded here, and only here (KeyboardKit: "must ONLY be
       # added to the app target"): its two frameworks (KeyboardKit, LicenseKit)
       # land in BlurtiOS.app/Frameworks, and the keyboard loads that copy

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// The PCM player's bookkeeping, around real playback of silence: what it
@@ -17,7 +18,7 @@ import Testing
 struct StreamingPCMPlayerTests {
   /// `seconds` of silence at the TTS sample rate.
   private func silence(seconds: Double) -> Data {
-    Data(count: Int(Double(AssemblyAISpeechSynthesizer.sampleRate) * seconds) * 2)
+    Data(count: Int(Double(SpeechClient.sampleRate) * seconds) * 2)
   }
 
   /// Drains `player`, waking each of its polls on `clock` as it parks, and
@@ -54,7 +55,7 @@ struct StreamingPCMPlayerTests {
   func badRateFallsBack() async {
     for rate in [0, -1, .nan, .infinity] {
       let clock = TestClock()
-      let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: rate, clock: clock)
+      let player = StreamingPCMPlayer(sampleRate: SpeechClient.sampleRate, rate: rate, clock: clock)
       player.enqueue(silence(seconds: 0.05))
       // Bounded as a rate of 1 bounds it: the fallback rate is what the
       // deadline divides by.
@@ -65,7 +66,7 @@ struct StreamingPCMPlayerTests {
   @Test("a drain finishes within the audio queued plus its slack")
   func drainIsBounded() async {
     let clock = TestClock()
-    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: 2, clock: clock)
+    let player = StreamingPCMPlayer(sampleRate: SpeechClient.sampleRate, rate: 2, clock: clock)
     player.enqueue(silence(seconds: 0.5))
     // With no output device the media clock never moves, so the drain waits
     // out its whole deadline — the queued audio at 2× plus its slack — and its
@@ -76,7 +77,7 @@ struct StreamingPCMPlayerTests {
 
   @Test("queued audio is reported in listening time, and nothing once stopped")
   func bufferedSeconds() {
-    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: 2)
+    let player = StreamingPCMPlayer(sampleRate: SpeechClient.sampleRate, rate: 2)
     #expect(player.bufferedSeconds == 0)
     player.enqueue(silence(seconds: 1))
     // A second of audio at 2× is half a second of listening, plus the
@@ -90,7 +91,7 @@ struct StreamingPCMPlayerTests {
   @Test("stopping twice is safe, audio after a stop is ignored, and so is less than a sample")
   func stopAndShortInput() async {
     let clock = TestClock()
-    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, clock: clock)
+    let player = StreamingPCMPlayer(sampleRate: SpeechClient.sampleRate, clock: clock)
     player.enqueue(Data())
     player.enqueue(Data([1]))
     #expect(player.bufferedSeconds == 0)
@@ -104,7 +105,7 @@ struct StreamingPCMPlayerTests {
 
   @Test("silence reads as no level")
   func silenceHasNoLevel() {
-    let player = StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate)
+    let player = StreamingPCMPlayer(sampleRate: SpeechClient.sampleRate)
     player.enqueue(silence(seconds: 0.5))
     #expect(player.currentLevel == 0)
     player.stop()

@@ -19,7 +19,7 @@ struct APIKeySubmissionTests {
 
   /// A submission whose validator deterministically returns `result`.
   private func submission(
-    store: any APIKeyGateway, result: APIKeyValidator.Result
+    store: any APIKeyGateway, result: KeyValidation
   ) -> APIKeySubmission {
     APIKeySubmission(keyStore: store) { _ in result }
   }

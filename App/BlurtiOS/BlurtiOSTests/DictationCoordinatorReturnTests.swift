@@ -29,7 +29,7 @@ struct DictationCoordinatorReturnTests {
     let rig = WindowRig()
     let returns = Returns()
     let coordinator = DictationCoordinator(
-      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()),
+      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()) { _ in .unreachable },
       window: rig.window,
       transcriber: StubTranscriber(text: "hello"),
       clock: rig.clock,

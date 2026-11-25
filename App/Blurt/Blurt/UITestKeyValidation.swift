@@ -1,6 +1,5 @@
 #if UITEST_HOOKS
 
-  import AssemblyAI
   import BlurtEngine
 
   // The real Keychain stays untouched under UI testing via the engine's
@@ -16,7 +15,7 @@
   enum UITestKeyValidation {
     // nonisolated: called from the coordinator's nonisolated @Sendable
     // `validateKey` closure, not the main actor (the app's default isolation).
-    nonisolated static func result(for key: String) -> APIKeyValidator.Result {
+    nonisolated static func result(for key: String) -> KeyValidation {
       switch key {
       case UITestIdentifiers.invalidAPIKey:
         return .invalid

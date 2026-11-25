@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtEngine
 import CoreTransferable
 import Foundation
 import UniformTypeIdentifiers
@@ -45,7 +46,7 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
   /// without Blurt still gets the words.
   package var plainText: String {
     let lead = from.map { "\($0)'s Blurt key terms" } ?? "Blurt key terms"
-    return "\(lead) (\(name)): \(KeyTerms.join(terms))"
+    return "\(lead) (\(name)): \(KeyTermList.join(terms))"
   }
 
   package init(name: String, from: String?, terms: [String]) {
@@ -85,13 +86,13 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
     }
     let value = { (name: String) in items.first { $0.name == name }?.value }
     return Self(
-      name: value("name") ?? "Shared key terms", from: value("from"), terms: KeyTerms.parse(value("add") ?? "")
+      name: value("name") ?? "Shared key terms", from: value("from"), terms: KeyTermList.parse(value("add") ?? "")
     ).capped()
   }
 
   /// The pack within the caps, or nil when nothing usable is left.
   private func capped() -> Self? {
-    let kept = KeyTerms.parse(KeyTerms.join(terms)).filter { $0.count <= Self.lengthCap }
+    let kept = KeyTermList.parse(KeyTermList.join(terms)).filter { $0.count <= Self.lengthCap }
     let keptTerms = Array(kept.prefix(KeyTerms.termCap))
     guard !keptTerms.isEmpty else {
       return nil

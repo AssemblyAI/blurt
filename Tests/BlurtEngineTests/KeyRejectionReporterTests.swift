@@ -2,6 +2,8 @@ import Foundation
 import Synchronization
 import Testing
 
+@testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// A dictation refused for its key is reported (so a signed-in account renews

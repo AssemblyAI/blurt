@@ -40,7 +40,7 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   package let stateSequence: UInt64?
   /// For a press: the field is a password field (`UITextDocumentProxy.isPasswordField`).
   /// Its text never rides the command, and the app hands the flag to the
-  /// engine (`FocusedFieldContext.isSecure`), so what is dictated into it is
+  /// engine (`FocusedFieldContext.security`), so what is dictated into it is
   /// never remembered as context for a later dictation — the Mac's rule.
   /// Nil from a keyboard build that never learned it.
   package let isSecure: Bool?  // swiftlint:disable:this discouraged_optional_boolean

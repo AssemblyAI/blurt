@@ -6,9 +6,33 @@
   /// `ClipboardAccess` backed by the real `NSPasteboard.general`. The change-count
   /// comparison that gates the deferred restore lives here, behind the seam, so a
   /// fake never re-implements it.
+  ///
+  /// Every write goes through `put`, so the rules a write must follow — counted
+  /// before it lands, and a secret kept to this Mac, marked, and expired — are
+  /// applied once rather than remembered at each call site.
   struct SystemClipboard: ClipboardAccess {
     /// Arranges for a concealed leave-behind's expiry to run later.
     typealias ExpiryScheduler = @Sendable (_ expire: @escaping @Sendable () -> Void) -> Void
+
+    /// What one write leaves on the pasteboard.
+    private enum Contents {
+      /// An empty pasteboard: the clear that expires a secret, or the restore
+      /// of a pasteboard that held nothing.
+      case nothing
+      /// A single plain-string item.
+      case text(String)
+      /// A snapshot's items, rebuilt.
+      case items([NSPasteboardItem])
+    }
+
+    /// What takes a concealed write's words off the pasteboard again.
+    private enum ConcealedExpiry {
+      /// `expireOurWrite`, once `concealedLifetime` has passed.
+      case scheduled
+      /// The paste's own restore: it puts the user's contents back over the
+      /// words, or finds a newer copy of the user's already has.
+      case leftToRestore
+    }
 
     /// How long a concealed leave-behind stays for the paste by hand before it
     /// is cleared — a password manager's own copy window.
@@ -63,11 +87,7 @@
     // `concealedLifetime`, so the secret doesn't sit on the pasteboard for
     // whatever reads it next.
     func write(_ text: String, concealed: Bool) {
-      setString(text, transient: concealed, concealed: concealed)
-      guard concealed else {
-        return
-      }
-      expireOurWrite()
+      put(.text(text), transient: concealed, concealed: concealed)
     }
 
     func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void {
@@ -80,18 +100,16 @@
     func writeAndPrepareRestore(
       _ text: String, concealed: Bool, over saved: PasteboardSnapshot?
     ) -> @Sendable () -> Void {
-      setString(text, transient: true, concealed: concealed)
+      // With no snapshot the restore below leaves these words in place, so a
+      // secret's are given the same expiry as a concealed leave-behind's:
+      // nothing else would ever take a password off the clipboard. With one,
+      // the restore takes them off.
+      put(.text(text), transient: true, concealed: concealed, expiry: saved == nil ? .scheduled : .leftToRestore)
       // Snapshot the change count our own write produced. If anything else writes
       // to the pasteboard before the restore fires (e.g. the user copies
       // something), the count moves and the restore leaves their newer contents
       // alone rather than clobbering them with the stale pre-paste snapshot.
       let ourChangeCount = changeCount
-      // With no snapshot the restore below leaves these words in place, so a
-      // secret's are given the same expiry as a concealed leave-behind's:
-      // nothing else would ever take a password off the clipboard.
-      if concealed, saved == nil {
-        expireOurWrite()
-      }
       return { [self] in
         // A nil snapshot means the pasteboard could not be read at all. There is
         // nothing to put back, so leave the transcript on the clipboard (the same
@@ -107,18 +125,56 @@
     /// Puts `saved` back, unless something wrote to the pasteboard since
     /// `expected` was read: a newer copy by the user survives. Shared by the
     /// paste path and the read-aloud copy fallback (`SelectionCopy`).
-    ///
-    /// A concealed snapshot gets a fresh expiry once it is back. Whatever was
-    /// going to clear it — `write`'s own timer for a password field's
-    /// leave-behind, or a password manager's for its copy — keyed on the change
-    /// count before this paste, so it now finds a different one and skips the
-    /// clear, and the secret would stay on the pasteboard for good.
     func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
       guard changeCount == expected else {
         return
       }
       restore(saved)
-      if saved.isConcealed { expireOurWrite() }
+    }
+
+    /// The one way Blurt writes the pasteboard. The write is counted before it
+    /// lands (`ownWrites`), and a `concealed` one — a secret — is kept to this
+    /// Mac (`currentHostOnly` takes it off Universal Clipboard), marked so a
+    /// clipboard manager skips it, and, unless `expiry` hands that to the
+    /// paste's restore, cleared after `concealedLifetime`.
+    ///
+    /// `.text` gets its markers after the string. `.items` get the transient
+    /// marker on each item; their concealed marker is already among their data,
+    /// since a snapshot is concealed only by carrying it. Returns false when
+    /// `writeObjects` refuses `.items`: the pasteboard is then left cleared,
+    /// with no expiry, for the caller's text floor.
+    @discardableResult
+    private func put(
+      _ contents: Contents, transient: Bool, concealed: Bool, expiry: ConcealedExpiry = .scheduled
+    ) -> Bool {
+      noteOwnWrite()
+      let pasteboard = NSPasteboard.general
+      if concealed {
+        pasteboard.prepareForNewContents(with: .currentHostOnly)
+      } else {
+        pasteboard.clearContents()
+      }
+      switch contents {
+      case .nothing:
+        break
+
+      case .text(let text):
+        pasteboard.setString(text, forType: .string)
+        if transient { pasteboard.setData(Data(), forType: Self.transientType) }
+        if concealed { pasteboard.setData(Data(), forType: Self.concealedType) }
+
+      case .items(let items):
+        if transient {
+          for item in items { item.setData(Data(), forType: Self.transientType) }
+        }
+        guard pasteboard.writeObjects(items) else {
+          return false
+        }
+      }
+      if concealed, expiry == .scheduled {
+        expireOurWrite()
+      }
+      return true
     }
 
     private func noteOwnWrite() { Self.ownWrites.add(1, ordering: .sequentiallyConsistent) }
@@ -154,22 +210,6 @@
       return PasteboardSnapshot(items: captured, plainText: pasteboard.string(forType: .string))
     }
 
-    /// `concealed` also keeps the words to this Mac: `currentHostOnly` takes
-    /// them off Universal Clipboard, so a secret isn't handed to the user's
-    /// other devices.
-    func setString(_ text: String, transient: Bool = false, concealed: Bool = false) {
-      noteOwnWrite()
-      let pasteboard = NSPasteboard.general
-      if concealed {
-        pasteboard.prepareForNewContents(with: .currentHostOnly)
-      } else {
-        pasteboard.clearContents()
-      }
-      pasteboard.setString(text, forType: .string)
-      if transient { pasteboard.setData(Data(), forType: Self.transientType) }
-      if concealed { pasteboard.setData(Data(), forType: Self.concealedType) }
-    }
-
     /// Empties the pasteboard, unless something wrote to it since `expected`
     /// was read: a concealed leave-behind expiring must not take a newer copy
     /// with it.
@@ -177,19 +217,21 @@
       guard changeCount == expected else {
         return
       }
-      noteOwnWrite()
-      NSPasteboard.general.clearContents()
+      put(.nothing, transient: false, concealed: false)
     }
 
+    /// Puts `saved` back. A concealed snapshot goes back kept to this Mac, as
+    /// `put` keeps every secret, and with a fresh expiry: whatever was going to
+    /// clear it — `write`'s own timer for a password field's leave-behind, or a
+    /// password manager's for its copy — keyed on the change count before this
+    /// paste, so it now finds a different one and skips the clear, and the
+    /// secret would stay on the pasteboard for good.
     func restore(_ saved: PasteboardSnapshot) {
-      noteOwnWrite()
-      let pasteboard = NSPasteboard.general
-
       // The pasteboard genuinely held nothing, so restoring it means emptying it.
       // Safe to clear because the snapshot succeeded — a *failed* read is nil and
       // never reaches here.
       guard !saved.items.isEmpty else {
-        pasteboard.clearContents()
+        put(.nothing, transient: false, concealed: false)
         return
       }
 
@@ -204,9 +246,6 @@
         for (type, data) in item.dataMap {
           pasteboardItem.setData(data, forType: type)
         }
-        // Putting the user's own contents back is not a new copy: without the
-        // marker a clipboard manager records it again, on every dictation.
-        pasteboardItem.setData(Data(), forType: Self.transientType)
         return pasteboardItem
       }
 
@@ -222,18 +261,12 @@
         first.setString(plainText, forType: .string)
       }
 
-      if !rebuilt.isEmpty {
-        // A restored secret stays on this Mac, as `setString` keeps a new one.
-        if saved.isConcealed {
-          pasteboard.prepareForNewContents(with: .currentHostOnly)
-        } else {
-          pasteboard.clearContents()
-        }
-        // `writeObjects` can refuse the batch; fall through to the text floor
-        // rather than leaving the pasteboard empty.
-        if pasteboard.writeObjects(rebuilt) {
-          return
-        }
+      // Transient: putting the user's own contents back is not a new copy, and
+      // without the marker a clipboard manager records it again, on every
+      // dictation. `writeObjects` can refuse the batch; fall through to the text
+      // floor rather than leaving the pasteboard empty.
+      if !rebuilt.isEmpty, put(.items(rebuilt), transient: true, concealed: saved.isConcealed) {
+        return
       }
 
       // Either nothing was materializable, or the write above was refused. Put the
@@ -249,7 +282,7 @@
       // valid `NSPasteboardItem`s is a programming error, not a runtime condition,
       // and NSPasteboard offers no way to test a write before clearing.
       if let plainText = saved.plainText {
-        setString(plainText, transient: true, concealed: saved.isConcealed)
+        put(.text(plainText), transient: true, concealed: saved.isConcealed)
       }
     }
   }

@@ -1,5 +1,6 @@
 import AppKit
 import AssemblyAI
+import BlurtAssemblyAI
 import BlurtEngine
 import Foundation
 import Observation
@@ -196,6 +197,7 @@ final class AppCoordinator {
     guard let seams = triggerKeySeams else {
       return SelectionSpeechRouter(
         session: session,
+        services: .assemblyAI(),
         // Every read is kept, findable and playable from the Recent list.
         clips: ReadClipSink(directory: TranscriptStore.readAloudDirectory) { [weak self] clip in
           Task { @MainActor in self?.transcripts.saveReadClip(clip) }
@@ -264,8 +266,12 @@ final class AppCoordinator {
   }
 
   private func observePhases() -> Task<Void, Never> {
-    Task { [weak self] in
-      guard let phases = await self?.session.phaseStream() else {
+    // The key tap can take a press before this subscription lands; a replayed
+    // `.idle` behind it would read as that dictation's end and reset its gate
+    // (`syncAfterTerminalPhase`). Only `render` moves `lastPhase` (#413).
+    let shown = lastPhase
+    return Task { [weak self] in
+      guard let phases = await self?.session.phaseStream(alreadyShowing: shown) else {
         return
       }
       for await phase in phases {

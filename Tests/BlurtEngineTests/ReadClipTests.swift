@@ -2,6 +2,7 @@ import Foundation
 import Synchronization
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// Read-aloud clips: the WAV a read's audio is kept in, and the speaker

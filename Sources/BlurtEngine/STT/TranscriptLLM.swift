@@ -1,7 +1,7 @@
 import Foundation
 
-/// Runs a `TranscriptTransform` over a stored transcript on AssemblyAI's LLM
-/// Gateway — `POST /v1/chat/completions`, the documented route.
+/// Runs a `TranscriptTransform` over a stored transcript through the provider's
+/// `ChatCompleting` — AssemblyAI's LLM Gateway, with `BlurtAssemblyAI`.
 ///
 /// **The repo's second LLM Gateway client, and only for file transcripts.**
 /// Dictation cleanup stays the dictation API's server-side rewrite on the same
@@ -10,7 +10,8 @@ import Foundation
 /// the user opens and asks a task of, past dictations included.
 /// A file transcript comes from the async API, which has no rewrite to ask
 /// for, and can run for hours — past anything the dictation request accepts.
-/// `check-invariants.sh` exempts this file and `ReadAloudLLM.swift`, no other.
+/// Like every LLM client it sends through `GatewayConnection`, so the gateway's
+/// URL lives only in the SDK's `GatewayChatClient.swift`.
 public struct TranscriptLLM: GatewayClient, Sendable {
   /// Gemma 4 (31B), the owner's pick (2026-10-30): $0.14 in / $0.40
   /// out per million tokens on the docs' list, with a 256k-token context — some
