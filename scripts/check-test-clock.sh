@@ -18,7 +18,8 @@
 #
 # Usage:
 #   check-test-clock.sh               every tracked test file
-#   check-test-clock.sh FILE...       just these (the PostToolUse hook's mode)
+#   check-test-clock.sh FILE...       just these, less any outside the test
+#                                     scope (the PostToolUse hook's mode)
 #   check-test-clock.sh --self-test   the scan against known inputs
 
 set -euo pipefail
@@ -109,8 +110,21 @@ fi
 if [ "$#" -gt 0 ]; then
   # Just these files, tracked or not — the PostToolUse hook's mode. The tracked
   # list alone missed exactly the file the hook fires on most: a test suite just
-  # written, which git doesn't list until it is staged.
-  hits="$(unmarked "$@")"
+  # written, which git doesn't list until it is staged. Any outside the test
+  # scope are dropped; a pathspec's `*` crosses `/`, and so does a `[[ == ]]`
+  # pattern's.
+  in_scope=()
+  for f in "$@"; do
+    for pat in "${SCOPE[@]}"; do
+      # shellcheck disable=SC2053 # $pat is a glob on purpose
+      if [[ ${f#"$REPO_ROOT"/} == $pat ]]; then
+        in_scope+=("$f")
+        break
+      fi
+    done
+  done
+  [ "${#in_scope[@]}" -gt 0 ] || exit 0
+  hits="$(unmarked "${in_scope[@]}")"
 else
   hits="$(waits)"
 fi
@@ -123,4 +137,4 @@ if [ -n "$hits" ]; then
   echo "       '// wall-clock-ok: <reason>' at the end of the line or on the line above." >&2
   exit 1
 fi
-echo "every wall-clock wait in the tests says why"
+[ "$#" -gt 0 ] || echo "every wall-clock wait in the tests says why"
