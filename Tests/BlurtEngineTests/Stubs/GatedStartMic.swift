@@ -23,13 +23,19 @@ actor GatedStartMic: MicCaptureProtocol {
   /// during its liveness wait. Off by default so the common gated-press tests
   /// see a bring-up that simply completes.
   private var throwsIfCancelled = false
+  /// When set, `start()` throws this once released, cancelled or not — what the
+  /// real `MicCapture` does when the device open fails (`record()` answering
+  /// false) while a cancel is landing.
+  private var failure: (any Error)?
 
   func setThrowsIfCancelled(_ value: Bool) { throwsIfCancelled = value }
+  func setFailure(_ error: (any Error)?) { failure = error }
 
   func start() async throws -> AsyncStream<Data> {
     startCalls += 1
     await gate.enter()
     if throwsIfCancelled, Task.isCancelled { throw CancellationError() }
+    if let failure { throw failure }
     return .oneShot(StubPCM.aboveMinimum)
   }
 
