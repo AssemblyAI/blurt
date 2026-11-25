@@ -6,6 +6,9 @@
 #   scripts/ios-uitest.sh -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testHome
 #   BLURT_AUDIT_TEXT_SIZE=largest scripts/ios-uitest.sh   # one text size only (default|largest)
 #
+# Arguments (-only-testing: / -skip-testing:) select tests; CI's ios-audits
+# matrix splits the largest-size audits in two this way.
+#
 # XCUITests that launch the app onto each of its screens and run
 # `performAccessibilityAudit()` there (App/BlurtiOS/BlurtiOSUITests). Unlike the
 # Mac's UI suite they never touch this Mac's keyboard or mouse — everything
@@ -67,3 +70,11 @@ fi
 xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -resultBundlePath "$RESULTS" \
   -parallel-testing-enabled NO -collect-test-diagnostics never "$@" 2>&1 | "${PRETTY[@]}"
 echo "results: $RESULTS"
+# A selection that matched no test (a renamed one in a shard's -only-testing
+# list) would otherwise pass having audited nothing.
+COUNT="$(xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin).get("totalTestCount", ""))' || true)"
+if [ "$COUNT" = "0" ]; then
+  echo "error: no audit ran${1:+ for $*}" >&2
+  exit 1
+fi

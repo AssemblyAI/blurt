@@ -24,10 +24,11 @@
 #
 # The steps are test, uitest, analyze, probe and periphery; with no arguments
 # all five run, which is what check.sh runs on a Mac with an iPhone simulator.
-# CI runs the same steps across three jobs in parallel — ios-build (`test
-# probe`), ios-audits (`uitest`) and ios-static (`analyze periphery`) — since in
-# one job they were check.yml's long pole at 40–48 minutes, the audits and
-# analyze ~14 each. Run alone, `analyze` builds the tests for its log
+# CI runs the same steps across parallel jobs — ios-build (`test probe
+# uitest`, the audits at the default text size), ios-audits (the largest size,
+# through ios-uitest.sh, on two runners) and ios-static (`analyze periphery`) —
+# since in one job they were check.yml's long pole at 40–48 minutes, the audits
+# and analyze ~14 each. Run alone, `analyze` builds the tests for its log
 # (ios-test.sh with BLURT_IOS_BUILD_ONLY=1) instead of reusing the test run's.
 # Like check.sh, every step reports, so one failure doesn't hide the next.
 #

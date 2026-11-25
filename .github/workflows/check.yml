@@ -186,16 +186,44 @@ jobs:
         run: scripts/check.sh
 
   # The whole-app integration steps check.sh runs under CI: the XCUITest suite
-  # (scripts/uitest.sh — ~17 minutes, 47 tests driving every trigger key and
-  # read-aloud end to end) and the leak scan (scripts/leaks.sh). Half of what
-  # used to be one ~35-minute job, so a job of its own: it needs nothing the
-  # `macos` job produces — both scripts build the app themselves, from the
-  # committed project (`macos` runs the xcodegen drift check).
+  # (scripts/uitest.sh — 69 tests driving every trigger key, read-aloud and the
+  # audits end to end, ~20 minutes of test) and the leak scan (scripts/leaks.sh).
+  # A job of its own: it needs nothing the `macos` job produces — both scripts
+  # build the app themselves, from the committed project (`macos` runs the
+  # xcodegen drift check).
+  #
+  # Two runners, by test class, balanced on CI's per-class times (Nov 2026: ~580
+  # and ~600 s): shard a runs the classes it names and the leak scan; shard b
+  # skips those classes, so a new class lands in b with no list to update, and
+  # a renamed one still runs there (uitest.sh fails a selection that ran
+  # nothing).
   ui-tests:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    timeout-minutes: 35
+    # ~14 minutes per shard (Nov 2026); 30 for a slow runner.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: a
+            leaks: true
+            selection: >-
+              -only-testing:BlurtUITests/KeysAndReadAloudUITests
+              -only-testing:BlurtUITests/SettingsUITests
+              -only-testing:BlurtUITests/CommandPipelineUITests
+              -only-testing:BlurtUITests/MenuBarUITests
+              -only-testing:BlurtUITests/LaunchPerformanceUITests
+          - shard: b
+            leaks: false
+            selection: >-
+              -only-testing:BlurtUITests
+              -skip-testing:BlurtUITests/KeysAndReadAloudUITests
+              -skip-testing:BlurtUITests/SettingsUITests
+              -skip-testing:BlurtUITests/CommandPipelineUITests
+              -skip-testing:BlurtUITests/MenuBarUITests
+              -skip-testing:BlurtUITests/LaunchPerformanceUITests
 
     steps:
       - name: Checkout blurt
@@ -209,15 +237,19 @@ jobs:
         # output without it.
         run: brew install xcbeautify
 
-      - name: Run the XCUITest suite
+      - name: Run the XCUITest suite (shard ${{ matrix.shard }})
         working-directory: blurt
         env:
           # Where scripts/uitest.sh writes the UI suite's result bundle, for
           # the upload below.
           BLURT_UITEST_RESULTS: ${{ runner.temp }}/BlurtUITests.xcresult
-        run: scripts/uitest.sh
+          SELECTION: ${{ matrix.selection }}
+        run: |
+          read -ra selection <<<"$SELECTION"
+          scripts/uitest.sh "${selection[@]}"
 
       - name: Run the whole-app leak scan
+        if: matrix.leaks
         working-directory: blurt
         run: scripts/leaks.sh
 
@@ -229,7 +261,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: BlurtUITests-xcresult
+          name: BlurtUITests-xcresult-${{ matrix.shard }}
           path: ${{ runner.temp }}/BlurtUITests.xcresult
           if-no-files-found: ignore
 
@@ -355,11 +387,12 @@ jobs:
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
     # The engine's simulator build, then the iPhone unit tests with BlurtiOSCore's
-    # coverage gate and the probe's build: ~12 minutes once the audits, analyze
-    # and periphery moved to ios-audits and ios-static (together this job took
-    # 40–48 minutes, check.yml's long pole, Nov 2026). 30 leaves headroom for a
-    # slow runner's first simulator boot.
-    timeout-minutes: 30
+    # coverage gate, the probe's build and the default-size accessibility audits
+    # on the same booted simulator: ~19 minutes once the largest-size audits,
+    # analyze and periphery moved to ios-audits and ios-static (together this job
+    # took 40–48 minutes, check.yml's long pole, Nov 2026). 35 leaves headroom
+    # for a slow runner's first simulator boot.
+    timeout-minutes: 35
 
     steps:
       - name: Checkout blurt
@@ -383,34 +416,66 @@ jobs:
         # the Brewfile too, so these are the versions check.sh uses.
         run: brew install xcodegen xcbeautify
 
-      - name: Run the iPhone unit tests and build the probe
+      - name: Run the iPhone unit tests, build the probe and audit at the default text size
         working-directory: blurt
-        # scripts/ios-check.sh's `test` and `probe` steps: BlurtiOSTests
+        # scripts/ios-check.sh's `test`, `probe` and `uitest` steps: BlurtiOSTests
         # (warnings as errors, BlurtiOSCore's coverage gate) on whichever iPhone
-        # simulator the runner has (scripts/ios-lib.sh picks), then the probe's
-        # XCUITest bundle compiled over that build. Ad hoc signing: the
+        # simulator the runner has (scripts/ios-lib.sh picks), the probe's
+        # XCUITest bundle compiled over that build, then the accessibility audits
+        # at the default text size on the same simulator. A cold simulator costs
+        # a runner 8–10 minutes before its first test (CI, Nov 2026), so the
+        # default-size audits (~5.5 minutes of test) ride on the boot this job
+        # pays for anyway; ios-audits takes the largest size. Ad hoc signing: the
         # simulator accepts it and, unlike no signing, it embeds the App Group
         # entitlement.
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
+        env:
+          BLURT_AUDIT_TEXT_SIZE: default
+        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe uitest
 
-  # The iPhone accessibility audits (BlurtiOSUITests, scripts/ios-uitest.sh):
-  # `performAccessibilityAudit()` on every screen at two text sizes. A job of
-  # its own, beside ios-build, as the Mac's UI suite is beside `macos`: it needs
-  # nothing another job builds. One runner per text size: together the audits
-  # were ~12.5 minutes of test on top of the build, the run's longest job.
-  # Every test runs on both runners, each at its one size
-  # (BLURT_AUDIT_TEXT_SIZE), so there is no list of tests to keep balanced.
+      # The default-size audits' result bundle when they fail, as ios-audits
+      # keeps the largest size's.
+      - name: Upload the audits' results
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BlurtiOSUITests-xcresult-default
+          path: ${{ runner.temp }}/BlurtiOS/BlurtiOSUITests-*.xcresult
+          if-no-files-found: ignore
+
+  # The iPhone accessibility audits at the largest text size (BlurtiOSUITests,
+  # scripts/ios-uitest.sh with BLURT_AUDIT_TEXT_SIZE=largest), where each
+  # screen spans the most pages: ~9.5 minutes of test on top of the 8–10 a cold
+  # simulator costs a runner before its first one. ios-build audits the default
+  # size. Two runners, by test: shard a runs the tests it names, shard b skips
+  # them — so a new test lands in b with no list to update, and a renamed one
+  # still runs there (ios-uitest.sh fails a selection that ran nothing).
   ios-audits:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # The build, a warm-up launch, then one text size's audits; 35 for a slow
-    # runner.
+    # ~18 minutes (Nov 2026): the boot and the build, then half the
+    # largest-size audits; 35 for a slow runner.
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        text-size: [default, largest]
+        include:
+          - shard: a
+            selection: >-
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testConsent
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testHome
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testImportTerms
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeepOpen
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeyEntry
+              -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testSettings
+          - shard: b
+            selection: >-
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testConsent
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testHome
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testImportTerms
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeepOpen
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testKeyEntry
+              -skip-testing:BlurtiOSUITests/AccessibilityAuditTests/testSettings
 
     steps:
       - name: Checkout blurt
@@ -422,11 +487,14 @@ jobs:
       - name: Install XcodeGen and xcbeautify
         run: brew install xcodegen xcbeautify
 
-      - name: Run the iPhone accessibility audits at the ${{ matrix.text-size }} text size
+      - name: Run the iPhone accessibility audits at the largest text size (shard ${{ matrix.shard }})
         working-directory: blurt
         env:
-          BLURT_AUDIT_TEXT_SIZE: ${{ matrix.text-size }}
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh uitest
+          BLURT_AUDIT_TEXT_SIZE: largest
+          SELECTION: ${{ matrix.selection }}
+        run: |
+          read -ra selection <<<"$SELECTION"
+          BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-uitest.sh "${selection[@]}"
 
       # The audits' result bundle when the job fails or times out, as ui-tests
       # keeps the Mac suite's: the log shows each failure's first line only,
@@ -436,7 +504,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: BlurtiOSUITests-xcresult-${{ matrix.text-size }}
+          name: BlurtiOSUITests-xcresult-largest-${{ matrix.shard }}
           path: ${{ runner.temp }}/BlurtiOS/BlurtiOSUITests-*.xcresult
           if-no-files-found: ignore
 

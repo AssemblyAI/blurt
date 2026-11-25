@@ -269,8 +269,8 @@ tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer
     into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
     minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
     opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
-    `scripts/leaks.sh` directly. On CI they run in `check.yml`'s own `ui-tests` job, in parallel
-    with the rest: its `macos` job runs `check.sh` with `BLURT_INTEGRATION_TESTS=0`, the one
+    `scripts/leaks.sh` directly. On CI they run in `check.yml`'s own `ui-tests` job (two runners,
+    split by test class; `scripts/uitest.sh` takes the selection), in parallel with the rest: its `macos` job runs `check.sh` with `BLURT_INTEGRATION_TESTS=0`, the one
     opt-out, and the required `check` job fails unless `ui-tests` passed. Set it nowhere else —
     outside that pairing it is a green-looking bypass of the suite.
 
@@ -304,7 +304,8 @@ for the host, and every other job runs on a Mac. With its siblings **`ios-audits
 the iPhone code to the bar the engine and the Mac shell meet in `check.sh`: `BlurtiOSTests` with
 warnings as errors and a **line-coverage gate** on `BlurtiOSCore`, the iPhone code's logic
 (≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the engine's 88%; raise it as coverage grows), in
-`ios-build`; the accessibility audits in `ios-audits` (one runner per text size); **`swiftlint analyze`** over a from-scratch
+`ios-build`, with the accessibility audits at the default text size on the same simulator; the
+audits at the largest size in `ios-audits` (two runners, split by test); **`swiftlint analyze`** over a from-scratch
 build's log and **periphery** over the iPhone project in `ios-static`; `check.sh`'s swift-format, `swiftlint lint` and invariants already read every Swift file
 there. In the sibling
 **`ios-sanitizers`** job, one runner per sanitizer — **ThreadSanitizer** and **AddressSanitizer**

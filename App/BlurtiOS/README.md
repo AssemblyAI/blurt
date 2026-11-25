@@ -112,7 +112,8 @@ job runs it again under ThreadSanitizer and AddressSanitizer (`BLURT_IOS_SANITIZ
 `address` locally). `scripts/ios-check.sh` runs the whole iPhone bar in one go — the tests and
 the coverage gate, the accessibility audits, then `swiftlint analyze` and periphery over this
 project — and is what a local `scripts/check.sh` runs; CI runs its steps in three parallel jobs
-(`ios-build`, `ios-audits`, `ios-static`). The audits
+(`ios-build`, with the default-size audits; `ios-audits`, the largest size on two runners;
+`ios-static`). The audits
 (`BlurtiOSUITests`, `scripts/ios-uitest.sh`, its own scheme) launch the app onto each of its screens
 and run `performAccessibilityAudit()` there, at the default text size and at the largest; they run
 inside the simulator, so unlike the Mac's UI suite they leave the keyboard and mouse alone. The
