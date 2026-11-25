@@ -1,4 +1,4 @@
-import CoreGraphics
+import CoreFoundation
 import Testing
 
 /// The measured files against what they claim: each parses at the width its
