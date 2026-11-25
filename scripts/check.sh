@@ -340,12 +340,13 @@ fi
 
 # The iPhone targets, typechecked against the Mac Catalyst frameworks — the
 # closest thing to an iOS SDK a Mac without Xcode has (scripts/ios-typecheck.sh
-# explains). Not when ios-check.sh builds them for real below: that build
-# catches all this does. Skipped, not failed, where those frameworks are
-# absent; CI's ios-build job builds and tests the real thing.
+# explains). Not when ios-check.sh builds them for real below, nor on CI, where
+# the ios-build job does: either real build catches all this does, and on CI it
+# was a minute of the critical-path job spent repeating it. Skipped, not failed,
+# where those frameworks are absent.
 if [ "$IOS_GATES" -eq 1 ]; then
   echo "==> ios-typecheck skipped: ios-check builds App/BlurtiOS for real below"
-elif [ "$LINT_ONLY" -eq 1 ] && is_ci; then
+elif is_ci; then
   echo "==> ios-typecheck skipped: CI's ios-build job builds App/BlurtiOS for real"
 elif [ -d "$(xcrun --show-sdk-path 2>/dev/null)/System/iOSSupport/System/Library/Frameworks/UIKit.framework" ]; then
   run_check "ios-typecheck (App/BlurtiOS, Mac Catalyst stand-in)" "$REPO_ROOT/scripts/ios-typecheck.sh"
@@ -898,14 +899,21 @@ else
   # makes the machine unusable for the several minutes they take, which is enough
   # reason on its own not to run them on every local `check.sh`.
   #
-  # The gate is deliberately one-directional. Under CI they always run and there
-  # is no opt-out env var, because the whole point of the required `check` status
-  # is that it can't be talked out of a step — a skip flag CI honoured would be a
-  # green-looking bypass of the integration suite. Off CI they're skipped with a
-  # note unless BLURT_INTEGRATION_TESTS=1 asks for them; scripts/uitest.sh and
+  # Under CI they run by default. Off CI they're skipped with a note unless
+  # BLURT_INTEGRATION_TESTS=1 asks for them; scripts/uitest.sh and
   # scripts/leaks.sh also stay runnable directly, which is the same opt-in said
-  # another way. So a local run is no longer the authority on these two: CI is.
-  if is_ci; then
+  # another way. So a local run is not the authority on these two: CI is.
+  #
+  # BLURT_INTEGRATION_TESTS=0 is the one opt-out, and exists for check.yml alone:
+  # its `macos` job sets it because the `ui-tests` job runs both scripts on a
+  # runner of its own, in parallel — the UI suite is half this script's CI
+  # runtime. That is not a bypass, because the required status is no longer this
+  # script's job: it is check.yml's `check` job, which fails unless `ui-tests`
+  # passed. Setting it anywhere else skips the suite with nothing to catch it.
+  if is_ci && [ "${BLURT_INTEGRATION_TESTS:-}" = "0" ]; then
+    INTEGRATION=0
+    CI_INTEGRATION_ELSEWHERE=1
+  elif is_ci; then
     INTEGRATION=1
   elif [ "${BLURT_INTEGRATION_TESTS:-}" = "1" ]; then
     INTEGRATION=1
@@ -934,6 +942,9 @@ else
     # fixed set of system-framework XPC leaks is filtered out). Like the UI suite
     # it needs the GUI session the macos-26 runner provides.
     bash scripts/leaks.sh
+  elif [ "${CI_INTEGRATION_ELSEWHERE:-0}" -eq 1 ]; then
+    echo "==> skipping the UI suite and leak scan: BLURT_INTEGRATION_TESTS=0, so"
+    echo "    check.yml's ui-tests job runs them (and the required check fails without it)"
   else
     echo "==> skipping the UI suite and leak scan (they take over the machine)"
     echo "    CI runs both on every PR and is the authority on them. To run them"
@@ -985,6 +996,8 @@ if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
     echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
   elif [ "$LINT_ONLY" -eq 1 ]; then
     echo "==> ok (read-only checks only — Swift build/tests, swiftlint analyze and periphery NOT run)"
+  elif [ "${CI_INTEGRATION_ELSEWHERE:-0}" -eq 1 ]; then
+    echo "==> ok (UI suite + leak scan run in check.yml's ui-tests job)"
   elif [ "${INTEGRATION:-0}" -eq 0 ]; then
     # Say it at the end too, where the reader is deciding whether this run means
     # "green": everything else passed, but the UI suite and leak scan did not run.

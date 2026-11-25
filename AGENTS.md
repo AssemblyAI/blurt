@@ -172,7 +172,8 @@ evals/                       offline decision support — the repo's only Python
   pyproject.toml, uv.lock    the evals' ruff / mypy / pytest / coverage.py config and their
                              locked dev tools (uv sync --project evals --locked → evals/.venv)
                              — the repo's only Python config
-.github/workflows/           check.yml (the gate, macos-26; its ios-build job builds the engine for the
+.github/workflows/           check.yml (the gate, macos-26; its macos job runs check.sh, ui-tests the
+                             UI suite and leak scan; its ios-build job builds the engine for the
                              iOS simulator, then the iPhone app with its keyboard, and runs
                              BlurtiOSTests on a simulator with its coverage gate; ios-sanitizers
                              runs them again under TSan and ASan)
@@ -265,8 +266,10 @@ tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer
     into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
     minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
     opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
-    `scripts/leaks.sh` directly. There is deliberately **no opt-out** under CI — a flag CI honoured
-    would be a green-looking bypass of the required gate.
+    `scripts/leaks.sh` directly. On CI they run in `check.yml`'s own `ui-tests` job, in parallel
+    with the rest: its `macos` job runs `check.sh` with `BLURT_INTEGRATION_TESTS=0`, the one
+    opt-out, and the required `check` job fails unless `ui-tests` passed. Set it nowhere else —
+    outside that pairing it is a green-looking bypass of the suite.
 
 12. **`swiftlint analyze`** (unused imports — reads the compiler log the app build captured) and
     **`periphery scan --strict`** (unused declarations — runs its own xcodebuild + index). The only
@@ -285,7 +288,10 @@ background). `App/BlurtiOS/README.md` › Testing on a phone is the protocol; `c
 the script (shellcheck, shfmt, portability).
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
-script, so a clean local `check.sh` matches CI by construction. One more job **is** required, because
+script in its `macos` job — steps 10 and 11 in `ui-tests`, in parallel — so a clean local
+`check.sh` matches CI by construction. The one status branch protection requires is the summary
+job named `check`, which fails unless every gate below passed or was skipped by design. One more
+job **is** gated, because
 `check.sh` cannot cover it: **`ios-build`** compiles the engine for the iOS simulator
 (`xcodebuild -scheme BlurtEngine -destination 'generic/platform=iOS Simulator'`), which is the only
 place a macOS-only symbol that escaped its `#if os(macOS)` fence gets caught — `swift test` builds
@@ -298,9 +304,9 @@ project; `check.sh`'s swift-format, `swiftlint lint` and invariants already read
 there. In the sibling
 **`ios-sanitizers`** job, one runner per sanitizer — **ThreadSanitizer** and **AddressSanitizer**
 passes run the same tests. `codeql.yml`'s Swift analysis builds the iPhone app as well as the Mac
-one, so both are in its database. `gate` fails unless `lint` and all of them are green: `lint` may be skipped only for a docs-only
-change, and `check`, `compile`, `format-patch`, `ios-build` and `ios-sanitizers` also for an
-evals-only one — nothing but files under `evals/` other than JSON, which no Swift build or
+one, so both are in its database. `check` fails unless `lint`, `macos`, `ui-tests` and all of
+them are green: `lint` may be skipped only for a docs-only change, and the others (with the
+ungated `compile` and `format-patch`) also for an evals-only one — nothing but files under `evals/` other than JSON, which no Swift build or
 test reads (`evals/**/*.json` still counts as Swift: `PlannerEvalTests` reads
 `evals/command-planner/cases.json`).
 
@@ -686,8 +692,8 @@ rather than behind the full suite.
 
 **Integration tests (XCUITest)** — `App/Blurt/BlurtUITests/`, a `bundle.ui-testing` target declared
 in `project.yml` and wired into the `Blurt` scheme's test action, so it runs via `xcodebuild test`.
-`scripts/uitest.sh` drives it and `scripts/check.sh` invokes that as part of the required gate — but
-**on CI only**: it needs a GUI session and commandeers it, so a local `check.sh` skips it (as it does
+`scripts/uitest.sh` drives it, `check.yml`'s `ui-tests` job runs that as part of the required gate,
+and `scripts/check.sh` invokes it too — but **on CI only**: it needs a GUI session and commandeers it, so a local `check.sh` skips it (as it does
 the leak scan) unless `BLURT_INTEGRATION_TESTS=1`. Run `scripts/uitest.sh` directly to iterate on the
 suite; CI is the authority on whether it passes.
 

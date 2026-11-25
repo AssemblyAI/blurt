@@ -112,7 +112,8 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
     (whole-app leak check). Both drive the real app and seize the keyboard and
     screen, so a local run skips them with a note and the closing line says
     `ok (UI suite + leak scan NOT run …)`. That skip is by design — CI on
-    `macos-26` runs them on every PR and is the authority on them. To run them on
+    `macos-26` runs them on every PR (`check.yml`'s `ui-tests` job) and is the
+    authority on them. To run them on
     a Mac anyway: `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or invoke the two
     scripts directly. Expect to lose the machine for a few minutes if you do.
 12. `swiftlint analyze` (unused imports — needs the app build's compiler log) and
