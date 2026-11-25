@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Picking the app, button or menu item a spoken name means, apart from

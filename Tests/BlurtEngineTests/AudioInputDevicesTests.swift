@@ -1,5 +1,5 @@
 #if os(macOS)
-  @preconcurrency import AVFoundation
+  @preconcurrency @unsafe import AVFoundation
   import CoreAudio
   import Foundation
   import Testing
@@ -169,8 +169,8 @@
       var cfUID = uid as CFString
       var deviceID = AudioDeviceID(0)
       var idSize = UInt32(MemoryLayout<AudioDeviceID>.size)
-      let translated = withUnsafeMutablePointer(to: &cfUID) { qualifier in
-        AudioObjectGetPropertyData(
+      let translated = unsafe withUnsafeMutablePointer(to: &cfUID) { qualifier in
+        unsafe AudioObjectGetPropertyData(
           AudioRoute.systemObject, &translate, UInt32(MemoryLayout<CFString>.size), qualifier,
           &idSize, &deviceID)
       }
@@ -179,7 +179,7 @@
       var address = AudioRoute.globalAddress(kAudioDevicePropertyDeviceIsRunningSomewhere)
       var running = UInt32(0)
       var size = UInt32(MemoryLayout<UInt32>.size)
-      guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &running) == noErr else {
+      guard unsafe AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &running) == noErr else {
         return false
       }
       return running != 0

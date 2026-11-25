@@ -1,6 +1,6 @@
 import Foundation
 import Synchronization
-import os
+public import os
 
 /// Everything the engine needs to know about *which app it is running inside*:
 /// the Keychain item the API key lands in, the unified-logging subsystem, the

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// What a press of one trigger key does (`TriggerKeyBindings.action(for:)`).
 public enum TriggerKeyAction: Sendable, Hashable {

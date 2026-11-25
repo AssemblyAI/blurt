@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Wraps a transcriber to report a dictation the API refused for its key, so a
 /// signed-in account can renew at once (`AssemblyAIAccount.keyWasRejected`)

@@ -43,7 +43,7 @@
     @Test("a designated requirement can actually be read")
     func designatedRequirementIsReadable() throws {
       var code: SecStaticCode?
-      let status = SecStaticCodeCreateWithPath(
+      let status = unsafe SecStaticCodeCreateWithPath(
         URL(fileURLWithPath: "/bin/ls") as CFURL, SecCSFlags(), &code)
       #expect(status == errSecSuccess)
       let staticCode = try #require(code)

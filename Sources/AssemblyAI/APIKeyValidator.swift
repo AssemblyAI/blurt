@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Verifies an AssemblyAI API key with one cheap authenticated request.
 ///

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import os
 
 /// The SDK's own log, apart from any app's. Only transport faults are logged.

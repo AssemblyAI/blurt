@@ -9,9 +9,13 @@
 #if os(macOS)
   import AppKit
 
+  // `nonisolated` keeps these conformances what they were before Package.swift
+  // turned on InferIsolatedConformances: an inferred main-actor conformance is
+  // a different conformance (a dynamic cast to it fails off the main actor),
+  // and this change is strictness only.
   @MainActor
-  final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate,
-    NSTextFieldDelegate
+  final class Fixture: NSObject, nonisolated NSApplicationDelegate,
+    nonisolated NSTableViewDataSource, nonisolated NSTableViewDelegate, nonisolated NSTextFieldDelegate
   {
     private let statePath: String
     private var state: [String: Any] = ["pressed": [String](), "menu": [String]()]

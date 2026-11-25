@@ -27,7 +27,7 @@ enum SpeechSegmenter {
   static func segments(of text: String, maxCharacters: Int = 400) -> [String] {
     var sentences: [String] = []
     var start = text.startIndex
-    for match in text.matches(of: boundary) {
+    for match in unsafe text.matches(of: boundary) {
       appendTrimmed(text[start..<match.range.upperBound], to: &sentences)
       start = match.range.upperBound
     }
