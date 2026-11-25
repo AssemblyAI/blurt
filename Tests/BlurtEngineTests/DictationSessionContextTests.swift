@@ -42,6 +42,8 @@ struct DictationSessionContextTests {
     // The injector gets the two fields its separator decision runs on.
     #expect(await fixture.injector.insertedPrior == ["Hi Sam,"])
     #expect(await fixture.injector.insertedWindowTitles == ["Re: Q3 pricing"])
+    // An ordinary field's words may stay on the clipboard as they are.
+    #expect(await fixture.injector.insertedSecure == [false])
     // Logged once the paste ended, with how it did.
     #expect(
       fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected, outcome: .pasted)])
@@ -152,11 +154,17 @@ struct DictationSessionContextTests {
       keyTerms: ["Kubernetes"], seams: seams)
 
     // Twice, so the second press has history to carry — `recentDictations` is
-    // actor state and this is how the sibling tests seed it.
-    for _ in 1...2 {
+    // actor state and this is how the sibling tests seed it. Each read is let
+    // through only once its request has gone out unprimed, and before release:
+    // a read still in flight at release is remembered but never replayed
+    // (`DictationSessionUnknownSecurityTests`), and the first press has to be replayed.
+    for press in 1...2 {
       await session.press()
       await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
       clock.advance(by: DictationSession.contextWaitBudget)
+      while await transcriber.receivedContexts.count < press { await Task.yield() }
+      hung.signal()
+      while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
       await session.release()
       await session.waitForIdle()
     }
@@ -172,7 +180,6 @@ struct DictationSessionContextTests {
     // None of the focus signals, which are the part that genuinely timed out.
     #expect(second.priorText == nil)
     #expect(second.windowTitle == nil)
-    hung.signal()
   }
 
   @Test("a secure capture that lands after the upload's budget is still honored")
@@ -184,11 +191,11 @@ struct DictationSessionContextTests {
     // target (Electron, Java, Office — `FocusCapture` makes ~6 serial round
     // trips, each capped at ~1 s) therefore misses it routinely.
     //
-    // Missing it must not cost the `targetIsSecure` flag: a nil context reads as
-    // "not a password field", so the dictation would be written into
-    // `recentDictations` and replayed in `stt_prompt` on every later
-    // dictation this launch. `PressContext` is what keeps the read reachable
-    // after the deadline, and this is the test that says so.
+    // Missing it must not cost the `targetIsSecure` flag, or the dictation
+    // would be written into `recentDictations` and replayed in `stt_prompt` on
+    // every later dictation this launch. `PressContext` is what keeps the read
+    // reachable after the deadline, and this is the test that says so. (A read
+    // that never lands at all is in `DictationSessionUnknownSecurityTests`.)
     let clock = TestClock()
     let transcriber = StubTranscriber(mode: .transcript("hunter2"))
     let injector = StubInjector()
@@ -216,6 +223,9 @@ struct DictationSessionContextTests {
 
     // Pasted, as always — the flag suppresses remembering, never delivery.
     #expect(await injector.inserted == ["hunter2"])
+    // …and the paste knows it is a secret, so a "Copied" leave-behind is
+    // concealed rather than kept by a clipboard manager (#348).
+    #expect(await injector.insertedSecure == [true])
     // The request itself did go out unprimed; that is the cost of the deadline.
     #expect(await transcriber.receivedContexts == [nil])
     // But the late read was picked up in time for the decision that matters.
@@ -237,6 +247,7 @@ struct DictationSessionContextTests {
 
     #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
     #expect(await fixture.session.recentDictations.entries.isEmpty)
+    #expect(await fixture.injector.insertedSecure == [true])
   }
 
   @Test("history alone keeps the context worth carrying when the capture is empty")

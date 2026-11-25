@@ -144,11 +144,17 @@ struct LibrarySection<Header: View>: View {
       // Double-click and Return.
       if let entry = entry(id: ids.first) { model.open(entry) }
     }
-    .onCopyCommand {
-      guard let entry = entry(id: selection) else { return [] }
-      AccessibilityNotification.Announcement("Copied").post()
-      return [NSItemProvider(object: entry.text as NSString)]
-    }
+    // A nil action dims Edit › Copy: with nothing selected, or a recording
+    // kept without a transcript (no text yet), ⌘C has nothing to copy, and an
+    // enabled item that does nothing is worse than a dimmed one.
+    .onCopyCommand(
+      perform: entry(id: selection).flatMap { $0.needsTranscription ? nil : $0 }.map { entry in
+        {
+          AccessibilityNotification.Announcement("Copied").post()
+          return [NSItemProvider(object: entry.text as NSString)]
+        }
+      }
+    )
     .onDeleteCommand { pendingDelete = entry(id: selection) }
     .onChange(of: model.history, initial: true) {
       updateDetails()
@@ -259,11 +265,16 @@ private struct EntryActions: View {
   let delete: () -> Void
 
   var body: some View {
-    Button("Open") { model.open(entry) }
+    // A recording kept without a transcript opens by transcribing
+    // (`TranscriptsModel.open`), so the action says that, and it has no text
+    // to copy yet.
+    Button(entry.needsTranscription ? "Transcribe" : "Open") { model.open(entry) }
     if entry.hasAudio {
       Button(model.isPlaying(entry) ? "Stop" : "Play") { model.togglePlayback(entry) }
     }
-    Button("Copy") { NSPasteboard.copyAnnounced(entry.text) }
+    if !entry.needsTranscription {
+      Button("Copy") { NSPasteboard.copyAnnounced(entry.text) }
+    }
     // Gated on `hasAudio` and resolved on click: `audioURL` resolves a file's
     // bookmark, file-system work this menu is built too often to repeat.
     if entry.hasAudio {
@@ -326,7 +337,7 @@ private struct HistoryRow: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(title), \(details), \(dayTitle) at \(time)")
-    .accessibilityHint("Opens the transcript")
+    .accessibilityHint(entry.needsTranscription ? "Transcribes the recording" : "Opens the transcript")
     // The menu's actions, offered to VoiceOver on the row itself.
     .accessibilityActions { actions }
   }

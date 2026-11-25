@@ -62,15 +62,19 @@ struct ProtocolTests {
     #expect(SharedStore.keyTerms == ["Rizz"])
   }
 
-  @Test("with no keyboard on screen the words go to the clipboard and the phase is the quiet one")
-  func relayFallsBackToClipboard() async {
+  /// A password field's words (#348/#349) are copied too — kept to this phone
+  /// and expiring, options UIKit doesn't read back — never lost.
+  @Test(
+    "with no keyboard on screen the words go to the clipboard and the phase is the quiet one",
+    arguments: [false, true])
+  func relayFallsBackToClipboard(secure: Bool) async {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = nil
     UIPasteboard.general.string = ""
     let injector = KeyboardRelayInjector()
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("hello there", after: nil, windowTitle: nil)
+      try await injector.insert("hello there", after: nil, windowTitle: nil, secure: secure)
     }
     #expect(UIPasteboard.general.string == "hello there")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
@@ -109,7 +113,7 @@ struct ProtocolTests {
     UIPasteboard.general.string = ""
     let elsewhere = KeyboardRelayInjector(presser: { ResultAddress(keyboard: "kb-1") })
     await #expect(throws: BlurtError.noEditableTarget) {
-      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil)
+      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil, secure: false)
     }
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)

@@ -4,7 +4,7 @@ The iPhone app is Blurt's brand on a phone: Cam Neri's "warped futurism" as
 it appears on assemblyai.com/blurt — an ink ground under film grain, a warm
 paper one in the light, serif headlines, uppercase mono labels, green as the
 one signal, rectangular corners. The keyboard is Apple's: KeyboardKit's free
-core (`KeyboardView`; 11.1.6, the app's one remote package — `README.md` ›
+core (`KeyboardView`; 11.3.2, the app's one remote package — `README.md` ›
 Dependencies) draws the iPhone's own keyboard in the iPhone's own colours
 and owns typing, shift and caps lock, the symbol pages and the number pad,
 delete and its repeat, the callouts, the space bar's cursor drag and the

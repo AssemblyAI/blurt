@@ -94,17 +94,26 @@ extension DictationSession {
     // *read* a secure field; remembering what was dictated *into* one would leak
     // the same secret the other way — replayed as a context turn on every later
     // dictation this launch, in unrelated apps. So a secure target is transcribed
-    // and pasted as normal, and simply not remembered.
-    if capturedContext?.targetIsSecure != true {
+    // and pasted as normal, and simply not remembered. A target whose security
+    // is *unknown* — the read hasn't landed, or reached no focused element —
+    // is remembered for the Recent list but never replayed (see
+    // `PressContext.TargetSecurity`).
+    let security = pressContext?.targetSecurity ?? .unknown
+    if security != .secure {
       recentDictations.record(
-        trimmed, spoken: spoken, style: pressStyle.name, at: Date())
+        trimmed, spoken: spoken, style: pressStyle.name, at: Date(),
+        replayable: security == .ordinary)
     }
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded)
-    seams.logTranscript(text, capturedContext, outcome)
+    // The developer-mode log withholds a known password field's transcript
+    // itself (from `targetIsSecure`); an unknown target's is withheld here, since
+    // a read that never landed leaves the log no context to decide from.
+    seams.logTranscript(
+      security == .unknown ? DictationLog.unverifiedTranscript : text, capturedContext, outcome)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
@@ -242,7 +251,7 @@ extension DictationSession {
   /// session is at rest, and this is not a dictation. Throws only on cancellation.
   public func replaceSelection(with text: String) async throws -> PipelinePhase {
     do {
-      try await injector.insert(text, after: nil, windowTitle: nil)
+      try await injector.insert(text, after: nil, windowTitle: nil, secure: false)
       return .pasted
     } catch {
       if error is CancellationError || Task.isCancelled { throw CancellationError() }
@@ -282,8 +291,11 @@ extension DictationSession {
   private func inject(_ text: String) async -> PipelinePhase {
     setPhase(.injecting)
     do {
+      // A password field's words are pasted like any others, but if they end
+      // up left on the clipboard instead they are left as the secret they are.
       try await injector.insert(
-        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle)
+        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle,
+        secure: capturedContext?.targetIsSecure == true)
       // A cancel() that landed in insert's final, non-cancellable stretch
       // (after its last checkCancellation) already set .cancelled — leave the
       // claimed phase alone rather than repainting it as .pasted.

@@ -55,7 +55,7 @@ struct TranscriptPage: View {
     .onChange(of: model.state) { _, state in
       switch state {
       case .finished: AccessibilityNotification.Announcement("Transcript ready").post()
-      case .failed(_, let message): AccessibilityNotification.Announcement(message).post()
+      case .failed(_, let message, _): AccessibilityNotification.Announcement(message).post()
       case .recording: AccessibilityNotification.Announcement("Recording").post()
       case .idle, .transcribing, .finishingRecording: break
       }
@@ -95,10 +95,11 @@ struct TranscriptPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     case .finished:
       facetContent
-    case .failed(_, let message):
+    case .failed(_, let message, let retry):
       Label(message, systemImage: "exclamationmark.triangle")
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
+      if let retry { RetryRecording(entry: retry, model: model) }
       Spacer()
     }
   }
@@ -120,7 +121,7 @@ struct TranscriptPage: View {
   private var title: String {
     switch model.state {
     case .finished: model.openEntry?.title ?? ""
-    case .transcribing(let fileName, _), .failed(let fileName, _): fileName
+    case .transcribing(let fileName, _), .failed(let fileName, _, _): fileName
     case .recording, .finishingRecording: "Recording"
     case .idle: ""
     }
@@ -365,5 +366,28 @@ extension View {
   /// on the window under the title, as a Journal entry's is — no box or edge.
   func textAreaSurface() -> some View {
     frame(maxHeight: .infinity)
+  }
+}
+
+/// A recording whose transcription failed: it's kept in the Library, and
+/// here it can be tried again or found in Finder.
+private struct RetryRecording: View {
+  let entry: SavedTranscript
+  let model: TranscriptsModel
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("The recording is saved in your Library, so you can try again later.")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      HStack {
+        Button("Try Again") { model.retranscribe(entry) }
+        if let url = entry.audioURL {
+          Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            .disabled(!FileManager.default.fileExists(atPath: url.path))
+        }
+      }
+    }
   }
 }

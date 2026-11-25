@@ -250,8 +250,13 @@ final class WindowRig {
 }
 
 /// Polls until `condition` holds or `timeout` passes; true when it held.
+///
+/// The timeout only catches a hang, so it's generous: every caller expects
+/// the condition to hold, so a passing test never waits it out. Under the
+/// sanitizers on a loaded runner, a dictation's release took longer than the
+/// 3 s this used to allow (the watchdog-release test, lost on its `.noTarget`).
 @MainActor
-func until(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
+func until(_ timeout: Duration = .seconds(30), _ condition: () -> Bool) async -> Bool {
   let deadline = ContinuousClock.now + timeout
   while ContinuousClock.now < deadline {
     if condition() { return true }

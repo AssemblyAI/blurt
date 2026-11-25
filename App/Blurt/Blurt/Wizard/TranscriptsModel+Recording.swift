@@ -137,10 +137,11 @@ extension TranscriptsModel {
     let text = live.text
     guard text.trimmedNonEmpty() != nil else {
       // Nothing heard live — silence, or a live session that never got going.
-      // The audio may still hold speech: try the async pass on it, which
-      // saves it or, finding nothing, deletes the file.
+      // The audio may still hold speech: try the async pass on it. Saved
+      // first, so no way the pass ends — failed, or abandoned with Back —
+      // leaves the file with nothing pointing at it.
       state = .idle
-      transcribe(url, kind: .recording)
+      transcribe(url, kind: .recording, entry: keepUntranscribed(url))
       return
     }
     let entry = SavedTranscript(kind: .recording, date: .now, text: text, fileURL: url, plainText: live.plainText)
@@ -183,6 +184,44 @@ extension TranscriptsModel {
     }
   }
 
+  /// A recording is running or finishing: the sheet is its, and nothing else
+  /// may take it.
+  var isRecordingBusy: Bool {
+    switch state {
+    case .recording, .finishingRecording: true
+    default: false
+    }
+  }
+
+  /// Transcribes again a recording kept without a transcript — Try Again on
+  /// the failure page, or opening it from the Library.
+  func retranscribe(_ entry: SavedTranscript) {
+    guard history.contains(where: { $0.id == entry.id }), let url = entry.fileURL else { return }
+    transcribe(url, kind: entry.kind, entry: entry)
+  }
+
+  /// Saves the recording at `url` with no transcript yet
+  /// (`needsTranscription`), so it is in the Library — playable, in Finder,
+  /// and transcribed when opened — however its transcription ends.
+  func keepUntranscribed(_ url: URL) -> SavedTranscript {
+    let entry = SavedTranscript(kind: .recording, date: .now, text: "", fileURL: url)
+    history.insert(entry, at: 0)
+    save()
+    return entry
+  }
+
+  /// Gives a recording kept without a transcript the one just made, and
+  /// opens it; false if it was deleted meanwhile.
+  func fillIn(_ entry: SavedTranscript, with result: FileTranscription) -> Bool {
+    guard let index = history.firstIndex(where: { $0.id == entry.id }) else { return false }
+    history[index].replaceTranscript(result.text, plain: result.plainText)
+    save()
+    let transcribed = history[index]
+    open(transcribed)
+    Task { [weak self] in await self?.applyTitle(to: transcribed) }
+    return true
+  }
+
   /// The app is quitting (`applicationWillTerminate`, a Sparkle relaunch
   /// included): no `deinit` runs and no task resumes after this, so whatever
   /// is in flight is finished here, synchronously. A recording's file is
@@ -190,17 +229,20 @@ extension TranscriptsModel {
   /// what the live transcription heard is saved with it; then the history is
   /// written. The diarized pass a normal stop starts can't run now; the entry
   /// keeps the live transcript and the audio. A recording that heard nothing
-  /// live keeps its file in the Recordings folder, with no entry.
+  /// live is still kept, untranscribed (`needsTranscription`), as a failed
+  /// pass's is: the Library offers it again rather than leaving the file with
+  /// nothing pointing at it.
   func prepareForExit() {
     recorder.stop()
     if let recording {
       self.recording = nil
       let text = live.text
-      if text.trimmedNonEmpty() != nil {
-        history.insert(
-          SavedTranscript(kind: .recording, date: .now, text: text, fileURL: recording.url, plainText: live.plainText),
-          at: 0)
-      }
+      let heard = text.trimmedNonEmpty() != nil
+      history.insert(
+        SavedTranscript(
+          kind: .recording, date: .now, text: heard ? text : "", fileURL: recording.url,
+          plainText: heard ? live.plainText : nil),
+        at: 0)
     }
     flushHistory()
   }

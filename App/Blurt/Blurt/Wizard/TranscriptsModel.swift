@@ -23,7 +23,8 @@ final class TranscriptsModel {
     case finishingRecording
     /// A saved entry is open (`openEntry`).
     case finished
-    case failed(fileName: String, message: String)
+    /// `retry`: a recording kept untranscribed, for Try Again.
+    case failed(fileName: String, message: String, retry: SavedTranscript? = nil)
   }
 
   /// What one facet's text area shows.
@@ -121,14 +122,14 @@ final class TranscriptsModel {
   /// — never a burst of requests that can't succeed.
   private func titleUntitled() async {
     guard apiKey()?.isEmpty == false else { return }
-    for entry in history where entry.generatedTitle == nil && entry.isTranscript {
+    for entry in history where entry.generatedTitle == nil && entry.isTranscript && !entry.needsTranscription {
       await applyTitle(to: entry)
     }
   }
 
   /// Asks the LLM for `entry`'s title and saves it on the entry. Best-effort:
   /// until it comes — or if it fails — the entry keeps its file name.
-  private func applyTitle(to entry: SavedTranscript) async {
+  func applyTitle(to entry: SavedTranscript) async {
     guard let title = try? await llm.title(for: entry.text),
       let index = history.firstIndex(where: { $0.id == entry.id })
     else { return }
@@ -168,8 +169,12 @@ final class TranscriptsModel {
   }
 
   /// Opens a saved transcript in the sheet, with every transform already
-  /// fetched for it.
+  /// fetched for it — or transcribes one kept without a transcript.
   func open(_ entry: SavedTranscript) {
+    if entry.needsTranscription {
+      retranscribe(entry)
+      return
+    }
     reset()
     openEntry = entry
     customRequest = entry.customRequest ?? ""
@@ -347,14 +352,13 @@ final class TranscriptsModel {
 extension TranscriptsModel {
   /// Uploads and transcribes `url`, saving the result and opening it.
   ///
-  /// `kind` is `.recording` for a recording whose live transcript came back
-  /// empty: its audio is still worth the async pass, and if that finds nothing
-  /// either the file is deleted rather than left with no entry pointing at it.
-  /// If the pass fails, the file is kept: the audio may hold the whole meeting.
+  /// `entry` is a recording saved without a transcript (`keepUntranscribed`):
+  /// the transcript fills it in; finding nothing deletes it, file and all;
+  /// failing keeps it for Try Again — its audio may hold a whole meeting.
   ///
   /// Never over a recording: a file dropped while one runs is refused, or the
   /// recording would be left capturing with no sheet to stop it.
-  func transcribe(_ url: URL, kind: SavedTranscript.Kind = .file) {
+  func transcribe(_ url: URL, kind: SavedTranscript.Kind = .file, entry: SavedTranscript? = nil) {
     guard !isRecordingBusy else { return }
     reset()
     let fileName = url.lastPathComponent
@@ -377,24 +381,19 @@ extension TranscriptsModel {
       guard !Task.isCancelled, let self else { return }
       switch outcome {
       case .success(let result) where result.text.trimmedNonEmpty() == nil:
-        if kind == .recording { try? FileManager.default.removeItem(at: url) }
+        if let entry { delete(entry) }
         state = .failed(fileName: fileName, message: "No speech was found in that file.")
       case .success(let result):
-        add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
+        guard let entry else {
+          add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
+          return
+        }
+        if !fillIn(entry, with: result) { state = .idle }
       case .failure(let error):
-        // A failure isn't "no speech": the recording stays in its folder
+        // A failure isn't "no speech": a recording's entry stays, untranscribed,
         // rather than costing the user the audio over a network blip.
-        state = .failed(fileName: fileName, message: error.localizedDescription)
+        state = .failed(fileName: fileName, message: error.localizedDescription, retry: entry)
       }
-    }
-  }
-
-  /// A recording is running or finishing: the sheet is its, and nothing else
-  /// may take it.
-  var isRecordingBusy: Bool {
-    switch state {
-    case .recording, .finishingRecording: true
-    default: false
     }
   }
 }

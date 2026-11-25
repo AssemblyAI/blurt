@@ -33,6 +33,11 @@ public struct RecentDictations: Equatable, Sendable {
     /// renders as just the timestamp: the base treatment is every row's
     /// default, so naming it on each would be noise.
     public let style: String?
+    /// Whether this dictation may ride a later request's `stt_prompt`. False
+    /// when the press could not tell whether it went into a password field
+    /// (`PressContext.TargetSecurity.unknown`): it still shows in the Recent
+    /// list and saved history, which stay on this device, but is never sent.
+    let replayable: Bool
   }
 
   /// How many recent dictations the ring remembers. Deliberately deeper than
@@ -67,8 +72,9 @@ public struct RecentDictations: Equatable, Sendable {
   /// Every remembered transcript **oldest first** — the order
   /// `config.stt_prompt` wants, since `entries` is newest-first for the
   /// UI. Text only: the timestamps are a display concern. The *spoken* text,
-  /// never the expanded one — see `Entry.spoken`.
-  public var spokenOldestFirst: [String] { entries.reversed().map(\.spoken) }
+  /// never the expanded one — see `Entry.spoken`. Only `replayable` entries:
+  /// this is what is sent.
+  public var spokenOldestFirst: [String] { entries.reversed().filter(\.replayable).map(\.spoken) }
 
   public init() {}
 
@@ -76,12 +82,13 @@ public struct RecentDictations: Equatable, Sendable {
   /// pushing it to the front and dropping the oldest entries beyond `capacity`.
   /// `time` is injected (not read from the clock) so tests are deterministic.
   /// `spoken` is the pre-expansion transcript when text shortcuts changed it;
-  /// omitted, the two are the same.
+  /// omitted, the two are the same. `replayable: false` keeps the entry out of
+  /// `spokenOldestFirst` (see `Entry.replayable`).
   public mutating func record(
-    _ text: String, spoken: String? = nil, style: String? = nil, at time: Date
+    _ text: String, spoken: String? = nil, style: String? = nil, at time: Date, replayable: Bool = true
   ) {
     entries.insert(
-      Entry(text: text, spoken: spoken ?? text, timestamp: time, style: style), at: 0)
+      Entry(text: text, spoken: spoken ?? text, timestamp: time, style: style, replayable: replayable), at: 0)
     if entries.count > Self.capacity {
       entries.removeLast(entries.count - Self.capacity)
     }
