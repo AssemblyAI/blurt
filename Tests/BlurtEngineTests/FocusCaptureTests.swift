@@ -8,43 +8,120 @@ import Testing
 /// Accessibility trust, so they're exercised by running the app, not here.
 @Suite("FocusCapture helpers")
 struct FocusCaptureTests {
+  /// One `selectLabel` expectation: the four AX label candidates in priority
+  /// order, and the label that should win.
+  struct LabelCase: Sendable, CustomTestStringConvertible {
+    let name: String
+    let placeholder: String?
+    let description: String?
+    let title: String?
+    let roleDescription: String?
+    let expected: String?
+    var testDescription: String { name }
+  }
+
+  /// One `priorSlice(full:caret:maxChars:)` expectation.
+  struct PriorCase: Sendable, CustomTestStringConvertible {
+    let name: String
+    let full: String
+    let caret: Int
+    let maxChars: Int
+    let expected: String?
+    var testDescription: String { name }
+  }
+
+  static let labelCases: [LabelCase] = [
+    LabelCase(
+      name: "prefers placeholder when present",
+      placeholder: "Search",
+      description: "desc",
+      title: "title",
+      roleDescription: "text field",
+      expected: "Search"
+    ),
+    LabelCase(
+      name: "falls through blanks in priority order",
+      placeholder: "  ",
+      description: nil,
+      title: "Subject",
+      roleDescription: "text field",
+      expected: "Subject"
+    ),
+    LabelCase(
+      name: "uses role description only as a last resort",
+      placeholder: nil,
+      description: nil,
+      title: nil,
+      roleDescription: "text entry area",
+      expected: "text entry area"
+    ),
+    LabelCase(
+      name: "returns nil when every candidate is blank",
+      placeholder: " ",
+      description: "",
+      title: nil,
+      roleDescription: nil,
+      expected: nil
+    ),
+    LabelCase(
+      name: "trims the chosen candidate",
+      placeholder: "  To  ",
+      description: nil,
+      title: nil,
+      roleDescription: nil,
+      expected: "To"
+    ),
+  ]
+
+  static let priorCases: [PriorCase] = [
+    PriorCase(name: "returns text up to the caret", full: "hello world", caret: 5, maxChars: 320, expected: "hello"),
+    PriorCase(
+      name: "keeps only the trailing maxChars before the caret",
+      full: "abcdef",
+      caret: 6,
+      maxChars: 3,
+      expected: "def"
+    ),
+    // An out-of-range caret falls back to the tail of the whole value.
+    PriorCase(
+      name: "an unreadable selection (caret -1) falls back to the value's tail",
+      full: "abcdef",
+      caret: -1,
+      maxChars: 3,
+      expected: "def"
+    ),
+    PriorCase(
+      name: "a caret below -1 falls back to the value's tail",
+      full: "abcdef",
+      caret: -5,
+      maxChars: 3,
+      expected: "def"
+    ),
+    PriorCase(
+      name: "a caret past the end falls back to the value's tail",
+      full: "abcdef",
+      caret: 99,
+      maxChars: 10,
+      expected: "abcdef"
+    ),
+    PriorCase(name: "an empty value is nil", full: "", caret: 0, maxChars: 320, expected: nil),
+    PriorCase(
+      name: "a caret at 0 is nil — nothing precedes the cursor",
+      full: "hello",
+      caret: 0,
+      maxChars: 320,
+      expected: nil
+    ),
+  ]
+
   // MARK: selectLabel
 
-  @Test("selectLabel prefers placeholder when present")
-  func labelPrefersPlaceholder() {
+  @Test("selectLabel picks the first non-blank candidate, trimmed", arguments: labelCases)
+  func selectLabel(_ c: LabelCase) {
     let label = FocusCapture.selectLabel(
-      placeholder: "Search", description: "desc", title: "title", roleDescription: "text field"
+      placeholder: c.placeholder, description: c.description, title: c.title, roleDescription: c.roleDescription
     )
-    #expect(label == "Search")
-  }
-
-  @Test("selectLabel falls through blanks in priority order")
-  func labelFallsThrough() {
-    let label = FocusCapture.selectLabel(
-      placeholder: "  ", description: nil, title: "Subject", roleDescription: "text field"
-    )
-    #expect(label == "Subject")
-  }
-
-  @Test("selectLabel uses role description only as a last resort")
-  func labelRoleDescriptionLast() {
-    let label = FocusCapture.selectLabel(
-      placeholder: nil, description: nil, title: nil, roleDescription: "text entry area"
-    )
-    #expect(label == "text entry area")
-  }
-
-  @Test("selectLabel returns nil when every candidate is blank")
-  func labelAllBlank() {
-    #expect(FocusCapture.selectLabel(placeholder: " ", description: "", title: nil, roleDescription: nil) == nil)
-  }
-
-  @Test("selectLabel trims the chosen candidate")
-  func labelTrims() {
-    let label = FocusCapture.selectLabel(
-      placeholder: "  To  ", description: nil, title: nil, roleDescription: nil
-    )
-    #expect(label == "To")
+    #expect(label == c.expected)
   }
 
   @Test("selectLabel stops reading candidates once one answers")
@@ -71,31 +148,9 @@ struct FocusCaptureTests {
 
   // MARK: priorSlice
 
-  @Test("priorSlice returns text up to the caret")
-  func priorUpToCaret() {
-    #expect(FocusCapture.priorSlice(full: "hello world", caret: 5, maxChars: 320) == "hello")
-  }
-
-  @Test("priorSlice keeps only the trailing maxChars before the caret")
-  func priorClipsToMax() {
-    #expect(FocusCapture.priorSlice(full: "abcdef", caret: 6, maxChars: 3) == "def")
-  }
-
-  @Test("priorSlice with a caret out of range falls back to the value's tail")
-  func priorCaretOutOfRange() {
-    // caret == -1 (unreadable selection): use the tail of the whole value.
-    #expect(FocusCapture.priorSlice(full: "abcdef", caret: -1, maxChars: 3) == "def")
-    // caret < -1: same fallback.
-    #expect(FocusCapture.priorSlice(full: "abcdef", caret: -5, maxChars: 3) == "def")
-    // caret past the end: same fallback.
-    #expect(FocusCapture.priorSlice(full: "abcdef", caret: 99, maxChars: 10) == "abcdef")
-  }
-
-  @Test("priorSlice returns nil for an empty value or a zero-length prefix")
-  func priorEmpty() {
-    #expect(FocusCapture.priorSlice(full: "", caret: 0, maxChars: 320) == nil)
-    // caret at 0 → empty prefix → nil (nothing precedes the cursor).
-    #expect(FocusCapture.priorSlice(full: "hello", caret: 0, maxChars: 320) == nil)
+  @Test("priorSlice takes the text before the caret, capped at maxChars", arguments: priorCases)
+  func priorSlice(_ c: PriorCase) {
+    #expect(FocusCapture.priorSlice(full: c.full, caret: c.caret, maxChars: c.maxChars) == c.expected)
   }
 
   @Test("priorSlice is given the raw value, so surrounding whitespace keeps caret offsets valid")

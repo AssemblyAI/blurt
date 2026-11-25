@@ -40,13 +40,17 @@ struct OAuthConfigurationInfoTests {
     }
   }
 
-  @Test("plain http is allowed to this machine only, for a dev build on a local dashboard or site")
-  func loopback() {
-    for host in ["localhost:3000", "127.0.0.1:3000", "[::1]:3000"] {
-      var local = info
-      local[OAuthConfiguration.InfoKey.authorizeURL] = "http://\(host)/dashboard/oauth/authorize"
-      #expect(OAuthConfiguration.blurt(infoDictionary: local) != nil, "\(host)")
-    }
+  @Test(
+    "plain http is allowed to this machine, for a dev build on a local dashboard or site",
+    arguments: ["localhost:3000", "127.0.0.1:3000", "[::1]:3000"])
+  func loopback(host: String) {
+    var local = info
+    local[OAuthConfiguration.InfoKey.authorizeURL] = "http://\(host)/dashboard/oauth/authorize"
+    #expect(OAuthConfiguration.blurt(infoDictionary: local) != nil)
+  }
+
+  @Test("plain http to a host that merely starts with localhost is refused")
+  func loopbackLookalike() {
     var lookalike = info
     lookalike[OAuthConfiguration.InfoKey.apiOrigin] = "http://localhost.example.com"
     #expect(OAuthConfiguration.blurt(infoDictionary: lookalike) == nil)

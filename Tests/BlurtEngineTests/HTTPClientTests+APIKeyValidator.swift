@@ -10,6 +10,62 @@ import Testing
 // `FakeHTTPTransport` seam; each test wires its own per-instance transport, so
 // there is no shared state and no `.serialized` ordering.
 extension HTTPClientTests {
+  /// One HTTP status AssemblyAI might answer the key check with, and the verdict
+  /// it must produce. `.invalid` hard-blocks setup — `APIKeySubmission` refuses to
+  /// persist, so the user can't finish onboarding — so only statuses that actually
+  /// mean "credential rejected" or "malformed key" may report it; everything else
+  /// falls through to the retry-later `.unreachable`.
+  struct StatusCase: Sendable, CustomTestStringConvertible {
+    let name: String
+    let status: Int
+    let body: Data
+    let expected: APIKeyValidator.Result
+    var testDescription: String { "\(status): \(name)" }
+
+    init(_ name: String, _ status: Int, _ expected: APIKeyValidator.Result, body: Data = Data()) {
+      self.name = name
+      self.status = status
+      self.body = body
+      self.expected = expected
+    }
+  }
+
+  static let statusCases: [StatusCase] = [
+    StatusCase("AssemblyAI rejects the key", 401, .invalid, body: json(["error": "Invalid API key"])),
+    StatusCase("a malformed request is invalid", 400, .invalid, body: json(["error": "bad request"])),
+    // 401 and 400 were long the only `.invalid` statuses under test, so dropping
+    // 403 or 422 from the list would have gone unnoticed — and the failure is a
+    // *misleading* one rather than a loud one. On `.unreachable` the sheet says
+    // "Couldn't reach AssemblyAI. Check your connection and try again"
+    // (`Outcome.failureReport`), sending the user to debug a connection that is
+    // working fine, about a key AssemblyAI actually rejected.
+    //
+    // 403 is a verdict on the credential: AssemblyAI answers an authenticated
+    // request it won't serve with it. 422 means the key itself is malformed.
+    StatusCase("a forbidden credential is invalid", 403, .invalid, body: json(["error": "rejected"])),
+    StatusCase("a malformed key is invalid", 422, .invalid, body: json(["error": "rejected"])),
+    StatusCase("an unexpected server error is unreachable (offline-safe)", 500, .unreachable),
+    // A 404/405/410 (endpoint retired or moved) or a proxy/captive-portal 403-page
+    // equivalent says nothing about the key, so it must fall through to the
+    // retry-later outcome — a blanket `400..<500 -> .invalid` told users their
+    // working key was rejected.
+    StatusCase("a retired endpoint says nothing about the key", 404, .unreachable, body: json(["error": "not here"])),
+    StatusCase("a moved endpoint says nothing about the key", 405, .unreachable, body: json(["error": "not here"])),
+    StatusCase("a gone endpoint says nothing about the key", 410, .unreachable, body: json(["error": "not here"])),
+    StatusCase(
+      "a proxy's blocked-request page says nothing about the key",
+      451,
+      .unreachable,
+      body: json(["error": "not here"])
+    ),
+    // A good key that happens to be rate-limited during setup must not be
+    // rejected — saving anyway is the offline-safe choice for a transient state.
+    StatusCase("a rate limit is unreachable, not invalid", 429, .unreachable, body: json(["error": "rate limited"])),
+    // The other transient 4xx: like 429, it says nothing about the key itself.
+    StatusCase("a timeout is unreachable, not invalid", 408, .unreachable, body: json(["error": "request timeout"])),
+    StatusCase("an unexpected non-4xx status (a redirect) is unreachable", 301, .unreachable),
+  ]
+
   @Test("validator returns .valid on a 2xx response with the key and agent in the headers")
   func validateValidKey() async {
     let transport = FakeHTTPTransport { request in
@@ -28,79 +84,10 @@ extension HTTPClientTests {
     #expect(await makeValidator(transport).validate("good-key") == .valid)
   }
 
-  @Test("validator returns .invalid when AssemblyAI rejects the key")
-  func validateInvalidKey() async {
-    let transport = FakeHTTPTransport { _ in (401, json(["error": "Invalid API key"])) }
-    #expect(await makeValidator(transport).validate("bad-key") == .invalid)
-  }
-
-  @Test("validator returns .unreachable on an unexpected status (offline-safe)")
-  func validateUnreachable() async {
-    let transport = FakeHTTPTransport { _ in (500, Data()) }
-    #expect(await makeValidator(transport).validate("any-key") == .unreachable)
-  }
-
-  @Test("validator treats a 400 malformed-request as invalid")
-  func validateClientErrorIsInvalid() async {
-    let transport = FakeHTTPTransport { _ in (400, json(["error": "bad request"])) }
-    #expect(await makeValidator(transport).validate("malformed-key") == .invalid)
-  }
-
-  @Test("a 4xx that says nothing about the key is unreachable, not invalid")
-  func validateEndpointErrorIsUnreachable() async {
-    // `.invalid` hard-blocks setup: `APIKeySubmission` refuses to persist, so the
-    // user can't finish onboarding. Only statuses that actually mean "credential
-    // rejected" or "malformed key" may report it. A 404/405/410 (endpoint retired
-    // or moved) or a proxy/captive-portal 403-page equivalent says nothing about
-    // the key, so it must fall through to the retry-later outcome — a blanket
-    // `400..<500 -> .invalid` told users their working key was rejected.
-    for status in [404, 405, 410, 451] {
-      let transport = FakeHTTPTransport { _ in (status, json(["error": "not here"])) }
-      #expect(
-        await makeValidator(transport).validate("good-key") == .unreachable,
-        "status \(status) must not reject the key")
-    }
-  }
-
-  @Test("the rest of the credential-rejecting statuses also report .invalid")
-  func validateRemainingRejectingStatuses() async {
-    // 401 and 400 have cases of their own above; these two were the members of the
-    // `.invalid` list with no test at all, so dropping either from it would have
-    // gone unnoticed — and the failure is a *misleading* one rather than a loud
-    // one. On `.unreachable` the sheet says "Couldn't reach AssemblyAI. Check your
-    // connection and try again" (`Outcome.failureReport`), sending the user to
-    // debug a connection that is working fine, about a key AssemblyAI actually
-    // rejected.
-    //
-    // 403 is a verdict on the credential: AssemblyAI answers an authenticated
-    // request it won't serve with it. 422 means the key itself is malformed.
-    for status in [403, 422] {
-      let transport = FakeHTTPTransport { _ in (status, json(["error": "rejected"])) }
-      #expect(
-        await makeValidator(transport).validate("bad-key") == .invalid,
-        "status \(status) must reject the key")
-    }
-  }
-
-  @Test("validator treats 429 rate-limit as unreachable, not invalid")
-  func validateRateLimitedIsUnreachable() async {
-    let transport = FakeHTTPTransport { _ in (429, json(["error": "rate limited"])) }
-    // A good key that happens to be rate-limited during setup must not be
-    // rejected — saving anyway is the offline-safe choice for a transient state.
-    #expect(await makeValidator(transport).validate("good-key") == .unreachable)
-  }
-
-  @Test("validator treats a 408 timeout as unreachable, not invalid")
-  func validateTimeoutIsUnreachable() async {
-    let transport = FakeHTTPTransport { _ in (408, json(["error": "request timeout"])) }
-    // The other transient 4xx: like 429, it says nothing about the key itself.
-    #expect(await makeValidator(transport).validate("good-key") == .unreachable)
-  }
-
-  @Test("validator treats an unexpected non-4xx status (e.g. a redirect) as unreachable")
-  func validateUnexpectedStatusIsUnreachable() async {
-    let transport = FakeHTTPTransport { _ in (301, Data()) }
-    #expect(await makeValidator(transport).validate("good-key") == .unreachable)
+  @Test("validator maps each HTTP status to a verdict on the key", arguments: statusCases)
+  func validateStatus(_ c: StatusCase) async {
+    let transport = FakeHTTPTransport { _ in (c.status, c.body) }
+    #expect(await makeValidator(transport).validate("some-key") == c.expected)
   }
 
   @Test("validator returns .unreachable when the request fails in transport (offline)")

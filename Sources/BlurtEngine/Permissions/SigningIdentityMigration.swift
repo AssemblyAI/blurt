@@ -21,7 +21,7 @@
 /// Pure and fully injectable: the caller supplies the persisted identity, the
 /// current identity, the live trust state, and the reset side effect.
 public enum SigningIdentityMigration {
-  public enum Decision: Equatable {
+  public enum Decision: Sendable, Equatable {
     /// Unsigned build, or the identity is unchanged since last launch.
     case noAction
     /// Identity changed but the app is already trusted — nothing stale to clear;

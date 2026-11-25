@@ -7,13 +7,19 @@ import Testing
 
 @Suite("DestructiveGuard")
 struct DestructiveGuardTests {
-  @Test("a button or menu item that deletes, erases or powers off is refused, by whole words")
-  func destructiveLabels() {
-    for label in ["Move to Trash", "Empty Trash…", "Delete", "Erase Disk", "Shut Down…", "Restart", "Log Out Alex…"] {
-      #expect(DestructiveGuard.isDestructive(label: label), "\(label)")
-    }
-    for label in ["Send", "Show Log", "Format", "Restarted Jobs", "Deleted Items Folder"] {
-      #expect(!DestructiveGuard.isDestructive(label: label), "\(label)")
-    }
+  @Test(
+    "a button or menu item that deletes, erases or powers off is refused",
+    arguments: [
+      "Move to Trash", "Empty Trash…", "Delete", "Erase Disk", "Shut Down…", "Restart", "Log Out Alex…",
+    ])
+  func destructiveLabels(label: String) {
+    #expect(DestructiveGuard.isDestructive(label: label))
+  }
+
+  @Test(
+    "the guard matches whole words, so a lookalike label is allowed",
+    arguments: ["Send", "Show Log", "Format", "Restarted Jobs", "Deleted Items Folder"])
+  func harmlessLabels(label: String) {
+    #expect(!DestructiveGuard.isDestructive(label: label))
   }
 }
