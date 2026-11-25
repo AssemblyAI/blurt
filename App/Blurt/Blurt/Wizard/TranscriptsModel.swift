@@ -352,11 +352,9 @@ final class TranscriptsModel {
 extension TranscriptsModel {
   /// Uploads and transcribes `url`, saving the result and opening it.
   ///
-  /// `entry` is a recording saved without a transcript (`keepUntranscribed`)
-  /// — one whose live transcript came back empty, or whose pass failed: its
-  /// audio is still worth the async pass. The transcript fills it in; finding
-  /// nothing deletes it, file and all; failing keeps it for Try Again, since
-  /// the audio may hold the whole meeting.
+  /// `entry` is a recording saved without a transcript (`keepUntranscribed`):
+  /// the transcript fills it in; finding nothing deletes it, file and all;
+  /// failing keeps it for Try Again — its audio may hold a whole meeting.
   ///
   /// Never over a recording: a file dropped while one runs is refused, or the
   /// recording would be left capturing with no sheet to stop it.
