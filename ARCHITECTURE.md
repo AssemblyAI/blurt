@@ -384,7 +384,12 @@ replacement items before clearing, so a snapshot it can't reproduce leaves the c
 instead of emptying it. Promised (lazily provided) representations can't be copied, so restoring
 those degrades to the plain-text floor rather than a byte-faithful round trip. A snapshot holding a
 secret (`ConcealedType`) goes back kept to this Mac and with a fresh `concealedLifetime` expiry: the
-clear that was due for it keyed on the change count before the paste, so it would now skip.
+clear that was due for it keyed on the change count before the paste, so it would now skip. Every
+pasteboard write — the paste, the leave-behind, both restores, the expiry's clear — goes through one
+private primitive, `SystemClipboard.put`, which counts the write as Blurt's own and gives a concealed
+one its host-only scope, its markers and its expiry, so a new write path can't forget any of them.
+The one concealed write it doesn't expire is a paste with a snapshot to restore: the restore takes
+the words off.
 
 It first activates the captured target app; if that app has terminated or won't activate, it leaves
 the transcript on the clipboard and throws `.targetAppLost`, which the pipeline degrades to the quiet
