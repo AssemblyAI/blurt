@@ -13,19 +13,32 @@ on:
     - cron: "0 7 * * 1"
   workflow_dispatch: # manual run (e.g. to validate the swift scan on a branch)
 
+# Cancel superseded runs on PRs only. On main a cancelled scan isn't free: the
+# Swift job takes ~50 min, so with cancel-in-progress nearly every push to main
+# was cancelled by the next merge — and codeql-action uploads a cancelled
+# analysis as an "unsuccessful execution", which code scanning reports as
+# "CodeQL exited with errors". Without cancellation, main runs queue: GitHub
+# keeps at most one pending run per group and drops the older pending one
+# before it starts (so it uploads nothing), and the in-flight scan finishes.
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  # GitHub Actions workflow analysis — cheap (Linux, no build). Runs on every
-  # trigger, PRs included, so workflow-injection issues are caught pre-merge.
-  actions:
-    name: Analyze (actions)
+  # The interpreted languages — cheap (Linux, no build). Runs on every trigger,
+  # PRs included, so issues are caught pre-merge: `actions` covers the workflows
+  # (injection), `python` covers the evals harness under evals/. One matrix job,
+  # so the check names stay "Analyze (actions)" / "Analyze (python)".
+  interpreted:
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, python]
     permissions:
       security-events: write # upload SARIF results to code scanning
       actions: read # required to read workflow runs on private repos
@@ -39,13 +52,13 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
         with:
-          languages: actions
+          languages: ${{ matrix.language }}
           build-mode: none
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
         with:
-          category: "/language:actions"
+          category: "/language:${{ matrix.language }}"
 
   # Swift analysis — expensive (a full macOS build). Skipped on PRs: check.yml
   # already gates every PR with a macOS build, so running a second one here just
@@ -56,7 +69,9 @@ jobs:
     name: Analyze (swift)
     if: github.event_name != 'pull_request'
     runs-on: macos-26
-    timeout-minutes: 60
+    # Clean scans take 47-58 min; a timeout reports exactly like a cancellation
+    # ("CodeQL exited with errors"), so leave real headroom.
+    timeout-minutes: 90
     env:
       DERIVED: ${{ github.workspace }}/DerivedData-codeql
     permissions:
