@@ -272,6 +272,7 @@ jobs:
             selection: >-
               -only-testing:BlurtUITests/KeysAndReadAloudUITests
               -only-testing:BlurtUITests/SettingsUITests
+              -only-testing:BlurtUITests/APIKeySheetUITests
               -only-testing:BlurtUITests/CommandPipelineUITests
               -only-testing:BlurtUITests/MenuBarUITests
               -only-testing:BlurtUITests/LaunchPerformanceUITests
@@ -281,6 +282,7 @@ jobs:
               -only-testing:BlurtUITests
               -skip-testing:BlurtUITests/KeysAndReadAloudUITests
               -skip-testing:BlurtUITests/SettingsUITests
+              -skip-testing:BlurtUITests/APIKeySheetUITests
               -skip-testing:BlurtUITests/CommandPipelineUITests
               -skip-testing:BlurtUITests/MenuBarUITests
               -skip-testing:BlurtUITests/LaunchPerformanceUITests

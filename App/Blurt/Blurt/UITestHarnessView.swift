@@ -64,13 +64,12 @@
           .accessibilityIdentifier(UITestIdentifiers.cancelButton)
       }
 
-      // The Record button's scripted live session
-      // (`TranscriptsModel.UITestLiveSession`): its next turn, or a dropped
-      // connection.
+      // The Record button's scripted live session (`UITestLiveSession`): its
+      // next turn, or a dropped connection.
       HStack(spacing: 8) {
-        Button("Next Turn") { Task { await TranscriptsModel.UITestLiveSession.latest()?.next() } }
+        Button("Next Turn") { Task { await UITestLiveSession.latest()?.next() } }
           .accessibilityIdentifier(UITestIdentifiers.harnessLiveNextTurn)
-        Button("Fail Live") { Task { await TranscriptsModel.UITestLiveSession.latest()?.fail() } }
+        Button("Fail Live") { Task { await UITestLiveSession.latest()?.fail() } }
           .accessibilityIdentifier(UITestIdentifiers.harnessLiveFail)
       }
     }

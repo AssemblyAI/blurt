@@ -6,15 +6,21 @@ observable UI rather than mocking views.
 
 ## What's covered
 
-- **Settings page** — `SettingsUITests`: the real Settings window's API-key flow
+- **API key** — `APIKeySheetUITests`: the Settings window's API-key sheet
   (save / reject / unreachable / reveal, an edit clearing the error, "Get a Free
   Key" only before a key is stored, the change → cancel round-trip back to the
-  saved row, and a key connected in Settings reaching the setup window), the
-  microphone and sound pickers, the Styles pane's enhanced-transcripts switch
-  gating the dictation mode and styles, and the Advanced pane (developer mode and
-  its logs row, the experimental switches, the disabled updater, reset's
-  confirmation). The Keys tab is in `KeysAndReadAloudUITests`, the Read Aloud
-  tab in `ReadAloudSettingsUITests`.
+  saved row, and a key connected in Settings reaching the setup window).
+- **Settings page** — `SettingsUITests`: the microphone and sound pickers, the
+  Styles pane's enhanced-transcripts switch gating the dictation mode and
+  styles, and the Advanced pane (developer mode and its logs row, the
+  experimental switches, the disabled updater, reset's confirmation). The Keys
+  tab is in `KeysAndReadAloudUITests`, the Read Aloud tab in
+  `ReadAloudSettingsUITests`.
+- **Live recording** — `LiveRecordingUITests`: the toolbar's Record on offline
+  doubles for its capture and live session (`UITestRecordingCapture`,
+  `UITestLiveSession`): live turns under their speakers, Pause and Resume,
+  Discard asking first, Stop saving the diarized recording, and a dropped
+  session still saving it.
 - **Vocabulary** — `TextShortcutsUITests`: the Settings pane's add / edit /
   delete round-trip through the editor sheet, a duplicate phrase (differing
   only in case and separators) leaving Save disabled, and key terms surviving a

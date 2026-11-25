@@ -136,6 +136,22 @@ extension BlurtUITestCase {
     return app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any).matching(titled).firstMatch
   }
 
+  /// Static text in the main window containing `text`. A typed query:
+  /// matching `.any` element across the window is slow enough on this
+  /// hierarchy for XCUITest to time out.
+  func text(containing text: String) -> XCUIElement {
+    app.windows[UITestIdentifiers.mainWindowTitle].staticTexts
+      .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
+  }
+
+  /// Anything in the app showing `text` — the open item's transcript. A
+  /// speaker turn is one combined element — a group, not static text — so any
+  /// type is matched.
+  func windowText(containing text: String) -> XCUIElement {
+    app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
+  }
+
   /// Shows the view titled `title`, from the toolbar's View menu.
   func showView(_ title: String) {
     XCTAssertTrue(viewPicker.waitForExistence(timeout: 5), "The open item's View menu not found")

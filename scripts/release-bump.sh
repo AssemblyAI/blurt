@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Bump CFBundleShortVersionString + CFBundleVersion in project.yml, scaffold the
 # release notes, and commit. The project and Info.plist are generated from
-# project.yml at build time, so there is nothing to regenerate here. Does not tag or push — that's
-# release-publish.sh's job.
+# project.yml at build time, so there is nothing to regenerate here. Does not
+# tag or push — that's release-publish.sh's job.
 #
 # Usage: scripts/release-bump.sh X.Y.Z
 
