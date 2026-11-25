@@ -1,5 +1,5 @@
 #!/bin/bash
-# A ratchet on tests that wait on real time.
+# Tests that wait on real time must say why.
 #
 # A test that sleeps a fixed interval, or hands production code a real clock and
 # then waits for its timer, passes on a Mac and fails on a loaded CI runner or
@@ -9,23 +9,20 @@
 # failed *other* PRs: #379 changed only docs and failed ios-sanitizers.
 #
 # The fix each time was the same: step a TestClock (waitUntilSleeping, then
-# advance) or wait for the event itself (waitUntil / until), never a duration.
-# Many existing waits are legitimate — a fake that hangs until cancelled, the
-# poll inside waitUntil, a UI test settling an animation — so this is a ratchet,
-# not a ban: test-clock-baseline.txt records how many each file has, and a file
-# may not gain one. A new wait that is genuinely needed takes a trailing
-# `// wall-clock-ok: <reason>` comment instead.
+# advance) or wait for the event itself (waitUntil / until, whose 30 s bound only
+# catches a hang), never a duration. Some waits are legitimate — a fake that
+# hangs until cancelled, the poll inside waitUntil, a UI test, a live-device
+# suite, a check that something did NOT happen (a slow runner can only make
+# those pass) — so each one says why with `// wall-clock-ok: <reason>`, at the
+# end of its line or on the line above, and an unmarked one fails.
 #
-# Usage:
-#   check-test-clock.sh            fail if any file has more waits than its baseline
-#   check-test-clock.sh --update   rewrite the baseline from the tree (after removing waits)
+# Usage: check-test-clock.sh
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-BASELINE="scripts/test-clock-baseline.txt"
 PATTERN='Task\.sleep\(|Thread\.sleep|usleep\(|ContinuousClock\(\)|SuspendingClock\(\)'
 SCOPE=(
   'Tests/*.swift'
@@ -34,64 +31,41 @@ SCOPE=(
   'App/BlurtiOS/BlurtiOSUITests/*.swift'
 )
 
-# "count path" per file with at least one wall-clock wait, sorted by path.
-current() {
+# Every wall-clock wait not marked ok, as "path:line:text". A marker on the line
+# itself or on a comment line just above it counts: a trailing comment would push
+# many of these lines past swift-format's 120 columns.
+waits() {
   local files
   files="$(git ls-files -- "${SCOPE[@]}")"
   [ -n "$files" ] || {
     echo "error: the test scope matches no tracked files: ${SCOPE[*]}" >&2
     exit 1
   }
+  # The pattern goes in through the environment: `awk -v` would process its
+  # backslashes, turning `\.` into "any character" on one awk and not another.
   # shellcheck disable=SC2086 # one path per line, no spaces in this tree
-  { grep -nE "$PATTERN" $files || true; } | awk '
-    { body = $0; sub(/^[^:]*:[0-9]+:/, "", body) }
-    body ~ /wall-clock-ok:/ { next }
-    body ~ /^[[:space:]]*(\/\/|\*|\/\*)/ { next }
-    { split($0, f, ":"); n[f[1]]++ }
-    END { for (p in n) printf "%d %s\n", n[p], p }
-  ' | sort -k2
+  PAT="$PATTERN" awk '
+    BEGIN { pat = ENVIRON["PAT"] }
+    FNR == 1 { prev = "" }
+    {
+      line = $0
+      if (line ~ pat && line !~ /wall-clock-ok:/ && prev !~ /wall-clock-ok:/ \
+        && line !~ /^[[:space:]]*(\/\/|\*|\/\*)/) {
+        print FILENAME ":" FNR ":" line
+      }
+      prev = line
+    }
+  ' $files
 }
 
-if [ "${1:-}" = "--update" ]; then
-  current >"$BASELINE"
-  echo "wrote $BASELINE ($(wc -l <"$BASELINE" | tr -d ' ') files)"
-  exit 0
-fi
-
-[ -f "$BASELINE" ] || {
-  echo "error: $BASELINE is missing; run scripts/check-test-clock.sh --update" >&2
-  exit 1
-}
-
-grew=0
-shrank=0
-while read -r count path; do
-  allowed="$(awk -v p="$path" '$2 == p { print $1 }' "$BASELINE")"
-  allowed="${allowed:-0}"
-  if [ "$count" -gt "$allowed" ]; then
-    echo "error: $path waits on the wall clock $count times (baseline $allowed):" >&2
-    grep -nE "$PATTERN" "$path" | grep -v 'wall-clock-ok:' | sed 's/^/  /' >&2
-    grew=1
-  elif [ "$count" -lt "$allowed" ]; then
-    shrank=1
-  fi
-done < <(current)
-
-# A file whose waits were all removed drops out of `current`; catch that too.
-while read -r _ path; do
-  current | awk -v p="$path" '$2 == p { found = 1 } END { exit !found }' || shrank=1
-done <"$BASELINE"
-
-if [ "$grew" -ne 0 ]; then
+hits="$(waits)"
+if [ -n "$hits" ]; then
+  echo "error: tests wait on the wall clock without saying why:" >&2
+  printf '%s\n' "$hits" | sed 's/^/  /' >&2
   echo "       A fixed wait passes on a Mac and fails on a loaded runner or under ASan." >&2
   echo "       Step a TestClock (waitUntilSleeping, then advance) or wait for the event" >&2
-  echo "       (waitUntil / until). If real time is genuinely the point, end the line" >&2
-  echo "       with '// wall-clock-ok: <reason>'." >&2
+  echo "       (waitUntil / until). If real time is genuinely the point, mark it with" >&2
+  echo "       '// wall-clock-ok: <reason>' at the end of the line or on the line above." >&2
   exit 1
 fi
-if [ "$shrank" -ne 0 ]; then
-  echo "error: fewer wall-clock waits than $BASELINE records — good; lock it in with" >&2
-  echo "       scripts/check-test-clock.sh --update and commit the baseline." >&2
-  exit 1
-fi
-echo "no test gained a wall-clock wait ($(wc -l <"$BASELINE" | tr -d ' ') files at baseline)"
+echo "every wall-clock wait in the tests says why"

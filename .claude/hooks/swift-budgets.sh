@@ -34,10 +34,12 @@ case "$rel" in
 esac
 case "$rel" in
   Tests/* | App/Blurt/BlurtUITests/* | App/BlurtiOS/BlurtiOSTests/* | App/BlurtiOS/BlurtiOSUITests/*)
+    # Only this file's unmarked waits, then the advice that follows the list.
     clock="$(bash "$root/scripts/check-test-clock.sh" 2>&1 || true)"
-    # Report only a gain in this file; a shrink is good news for check.sh to lock in.
-    if grep -q "^error: $rel waits on the wall clock" <<<"$clock"; then
-      findings+="${findings:+$'\n'}$(sed -n "/^error: ${rel//\//\\/} waits/,/wall-clock-ok/p" <<<"$clock")"
+    mine="$(grep -F "  $rel:" <<<"$clock" || true)"
+    if [ -n "$mine" ]; then
+      findings+="${findings:+$'\n'}error: $rel waits on the wall clock without saying why:"$'\n'"$mine"
+      findings+=$'\n'"$(grep '^       ' <<<"$clock")"
     fi
     ;;
 esac

@@ -12,6 +12,7 @@ func waitUntil(timeout: Duration = .seconds(30), _ condition: () -> Bool) async 
   let deadline = ContinuousClock.now + timeout
   while !condition() {
     guard ContinuousClock.now < deadline else { throw CancellationError() }
+    // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
     try await Task.sleep(for: .milliseconds(5))
   }
 }

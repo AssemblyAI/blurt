@@ -25,7 +25,7 @@ struct TranscriptWriterTests {
     #expect(store.load() == newest)
     // Every older write has finished by now, so none lands after. Waited out
     // rather than trusted: a write still running would replace the list here.
-    try await Task.sleep(for: .milliseconds(500))
+    try await Task.sleep(for: .milliseconds(500))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(store.load() == newest)
   }
 

@@ -97,6 +97,7 @@
       try await MacDriver.bringToFront(scenario.app, with: performer)
       defer { Task { await performer.commandEnded() } }
       try await reach(scenario.setup, with: performer)
+      // wall-clock-ok: drives real hardware or a real app, which run on real time
       try await Task.sleep(for: .milliseconds(700))
       let app = await KeyInjector.frontmostApp()
       guard var facts = FocusCapture.focusFacts(forRecording: true) else { throw RecordError.untrusted }
@@ -118,6 +119,7 @@
         try await focus(kinds: kinds, label: label, with: performer)
 
       case let .pressThenFocus(press, kinds, label):
+        // wall-clock-ok: drives real hardware or a real app, which run on real time
         if await MacDriver.press(labelled: press, with: performer) { try await Task.sleep(for: .seconds(1)) }
         try await focus(kinds: kinds, label: label, with: performer)
       }

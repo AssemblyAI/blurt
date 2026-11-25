@@ -136,9 +136,7 @@ struct ProtocolTests {
     SharedStore.keyboardInstance = "kb-1"
     let injector = KeyboardRelayInjector()
     let delivery = Task { try await injector.insert("never mind", after: nil, windowTitle: nil) }
-    for _ in 0..<100 where SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil {
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    #expect(await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil })
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "never mind")
     delivery.cancel()
     await #expect(throws: CancellationError.self) { try await delivery.value }

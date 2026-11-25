@@ -103,7 +103,7 @@ struct DictationCoordinatorTests {
     #expect(coordinator.inFlight == nil)
     #expect(coordinator.answers == nil)
     #expect(coordinator.lastCommandID == nil)
-    try? await Task.sleep(for: .milliseconds(200))
+    try? await Task.sleep(for: .milliseconds(200))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(coordinator.phase == .idle, "nothing reached the session")
     #expect(rig.source.started == 0)
     // The same press again — a missed ack — gets the same answer and nothing more.
@@ -174,7 +174,7 @@ struct DictationCoordinatorTests {
     coordinator.start()
     coordinator.handle(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed))
     #expect(coordinator.needsFullAccess)
-    try? await Task.sleep(for: .milliseconds(100))
+    try? await Task.sleep(for: .milliseconds(100))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(rig.source.opened == 0)
     #expect(rig.state?.window == .closed && rig.state?.sequence == 0, "the window published only its launch")
     #expect(SharedStore.listeningState?.window == .closed)

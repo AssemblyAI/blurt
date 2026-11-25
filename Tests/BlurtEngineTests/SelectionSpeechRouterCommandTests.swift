@@ -232,7 +232,7 @@ struct SelectionSpeechRouterCommandTests {
     rig.router.press(key: .rightCommand)
     #expect(rig.events.pills == [.commanding, nil])
     #expect(!rig.router.ownsPill)
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(100))  // wall-clock-ok: absence check: a slow runner can only make it pass
     rig.phases.cancel()
     #expect(rig.events.pills == [.commanding, nil])
     #expect(rig.events.resets == resetsBefore)

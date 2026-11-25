@@ -95,9 +95,9 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
    fails here rather than leaving a gate that enforces a reversed decision. Then
    SwiftLint's size budgets counted without SwiftLint
    (`scripts/check-swift-size.sh`: `file_length` 400, `type_body_length` ~250,
-   with notes for files near either), the test-clock ratchet
-   (`scripts/check-test-clock.sh`: no test file gains a fixed sleep or a real
-   clock), and the Mac pbxproj's repo-root folder named `blurt`. All
+   with notes for files near either), the test-clock rule
+   (`scripts/check-test-clock.sh`: every fixed sleep or real clock in a test
+   carries a `// wall-clock-ok: <reason>`), and the Mac pbxproj's repo-root folder named `blurt`. All
    `--portable` too
 3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
    failures) — both source-only
