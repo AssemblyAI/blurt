@@ -268,6 +268,47 @@ jobs:
         # job is meant to save.
         run: swift build --build-tests -Xswiftc -warnings-as-errors
 
+  # Control Your Mac's real performer (`SystemVoiceCommandPerformer`) against a
+  # real window: `LivePerformerTests`, which launches the fixture app
+  # (Tests/CommandFixture) and judges every press, value, selection, menu
+  # item, scroll and window move by the state the fixture records. Everywhere
+  # else the performer is a stub, or its decisions are tested without the
+  # Accessibility calls, so this is the one gate that runs those calls.
+  #
+  # The suite drives the machine it runs on, so it asks to
+  # (`BLURT_LIVE_AX_TESTS=1`) and needs Accessibility trust; a throwaway
+  # runner is the safe place for both, and GitHub's macOS images grant that
+  # trust to the runner's agent and to /bin/bash, which this step's
+  # processes run under. Without it the suite is *skipped* and `swift test`
+  # still exits 0, so the step passes only if the suite reports that it
+  # passed: a skip fails the gate rather than reading as green.
+  live-performer:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    # ~5 minutes: the engine's test build, then a suite of seconds.
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Run the live performer suite
+        working-directory: blurt
+        env:
+          BLURT_LIVE_AX_TESTS: "1"
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/live-performer.log"
+          swift test --filter LivePerformerTests 2>&1 | tee "$log"
+          if ! grep -q 'Suite "Live performer" passed' "$log"; then
+            echo "::error::The live performer suite did not run: it needs BLURT_LIVE_AX_TESTS=1 and Accessibility trust for the test process (see its skip reason above)"
+            exit 1
+          fi
+
   # What swift-format would change, as an applicable patch. Formatting is the
   # other half of what CI is sole authority over here, and `macos` can only say
   # *that* a file is misformatted (`swift-format lint --strict`) — leaving the
@@ -457,22 +498,32 @@ jobs:
   # superseded run now ends cancelled, not failed. (Nothing is lost: each
   # merge-queue commit already passed `check` as its merge group.)
   check:
-    needs: [changes, lint, macos, ui-tests, ios-build, ios-sanitizers]
+    needs:
+      [
+        changes,
+        lint,
+        macos,
+        ui-tests,
+        live-performer,
+        ios-build,
+        ios-sanitizers,
+      ]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the lint, macOS, UI, iOS and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, UI, live-performer, iOS and iOS-sanitizer gates ran or were intentionally skipped
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           UI_RESULT: ${{ needs.ui-tests.result }}
+          LIVE_PERFORMER_RESULT: ${{ needs.live-performer.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
           IOS_SANITIZERS_RESULT: ${{ needs.ios-sanitizers.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT live-performer=$LIVE_PERFORMER_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -497,5 +548,6 @@ jobs:
           assert_gate lint "$LINT_RESULT" "$CODE_CHANGED"
           assert_gate macOS "$MACOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "UI suite" "$UI_RESULT" "$SWIFT_CHANGED"
+          assert_gate "live performer" "$LIVE_PERFORMER_RESULT" "$SWIFT_CHANGED"
           assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT" "$SWIFT_CHANGED"
