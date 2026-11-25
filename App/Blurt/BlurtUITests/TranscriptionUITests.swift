@@ -182,7 +182,6 @@ final class TranscriptionUITests: BlurtUITestCase {
     // Scoped to the window's sheet: a bare "Discard" could match elsewhere.
     let confirm = main.sheets.buttons["Discard"].firstMatch
     // On a miss, where things were: whether a window covered Discard….
-    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     XCTAssertTrue(
       confirm.waitForExistence(timeout: 5),
       "Discarding asks first (Discard… at \(discard.frame), hittable \(discard.isHittable); "
