@@ -39,7 +39,12 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// took them: the Mac's `SystemClipboard.concealedLifetime`, as an iOS expiry.
   package static let secureClipboardLifetime: TimeInterval = 90
 
-  package func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) async throws {
+  /// `secure` defaults to false, as `KeyInjector.insert`'s does, so a direct
+  /// caller (a test) describes an ordinary field without restating it; the
+  /// session always passes its real verdict through `InjectorProtocol`.
+  package func insert(
+    _ text: String, after priorText: String?, windowTitle: String?, secure: Bool = false
+  ) async throws {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.
