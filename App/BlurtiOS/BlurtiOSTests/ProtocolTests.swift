@@ -87,12 +87,19 @@ struct ProtocolTests {
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
     UIPasteboard.general.string = ""
-    let injector = KeyboardRelayInjector()
-    let started = Date()
-    await #expect(throws: BlurtError.noEditableTarget) {
-      try await injector.insert("late words", after: nil, windowTitle: nil, secure: false)
+    let clock = TestClock()
+    let injector = KeyboardRelayInjector(clock: clock)
+    let insert = Task { try await injector.insert("late words", after: nil, windowTitle: nil) }
+    // Every poll but the last finds the result still waiting; only the step
+    // onto the timeout copies it out.
+    let polls = Int(.seconds(KeyboardRelayInjector.deliveryTimeout) / KeyboardRelayInjector.deliveryPoll)
+    for _ in 0..<polls {
+      await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
+      #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "late words")
+      #expect(UIPasteboard.general.string == "")
+      clock.advance(by: KeyboardRelayInjector.deliveryPoll)
     }
-    #expect(Date().timeIntervalSince(started) >= KeyboardRelayInjector.deliveryTimeout - 0.5)
+    await #expect(throws: BlurtError.noEditableTarget) { try await insert.value }
     #expect(UIPasteboard.general.string == "late words")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
@@ -110,11 +117,12 @@ struct ProtocolTests {
     }
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
-    let same = KeyboardRelayInjector(presser: { ResultAddress(keyboard: "kb-2", controllerID: "c-2") })
-    let taker = takeResultShortly()
-    try await same.insert("right app", after: nil, windowTitle: nil, secure: false)
-    let taken = await taker.value
+    let clock = TestClock()
+    let same = KeyboardRelayInjector(presser: { ResultAddress(keyboard: "kb-2", controllerID: "c-2") }, clock: clock)
+    let insert = Task { try await same.insert("right app", after: nil, windowTitle: nil) }
+    let taken = await takeResult(stepping: clock)
     #expect(taken?.recipient == "kb-2" && taken?.controllerID == "c-2")
+    try await insert.value
   }
 
   @Test("a dictation cancelled while its result waits for the keyboard takes the result back")
@@ -140,24 +148,27 @@ struct ProtocolTests {
     defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
-    let injector = KeyboardRelayInjector()
-    let taker = takeResultShortly()
-    try await injector.insert("on time", after: nil, windowTitle: nil, secure: false)
-    let taken = await taker.value
+    let clock = TestClock()
+    let injector = KeyboardRelayInjector(clock: clock)
+    let insert = Task { try await injector.insert("on time", after: nil, windowTitle: nil) }
+    let taken = await takeResult(stepping: clock)
+    try await insert.value
     #expect(taken?.text == "on time")
     #expect(taken?.recipient == "kb-1")
   }
 }
 
-/// Stands in for the keyboard: a moment after the app hands a result over, takes
-/// it out of the store the way the keyboard's signal handler does.
-private func takeResultShortly() -> Task<DictationResult?, Never> {
-  Task {
-    try? await Task.sleep(for: .milliseconds(300))
-    let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
-    SharedStore.remove(forKey: BlurtShared.Key.result)
-    return pending
-  }
+/// Stands in for the keyboard: once the app has handed a result over, takes it
+/// out of the store the way the keyboard's signal handler does, then steps the
+/// relay's clock to its next poll so it sees the result gone.
+private func takeResult(stepping clock: TestClock) async -> DictationResult? {
+  let handed = await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil }
+  guard handed else { return nil }
+  let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
+  SharedStore.remove(forKey: BlurtShared.Key.result)
+  await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
+  clock.advance(by: KeyboardRelayInjector.deliveryPoll)
+  return pending
 }
 
 @Suite("Keyboard model: the mic, the phase and results", .serialized)

@@ -45,6 +45,12 @@ struct KeyboardRig {
     let model = KeyboardModel()
     model.proxyOverride = proxy
     model.hasFullAccess = true
+    // Time stands still unless a test moves it (`model.now = { … }`): on the
+    // wall clock a slow runner — ASan, a loaded CI host — can let more than
+    // the hold threshold pass between a tap's micDown and micUp, and a tap
+    // read as a hold sends a release nobody asked for.
+    let start = Date()
+    model.now = { start }
     Self.listening(true)
     model.readListeningState()
     let commands = Commands()

@@ -57,10 +57,14 @@ struct ChunkedRequestBodyTests {
     // Nobody ever reads, so the pipe fills and the writer lands in its
     // backpressure loop. Cancellation is what has to get it out — `send` relies
     // on exactly this when the response arrives before the body is done.
+    body.input.open()
+    defer { body.input.close() }
     let writer = Task { try await body.drain(.chunks(Data(count: 512 * 1024))) }
     // Let it reach the loop before cancelling, so this exercises the wait rather
-    // than the pre-flight `checkCancellation`.
-    try await Task.sleep(for: .milliseconds(50))
+    // than the pre-flight `checkCancellation`. Bytes in the pipe prove it: the
+    // chunk is far larger than the pipe, so once any of it is written the writer
+    // is past that check and can only finish by waiting for space.
+    while !body.input.hasBytesAvailable { await Task.yield() }
     writer.cancel()
 
     await #expect(throws: CancellationError.self) { try await writer.value }

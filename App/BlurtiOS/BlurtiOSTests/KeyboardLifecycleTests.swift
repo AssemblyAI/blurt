@@ -127,11 +127,15 @@ struct KeyboardLifecycleTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let model = KeyboardRig().model
+    let clock = TestClock()
+    model.clock = clock
     let pasted = snapshot(.pasted)
     let dwell = try #require(pasted.noticeDwellSeconds)
     model.apply(pasted)
     #expect(model.snapshot.state == .pasted)
-    #expect(await eventually(.seconds(dwell + 2)) { model.snapshot.state == .idle })
+    await clock.waitUntilSleeping(for: .seconds(dwell))
+    clock.advance(by: .seconds(dwell))
+    #expect(await eventually { model.snapshot.state == .idle })
     model.apply(pasted)
     #expect(model.snapshot.state == .idle)
     // A new notice is not the one let go of.
@@ -144,12 +148,16 @@ struct KeyboardLifecycleTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let model = KeyboardRig().model
+    let clock = TestClock()
+    model.clock = clock
     let error = snapshot(.error, reason: .micSilent)
     let dwell = try #require(error.noticeDwellSeconds)
     model.apply(error)
     #expect(model.heldError == error)
     #expect(model.statusLine?.text == VoiceNotice.Copy.micSilent)
-    #expect(await eventually(.seconds(dwell + 2)) { model.snapshot.state == .idle })
+    await clock.waitUntilSleeping(for: .seconds(dwell))
+    clock.advance(by: .seconds(dwell))
+    #expect(await eventually { model.snapshot.state == .idle })
     #expect(model.statusLine?.text == VoiceNotice.Copy.micSilent)
     #expect(model.voiceState.glyph == nil)
     model.micDown()
@@ -198,12 +206,16 @@ struct KeyboardLifecycleTests {
     let proxy = FakeProxy()
     proxy.selected = "Rizz"
     let model = KeyboardRig(proxy: proxy).model
+    let clock = TestClock()
+    model.clock = clock
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
     model.addSelectedTerm()
     #expect(model.termSavedAt != nil)
     #expect(SharedStore.keyTerms == ["Rizz"])
-    #expect(await eventually(.seconds(KeyboardModel.termNoticeDwell + 2)) { model.termSavedAt == nil })
+    await clock.waitUntilSleeping(for: .seconds(KeyboardModel.termNoticeDwell))
+    clock.advance(by: .seconds(KeyboardModel.termNoticeDwell))
+    #expect(await eventually { model.termSavedAt == nil })
     #expect(model.selectedTerm == nil)
     #expect(model.dismissedSelection == "Rizz")
   }
@@ -216,12 +228,15 @@ struct KeyboardLifecycleTests {
       LexiconEntry(userInput: "Neil Bisht", documentText: "Neil Bisht"),
       LexiconEntry(userInput: "omw", documentText: "On my way!"),
     ]
+    let before = Date()
     KeyboardModel.store(entries)
+    let after = Date()
     let stored = SharedStore.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon)
     #expect(stored?.map(\.documentText) == ["Neil Bisht", "On my way!"])
     #expect(stored?.map(\.isName) == [true, false])
+    // Stamped by the store itself, however long the call took.
     let refreshed = try #require(SharedStore.lexiconRefreshedAt)
-    #expect(Date().timeIntervalSince(refreshed) < 5)
+    #expect(before...after ~= refreshed)
   }
 
   @Test("opening the app walks the responder chain to the application: setup without Full Access, start with it")
