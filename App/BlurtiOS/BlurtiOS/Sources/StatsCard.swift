@@ -10,6 +10,7 @@ struct StatsCard: View {
   /// The speed time saved is measured against: the phone average, or the
   /// easter egg's latest result (`TypingSpeed`).
   @AppStorage(TypingSpeed.defaultsKey) private var typingSpeed: Double = 0
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     let stats = DictationStats.decode(raw)
@@ -25,6 +26,12 @@ struct StatsCard: View {
     // The candidates are listed out, not generated with ForEach: ViewThatFits
     // traps on generated children whose identities repeat across branches.
     ViewThatFits(in: .horizontal) {
+      // At an accessibility text size the labels alone outgrow a shared row
+      // ("DICTATIONSWORDS"), so each stat takes a row of its own, at the
+      // size the user asked for rather than the largest that fits.
+      if dynamicTypeSize.isAccessibilitySize {
+        stacked(dictations, words, timeSaved, size: sizes.sizeStatS)
+      }
       if saved < .seconds(3_600) {
         oneRow(dictations, words, timeSaved, size: sizes.sizeStatXl)
         oneRow(dictations, words, timeSaved, size: sizes.sizeStatL)
@@ -42,6 +49,14 @@ struct StatsCard: View {
   }
 
   private typealias Parts = [(String, String?)]
+
+  private func stacked(_ dictations: Parts, _ words: Parts, _ timeSaved: Parts, size: CGFloat) -> some View {
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStatGap) {
+      Stat(label: "Dictations", parts: dictations, size: size)
+      Stat(label: "Words", parts: words, size: size)
+      Stat(label: "Time saved", parts: timeSaved, size: size)
+    }
+  }
 
   private func oneRow(_ dictations: Parts, _ words: Parts, _ timeSaved: Parts, size: CGFloat) -> some View {
     HStack(alignment: .top, spacing: 0) {
@@ -82,12 +97,12 @@ private struct Stat: View {
         ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
           HStack(alignment: .firstTextBaseline, spacing: size * metrics.statUnitGapRatio) {
             Text(part.value)
-              .font(BlurtType.heading(size))
+              .headingFont(size)
               .tracking(size * metrics.statTrackingRatio)
               .foregroundStyle(BlurtBrand.text)
             if let unit = part.unit {
               Text(unit.uppercased())
-                .font(BlurtType.mono((size * metrics.statUnitRatio).rounded(), weight: .medium))
+                .monoFont((size * metrics.statUnitRatio).rounded(), weight: .medium)
                 .foregroundStyle(BlurtBrand.muted)
             }
           }

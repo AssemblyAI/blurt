@@ -94,10 +94,12 @@ struct KeepOpenView: View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appHeroGap) {
       Eyebrow(KeepOpen.eyebrow, color: BlurtBrand.accent)
       Text(KeepOpen.headline)
-        .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+        .headingFont(DesignTokens.Typography.sizeTitle)
         .foregroundStyle(BlurtBrand.text)
+        // Wraps rather than truncating at a large text size, as the body does.
+        .fixedSize(horizontal: false, vertical: true)
       Text(KeepOpen.body(windowMinutes: windowMinutes))
-        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+        .bodyFont(DesignTokens.Typography.sizeBody)
         .foregroundStyle(BlurtBrand.muted)
         .fixedSize(horizontal: false, vertical: true)
     }

@@ -12,14 +12,17 @@ struct TryItBox: View {
   @State private var text = ""
 
   var body: some View {
-    RememberingTextView(text: $text)
-      .frame(minHeight: DesignTokens.Metrics.appTryBoxHeight, alignment: .topLeading)
+    // The text view itself takes the box's least height, not just its frame:
+    // the whole box is what a tap lands on, and what VoiceOver outlines.
+    RememberingTextView(text: $text, minHeight: DesignTokens.Metrics.appTryBoxHeight)
       .overlay(alignment: .topLeading) {
         if text.isEmpty {
           Text("Try it here")
-            .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+            .bodyFont(DesignTokens.Typography.sizeBody)
             .foregroundStyle(BlurtBrand.muted)
             .allowsHitTesting(false)
+            // The text view carries the same words as its label.
+            .accessibilityHidden(true)
         }
       }
       .brandInput()
@@ -30,11 +33,14 @@ struct TryItBox: View {
 /// input context, which is what makes iOS remember the keyboard chosen in it.
 private struct RememberingTextView: UIViewRepresentable {
   @Binding var text: String
+  let minHeight: CGFloat
 
   func makeUIView(context: Context) -> ContextTextView {
     let view = ContextTextView()
     view.delegate = context.coordinator
-    view.font = .systemFont(ofSize: DesignTokens.Typography.sizeBody)
+    // The body size, following Dynamic Type as the rest of the app's text does.
+    view.font = BlurtType.scaledBody(DesignTokens.Typography.sizeBody)
+    view.adjustsFontForContentSizeCategory = true
     view.textColor = UIColor(BlurtBrand.text)
     view.backgroundColor = .clear
     // Growing with its text, as the brand's inputs do, rather than scrolling.
@@ -52,7 +58,7 @@ private struct RememberingTextView: UIViewRepresentable {
   func sizeThatFits(_ proposal: ProposedViewSize, uiView: ContextTextView, context: Context) -> CGSize? {
     guard let width = proposal.width else { return nil }
     let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-    return CGSize(width: width, height: fitted.height)
+    return CGSize(width: width, height: max(fitted.height, minHeight))
   }
 
   func makeCoordinator() -> Coordinator { Coordinator(text: $text) }

@@ -110,8 +110,12 @@ The suite holds the same gates as the engine's: warnings are errors, a plain run
 script — raise it as coverage grows, never lower it to land a change), and CI's `ios-sanitizers`
 job runs it again under ThreadSanitizer and AddressSanitizer (`BLURT_IOS_SANITIZER=thread` or
 `address` locally). `scripts/ios-check.sh` runs the whole iPhone bar in one go — the tests and
-the coverage gate, then `swiftlint analyze` and periphery over this project — and is what CI's
-`ios-build` job and a local `scripts/check.sh` run. The views are not in that figure, as the Mac shell's aren't in the engine's:
+the coverage gate, the accessibility audits, then `swiftlint analyze` and periphery over this
+project — and is what CI's `ios-build` job and a local `scripts/check.sh` run. The audits
+(`BlurtiOSUITests`, `scripts/ios-uitest.sh`, its own scheme) launch the app onto each of its screens
+and run `performAccessibilityAudit()` there, at the default text size and at the largest; they run
+inside the simulator, so unlike the Mac's UI suite they leave the keyboard and mouse alone. The
+views are not in the coverage figure, as the Mac shell's aren't in the engine's:
 the keyboard is measured against Apple's by the parity probe (`scripts/keyboard-parity.sh`) and
 checked on sight through the probe's screenshots and flows (`scripts/ios-keyboard-shot.sh`,
 `scripts/ios-keyboard-flows.sh`).

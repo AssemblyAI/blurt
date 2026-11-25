@@ -70,7 +70,7 @@ struct SettingsView: View {
           Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent)
           Spacer()
           Button(showsSetupSteps ? "Hide steps" : "Show steps") { showsSetupSteps.toggle() }
-            .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+            .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
             .foregroundStyle(BlurtBrand.accent)
             .buttonStyle(.plain)
         }
@@ -182,7 +182,7 @@ struct SettingsView: View {
       .foregroundStyle(BlurtBrand.accent)
       if typingSpeed > 0 {
         Button("Using your \(Int(typingSpeed)) wpm · Reset to average") { TypingSpeed.resetToAverage() }
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .bodyFont(DesignTokens.Typography.sizeCaption)
           .foregroundStyle(BlurtBrand.muted)
       }
     } header: {

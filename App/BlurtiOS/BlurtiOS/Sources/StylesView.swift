@@ -90,6 +90,7 @@ private struct StyleRow: View {
   let isActive: Bool
   let edit: (() -> Void)?
   let activate: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     HStack(spacing: DesignTokens.Metrics.appStackGap) {
@@ -97,8 +98,8 @@ private struct StyleRow: View {
         HStack {
           VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
             Text(name).foregroundStyle(BlurtBrand.text)
-            Text(detail).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
-              .lineLimit(2)  // literal-ok: two lines of instructions
+            Text(detail).bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(BlurtBrand.muted)
+              .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)  // literal-ok: two lines, all at a large size
           }
           Spacer()
           if isActive { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent) }
@@ -126,6 +127,7 @@ private struct PresetRow: View {
   let isAdded: Bool
   let isFull: Bool
   let add: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     Button(action: add) {
@@ -136,9 +138,11 @@ private struct PresetRow: View {
           .frame(width: DesignTokens.Metrics.appIcon)
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
           Text(preset.name).foregroundStyle(BlurtBrand.text)
-          Text(preset.instructions).font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          Text(preset.instructions).bodyFont(DesignTokens.Typography.sizeCaption)
             .foregroundStyle(BlurtBrand.muted)
-            .lineLimit(1)  // literal-ok: a line of the preset's instructions
+            // A line of the preset's instructions; all of them at an
+            // accessibility text size, where a line is a few words.
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)  // literal-ok: one line
         }
         Spacer()
         if isAdded {
@@ -152,6 +156,8 @@ private struct PresetRow: View {
     .buttonStyle(.plain)
     .disabled(!isAdded && isFull)
     .accessibilityLabel(isAdded ? "\(preset.name), added" : "Add \(preset.name)")
+    // The label names the action; what the preset does follows it.
+    .accessibilityHint(preset.instructions)
   }
 }
 
@@ -163,6 +169,7 @@ private struct StyleEditor: View {
   let profile: StyleProfile?
   let store: StyleProfileStore
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var name: String
   @State private var instructions: String
 
@@ -183,8 +190,14 @@ private struct StyleEditor: View {
       Form {
         if profile == nil {
           Section {
-            // The three share the row in equal widths, so none runs off it.
-            HStack(spacing: DesignTokens.Metrics.appChipGap) {
+            // The three share the row in equal widths, so none runs off it;
+            // at an accessibility text size, where a third of the row holds
+            // a few letters, each takes the whole row.
+            let chips =
+              dynamicTypeSize.isAccessibilitySize
+              ? AnyLayout(VStackLayout(spacing: DesignTokens.Metrics.appChipGap))
+              : AnyLayout(HStackLayout(spacing: DesignTokens.Metrics.appChipGap))
+            chips {
               ForEach(StylePreset.allCases) { preset in
                 PresetChip(preset: preset, isChosen: instructions == preset.instructions) {
                   name = preset.name
@@ -268,7 +281,7 @@ private struct PresetChip: View {
         Image(systemName: preset.symbol)
         Text(preset.name).lineLimit(1)
       }
-      .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+      .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
       .padding(.vertical, DesignTokens.Metrics.appChipPadY)
       .frame(maxWidth: .infinity)
       .foregroundStyle(isChosen ? BlurtBrand.ctaText : BlurtBrand.text)

@@ -16,7 +16,7 @@ struct WordsView: View {
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
         HStack {
           Text("Words")
-            .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+            .headingFont(DesignTokens.Typography.sizeTitle)
             .foregroundStyle(BlurtBrand.text)
             .accessibilityAddTraits(.isHeader)
           Spacer()
@@ -94,7 +94,7 @@ private struct KeyTermsCard: View {
           preview: SharePreview(pack.name, icon: Image(systemName: "text.badge.plus"))
         ) {
           Label("Share key terms", systemImage: "square.and.arrow.up")
-            .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+            .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
         }
         .tint(BlurtBrand.accent)
       }
@@ -121,7 +121,7 @@ private struct TermPill: View {
   var body: some View {
     HStack(spacing: DesignTokens.Metrics.appLineGap) {
       Text(term)
-        .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+        .bodyFont(DesignTokens.Typography.sizeCaption)
         .foregroundStyle(BlurtBrand.text)
       Button(action: remove) {
         Image(systemName: "xmark")
@@ -226,7 +226,7 @@ private struct ShortcutRow: View {
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
         Eyebrow(shortcut.trigger, color: BlurtBrand.accent)
         Text(shortcut.expansion)
-          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .bodyFont(DesignTokens.Typography.sizeCaption)
           .foregroundStyle(BlurtBrand.text)
           .lineLimit(2)  // literal-ok: two lines of the replacement
       }

@@ -9,10 +9,13 @@
 #   1. BlurtiOSTests on a simulator, warnings as errors, with BlurtiOSCore's
 #      line-coverage gate (ios-test.sh; the TSan and ASan passes are its
 #      BLURT_IOS_SANITIZER runs, CI's ios-sanitizers job).
-#   2. `swiftlint analyze` — unused imports — over that build's compiler log,
+#   2. The accessibility audits (BlurtiOSUITests, ios-uitest.sh):
+#      `performAccessibilityAudit()` on every screen of the app, on the same
+#      simulator and over the same build.
+#   3. `swiftlint analyze` — unused imports — over that build's compiler log,
 #      as check.sh runs it over the Mac app's.
-#   3. periphery over the iPhone project — unused declarations.
-#   4. The probe's XCUITest bundle (BlurtiOSProbe), compiled: its own scheme,
+#   4. periphery over the iPhone project — unused declarations.
+#   5. The probe's XCUITest bundle (BlurtiOSProbe), compiled: its own scheme,
 #      run only by hand (the screenshot and keyboard-flow scripts), so nothing
 #      else ever builds it — and it went uncompiled through a Swift 6 change.
 # swift-format, `swiftlint lint` and the invariants already cover App/BlurtiOS
@@ -43,6 +46,9 @@ trap 'rm -f "$BUILD_LOG" "$APP_LOG"' EXIT
 
 echo "==> ios-test (BlurtiOSTests + BlurtiOSCore coverage gate)"
 BLURT_IOS_BUILD_LOG="$BUILD_LOG" "$REPO_ROOT/scripts/ios-test.sh" || FAILED+=("ios-test")
+
+echo "==> ios-uitest (BlurtiOSUITests: accessibility audits)"
+"$REPO_ROOT/scripts/ios-uitest.sh" || FAILED+=("ios-uitest")
 
 echo "==> swiftlint analyze (unused imports, App/BlurtiOS)"
 if [ -s "$BUILD_LOG" ]; then

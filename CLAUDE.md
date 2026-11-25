@@ -131,7 +131,8 @@ The simulator records through the Mac's microphone (`SimulatorAudioSource`), so 
 needs macOS to allow the **Simulator** app the microphone (Privacy & Security › Microphone) and
 the right input under the Simulator's I/O › Audio Input — a refused microphone records silence
 rather than failing. `scripts/ios-check.sh` runs the iPhone's quality gates (tests with the
-`BlurtiOSCore` coverage floor, `swiftlint analyze`, periphery, the probe build); `check.sh` runs it
+`BlurtiOSCore` coverage floor, the accessibility audits (`scripts/ios-uitest.sh`), `swiftlint
+analyze`, periphery, the probe build); `check.sh` runs it
 itself when this Mac has the matching runtime.
 
 ## Permissions

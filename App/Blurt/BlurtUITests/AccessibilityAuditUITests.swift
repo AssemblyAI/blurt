@@ -23,9 +23,11 @@ extension BlurtUITestCase {
     found += issues.map { "[\(screen)] \($0)" }
   }
 
-  /// Fails once, listing every issue `found` holds.
+  /// Fails once per issue `found` holds, each on its own line, so a CI log
+  /// (which shows a failure's first line) names every one.
   func assertNoAccessibilityIssues(_ found: [String]) {
-    XCTAssertTrue(found.isEmpty, "\(found.count) accessibility issue(s):\n" + found.joined(separator: "\n"))
+    continueAfterFailure = true
+    for issue in found { XCTFail(issue) }
   }
 
   private static func describe(_ issue: XCUIAccessibilityAuditIssue) -> String {
@@ -66,15 +68,16 @@ final class AccessibilityAuditUITests: BlurtUITestCase {
       let sheet = main.sheets.firstMatch
       XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The API key sheet should open")
       try audit("wizard, API key sheet", into: &found)
-      sheet.buttons[UITestIdentifiers.apiKeyCancel].click()
-      XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
+      // Saved through the sheet, as a user would: the harness is closed by
+      // now (`mainWindow()` closes its siblings).
+      let field = sheet.secureTextFields[UITestIdentifiers.apiKeyField]
+      field.click()
+      field.typeText(UITestIdentifiers.validAPIKey)
+      sheet.buttons[UITestIdentifiers.apiKeySave].click()
+      XCTAssertTrue(sheet.waitForNonExistence(timeout: 10), "Saving a valid key should close the sheet")
     } else {
       found.append("[wizard] no Connect button to open the key sheet:\n\(main.debugDescription)")
     }
-
-    let harness = harnessWindow()
-    harness.buttons[UITestIdentifiers.setKeyButton].click()
-    mainWindow()
     try audit("wizard, key saved", into: &found)
     assertNoAccessibilityIssues(found)
   }
@@ -128,9 +131,13 @@ final class AccessibilityAuditUITests: BlurtUITestCase {
     // Off `app`: a SwiftUI `.alert` isn't necessarily a sheet of its window.
     XCTAssertTrue(app.staticTexts["Reset Blurt?"].waitForExistence(timeout: 5), "Reset should ask first")
     try audit("Settings › Advanced › Reset confirmation", into: &found)
-    let confirmation = [app.sheets.firstMatch, app.dialogs.firstMatch].first { $0.exists }
     // Scoped to the alert: an app-level "Cancel" also matches the Touch Bar's.
-    confirmation?.buttons["Cancel"].click()
+    if let confirmation = [app.sheets.firstMatch, app.dialogs.firstMatch].first(where: { $0.exists }) {
+      confirmation.buttons["Cancel"].click()
+    } else {
+      app.typeKey(.escape, modifierFlags: [])
+    }
+    XCTAssertTrue(app.staticTexts["Reset Blurt?"].waitForNonExistence(timeout: 5), "Cancel should close Reset")
     assertNoAccessibilityIssues(found)
   }
 

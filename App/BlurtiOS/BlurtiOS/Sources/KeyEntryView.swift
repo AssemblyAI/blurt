@@ -21,7 +21,7 @@ struct KeyEntryView: View {
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
           if let inlineError {
-            Text(inlineError).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(
+            Text(inlineError).bodyFont(DesignTokens.Typography.sizeCaption).foregroundStyle(
               BlurtBrand.errorOrange)
           }
         } header: {

@@ -170,7 +170,22 @@ jobs:
         # is visible at the call site rather than only in check.sh.
         env:
           CI: "true"
+          # Where scripts/uitest.sh writes the UI suite's result bundle, for
+          # the upload below.
+          BLURT_UITEST_RESULTS: ${{ runner.temp }}/BlurtUITests.xcresult
         run: scripts/check.sh
+
+      # The UI suite's result bundle when the job fails: the log shows each
+      # failure's first line only, and the bundle has the rest — every
+      # accessibility issue an audit raised, and the screenshots the test plan
+      # keeps.
+      - name: Upload the UI suite's results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BlurtUITests-xcresult
+          path: ${{ runner.temp }}/BlurtUITests.xcresult
+          if-no-files-found: ignore
 
   # Fast-fail typecheck. `check` above is the authority on green and this job can
   # only go red where `check` would too — so it is deliberately NOT required, and
@@ -294,9 +309,10 @@ jobs:
     runs-on: macos-26
     # The simulator build, the unit tests and the periphery scan (which rebuilds
     # after them) now take 22-29 minutes on macos-26, so 30 started cancelling
-    # healthy runs, main's included (Nov 2026). 45 leaves headroom for a slow
-    # runner without letting a hung simulator burn an hour.
-    timeout-minutes: 45
+    # healthy runs, main's included (Nov 2026). 45 left headroom for a slow
+    # runner without letting a hung simulator burn an hour; the accessibility
+    # audits (scripts/ios-uitest.sh) add a few minutes on top, hence 55.
+    timeout-minutes: 55
 
     steps:
       - name: Checkout blurt
@@ -332,7 +348,8 @@ jobs:
         working-directory: blurt
         # scripts/ios-check.sh — the iPhone's check.sh: BlurtiOSTests (warnings
         # as errors, BlurtiOSCore's coverage gate) on whichever iPhone simulator
-        # the runner has (scripts/ios-lib.sh picks), then `swiftlint analyze`
+        # the runner has (scripts/ios-lib.sh picks), the accessibility audits
+        # (BlurtiOSUITests) on the same simulator, then `swiftlint analyze`
         # over that from-scratch build's log, then periphery. Ad hoc signing: the
         # simulator accepts it and, unlike no signing, it embeds the App Group
         # entitlement.
