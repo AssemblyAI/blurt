@@ -40,9 +40,27 @@ fi
 # jscpd (npm) — check.sh's copy/paste gate, from tools/jscpd's lockfile (the one
 # version pin; check.sh prefers that copy). The tokenizer decides what counts as a
 # clone, so another release could disagree with CI.
-jscpd_dir="$(cd "$(dirname "$0")/../.." && pwd)/tools/jscpd"
+repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+jscpd_dir="$repo_root/tools/jscpd"
 if [ ! -x "$jscpd_dir/node_modules/.bin/jscpd" ]; then
   npm ci --prefix "$jscpd_dir" >/dev/null 2>&1 || note "jscpd install failed (npm ci --prefix tools/jscpd)"
+fi
+
+# ruff, mypy, pytest and coverage.py (uv) — the evals' gates, from evals/uv.lock
+# (check.sh prefers evals/.venv). uv itself comes from pip, and PyPI is reachable
+# here, which is what lets the whole Python gate run in --portable.
+python_bin="$repo_root/evals/.venv/bin"
+python_tools="ruff mypy pytest coverage"
+python_missing=""
+for tool in $python_tools; do
+  [ -x "$python_bin/$tool" ] || python_missing="$python_missing $tool"
+done
+if [ -n "$python_missing" ]; then
+  if ! command -v uv >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
+    pip3 install --quiet uv >/dev/null 2>&1 || true
+  fi
+  uv sync --project "$repo_root/evals" --locked >/dev/null 2>&1 \
+    || note "evals' Python tools install failed (uv sync --project evals --locked)"
 fi
 
 # ShellCheck (pip) — static analysis for scripts/*.sh. shellcheck-py bundles a
@@ -85,6 +103,9 @@ for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfm
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 [ -x "$jscpd_dir/node_modules/.bin/jscpd" ] || missing="$missing jscpd"
+for tool in $python_tools; do
+  [ -x "$python_bin/$tool" ] || missing="$missing $tool"
+done
 echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."
 if [ -n "$missing" ]; then
   echo "Portable linters missing:${missing}. 'scripts/check.sh --portable' will skip them with a note."

@@ -77,15 +77,16 @@ def ensure_audio(rows: list[dict]) -> None:
     """
     import urllib.request  # noqa: PLC0415 — only a cache miss touches the network
 
-    missing = [row for row in rows if not audio_path(row).exists() and audio_url(row)]
+    missing = [
+        (row, url) for row in rows if not audio_path(row).exists() and (url := audio_url(row))
+    ]
     if not missing:
         return
-    print(
-        f"  downloading {len(missing)} Voice Arena recording(s) once; kept at {audio_path(missing[0]).parent}"
-    )
-    audio_path(missing[0]).parent.mkdir(parents=True, exist_ok=True)
-    for row in missing:
-        with urllib.request.urlopen(audio_url(row), timeout=90) as response:  # noqa: S310
+    directory = audio_path(missing[0][0]).parent
+    print(f"  downloading {len(missing)} Voice Arena recording(s) once; kept at {directory}")
+    directory.mkdir(parents=True, exist_ok=True)
+    for row, url in missing:
+        with urllib.request.urlopen(url, timeout=90) as response:  # noqa: S310
             audio_path(row).write_bytes(response.read())
 
 

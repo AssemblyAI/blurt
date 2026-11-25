@@ -24,12 +24,12 @@ jobs:
   #   code  — anything outside docs/. docs/ is prose (excluded from the lint
   #           checks) and can't affect the build or tests, so a docs-only change
   #           skips every macOS job below.
-  #   swift — anything outside docs/ and outside the evals' Python, Markdown and
-  #           ruff config. An evals-only change (a prompt harness, a scorer) can't
-  #           move a Swift build or test either, so it runs only `lint` — which
-  #           carries ruff and pytest — and skips the ~37-minute Swift/iOS jobs.
-  #           evals/**/*.json stays `swift`: PlannerEvalTests reads
-  #           evals/command-planner/cases.json as a fixture.
+  #   swift — anything outside docs/ and evals/, plus evals/**/*.json. An
+  #           evals-only change (a prompt harness, a scorer, their config) can't
+  #           move a Swift build or test, so it runs only `lint` — which carries
+  #           ruff, mypy and the pytest coverage gate — and skips the ~37-minute
+  #           Swift/iOS jobs. The JSON is the one exception: PlannerEvalTests
+  #           reads evals/command-planner/cases.json as a fixture.
   #
   # Why a skipped job rather than `paths-ignore`: `check` is a required status
   # check on main. `paths-ignore` filters the whole workflow, so the required
@@ -85,7 +85,7 @@ jobs:
           fi
           # Same fail-open shape: an empty `changed` counts as Swift.
           swiftish="$(printf '%s\n' "$nondocs" \
-            | grep -vE '^evals/.*\.(py|md|toml)$' | grep -v '^$' || true)"
+            | awk 'NF && (!/^evals\// || /\.json$/)' || true)"
           if [ -z "$changed" ] || [ -n "$swiftish" ]; then
             echo "swift=true" >>"$GITHUB_OUTPUT"
           else
@@ -122,6 +122,10 @@ jobs:
         working-directory: blurt
         run: npm ci --prefix tools/jscpd
 
+      - name: Install the evals' Python tools
+        working-directory: blurt
+        run: uv sync --project evals --locked
+
       - name: Run check.sh --lint-only
         working-directory: blurt
         env:
@@ -154,6 +158,13 @@ jobs:
       - name: Install jscpd
         working-directory: blurt
         run: npm ci --prefix tools/jscpd
+
+      # ruff, mypy, pytest and coverage.py for the evals, from evals/uv.lock —
+      # coverage has to share pytest's interpreter, which no Homebrew formula
+      # offers. check.sh finds evals/.venv itself.
+      - name: Install the evals' Python tools
+        working-directory: blurt
+        run: uv sync --project evals --locked
 
       - name: Show toolchain
         run: |

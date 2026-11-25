@@ -87,3 +87,27 @@ def test_the_corpus_is_in_the_shape_the_swift_eval_decodes():
             assert case["screen"] in recordings, case["id"]
         for element in case.get("elements", []):
             assert isinstance(element[0], int) and len(element) == 3, case["id"]
+
+
+def test_screen_with_an_untitled_window_of_unlisted_lines():
+    # No app, no title, and nothing in the window an element line matches.
+    prompt = '<window fence="ff">\nsome stray text\n</window fence="ff">'
+    assert import_log.screen(prompt) == {}
+
+
+def test_main_writes_the_drafts_to_out(tmp_path):
+    log, out = tmp_path / "commands.jsonl", tmp_path / "drafts.json"
+    log.write_text(entry() + "\n")
+    assert import_log.main([str(log), "--out", str(out)]) == 0
+    assert out.read_text().endswith("\n")
+    assert [case["id"] for case in json.loads(out.read_text())] == ["c1"]
+
+
+def test_main_prints_the_drafts_without_out(tmp_path, capsys):
+    log = tmp_path / "commands.jsonl"
+    log.write_text(entry(command="résumé") + "\n")
+    assert import_log.main([str(log)]) == 0
+    printed = capsys.readouterr().out
+    # ensure_ascii=False: a non-ASCII prompt stays readable in the draft.
+    assert "‹b›" in printed
+    assert json.loads(printed)[0]["said"] == "reply to lunch"
