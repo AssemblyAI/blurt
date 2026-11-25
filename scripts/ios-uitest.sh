@@ -4,6 +4,7 @@
 #   scripts/ios-uitest.sh
 #   BLURT_SIM_DEVICE="iPhone 17 Pro" scripts/ios-uitest.sh
 #   scripts/ios-uitest.sh -only-testing:BlurtiOSUITests/AccessibilityAuditTests/testHome
+#   BLURT_AUDIT_TEXT_SIZE=largest scripts/ios-uitest.sh   # one text size only (default|largest)
 #
 # XCUITests that launch the app onto each of its screens and run
 # `performAccessibilityAudit()` there (App/BlurtiOS/BlurtiOSUITests). Unlike the
@@ -53,6 +54,13 @@ if [ -d "$APP" ]; then
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
 else
   echo "note: no $APP to warm the simulator with; running the audits cold" >&2
+fi
+# BLURT_AUDIT_TEXT_SIZE keeps the run to one of the two text sizes (CI's
+# ios-audits matrix runs one per runner). xcodebuild hands any TEST_RUNNER_-
+# prefixed variable to the test runner without the prefix.
+if [ -n "${BLURT_AUDIT_TEXT_SIZE:-}" ]; then
+  echo "auditing at the $BLURT_AUDIT_TEXT_SIZE text size only"
+  export TEST_RUNNER_BLURT_AUDIT_TEXT_SIZE="$BLURT_AUDIT_TEXT_SIZE"
 fi
 # Serial: every test relaunches the one app on the one simulator. Any extra
 # arguments (-only-testing:…) select tests, so they go to the run.

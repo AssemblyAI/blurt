@@ -304,7 +304,7 @@ for the host, and every other job runs on a Mac. With its siblings **`ios-audits
 the iPhone code to the bar the engine and the Mac shell meet in `check.sh`: `BlurtiOSTests` with
 warnings as errors and a **line-coverage gate** on `BlurtiOSCore`, the iPhone code's logic
 (≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the engine's 88%; raise it as coverage grows), in
-`ios-build`; the accessibility audits in `ios-audits`; **`swiftlint analyze`** over a from-scratch
+`ios-build`; the accessibility audits in `ios-audits` (one runner per text size); **`swiftlint analyze`** over a from-scratch
 build's log and **periphery** over the iPhone project in `ios-static`; `check.sh`'s swift-format, `swiftlint lint` and invariants already read every Swift file
 there. In the sibling
 **`ios-sanitizers`** job, one runner per sanitizer — **ThreadSanitizer** and **AddressSanitizer**

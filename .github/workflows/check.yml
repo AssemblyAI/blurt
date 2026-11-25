@@ -394,15 +394,23 @@ jobs:
         run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh test probe
 
   # The iPhone accessibility audits (BlurtiOSUITests, scripts/ios-uitest.sh):
-  # `performAccessibilityAudit()` on every screen at two text sizes, ~14
-  # minutes of test on top of its own build. A job of its own, beside ios-build,
-  # as the Mac's UI suite is beside `macos`: it needs nothing another job builds.
+  # `performAccessibilityAudit()` on every screen at two text sizes. A job of
+  # its own, beside ios-build, as the Mac's UI suite is beside `macos`: it needs
+  # nothing another job builds. One runner per text size: together the audits
+  # were ~12.5 minutes of test on top of the build, the run's longest job.
+  # Every test runs on both runners, each at its one size
+  # (BLURT_AUDIT_TEXT_SIZE), so there is no list of tests to keep balanced.
   ios-audits:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # ~22 minutes (Nov 2026): the build, then the audits; 40 for a slow runner.
-    timeout-minutes: 40
+    # The build, a warm-up launch, then one text size's audits; 35 for a slow
+    # runner.
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        text-size: [default, largest]
 
     steps:
       - name: Checkout blurt
@@ -414,8 +422,10 @@ jobs:
       - name: Install XcodeGen and xcbeautify
         run: brew install xcodegen xcbeautify
 
-      - name: Run the iPhone accessibility audits
+      - name: Run the iPhone accessibility audits at the ${{ matrix.text-size }} text size
         working-directory: blurt
+        env:
+          BLURT_AUDIT_TEXT_SIZE: ${{ matrix.text-size }}
         run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh uitest
 
       # The audits' result bundle when the job fails or times out, as ui-tests
@@ -426,7 +436,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: BlurtiOSUITests-xcresult
+          name: BlurtiOSUITests-xcresult-${{ matrix.text-size }}
           path: ${{ runner.temp }}/BlurtiOS/BlurtiOSUITests-*.xcresult
           if-no-files-found: ignore
 
