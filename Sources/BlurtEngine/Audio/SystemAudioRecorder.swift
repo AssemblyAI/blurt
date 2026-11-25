@@ -33,7 +33,7 @@
   /// `@safe`: the IOProc ID it stores is a raw Core Audio handle, but it is
   /// created, run and destroyed entirely inside this class, never handed out.
   @safe
-  public final class SystemAudioRecorder {
+  public final class SystemAudioRecorder: RecordingCapture {
     public enum RecorderError: Error, LocalizedError {
       case coreAudio(String, OSStatus)
 

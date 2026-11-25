@@ -1,7 +1,8 @@
 import XCTest
 
-/// The Library with entries, its menus open, its Delete confirmation, and an
-/// open transcript in each of its views.
+/// The Library with entries, its menus open, its Delete confirmation, an
+/// open transcript in each of its views, and a live recording's page (on
+/// Record's offline doubles) with its Discard question.
 final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
   override var extraLaunchArguments: [String] {
     [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.seedHistoryLaunchArgument]
@@ -61,6 +62,34 @@ final class LibraryAccessibilityAuditUITests: BlurtUITestCase {
     app.typeKey(.escape, modifierFlags: [])
     XCTAssertTrue(confirmation.waitForNonExistence(timeout: 5), "Escape should cancel the confirmation")
     XCTAssertTrue(dictation.exists, "Cancelling deletes nothing")
+    assertNoAccessibilityIssues(found)
+  }
+
+  /// A recording's live page: listening, with two speakers' turns streamed
+  /// in, paused, and asking before Discard.
+  func testLiveRecordingPage() throws {
+    var found: [String] = []
+    let (harness, main) = readyScreenWindows()
+    startLiveRecording(in: main)
+    try audit("live recording, listening", into: &found)
+
+    for _ in 0..<4 { releaseLiveTurn(in: harness) }
+    let lastTurn = NSPredicate(format: "label CONTAINS %@", UITestIdentifiers.liveFinalB)
+    XCTAssertTrue(main.descendants(matching: .any).matching(lastTurn).firstMatch.waitForExistence(timeout: 5))
+    try audit("live recording, two speakers", into: &found)
+
+    main.buttons[UITestIdentifiers.liveRecordingPause].click()
+    // The status line is one Text around a live timer: "Paused" can come
+    // through as its value rather than its label, as TranscriptionUITests reads it.
+    let paused = main.staticTexts
+      .matching(NSPredicate(format: "label CONTAINS 'Paused' OR value CONTAINS 'Paused'")).firstMatch
+    XCTAssertTrue(paused.waitForExistence(timeout: 5), "Pause should say so")
+    try audit("live recording, paused", into: &found)
+
+    main.buttons[UITestIdentifiers.liveRecordingDiscard].click()
+    XCTAssertTrue(main.sheets.buttons["Discard"].firstMatch.waitForExistence(timeout: 5), "Discard… should ask first")
+    try audit("live recording, Discard question", into: &found)
+    app.typeKey(.escape, modifierFlags: [])
     assertNoAccessibilityIssues(found)
   }
 }
