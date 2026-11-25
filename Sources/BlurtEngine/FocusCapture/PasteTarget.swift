@@ -6,9 +6,7 @@
     /// whatever it reports, as `KeyInjector` does (`FocusCapture.isAXOpaqueApp`
     /// over a bundle id and the Electron probe's answer); otherwise only a focused
     /// element that reads as editable (`FocusCapture.isEditableTarget`).
-    static func pastes(_ facts: PasteFacts) -> Bool {  // swiftlint:disable:this unused_declaration
-      // Only the test target calls this (the paste fixtures replay it), and the analyzer
-      // reads the app build's log, which doesn't compile the tests.
+    static func pastes(_ facts: PasteFacts) -> Bool {
       FocusCapture.isAXOpaqueBundleID(facts.bundleID) || facts.electron || fieldTakesPaste(facts)
     }
 

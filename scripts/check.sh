@@ -924,8 +924,8 @@ if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1
   cd "$REPO_ROOT"
   # Analyzer rules need the compiler invocations, so feed them the build log
   # captured above. Runs every analyzer rule .swiftlint.yml lists — unused imports
-  # (the one dead-code gap periphery doesn't cover), unused declarations, captured
-  # variables, untyped array inits. False positives on AVFoundation/OSLog imports
+  # (the one dead-code gap periphery doesn't cover), captured variables, untyped
+  # array inits; unused declarations are periphery's. False positives on AVFoundation/OSLog imports
   # are suppressed via always_keep_imports in .swiftlint.yml.
   run_check "swiftlint analyze" \
     swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
@@ -936,7 +936,13 @@ if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ]; then
     # --strict promotes any unused-code finding to a non-zero exit.
     # Periphery does its own xcodebuild + index — separate from the build above
     # because reusing DerivedData reliably across machines is fragile.
-    run_check "periphery" periphery scan --strict --quiet
+    #
+    # `--clean-build`, as ios-check.sh's iPhone scan has: periphery keeps its
+    # DerivedData between runs, and an index unit for a file that no longer
+    # compiles to the same output is never replaced. After a file is renamed or
+    # split, a scan reads the old file's declarations with none of today's
+    # references and reports live code as unused. CI starts clean anyway.
+    run_check "periphery" periphery scan --strict --quiet --clean-build
   fi
 fi
 

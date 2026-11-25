@@ -89,12 +89,16 @@ nesting:
 # fails, so prefer `try?` with a fallback even in test fixtures.
 
 # Analyzer rules need a compiler log (see check.sh's `swiftlint analyze` step);
-# they don't run under plain `swiftlint lint`. Every analyzer rule is on except
-# explicit_self (disabled above).
+# they don't run under plain `swiftlint lint`. Every analyzer rule is on except:
+#   explicit_self      — contradicts redundant_self.
+#   unused_declaration — periphery already gates unused code, over the app *and*
+#                        the test target (this analyzer reads only the app build's
+#                        log, so it flags test-only helpers); and the extra
+#                        analyzer pass made SourceKit segfault expanding Swift
+#                        Testing macros in a majority of ios-check runs.
 analyzer_rules:
   - capture_variable
   - typesafe_array_init
-  - unused_declaration
   - unused_import
 
 unused_import:
