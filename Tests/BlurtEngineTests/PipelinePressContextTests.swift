@@ -34,6 +34,18 @@ struct PipelinePressContextTests {
     return later
   }
 
+  /// One dictation into `firstField` whose transcript is held until a later
+  /// press's context has replaced the session's, then let through.
+  private static func dictateAcrossALaterPress(_ session: DictationSession, _ transcriber: GatedTranscriber) async {
+    await session.press()
+    while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
+    await session.release()
+    await transcriber.waitUntilStarted()
+    await session.installPressContext(laterPress())
+    await transcriber.allowToFinish()
+    await session.awaitPipeline()
+  }
+
   @Test("the paste keeps its own press's caret context when another press's context is installed")
   func pasteKeepsItsPressContext() async {
     let transcriber = GatedTranscriber(text: "thanks for the notes.")
@@ -45,13 +57,7 @@ struct PipelinePressContextTests {
       seams: testSeams(field: Self.firstField)
     )
 
-    await session.press()
-    while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
-    await session.release()
-    await transcriber.waitUntilStarted()
-    await session.installPressContext(Self.laterPress())
-    await transcriber.allowToFinish()
-    await session.awaitPipeline()
+    await Self.dictateAcrossALaterPress(session, transcriber)
 
     #expect(await injector.inserted == ["thanks for the notes."])
     #expect(await injector.insertedPrior == ["Dear Sam,"])
@@ -71,13 +77,7 @@ struct PipelinePressContextTests {
       seams: testSeams(field: Self.firstField, log: log)
     )
 
-    await session.press()
-    while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
-    await session.release()
-    await transcriber.waitUntilStarted()
-    await session.installPressContext(Self.laterPress())
-    await transcriber.allowToFinish()
-    await session.awaitPipeline()
+    await Self.dictateAcrossALaterPress(session, transcriber)
 
     #expect(await session.phase == .failed(.accessibilityPermissionMissing))
     #expect(log.failureNames == [BlurtError.accessibilityPermissionMissing.diagnosticName])
