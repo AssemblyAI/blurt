@@ -55,8 +55,7 @@ final class TranscriptsModel {
 
   let transcriber: FileTranscriber
   private let llm: TranscriptLLM
-  /// Internal, like `pendingSave`, `isLoaded` and `saveQueue`: `prepareForExit` reads them.
-  let store: TranscriptStore
+  private let store: TranscriptStore
   /// The key the model's own checks read — the same one the transcriber and
   /// the LLM are given, so a test's in-memory key is the only one consulted.
   let apiKey: @Sendable () -> String?
@@ -89,7 +88,8 @@ final class TranscriptsModel {
   @ObservationIgnored private var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
   @ObservationIgnored private(set) var pendingSave: Task<Void, Never>?
   /// History writes, one at a time and in order, so an older list never lands last.
-  let saveQueue = DispatchQueue(label: HostIdentity.current.queueLabel("TranscriptStore"))
+  /// Internal, like `pendingSave` and `isLoaded`: `prepareForExit` reads them.
+  let writer: TranscriptWriter
   /// Whether the saved history has been read in. Until it has, nothing is written: a save
   /// then would replace the file with this session's entries. The load's merge saves them.
   @ObservationIgnored private(set) var isLoaded = false
@@ -103,6 +103,7 @@ final class TranscriptsModel {
     self.transcriber = transcriber ?? FileTranscriber(apiKeyProvider: apiKey)
     self.llm = llm ?? TranscriptLLM(apiKeyProvider: apiKey)
     self.store = store
+    self.writer = TranscriptWriter(store: store)
     self.history = []
     // Read off the main actor: the history only grows, and launch shouldn't
     // wait on decoding it. Anything saved meanwhile stays on top.
@@ -339,10 +340,10 @@ final class TranscriptsModel {
     pendingSave?.cancel()
     guard isLoaded else { return }
     let snapshot = history
-    pendingSave = Task { [store, saveQueue] in
+    pendingSave = Task { [writer] in
       try? await Task.sleep(for: .milliseconds(300))
       guard !Task.isCancelled else { return }
-      saveQueue.async { try? store.save(snapshot) }
+      writer.save(snapshot)
     }
   }
 }

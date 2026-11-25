@@ -253,12 +253,7 @@ extension TranscriptsModel {
   /// overwritten with only this session's entries.
   private func flushHistory() {
     pendingSave?.cancel()
-    var entries = history
-    if !isLoaded {
-      let added = Set(entries.map(\.id))
-      entries += store.load().filter { !added.contains($0.id) }
-    }
-    saveQueue.sync { [store, entries] in try? store.save(entries) }
+    writer.saveNow(history, mergingSaved: !isLoaded)
   }
 
   /// Stops capturing and ends the audio feed — every way a recording ends.
