@@ -265,15 +265,7 @@
     /// `searchBounded` among a page's menu items only: "Format" is the menu,
     /// never a toolbar button that mentions it.
     private static func searchMenu(_ name: String, in window: AXUIElement) -> AXUIElement? {
-      let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
-      return ElementSearch.best(
-        named: name,
-        from: AXRead.Node(window),
-        children: \.children,
-        labels: AXRead.labels,
-        pressable: { $0.role.map(pageMenuRoles.contains) == true && $0.frame != nil },
-        shouldStop: { ContinuousClock.now >= deadline }
-      )?.element
+      searchBounded(name, in: window) { $0.role.map(pageMenuRoles.contains) == true && $0.frame != nil }
     }
 
     /// The frontmost app's menu item at `path`, from the menu-bar title down
@@ -307,16 +299,21 @@
 
     /// `ElementSearch` over the window within `ScreenSnapshot.readBudget`: in a
     /// slow app (Music, ~15 ms a call) a search of every node runs for minutes.
-    private static func searchBounded(_ name: String, in window: AXUIElement) -> AXUIElement? {
+    /// `pressable` says which nodes count as targets: anything pressable, unless
+    /// a caller narrows it (`searchMenu`).
+    private static func searchBounded(
+      _ name: String,
+      in window: AXUIElement,
+      pressable: @escaping (AXRead.Node) -> Bool = { AXRead.isPressable($0.element) }
+    ) -> AXUIElement? {
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
       return ElementSearch.best(
         named: name,
         from: AXRead.Node(window),
         children: \.children,
         labels: AXRead.labels,
-        pressable: { AXRead.isPressable($0.element) },
-        shouldStop: { ContinuousClock.now >= deadline }
-      )?.element
+        pressable: pressable
+      ) { ContinuousClock.now >= deadline }?.element
     }
 
     static func pid(of element: AXUIElement) -> pid_t? {

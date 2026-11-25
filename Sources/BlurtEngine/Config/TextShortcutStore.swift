@@ -31,14 +31,7 @@ public struct TextShortcutStore {
   public var shortcuts: [TextShortcut] {
     get { shortcuts(decoding: defaults.string(forKey: Self.defaultsKey) ?? "") }
     nonmutating set {
-      // Spelled failably for the reason on `StyleProfileStore.profiles`:
-      // dropping the write beats trapping in a settings sheet.
-      guard let data = try? JSONEncoder().encode(Self.normalized(newValue)),
-        let json = String(data: data, encoding: .utf8)
-      else {
-        return
-      }
-      defaults.set(json, forKey: Self.defaultsKey)
+      JSONText.write(Self.normalized(newValue), to: defaults, forKey: Self.defaultsKey)
     }
   }
 

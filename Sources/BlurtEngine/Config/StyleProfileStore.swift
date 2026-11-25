@@ -138,18 +138,10 @@ public struct StyleProfileStore {
   public var profiles: [StyleProfile] {
     get { profiles(decoding: defaults.string(forKey: Self.defaultsKey) ?? "") }
     nonmutating set {
-      // A list of strings cannot fail to encode, and `JSONEncoder` emits UTF-8
-      // by definition, so neither step can realistically fail. Both are spelled
-      // failably anyway: dropping the write beats trapping in a settings sheet,
-      // and the non-failable `String(decoding:as:)` would quietly substitute
-      // U+FFFD for a malformed byte instead of saying so.
-      guard let data = try? JSONEncoder().encode(Self.normalized(newValue)),
-        let json = String(data: data, encoding: .utf8)
-      else {
-        return
+      // A write that couldn't be encoded is dropped, and nothing changed to announce.
+      if JSONText.write(Self.normalized(newValue), to: defaults, forKey: Self.defaultsKey) {
+        NotificationCenter.default.post(name: Self.profilesDidChangeNotification, object: defaults)
       }
-      defaults.set(json, forKey: Self.defaultsKey)
-      NotificationCenter.default.post(name: Self.profilesDidChangeNotification, object: defaults)
     }
   }
 

@@ -12,16 +12,11 @@ import UIKit
 @Suite("Keyboard model: lifecycle and the app's signals", .serialized)
 @MainActor
 struct KeyboardLifecycleTests {
-  /// Polls until `condition` holds or `timeout` passes; true when it held.
+  /// Polls until `condition` holds or `timeout` passes; true when it held. The
+  /// suite's shorter default over the shared `until` poll: these tests wait on
+  /// the model, which answers within a tick.
   func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-      if condition() {
-        return true
-      }
-      try? await Task.sleep(for: .milliseconds(20))
-    }
-    return condition()
+    await until(timeout, condition)
   }
 
   @Test("on screen, the keyboard writes its presence record and the older keys, and beats; gone, it says so")
