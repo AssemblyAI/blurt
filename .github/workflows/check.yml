@@ -132,6 +132,19 @@ jobs:
           CI: "true"
         run: scripts/check.sh --lint-only
 
+      - name: Run the evals' DSPy test
+        # test_eval.py's one test that needs DSPy, which the locked dev
+        # environment (evals/uv.lock) leaves out, so check.sh's pytest skips it
+        # on every machine. Here it runs with DSPy in the range the harness's
+        # own script declares (optimize_cleanup_prompt.py's inline metadata),
+        # and the step fails unless it passed rather than skipped.
+        working-directory: blurt/evals
+        run: |
+          set -o pipefail
+          uv run --locked --with 'dspy>=3.0,<3.5' pytest dictation-prompt/test_eval.py \
+            -k test_a_failing_example_still_advances_the_meter 2>&1 | tee "$RUNNER_TEMP/dspy-test.log"
+          grep -q '1 passed' "$RUNNER_TEMP/dspy-test.log"
+
   # The full check.sh on macOS — engine tests, coverage, sanitizers, the app
   # build, swiftlint analyze and periphery — minus the whole-app integration
   # steps, which `ui-tests` runs in parallel. (This job was `check` until the
@@ -268,25 +281,31 @@ jobs:
         # job is meant to save.
         run: swift build --build-tests -Xswiftc -warnings-as-errors
 
-  # Control Your Mac's real performer (`SystemVoiceCommandPerformer`) against a
-  # real window: `LivePerformerTests`, which launches the fixture app
-  # (Tests/CommandFixture) and judges every press, value, selection, menu
-  # item, scroll and window move by the state the fixture records. Everywhere
-  # else the performer is a stub, or its decisions are tested without the
-  # Accessibility calls, so this is the one gate that runs those calls.
+  # The engine suites that need this Mac's hardware, which every other job
+  # skips: Control Your Mac's real performer against a real window
+  # (`LivePerformerTests`, on the CommandFixture app: every press, value,
+  # selection, menu item, scroll and window move judged by the state the
+  # fixture records) and the three live-audio suites (`MicCaptureLevelsTests`,
+  # `AudioInputDevicesTests`, `MicCaptureBringUpTests`: device enumeration, a
+  # real AVCaptureSession's levels, its bring-up and teardown). Everywhere else
+  # these paths are stubs, or their decisions are tested without the system
+  # calls, so this is the one gate that makes them.
   #
-  # The suite drives the machine it runs on, so it asks to
-  # (`BLURT_LIVE_AX_TESTS=1`) and needs Accessibility trust; a throwaway
-  # runner is the safe place for both, and GitHub's macOS images grant that
-  # trust to the runner's agent and to /bin/bash, which this step's
-  # processes run under. Without it the suite is *skipped* and `swift test`
-  # still exits 0, so the step passes only if the suite reports that it
-  # passed: a skip fails the gate rather than reading as green.
-  live-performer:
+  # They drive the machine they run on, so each asks to (`BLURT_LIVE_AX_TESTS=1`,
+  # `BLURT_LIVE_AUDIO_TESTS=1`); a throwaway runner is the safe place. GitHub's
+  # macOS image grants the runner's processes Accessibility and Microphone
+  # trust, but has no input device, so a virtual one (BlackHole) is installed
+  # first — the suites check that capture works, not what it hears, and
+  # silence is a valid level. A missing gate *skips* a suite and `swift test`
+  # still exits 0, so the step passes only if every suite reports it passed.
+  # The fixture recorders (`ScreenTreeRecorder`, `PasteFixtureRecorder`) are
+  # tools that drive the user's own apps to write fixtures, not tests, and stay
+  # manual.
+  live-tests:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    # ~5 minutes: the engine's test build, then a suite of seconds.
+    # ~6 minutes: the driver, the engine's test build, then suites of seconds.
     timeout-minutes: 20
 
     steps:
@@ -296,18 +315,41 @@ jobs:
           path: blurt
           persist-credentials: false
 
-      - name: Run the live performer suite
+      - name: Install a virtual microphone
+        # A Core Audio driver: coreaudiod loads it only on a restart, which
+        # launchd does at once. Waits until the device is listed.
+        run: |
+          brew install --cask blackhole-2ch
+          sudo killall coreaudiod || true
+          for _ in $(seq 1 30); do
+            if system_profiler SPAudioDataType | grep -q BlackHole; then
+              echo "BlackHole is listed"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::BlackHole never appeared as an audio device"
+          exit 1
+
+      - name: Run the live performer and live-audio suites
         working-directory: blurt
         env:
           BLURT_LIVE_AX_TESTS: "1"
+          BLURT_LIVE_AUDIO_TESTS: "1"
         run: |
           set -o pipefail
-          log="$RUNNER_TEMP/live-performer.log"
-          swift test --filter LivePerformerTests 2>&1 | tee "$log"
-          if ! grep -q 'Suite "Live performer" passed' "$log"; then
-            echo "::error::The live performer suite did not run: it needs BLURT_LIVE_AX_TESTS=1 and Accessibility trust for the test process (see its skip reason above)"
-            exit 1
-          fi
+          log="$RUNNER_TEMP/live-tests.log"
+          swift test --filter 'LivePerformerTests|MicCaptureLevelsTests|AudioInputDevicesTests|MicCaptureBringUpTests' \
+            2>&1 | tee "$log"
+          missing=0
+          for suite in "Live performer" "MicCapture.levels (live)" \
+            "AudioInputDevices & capture session (live)" "MicCapture bring-up (live)"; do
+            if ! grep -qF "Suite \"$suite\" passed" "$log"; then
+              echo "::error::Suite \"$suite\" did not run and pass (see its skip reason above)"
+              missing=1
+            fi
+          done
+          exit "$missing"
 
   # What swift-format would change, as an applicable patch. Formatting is the
   # other half of what CI is sole authority over here, and `macos` can only say
@@ -499,31 +541,23 @@ jobs:
   # merge-queue commit already passed `check` as its merge group.)
   check:
     needs:
-      [
-        changes,
-        lint,
-        macos,
-        ui-tests,
-        live-performer,
-        ios-build,
-        ios-sanitizers,
-      ]
+      [changes, lint, macos, ui-tests, live-tests, ios-build, ios-sanitizers]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the lint, macOS, UI, live-performer, iOS and iOS-sanitizer gates ran or were intentionally skipped
+      - name: Assert the lint, macOS, UI, live-hardware, iOS and iOS-sanitizer gates ran or were intentionally skipped
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           UI_RESULT: ${{ needs.ui-tests.result }}
-          LIVE_PERFORMER_RESULT: ${{ needs.live-performer.result }}
+          LIVE_RESULT: ${{ needs.live-tests.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
           IOS_SANITIZERS_RESULT: ${{ needs.ios-sanitizers.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT live-performer=$LIVE_PERFORMER_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED swift=$SWIFT_CHANGED lint=$LINT_RESULT macos=$MACOS_RESULT ui-tests=$UI_RESULT live-tests=$LIVE_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -548,6 +582,6 @@ jobs:
           assert_gate lint "$LINT_RESULT" "$CODE_CHANGED"
           assert_gate macOS "$MACOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "UI suite" "$UI_RESULT" "$SWIFT_CHANGED"
-          assert_gate "live performer" "$LIVE_PERFORMER_RESULT" "$SWIFT_CHANGED"
+          assert_gate "live hardware" "$LIVE_RESULT" "$SWIFT_CHANGED"
           assert_gate iOS "$IOS_RESULT" "$SWIFT_CHANGED"
           assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT" "$SWIFT_CHANGED"

@@ -649,9 +649,10 @@ skipped.
   land elsewhere. A process spawned by the test can't take the front by itself, so the test process
   registers as an accessory app and activates the fixture. It pins a native app's press as trusted:
   Reply, which visibly answers, and Send, which changes nothing, are each pressed once.
-  It runs on CI too, in `check.yml`'s required `live-performer` job: a throwaway runner, whose
-  image already grants the runner's processes Accessibility trust. That job fails unless the suite
-  reports it _passed_, since a missing gate skips the suite and `swift test` still exits 0.
+  It runs on CI too, in `check.yml`'s required `live-tests` job, with the live-audio suites
+  (`BLURT_LIVE_AUDIO_TESTS=1`, on a virtual input device): a throwaway runner, whose image already
+  grants the runner's processes Accessibility and Microphone trust. That job fails unless every
+  suite reports it _passed_, since a missing gate skips a suite and `swift test` still exits 0.
 - **The planner, `BLURT_PLANNER_EVAL=1`.** `PlannerEvalTests` scores the real planner — instruction,
   schema, retry, parser — on `evals/command-planner/cases.json`, and fails below the corpus's
   `passFloor`. It costs paid gateway calls, and one run is noise (the model varies even at

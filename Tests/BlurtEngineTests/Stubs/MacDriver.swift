@@ -64,7 +64,7 @@
   extension Tag {
     /// Marks suites that drive this Mac's real apps — clicking, typing keys,
     /// opening windows; `--filter-tag drivesThisMac` picks them. On CI only
-    /// the live performer runs, in check.yml's `live-performer` job, against its
+    /// the live performer runs, in check.yml's `live-tests` job, against its
     /// own fixture app on a throwaway runner; the recorders drive the user's
     /// real apps and stay manual.
     @Tag static var drivesThisMac: Self
