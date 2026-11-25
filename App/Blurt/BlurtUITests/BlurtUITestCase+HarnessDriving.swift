@@ -158,8 +158,15 @@ extension BlurtUITestCase {
     )
   }
 
-  /// Releases the scripted live session's next turn, from the harness.
+  /// Releases the scripted live session's next turn, from the harness, then
+  /// brings the main window back to the front. The click raises the harness,
+  /// pinned top-leading, and how far it reaches over the centred main window
+  /// depends on the screen: Discard…, at the live page's leading edge, missed
+  /// its click after a turn while Pause and Stop, at the trailing edge, never
+  /// did. A click on the main window's centre — the live transcript, inert —
+  /// raises it from anywhere the harness can't reach.
   func releaseLiveTurn(in harness: XCUIElement) {
     harness.buttons[UITestIdentifiers.harnessLiveNextTurn].click()
+    app.windows[UITestIdentifiers.mainWindowTitle].click()
   }
 }
