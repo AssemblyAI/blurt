@@ -122,8 +122,8 @@ final class TranscriptsModel {
     llm: TranscriptLLM? = nil,
     store: TranscriptStore = TranscriptStore(),
     recorder: (any RecordingCapture)? = nil,
-    liveSession: @escaping @Sendable (String) -> any LiveTranscriptionSession = {
-      RealtimeTranscriber.blurt(apiKey: $0)
+    liveSession: @escaping @Sendable (String) -> any LiveTranscriptionSession = { key in
+      RealtimeTranscriber.blurt(apiKey: key)
     },
     recordingsDirectory: URL = TranscriptStore.recordingsDirectory
   ) {
