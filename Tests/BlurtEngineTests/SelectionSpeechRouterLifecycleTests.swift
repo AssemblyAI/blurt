@@ -5,7 +5,7 @@ import Testing
 @testable import BlurtEngine
 
 /// The router around a read that's stopped, replaced or styled — with a speaker
-/// that plays until stopped — and its real hold timer.
+/// that plays until stopped — and its hold timer, stepped on a `TestClock`.
 @MainActor
 @Suite("SelectionSpeechRouter lifecycle")
 struct SelectionSpeechRouterLifecycleTests {
@@ -48,6 +48,15 @@ struct SelectionSpeechRouterLifecycleTests {
     tapRead(router)
     try await waitUntil { speaker.calls.count == 1 }
     router.press(key: .leftOption)
+  }
+
+  /// Presses the read key, waits for its hold timer to park on `clock`, then
+  /// advances virtual time to `remaining` before the hold fires.
+  private func press(_ router: SelectionSpeechRouter, on clock: TestClock, stoppingShortBy remaining: Duration) async {
+    let hold = SelectionSpeechRouting.holdDelay
+    router.press(key: .leftOption)
+    await clock.waitUntilSleeping(for: hold)
+    clock.advance(by: hold - remaining)
   }
 
   // MARK: - E1: interrupted reads
@@ -173,17 +182,23 @@ struct SelectionSpeechRouterLifecycleTests {
     try await waitUntil { events.failures == 1 }
   }
 
-  // MARK: - E5: the real hold timer
+  // MARK: - E5: the hold timer
 
+  /// On a `TestClock`, not the wall clock: under a loaded CI run the real
+  /// 300 ms timer's task could be starved past `waitUntil`'s 5 s budget
+  /// (AssemblyAI/blurt#370), and a lower bound on elapsed wall time says
+  /// nothing a virtual one doesn't say exactly.
   @Test("a held read starts once the key has been down for the hold delay")
   func heldReadStartsAfterTheDelay() async throws {
     let speaker = GatedSpeaker()
-    let rig = router(speaker)
+    let clock = TestClock()
+    let rig = router(speaker, clock: clock)
     let (router, events) = (rig.router, rig.events)
-    let pressed = ContinuousClock.now
-    router.press(key: .leftOption)
+    await press(router, on: clock, stoppingShortBy: .milliseconds(1))
+    #expect(clock.sleepingFor == [.milliseconds(1)], "the hold fired before its delay was up")
+    #expect(events.started == 0)
+    clock.advance(by: .milliseconds(1))
     try await waitUntil { events.started == 1 }
-    #expect(ContinuousClock.now - pressed >= .milliseconds(300))
   }
 
   @Test("a press's leftover timer can't mark the next press as a hold early")
@@ -195,9 +210,7 @@ struct SelectionSpeechRouterLifecycleTests {
     let rig = router(speaker, selection: { reads.next() == 1 ? nil : "Hello there." }, clock: clock)
     let (router, events) = (rig.router, rig.events)
     let hold = SelectionSpeechRouting.holdDelay
-    router.press(key: .leftOption)
-    await clock.waitUntilSleeping(for: hold)
-    clock.advance(by: hold - .milliseconds(150))
+    await press(router, on: clock, stoppingShortBy: .milliseconds(150))
     router.press(key: .leftOption)
     await clock.waitUntilSleeping(for: hold)
     // The first press's timer, 150 ms from firing, is gone: only the second's

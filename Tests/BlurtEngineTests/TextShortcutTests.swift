@@ -160,6 +160,18 @@ struct TextShortcutExpanderTests {
     #expect(out == "me@work.example or me@example.com")
   }
 
+  @Test("longest is measured in letters and digits, not separators")
+  func longestIgnoresSeparators() {
+    let asap = TextShortcut(trigger: "a.s.a.p.", expansion: "as soon as possible")
+    let reply = TextShortcut(
+      trigger: "asap reply", expansion: "I'll get back to you as soon as I can.")
+    for shortcuts in [[asap, reply], [reply, asap]] {
+      #expect(
+        TextShortcutExpander.expand("Sure, asap reply coming.", using: shortcuts)
+          == "Sure, I'll get back to you as soon as I can. coming.")
+    }
+  }
+
   @Test("an expansion is inserted literally and never re-expanded")
   func literalExpansion() {
     let tricky = TextShortcut(trigger: "price tag", expansion: "$1 \\0 personal email")

@@ -294,7 +294,9 @@ enum ScreenSnapshot {
 /// screen. The same before and after means the press changed nothing Blurt
 /// can see, and a click is tried instead.
 struct PressFingerprint {
-  /// The focused element's identity (`CFHash`), not its contents.
+  /// The focused element's identity (`CFHash`), not its contents. Bit-pattern
+  /// converted from the unsigned `CFHashCode`: a plain `Int(_:)` traps on any
+  /// hash with the top bit set, and only equality is ever asked of it.
   let focusedElement: Int?
   let windowTitle: String?
   let value: String?
