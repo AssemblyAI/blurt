@@ -448,7 +448,15 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
   It skips the entire Swift side, and its closing line says so. **Run it before every push, Swift
   changes included**: jscpd, the invariants and the shell, workflow and Markdown linters all catch
-  real CI failures from here.
+  real CI failures from here. So do three Swift checks that need no toolchain:
+  `scripts/check-swift-size.sh` counts SwiftLint's `file_length` (400) and `type_body_length`
+  (~250) budgets and notes files within 20 lines of either, where a parallel PR can tip the merge
+  over; `scripts/check-test-clock.sh` fails a fixed sleep or real clock in a test that doesn't
+  say why (step a `TestClock` or wait for the event; `// wall-clock-ok: <reason>` where real time
+  is the point); and the Mac pbxproj's repo-root folder must be named `blurt`, not a worktree's name.
+- **Splitting a file**: give each new file only the imports it uses — `swiftlint analyze`'s
+  `unused_import` (CI only) flagged 86 copied headers in #392 — and import a type from the module
+  that declares it (`CGFloat` from CoreFoundation, `DispatchQueue` from Dispatch).
 - **What only CI can tell you**: `swiftlint lint` (its Linux build is a GitHub release download the
   default network policy blocks, so the `SessionStart` hook can't install it), periphery (a property
   that is assigned but never read is the usual catch), `scripts/design-sync.sh --check` (after

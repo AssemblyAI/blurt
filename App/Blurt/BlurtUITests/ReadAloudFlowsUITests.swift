@@ -27,7 +27,7 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
         pill.exists && pill.label == "Your dictation was pasted.",
         "A read's end must not replay the earlier dictation's notice"
       )
-      usleep(100_000)
+      usleep(100_000)  // wall-clock-ok: a UI test: the app under test runs on real time
     }
   }
 

@@ -22,6 +22,7 @@ final class GatedRewrites: GatewayStub, Sendable {
       return state.asked
     }
     while state.withLock({ $0.released < number }) {
+      // wall-clock-ok: a fake that waits until the test releases or cancels it
       try await Task.sleep(for: .milliseconds(5))
     }
     return try ok(request, completion("Rewritten \(number). The words read aloud."))

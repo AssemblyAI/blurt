@@ -25,6 +25,7 @@ final class StubPlanner: VoiceCommandPlanning {
 
   func plan(_ command: String, context: ScreenContext, trace _: PlanTrace) async throws -> [VoiceCommandStep] {
     recorded.withLock { $0.append(Call(command: command, context: context)) }
+    // wall-clock-ok: a fake that waits until the test releases or cancels it
     if hangs { try await Task.sleep(for: .seconds(60)) }
     if let error { throw error }
     return steps

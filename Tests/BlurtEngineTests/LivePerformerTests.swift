@@ -35,6 +35,7 @@
       func run(_ step: VoiceCommandStep) async throws -> String? {
         try await fixture.requireFrontmost()
         let how = try await performer.perform(step)
+        // wall-clock-ok: drives real hardware or a real app, which run on real time
         try await Task.sleep(for: performer.settle)
         return how
       }

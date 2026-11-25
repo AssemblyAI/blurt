@@ -18,7 +18,7 @@ final class LaunchPerformanceUITests: XCTestCase {
     for i in 0..<3 {
       let app = XCUIApplication()
       app.launchArguments += [UITestIdentifiers.launchArgument]
-      let elapsed = ContinuousClock().measure { app.launch() }
+      let elapsed = ContinuousClock().measure { app.launch() }  // wall-clock-ok: measuring real time is the point
       XCTAssertTrue(
         app.windows[UITestIdentifiers.harnessWindowTitle].waitForExistence(timeout: 15),
         "app did not present its window after launch"

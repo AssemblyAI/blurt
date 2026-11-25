@@ -200,6 +200,7 @@ enum PlannerEval {
       do {
         return .success(try await planner.plan(item.said, context: item.context, trace: PlanTrace()))
       } catch ReadAloudLLMError.status(429) where attempt < 4 {
+        // wall-clock-ok: backs off from the real gateway's rate limit
         try? await Task.sleep(for: .seconds(5 * attempt))
       } catch {
         return .failure(error)

@@ -21,7 +21,7 @@ final class DictationPerformanceTests: XCTestCase {
   private func medianDuration(iterations: Int, of body: () async -> Void) async -> Duration {
     var samples: [Duration] = []
     for i in 0..<iterations {
-      let elapsed = await ContinuousClock().measure { await body() }
+      let elapsed = await ContinuousClock().measure { await body() }  // wall-clock-ok: measuring real time is the point
       if i > 0 { samples.append(elapsed) }
     }
     return samples.sorted()[samples.count / 2]
