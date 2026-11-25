@@ -1,5 +1,5 @@
-import CoreGraphics
-import Foundation
+public import CoreGraphics
+public import Foundation
 
 /// Shape of the overlay pill's live level meter — the bar row that tracks the
 /// current mic level, plus the breathing curve the REC dot and "Transcribing…"

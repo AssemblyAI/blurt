@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Persists the chosen `SoundPack` (by its `id`) in `UserDefaults`. Defaults to
 /// the catalog's default voice when unset or when the stored id isn't one of its

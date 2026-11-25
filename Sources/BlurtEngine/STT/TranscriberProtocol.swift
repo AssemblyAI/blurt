@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public protocol TranscriberProtocol: Sendable {
   /// Transcribe an utterance that is **still being recorded**, uploading the

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// The "reset to a clean state" sweep over every `UserDefaults` key the engine's
 /// settings stores persist — trigger key, sound pack, key terms, developer mode,

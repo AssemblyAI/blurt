@@ -1,5 +1,5 @@
-import CoreGraphics
-import Foundation
+public import CoreGraphics
+public import Foundation
 
 /// Persists the overlay pill's user-dragged origin. Same shape as
 /// `TriggerKeyStore` / `SoundPackStore`; its two keys are `DefaultsKey` cases, which

@@ -1,5 +1,5 @@
 import AssemblyAI
-import Foundation
+public import Foundation
 
 /// Which model the dictation API's server-side cleanup rewrite runs on — the
 /// request's `rewrite_mode` option. Smart, the unset default, asks for the

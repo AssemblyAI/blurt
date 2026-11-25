@@ -1,5 +1,5 @@
 import CryptoKit
-import Foundation
+public import Foundation
 
 /// Where an app signs a member in with "Sign in with AssemblyAI", and what it
 /// asks for. Public client, authorization code with PKCE (RFC 7636): there is no

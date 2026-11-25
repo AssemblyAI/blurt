@@ -10,14 +10,17 @@ actor StubInjector: InjectorProtocol {
   /// the arguments arrived, which was all a host-dependent real capture allowed.
   var insertedPrior: [String?] = []
   var insertedWindowTitles: [String?] = []
+  /// Whether each `insert` was flagged as a dictation into a password field.
+  var insertedSecure: [Bool] = []
   var error: (any Error & Sendable)?
 
   // Actor-isolated methods satisfy these `async` protocol requirements directly.
-  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+  func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) async throws {
     if let error { throw error }
     inserted.append(text)
     insertedPrior.append(priorText)
     insertedWindowTitles.append(windowTitle)
+    insertedSecure.append(secure)
   }
   /// What each `insertAtFocus` pasted: a voice command's typed step.
   var insertedAtFocus: [String] = []

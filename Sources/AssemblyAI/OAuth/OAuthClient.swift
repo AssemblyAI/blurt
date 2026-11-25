@@ -1,4 +1,5 @@
-import Foundation
+public import Foundation
+import os
 
 /// The network half of "Sign in with AssemblyAI": the token endpoint (code
 /// exchange, refresh) and AssemblyAI's own two routes, the API-key exchange and

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 #if os(macOS)
 

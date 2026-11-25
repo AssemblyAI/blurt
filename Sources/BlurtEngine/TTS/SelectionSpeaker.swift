@@ -1,5 +1,6 @@
 #if os(macOS)
   import Foundation
+  import os
 
   /// What reads text aloud for `SelectionSpeechRouter`: `SelectionSpeaker` in
   /// production, a stand-in under UI testing (no network, no audio). Both calls

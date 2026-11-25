@@ -146,7 +146,7 @@
 
     static func pid(of element: AXUIElement) -> pid_t? {
       var pid: pid_t = 0
-      return AXUIElementGetPid(element, &pid) == .success ? pid : nil
+      return unsafe AXUIElementGetPid(element, &pid) == .success ? pid : nil
     }
 
     /// The frontmost app's pid, read on the main actor where `NSWorkspace` lives.
@@ -174,7 +174,7 @@
   enum AXRead {
     static func value(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
       var value: CFTypeRef?
-      guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+      guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
       return value
     }
 
@@ -232,7 +232,7 @@
 
     static func isPressable(_ element: AXUIElement) -> Bool {
       var names: CFArray?
-      guard AXUIElementCopyActionNames(element, &names) == .success else { return false }
+      guard unsafe AXUIElementCopyActionNames(element, &names) == .success else { return false }
       return (names as? [String])?.contains(kAXPressAction) ?? false
     }
   }
@@ -307,7 +307,7 @@
       private static func read(_ element: AXUIElement, _ batch: [String]) -> [String: CFTypeRef] {
         var values: CFArray?
         guard
-          AXUIElementCopyMultipleAttributeValues(
+          unsafe AXUIElementCopyMultipleAttributeValues(
             element, batch as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values) == .success,
           let array = values as? [CFTypeRef]
         else { return [:] }

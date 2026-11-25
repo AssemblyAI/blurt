@@ -1,3 +1,4 @@
+import AssemblyAI
 import Testing
 
 @testable import BlurtEngine

@@ -1,4 +1,4 @@
-@preconcurrency import AVFoundation
+@preconcurrency @unsafe import AVFoundation
 
 // The output's format request, in its own file so `CaptureSessionRecorder.swift`
 // stays within the lint file-length budget — the same split `DictationSession`

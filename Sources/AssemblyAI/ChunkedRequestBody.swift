@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A `CFStream` bound pair standing in for a request body that does not exist
 /// yet: `URLSession` reads `input` as the upload body while `drain` writes the
@@ -68,12 +69,12 @@ final class ChunkedRequestBody: @unchecked Sendable {
   init() throws {
     var readStream: Unmanaged<CFReadStream>?
     var writeStream: Unmanaged<CFWriteStream>?
-    CFStreamCreateBoundPair(nil, &readStream, &writeStream, CFIndex(Self.bufferSize))
-    guard let readStream, let writeStream else {
+    unsafe CFStreamCreateBoundPair(nil, &readStream, &writeStream, CFIndex(Self.bufferSize))
+    guard let readStream = unsafe readStream, let writeStream = unsafe writeStream else {
       throw ChunkedUploadError.bodyStreamUnavailable
     }
-    input = readStream.takeRetainedValue() as InputStream
-    output = writeStream.takeRetainedValue() as OutputStream
+    input = unsafe readStream.takeRetainedValue() as InputStream
+    output = unsafe writeStream.takeRetainedValue() as OutputStream
   }
 
   /// Writes every chunk `body` produces into the pipe, in order, then closes it
@@ -126,9 +127,9 @@ final class ChunkedRequestBody: @unchecked Sendable {
           continue
         }
       }
-      let written = remaining.withUnsafeBytes { raw -> Int in
-        guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return -1 }
-        return output.write(base, maxLength: remaining.count)
+      let written = unsafe remaining.withUnsafeBytes { raw -> Int in
+        guard let base = unsafe raw.bindMemory(to: UInt8.self).baseAddress else { return -1 }
+        return unsafe output.write(base, maxLength: remaining.count)
       }
       guard written > 0 else {
         // 0 means the reader went away, negative means a real stream error;

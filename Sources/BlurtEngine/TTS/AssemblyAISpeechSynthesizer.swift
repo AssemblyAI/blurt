@@ -51,7 +51,7 @@ struct AssemblyAISpeechSynthesizer: Sendable {
   /// PCM chunks of `text` spoken by `voiceID`, in playback order, as they
   /// arrive. Blank text finishes at once without a request. Cancelling the
   /// consumer cancels the request.
-  func speech(for text: String, voiceID: String = ReadAloudVoice.defaultID) -> AsyncThrowingStream<Data, Error> {
+  func speech(for text: String, voiceID: String = ReadAloudVoice.defaultID) -> AsyncThrowingStream<Data, any Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
@@ -121,7 +121,7 @@ struct AssemblyAISpeechSynthesizer: Sendable {
 
   /// The start of an error body: enough for any error the docs describe; a
   /// proxy's page or a stalled stream past it isn't worth waiting on.
-  private static func head(of body: AsyncThrowingStream<Data, Error>) async throws -> Data {
+  private static func head(of body: AsyncThrowingStream<Data, any Error>) async throws -> Data {
     var data = Data()
     for try await chunk in body {
       data.append(chunk)
@@ -159,7 +159,7 @@ enum SpeechSynthesisError: Error, Equatable, LocalizedError {
 /// play the service.
 protocol SpeechTransport: Sendable {
   /// The response head, once it arrives, and its body as it streams in.
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>)
+  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>)
 }
 
 extension URLSession: SpeechTransport {
@@ -171,9 +171,9 @@ extension URLSession: SpeechTransport {
   /// to report one: a task cancelled before it was resumed (the caller already
   /// cancelled, so `onCancel` runs before the operation) may never call back,
   /// and the wait for the head would never end.
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
+  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
     try Task.checkCancellation()
-    let (body, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+    let (body, feed) = AsyncThrowingStream<Data, any Error>.makeStream()
     let delegate = SpeechStreamDelegate(body: feed)
     let task = dataTask(with: request)
     task.delegate = delegate
@@ -201,22 +201,22 @@ extension URLSession: SpeechTransport {
 final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
   private enum Head {
     case pending
-    case waiting(CheckedContinuation<HTTPURLResponse, Error>)
-    case settled(Result<HTTPURLResponse, Error>)
+    case waiting(CheckedContinuation<HTTPURLResponse, any Error>)
+    case settled(Result<HTTPURLResponse, any Error>)
     case delivered
   }
 
   private let head = Mutex(Head.pending)
-  private let body: AsyncThrowingStream<Data, Error>.Continuation
+  private let body: AsyncThrowingStream<Data, any Error>.Continuation
 
-  init(body: AsyncThrowingStream<Data, Error>.Continuation) {
+  init(body: AsyncThrowingStream<Data, any Error>.Continuation) {
     self.body = body
   }
 
   /// Waits on the head with `continuation`. False when the outcome was
   /// already in — it's delivered now, and there is nothing left to start.
-  func arm(_ continuation: CheckedContinuation<HTTPURLResponse, Error>) -> Bool {
-    let early: Result<HTTPURLResponse, Error>? = head.withLock { head in
+  func arm(_ continuation: CheckedContinuation<HTTPURLResponse, any Error>) -> Bool {
+    let early: Result<HTTPURLResponse, any Error>? = head.withLock { head in
       switch head {
       case .pending:
         head = .waiting(continuation)
@@ -239,8 +239,8 @@ final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
     body.finish(throwing: error)
   }
 
-  func settle(_ outcome: Result<HTTPURLResponse, Error>) {
-    let waiting: CheckedContinuation<HTTPURLResponse, Error>? = head.withLock { head in
+  func settle(_ outcome: Result<HTTPURLResponse, any Error>) {
+    let waiting: CheckedContinuation<HTTPURLResponse, any Error>? = head.withLock { head in
       switch head {
       case .pending:
         head = .settled(outcome)

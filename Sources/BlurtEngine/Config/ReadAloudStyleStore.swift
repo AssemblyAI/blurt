@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// How one read-aloud press should sound: the voice, the playback rate, and
 /// whether the text is rewritten for listening before it is spoken

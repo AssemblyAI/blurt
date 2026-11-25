@@ -58,8 +58,8 @@
     ) -> OSStatus {
       var address = globalAddress(selector)
       var size = UInt32(MemoryLayout<Value>.size)
-      return withUnsafeMutablePointer(to: &value) {
-        AudioObjectGetPropertyData(object, &address, 0, nil, &size, UnsafeMutableRawPointer($0))
+      return unsafe withUnsafeMutablePointer(to: &value) {
+        unsafe AudioObjectGetPropertyData(object, &address, 0, nil, &size, UnsafeMutableRawPointer($0))
       }
     }
 

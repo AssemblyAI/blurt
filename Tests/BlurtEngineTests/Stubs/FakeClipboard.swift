@@ -18,6 +18,7 @@
       var text: String?
       var count = 0
       var keptForHandPaste = false
+      var concealed = false
     }
     private let state: Mutex<State>
     let lock = PasteboardLock()
@@ -26,20 +27,22 @@
       state = Mutex(State(text: string))
     }
 
-    func write(_ text: String) {
+    func write(_ text: String, concealed: Bool) {
       state.withLock {
         $0.text = text
         $0.count += 1
         $0.keptForHandPaste = true
+        $0.concealed = concealed
       }
     }
 
-    func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void {
+    func writeAndPrepareRestore(_ text: String, concealed: Bool) -> @Sendable () -> Void {
       let (saved, mark) = state.withLock { s -> (String?, Int) in
         let previous = s.text
         s.text = text
         s.count += 1
         s.keptForHandPaste = false
+        s.concealed = concealed
         return (previous, s.count)
       }
       return { [self] in
@@ -49,12 +52,13 @@
           guard s.count == mark else { return }
           s.text = saved
           s.count += 1
+          s.concealed = false
         }
       }
     }
 
     /// Simulate another process writing the clipboard mid-paste.
-    func externalWrite(_ text: String) { write(text) }
+    func externalWrite(_ text: String) { write(text, concealed: false) }
 
     /// Current plain-string content, for assertions.
     var string: String? {
@@ -67,6 +71,13 @@
     /// item and a `TransientType` one.
     var isKeptForHandPaste: Bool {
       state.withLock { $0.keptForHandPaste }
+    }
+
+    /// Whether the current contents were written as a password field's secret
+    /// — `SystemClipboard` marks those concealed and transient, keeps them off
+    /// Universal Clipboard, and clears them after `concealedLifetime`.
+    var isConcealed: Bool {
+      state.withLock { $0.concealed }
     }
   }
 #endif

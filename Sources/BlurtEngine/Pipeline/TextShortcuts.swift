@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// One spoken phrase and the text it expands to — "personal email" →
 /// `me@example.com`. Applied to the finished transcript on the device, after
