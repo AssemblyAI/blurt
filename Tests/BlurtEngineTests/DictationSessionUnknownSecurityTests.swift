@@ -73,4 +73,17 @@ struct DictationSessionUnknownSecurityTests {
     #expect(contexts.allSatisfy { STTPrompt.text(context: $0).isEmpty })
     #expect(fixture.log.transcripts.map(\.text) == Array(repeating: DictationLog.unverifiedTranscript, count: 2))
   }
+
+  @Test("a hand-back press over a field of unknown security logs its request withheld, as a dictation does")
+  func handBackOverUnknownFieldIsWithheld() async throws {
+    // The hand-back ending (read-aloud's "ask about the selection", the rewrite
+    // and compose keys) returns before the paste, so it used to log the spoken
+    // words verbatim where a pasted dictation into the same field is withheld.
+    let fixture = makeSession(mode: .transcript("hunter2"), field: .unreachable)
+
+    await fixture.session.dictate(handingBack: true)
+
+    #expect(await fixture.session.phase == .handedBack("hunter2"))
+    #expect(fixture.log.transcripts.map(\.text) == [DictationLog.unverifiedTranscript])
+  }
 }

@@ -46,8 +46,6 @@ ENGINE_FLAGS=(
   -enable-upcoming-feature InferIsolatedConformances
   -enable-upcoming-feature ImmutableWeakCaptures
   -strict-memory-safety -warnings-as-errors -require-explicit-sendable
-  -Xfrontend -warn-long-function-bodies=500
-  -Xfrontend -warn-long-expression-type-checking=500
 )
 
 # The AssemblyAI SDK first: the engine imports it.

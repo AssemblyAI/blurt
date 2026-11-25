@@ -77,11 +77,30 @@ extension DictationSession {
       setPhase(.idle)
       return
     }
+    // Read once for both endings below: the remember decision, and what the
+    // developer-mode log may keep (see `PressContext.TargetSecurity`).
+    //
+    // This press's own context, held for the log after the paste: a cancel
+    // during the paste ends the phase without waiting for this task, so a new
+    // press can install its `pressContext` before the log line runs.
+    let press = pressContext
+    let security = press?.targetSecurity ?? .unknown
+    // What the developer-mode log may keep is decided here, before the paste,
+    // never from whichever press is current by the time it is written: a
+    // password field's transcript is withheld outright, and an unknown target's
+    // too, since a read that never landed leaves the log no context to decide
+    // from. The same for a hand-back's spoken request as for a pasted dictation.
+    let loggable =
+      switch security {
+      case .secure: DictationLog.withheldTranscript
+      case .unknown: DictationLog.unverifiedTranscript
+      case .ordinary: text
+      }
     // A hand-back press ends here: the host asked for the words, not a paste.
     // Not remembered either, since the ring is what later dictations are primed
     // with and this text was never typed anywhere.
     if handsBackTranscript {
-      seams.logTranscript(text, capturedContext, .handedBack(spoken))
+      seams.logTranscript(loggable, press?.resolved, .handedBack(spoken))
       setPhase(.handedBack(spoken))
       return
     }
@@ -98,12 +117,6 @@ extension DictationSession {
     // is *unknown* — the read hasn't landed, or reached no focused element —
     // is remembered for the Recent list but never replayed (see
     // `PressContext.TargetSecurity`).
-    //
-    // This press's own context, held for the log after the paste: a cancel
-    // during the paste ends the phase without waiting for this task, so a new
-    // press can install its `pressContext` before the log line runs.
-    let press = pressContext
-    let security = press?.targetSecurity ?? .unknown
     if security != .secure {
       recentDictations.record(
         trimmed, spoken: spoken, style: pressStyle.name, at: Date(),
@@ -114,17 +127,7 @@ extension DictationSession {
     onTranscriptDelivered?(trimmed, recentDictations)
     // Logged once the paste has ended, so the log says whether it landed.
     let outcome = await inject(expanded)
-    // What the developer-mode log may keep is decided from `security`, read
-    // before the paste, never from whichever press is current now: a password
-    // field's transcript is withheld outright, and an unknown target's too,
-    // since a read that never landed leaves the log no context to decide from.
-    let logged =
-      switch security {
-      case .secure: DictationLog.withheldTranscript
-      case .unknown: DictationLog.unverifiedTranscript
-      case .ordinary: text
-      }
-    seams.logTranscript(logged, press?.resolved, outcome)
+    seams.logTranscript(loggable, press?.resolved, outcome)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.
