@@ -12,6 +12,8 @@ actor GatedTranscriber: TranscriberProtocol {
   /// `URLError(.cancelled)` — mimicking the real URLSession-backed transcriber,
   /// whose in-flight request is torn down by task cancellation.
   private let throwsWhenCancelled: Bool
+  /// When true, a release throws `URLError(.cancelled)` whether or not the task
+  /// was cancelled — a request the system dropped, which nobody cancelled.
   private let throwsCancelled: Bool
   private let gate = Gate()
 

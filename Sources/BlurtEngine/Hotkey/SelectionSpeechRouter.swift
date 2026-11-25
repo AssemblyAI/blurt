@@ -1,4 +1,5 @@
 #if os(macOS)
+  import AssemblyAI
   public import Foundation
   import os
 
@@ -328,7 +329,7 @@
           outcome = try await session.replaceSelection(with: text).overlayState
         } catch {
           // Abandoned only if cancelled; otherwise a dropped request, a failure.
-          if Self.isCancellation(error), Task.isCancelled {
+          if error.isAbandonment {
             return
           }
           Self.logger.error("\(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")

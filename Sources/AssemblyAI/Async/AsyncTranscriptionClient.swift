@@ -60,8 +60,14 @@ public struct AsyncTranscriptionClient: Sendable {
   /// A failure worth one more try: a dropped or unreachable connection, a 5xx,
   /// or a 429. Never a cancellation — `URLSession` answers a cancelled task
   /// with `URLError.cancelled`, and retrying that would keep a Library cancel
-  /// waiting through every attempt.
+  /// waiting through every attempt. By shape (`isCancellationShaped`), not
+  /// `isAbandonment`: this decides only whether to try again, never whether
+  /// the error is a failure, so a request the system dropped still reaches
+  /// the caller as the failure it is — just without retries of its own.
   static func isTransient(_ error: any Error) -> Bool {
+    guard !error.isCancellationShaped else {
+      return false
+    }
     if case AsyncTranscriptionError.http(let status, _) = error {
       return status == 0 || status == 429 || status >= 500
     }

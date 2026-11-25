@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 import os
 
@@ -53,7 +54,7 @@ import os
           "command with \(context.elements.count) elements planned \(steps.map(\.action.rawValue).joined(separator: ", "), privacy: .public): \(command, privacy: .private) in \(context.appName ?? "no app", privacy: .private) as \(String(describing: steps), privacy: .private)"
         )
         outcome = try await perform(steps, in: context, performer: performer, session: session, recording: ran)
-      } catch  where !(isCancellation(error) && Task.isCancelled) {
+      } catch where !error.isAbandonment {
         // A cancellation-shaped error on a task nobody cancelled (a request
         // the system dropped) is a failure like any other, and says so.
         // The kind in public, the words private: a command's errors carry
@@ -65,7 +66,8 @@ import os
         outcome = Self.failure(error)
       } catch {
         // A cancelled request answers `URLError.cancelled`, not
-        // `CancellationError`: a command a press abandoned, not a failure.
+        // `CancellationError`: a command a press abandoned, not a failure
+        // (`Error.isAbandonment`).
       }
       return DictationLog.CommandRecord(
         command: command,
@@ -110,7 +112,9 @@ import os
           }
           ran.add(line, since: started, how: "pasted")
         } catch {
-          if !isCancellation(error) { ran.add(line, since: started, error: error.localizedDescription) }
+          // The same rule `execute` applies to the command: a step a dropped
+          // request stopped failed, and its record says why.
+          if !error.isAbandonment { ran.add(line, since: started, error: error.localizedDescription) }
           throw error
         }
       }
@@ -133,12 +137,6 @@ import os
         return "URLError(\(urlError.code.rawValue))"
       }
       return String(describing: type(of: error))
-    }
-
-    /// Whether `error` is a cancellation: Swift's own, or a request the
-    /// cancel reached first, which `URLSession` answers with `URLError.cancelled`.
-    nonisolated static func isCancellation(_ error: any Error) -> Bool {
-      error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
     /// What the pill shows for a failed rewrite or command. A `BlurtError` (a

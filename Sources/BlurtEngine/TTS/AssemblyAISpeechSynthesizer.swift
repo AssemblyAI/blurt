@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 
 /// Speaks one piece of text through AssemblyAI's Streaming TTS HTTP API
@@ -140,10 +141,13 @@ struct AssemblyAISpeechSynthesizer: Sendable {
       }
     } catch let error as URLError where error.code == .timedOut {
       throw SpeechSynthesisError.timedOut
-    } catch let error as URLError where error.code == .cancelled {
+    } catch where error.isAbandonment {
       // A stopped read cancels its request, which URLSession reports as an
       // error. It's a cancellation, and must read as one: the router beeps on
-      // a failure, never on a stop.
+      // a failure, never on a stop. Only when this task was cancelled, though
+      // (`speech(for:)` cancels it when the read is stopped): the same
+      // `URLError.cancelled` on a request nobody stopped is one the system
+      // dropped, and a read cut short that way is a failure, said as one.
       throw CancellationError()
     }
   }
