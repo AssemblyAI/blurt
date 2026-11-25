@@ -358,8 +358,11 @@ jobs:
     # after them) now take 22-29 minutes on macos-26, so 30 started cancelling
     # healthy runs, main's included (Nov 2026). 45 left headroom for a slow
     # runner without letting a hung simulator burn an hour; the accessibility
-    # audits (scripts/ios-uitest.sh) add a few minutes on top, hence 55.
-    timeout-minutes: 55
+    # audits (scripts/ios-uitest.sh) add a few minutes on top, hence 55. Since
+    # every SwiftLint opt-in rule (and `swiftlint analyze`'s 14-16 minutes)
+    # joined the job, a healthy run takes 43 minutes and a slow runner's ran
+    # out at 55 with only periphery left (run 45637833002), so 70.
+    timeout-minutes: 70
 
     steps:
       - name: Checkout blurt
