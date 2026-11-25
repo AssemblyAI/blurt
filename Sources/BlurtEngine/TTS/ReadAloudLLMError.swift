@@ -1,9 +1,7 @@
 import Foundation
 
 enum ReadAloudLLMError: Error, Equatable, LocalizedError {
-  /// A non-2xx answer from the gateway (0 when the response wasn't HTTP).
-  case status(Int)
-  /// A 2xx with no text in it.
+  /// A reply with no usable text in it (`TranscriptLLM.title`).
   case empty
   /// The rewrite stopped at `max_tokens`, part-way through the selection.
   case truncated
@@ -12,9 +10,6 @@ enum ReadAloudLLMError: Error, Equatable, LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .status(let code):
-      "The LLM Gateway answered HTTP \(code)."
-
     case .empty:
       "The LLM Gateway returned no text."
 

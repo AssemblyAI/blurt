@@ -31,7 +31,7 @@ struct DictationCoordinatorTests {
     let frozen = frozenNow
     let heldNow: @Sendable () -> Date = { frozen }
     let coordinator = DictationCoordinator(
-      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()),
+      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()) { _ in .unreachable },
       window: rig.window,
       transcriber: StubTranscriber(text: Self.transcript),
       clock: rig.clock,

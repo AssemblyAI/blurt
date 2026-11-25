@@ -271,6 +271,7 @@
 		80D5E7A6D72094E9FC31CF7C /* juno-92-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3C54A0D394CE71150BB0DBA8 /* juno-92-stop.m4a */; };
 		81D694399C35A280FE815202 /* TranscriptsModel+Transcribing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A878D133879F70F8549784BB /* TranscriptsModel+Transcribing.swift */; };
 		82B97735B1714774843153EF /* juno-90-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 79F8F36D7C5D074BC5135FEA /* juno-90-start.m4a */; };
+		82FCEE1383634F9B88976992 /* BlurtAssemblyAI in Frameworks */ = {isa = PBXBuildFile; productRef = E7C9C1D975760C49CE82A72D /* BlurtAssemblyAI */; };
 		84464B97FB48543A1D5AF199 /* TranscriptFacetMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 214A8D034FE5F4A5EEBB7407 /* TranscriptFacetMenu.swift */; };
 		84958721E6DEB4D06E1A01B6 /* juno-42-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F77424E89C3E4B5B787BDFA4 /* juno-42-stop.m4a */; };
 		8736CF7025B1EE7C295218D7 /* juno-9-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8887DCE124B065F8313AC59F /* juno-9-start.m4a */; };
@@ -1108,6 +1109,7 @@
 				0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */,
 				A34A51EDE26BC24EB08A3900 /* AssemblyAI in Frameworks */,
 				D6DFF322638007525EBA02B2 /* Sparkle in Frameworks */,
+				82FCEE1383634F9B88976992 /* BlurtAssemblyAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1846,6 +1848,7 @@
 				371215E93A9C2CE60C6347BB /* BlurtEngine */,
 				07F3519DF8F73DA30C8E55EB /* AssemblyAI */,
 				3BE06CE59B6A662701C56CE5 /* Sparkle */,
+				E7C9C1D975760C49CE82A72D /* BlurtAssemblyAI */,
 			);
 			productName = Blurt;
 			productReference = 5E2309BDEF30ED9EFED5B849 /* Blurt.app */;
@@ -2905,6 +2908,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1F23C462C4138D3EA5BFA25E /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		E7C9C1D975760C49CE82A72D /* BlurtAssemblyAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BlurtAssemblyAI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

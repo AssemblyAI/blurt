@@ -1,3 +1,4 @@
+import BlurtAssemblyAI
 import BlurtEngine
 
 /// The set of engine collaborators `AppCoordinator` composes into a

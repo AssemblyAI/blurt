@@ -2,8 +2,8 @@ public import Foundation
 
 /// Persists the chosen `RewriteMode` as its raw value in `UserDefaults`. Reads
 /// as Smart when unset or when the stored value isn't a known mode.
-/// `AssemblyAITranscriber` reads it at each request, so a change applies to the
-/// very next dictation. Same shape as `TriggerActivationStore`.
+/// The transcriber reads it at each request (`AssemblyAITranscriber`), so a
+/// change applies to the very next dictation. Same shape as `TriggerActivationStore`.
 public struct RewriteModeStore {
   /// UserDefaults key holding the mode. Public so SwiftUI views can observe it
   /// directly (e.g. `@AppStorage`) and re-render on change.

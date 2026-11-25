@@ -12,7 +12,7 @@ import Foundation
 /// itself — never script to run. It never sees a dictation's words as text to
 /// clean up: that stays the dictation API's server-side rewrite (AGENTS.md's
 /// settled decisions).
-public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
+struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   private typealias Field = VoiceCommandStep.Field
 
   /// The file transcripts' model (`TranscriptLLM.model`), as the rewrite
@@ -169,7 +169,7 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   /// The gateway call, key and transport bound in.
   private let gateway: GatewayConnection
 
-  public init(gateway: GatewayConnection) {
+  init(gateway: GatewayConnection) {
     self.init(gateway: gateway, apps: Self.installedApp)
   }
 
@@ -195,8 +195,8 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
     return parts.compactMap(\.self).joined(separator: "\n\n")
   }
 
-  public func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
-    let ask = ReadAloudLLM.Body.Message(role: "user", content: Self.prompt(command, context: context))
+  func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
+    let ask = ChatRequest.Message(role: "user", content: Self.prompt(command, context: context))
     trace.record(prompt: ask.content, model: Self.model, promptVersion: Self.promptVersion)
     let first = try await complete([ask], trace: trace)
     let steps: [VoiceCommandStep]
@@ -216,7 +216,7 @@ public struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
 
   /// One completion's text. Cut off part-way, the JSON doesn't close, and half
   /// a plan is a different command: never retried, since it would be again.
-  private func complete(_ turns: [ReadAloudLLM.Body.Message], trace: PlanTrace) async throws -> String {
+  private func complete(_ turns: [ChatRequest.Message], trace: PlanTrace) async throws -> String {
     var body = ReadAloudLLM.chat(system: Self.instruction, turns: turns, maxTokens: Self.maxTokens, model: Self.model)
     body.responseFormat = Self.responseFormat
     let reply = try await gateway.send(body, timeout: Self.timeout)
@@ -246,8 +246,8 @@ extension VoiceCommandPlanner {
   /// own fields: with every field optional, "close this tab" came back as a
   /// shortcut with no keys, and the gateway enforces `anyOf` (measured the same
   /// day). `VoiceCommandStep+Parse` still checks every step.
-  static let responseFormat: ReadAloudLLM.JSONValue = {
-    let step: ReadAloudLLM.JSONValue = .object([
+  static let responseFormat: ChatRequest.JSONValue = {
+    let step: ChatRequest.JSONValue = .object([
       "anyOf": .array(VoiceCommandStep.Action.allCases.map(branch))
     ])
     return .object([
@@ -267,14 +267,14 @@ extension VoiceCommandPlanner {
     ])
   }()
 
-  private static let string: ReadAloudLLM.JSONValue = .object(["type": .string("string")])
-  private static let integer: ReadAloudLLM.JSONValue = .object(["type": .string("integer")])
+  private static let string: ChatRequest.JSONValue = .object(["type": .string("string")])
+  private static let integer: ChatRequest.JSONValue = .object(["type": .string("integer")])
 
   /// One action's branch: its name and its fields, all required but a
   /// scroll's element (with none, the window scrolls).
-  private static func branch(_ action: VoiceCommandStep.Action) -> ReadAloudLLM.JSONValue {
+  private static func branch(_ action: VoiceCommandStep.Action) -> ChatRequest.JSONValue {
     let fields = self.fields(action)
-    var properties: [String: ReadAloudLLM.JSONValue] = [Field.action.rawValue: enumeration([action.rawValue])]
+    var properties: [String: ChatRequest.JSONValue] = [Field.action.rawValue: enumeration([action.rawValue])]
     properties.merge(fields) { $1 }
     let required =
       [Field.action.rawValue] + fields.keys.filter { !(action == .scroll && $0 == Field.element.rawValue) }.sorted()
@@ -289,7 +289,7 @@ extension VoiceCommandPlanner {
   /// An action's fields, by the names `VoiceCommandStep+Parse` reads. Both
   /// switches below are exhaustive with no `default`: a new action doesn't
   /// compile until each has decided what it takes.
-  static func fields(_ action: VoiceCommandStep.Action) -> [String: ReadAloudLLM.JSONValue] {
+  static func fields(_ action: VoiceCommandStep.Action) -> [String: ChatRequest.JSONValue] {
     if let name = stringField(action) {
       return [name: string]
     }
@@ -320,7 +320,7 @@ extension VoiceCommandPlanner {
   }
 
   /// The fields of every other step: an element, a path, a choice from a list.
-  private static func controlFields(_ action: VoiceCommandStep.Action) -> [String: ReadAloudLLM.JSONValue] {
+  private static func controlFields(_ action: VoiceCommandStep.Action) -> [String: ChatRequest.JSONValue] {
     switch action {
     case .media:
       [Field.control.rawValue: enumeration(MediaKey.allCases.map(\.rawValue))]
@@ -348,7 +348,7 @@ extension VoiceCommandPlanner {
     }
   }
 
-  private static func enumeration(_ values: [String]) -> ReadAloudLLM.JSONValue {
+  private static func enumeration(_ values: [String]) -> ChatRequest.JSONValue {
     .object(["type": .string("string"), "enum": .array(values.map { .string($0) })])
   }
 }

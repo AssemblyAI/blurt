@@ -1,7 +1,7 @@
 import Foundation
 
-/// Read-aloud's two LLM jobs, each one `POST /v1/chat/completions` to
-/// AssemblyAI's LLM Gateway:
+/// Read-aloud's two LLM jobs, each one chat completion through the provider's
+/// `ChatCompleting` (AssemblyAI's LLM Gateway, with `BlurtAssemblyAI`):
 ///
 /// - `rewriteForListening`: the skip-jargon pass over a selection before it is
 ///   spoken. Word for word, minus what sounds like noise read aloud (code, file
@@ -13,7 +13,8 @@ import Foundation
 /// cleanup stays the dictation API's server-side rewrite on the same request
 /// (AGENTS.md's settled decisions). The TTS API has no rewrite or reply of
 /// its own to ask for, so this is the only way to shape what the voice says.
-/// That is also why `check-invariants.sh` exempts this file and no other.
+/// The gateway's endpoint lives in the SDK's `GatewayChatClient.swift`, which
+/// `check-invariants.sh` exempts for this reason.
 ///
 /// The rewrite is best-effort, like the dictation rewrite: any failure throws,
 /// and `SelectionSpeaker` reads the selection verbatim instead. So does any
@@ -22,82 +23,6 @@ import Foundation
 /// through, would otherwise read out an answer nobody asked for. An answer has
 /// no such fallback, since there is nothing else to say.
 struct ReadAloudLLM: GatewayClient, Sendable {
-  // MARK: - Wire format
-
-  struct Body: Encodable {
-    struct Message: Encodable {
-      let role: String
-      let content: String
-    }
-
-    enum CodingKeys: String, CodingKey {
-      case model, messages, temperature
-      case maxTokens = "max_tokens"
-      case responseFormat = "response_format"
-    }
-
-    let model: String
-    let messages: [Message]
-    let maxTokens: Int
-    let temperature: Double
-    /// A JSON schema the reply must follow (`VoiceCommandPlanner`'s plan).
-    /// Nil leaves the key off the wire, as every other client sends it.
-    var responseFormat: JSONValue?
-  }
-
-  /// A JSON value built in code: a response format's schema.
-  indirect enum JSONValue: Encodable, Equatable, Sendable {
-    case string(String)
-    case number(Double)
-    case bool(Bool)
-    case array([Self])
-    case object([String: Self])
-
-    func encode(to encoder: any Encoder) throws {
-      var container = encoder.singleValueContainer()
-      switch self {
-      case .string(let value):
-        try container.encode(value)
-
-      case .number(let value):
-        try container.encode(value)
-
-      case .bool(let value):
-        try container.encode(value)
-
-      case .array(let value):
-        try container.encode(value)
-
-      case .object(let value):
-        try container.encode(value)
-      }
-    }
-  }
-
-  private struct Completion: Decodable {
-    struct Choice: Decodable {
-      struct Message: Decodable { let content: String? }
-
-      enum CodingKeys: String, CodingKey {
-        case message
-        case finishReason = "finish_reason"
-      }
-
-      let message: Message
-      let finishReason: String?
-    }
-
-    let choices: [Choice]
-  }
-
-  struct Reply: Equatable {
-    let text: String
-    /// The model stopped at `max_tokens`, part-way through.
-    let truncated: Bool
-  }
-
-  static let endpoint = URL(staticString: "https://llm-gateway.assemblyai.com/v1/chat/completions")
-
   /// AssemblyAI's own hosted small model: the docs' quickstart model, the
   /// cheapest tier on the gateway's `/v1/models` list (2026-10-02), and served
   /// in the US and EU without sending the text to a third-party provider. Both
@@ -179,14 +104,19 @@ struct ReadAloudLLM: GatewayClient, Sendable {
     "<highlighted_text>\n\(selection)\n</highlighted_text>\n\n<spoken_request>\n\(request)\n</spoken_request>"
   }
 
-  static func chat(system: String, user: String, maxTokens: Int, model: String = model) -> Body {
+  static func chat(system: String, user: String, maxTokens: Int, model: String = model) -> ChatRequest {
     chat(system: system, turns: [.init(role: "user", content: user)], maxTokens: maxTokens, model: model)
   }
 
   /// A chat with more than one turn after the system prompt: a retry that
   /// shows the model its own unusable reply and what was wrong with it.
-  static func chat(system: String, turns: [Body.Message], maxTokens: Int, model: String = model) -> Body {
-    Body(
+  static func chat(
+    system: String,
+    turns: [ChatRequest.Message],
+    maxTokens: Int,
+    model: String = model
+  ) -> ChatRequest {
+    ChatRequest(
       model: model,
       messages: [.init(role: "system", content: system)] + turns,
       maxTokens: maxTokens,
@@ -194,15 +124,6 @@ struct ReadAloudLLM: GatewayClient, Sendable {
       // the same way twice.
       temperature: 0
     )
-  }
-
-  /// The first choice's text, trimmed, and whether it hit the token cap. Throws
-  /// when there is no text at all.
-  static func reply(from data: Data) throws -> Reply {
-    guard let choice = try JSONDecoder().decode(Completion.self, from: data).choices.first,
-      let text = choice.message.content?.trimmedNonEmpty()
-    else { throw ReadAloudLLMError.empty }
-    return Reply(text: text, truncated: choice.finishReason == "length")
   }
 
   /// Whether `output` can be a rewrite of `input`. Every change the instruction
@@ -234,7 +155,7 @@ struct ReadAloudLLM: GatewayClient, Sendable {
     ).text
   }
 
-  private func complete(_ body: Body, timeout: TimeInterval) async throws -> Reply {
+  private func complete(_ body: ChatRequest, timeout: TimeInterval) async throws -> ChatReply {
     try await gateway.send(body, timeout: timeout)
   }
 }

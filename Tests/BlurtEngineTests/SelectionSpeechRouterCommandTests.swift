@@ -57,6 +57,8 @@ struct SelectionSpeechRouterCommandTests {
     let router = SelectionSpeechRouter(
       session: fixture.session,
       speaker: GatedSpeaker(),
+      rewriter: SelectionRewriter(gateway: .unused),
+      composer: MessageComposer(gateway: .unused),
       planner: planner,
       performer: performer,
       readSelection: { nil },

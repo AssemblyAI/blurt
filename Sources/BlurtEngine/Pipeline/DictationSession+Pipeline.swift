@@ -10,7 +10,7 @@ import os
 // beside `awaitUpload` — the thing that finishes it — beats splitting one
 // lifecycle across the press/release line to match the file names.
 /// Failures the release pipeline itself raises, as opposed to the transport's
-/// (`ChunkedUploadError`) or the service's (`AssemblyAIError`). Declared here
+/// (`ChunkedUploadError`) or the transcriber's (`TranscriberError`). Declared here
 /// because this is where it is raised: filed under the transport's body-stream
 /// errors it read as one, and a transport test reached for it as a stand-in.
 enum DictationPipelineError: Error, LocalizedError {
@@ -197,7 +197,7 @@ extension DictationSession {
       // The request gets the read if it arrived and the press-known half if it
       // didn't, rather than nothing: key terms and the recent turns never needed
       // the AX round trip that just timed out. Only the *request* falls back —
-      // `pressKnown` asserts a `targetIsSecure: false` it has no business
+      // `pressKnown` asserts a `targetSecurity: .ordinary` it has no business
       // asserting, and `capturedContext`, which is where the release path reads
       // that flag, reads the resolved value and never this one.
       return try await transcriber.transcribe(
@@ -279,7 +279,7 @@ extension DictationSession {
       // producer gets there first instead, the outcome has to be the same
       // nothing rather than a red pill reading "too short to transcribe" — the
       // floor is one policy with two enforcement points, not two behaviours.
-      if case AssemblyAIError.audioTooShort = error {
+      if case TranscriberError.audioTooShort = error {
         setPhase(.idle)
         return nil
       }
@@ -335,7 +335,7 @@ extension DictationSession {
 
   /// The paste, answering how it ended for the log (`DictationLog.Entry.outcome`).
   /// `security` is the verdict the release path read once for this press —
-  /// not `capturedContext?.targetIsSecure`, which a read that never landed
+  /// not `capturedContext?.targetSecurity`, which a read that never landed
   /// leaves nil and so reads as an ordinary field.
   private func inject(_ text: String, security: TargetSecurity) async -> PipelinePhase {
     setPhase(.injecting)

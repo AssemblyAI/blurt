@@ -29,7 +29,14 @@ struct SelectionSpeechRouterLifecycleTests {
   ) -> Rig {
     let fixture = makeSession()
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults, clock: clock
+      session: fixture.session,
+      speaker: speaker,
+      rewriter: SelectionRewriter(gateway: .unused),
+      composer: MessageComposer(gateway: .unused),
+      planner: VoiceCommandPlanner(gateway: .unused),
+      readSelection: selection,
+      defaults: defaults,
+      clock: clock
     )
     let events = Events()
     router.speechStarted = { events.started += 1 }
