@@ -243,8 +243,9 @@ final class TranscriptionUITests: BlurtUITestCase {
   /// UI query") under the live page's ticking clock, while the window-scoped
   /// match passed every run.
   private func liveTurn(containing text: String) -> XCUIElement {
-    app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any)
-      .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
+    let window = app.windows[UITestIdentifiers.mainWindowTitle]
+    let shown = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
+    return window.descendants(matching: .any).matching(shown).firstMatch
   }
 
   /// Anything in the app showing `text` — the open item's transcript. A speaker turn is one combined element — a group,
