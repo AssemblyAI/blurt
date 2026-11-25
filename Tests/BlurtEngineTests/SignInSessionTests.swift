@@ -152,7 +152,7 @@ extension AssemblyAIAccountTests {
     // own storage (not `forget()`), then `refreshStatus()`.
     let keyStore = keyStore
     let alert = InstallReset(
-      clearSettings: {},
+      clearSettings: { /* no defaults to clear in a test */ },
       clearAPIKey: { [keyStore.save(nil), account.storage.save(nil)].allSatisfy(\.self) },
       resetPermissions: { true },
       clearLogs: { true }
