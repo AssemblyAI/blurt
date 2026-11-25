@@ -174,4 +174,22 @@ struct HistoryModelTests {
     }
     #expect(starts.withLock { $0 } == 0)
   }
+
+  @Test("onStart doesn't run on the real speaker's silent readings: before audio, or the final 0")
+  func textReaderSilentLevels() async {
+    let starts = Mutex(0)
+    // The read fails before any audio, so all the meter ever reports is the
+    // silent sink's 0 and the final 0 the speaker sends however it ends.
+    let speaker = SelectionSpeaker(
+      synthesizer: AssemblyAISpeechSynthesizer(
+        apiKeyProvider: { "k" },
+        transport: FakeSpeechTransport { _ in (500, [Data(#"{"message":"boom"}"#.utf8)]) }
+      ),
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
+    ) { _ in RecordingSink() }
+    try? await TextReader(speaker: speaker).read("Meeting notes.") {
+      starts.withLock { $0 += 1 }
+    }
+    #expect(starts.withLock { $0 } == 0)
+  }
 }

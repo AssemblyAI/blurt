@@ -143,4 +143,28 @@ extension AssemblyAIAccountTests {
     #expect(account.status == .signedOut)
     #expect(sessions.session == nil)
   }
+
+  @Test("the install reset during a renewal wins too: the renewal writes no session or key back")
+  func installResetDuringRenewal() async throws {
+    let parked = try await renewalParkedOnTheNetwork()
+    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
+    // What `ResetSection.reset()` does: the reset's sweep over the account's
+    // own storage (not `forget()`), then `refreshStatus()`.
+    let keyStore = keyStore
+    let alert = InstallReset(
+      clearSettings: {
+        // No defaults to clear in a test.
+      },
+      clearAPIKey: { [keyStore.save(nil), account.storage.save(nil)].allSatisfy(\.self) },
+      resetPermissions: { true },
+      clearLogs: { true }
+    ).run()
+    #expect(alert == nil)
+    account.refreshStatus()
+    gate.allowToFinish()
+    await renewal.value
+    #expect(account.status == .signedOut)
+    #expect(sessions.session == nil)
+    #expect(keyStore.current == nil)
+  }
 }

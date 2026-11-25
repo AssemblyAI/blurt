@@ -15,5 +15,17 @@ struct WordsEditTests {
   func keyTermsStopAtTheCap() {
     let full = (0..<KeyTerms.termCap).map { "t\($0)" }
     #expect(WordsEdit.addingKeyTerms("one more", to: full) == full)
+    let nearlyFull = Array(full.dropLast())
+    #expect(WordsEdit.addingKeyTerms("one, two", to: nearlyFull) == nearlyFull + ["one"])
+  }
+
+  /// The keyboard's + and a shared list add without the cap, so the list can
+  /// be over it; a term typed in the Words tab then (Return still submits with
+  /// Add disabled) used to cut the list back to the cap, deleting the rest.
+  @Test("adding to a list already over the cap keeps every term it had and adds nothing")
+  func overTheCapKeepsTheList() {
+    let over = (0..<(KeyTerms.termCap + 5)).map { "t\($0)" }
+    #expect(WordsEdit.addingKeyTerms("one more", to: over) == over)
+    #expect(WordsEdit.addingKeyTerms("t3", to: over) == over)
   }
 }

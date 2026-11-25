@@ -35,7 +35,7 @@ cd "$REPO_ROOT"
 # as the suffix on macOS. The pattern therefore matches -i only when nothing
 # follows it, leaving the portable `sed -i.bak` form alone.
 PATTERNS=(
-  "sed[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*-i([[:space:]]|$)"
+  "sed[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(-[a-zA-Z]*i|--in-place)([[:space:]]|$|=)"
   "sed[[:space:]]+-[a-zA-Z]*r[[:space:]]"
   "grep[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(-[a-zA-Z]*P|--perl-regexp)"
   "readlink[[:space:]]+-f"
@@ -96,9 +96,20 @@ if [ "${1:-}" = "--self-test" ]; then
       failed=1
     fi
   done
+  # Spellings of a rule its one probe doesn't cover. `sed -Ei` is the one that
+  # slipped through: the rule wanted `-i` as its own word, and on BSD sed the `i`
+  # in `-Ei` takes the script as its backup suffix, then reads the file as the script.
+  for bad in "sed -Ei 's/a/b/' f" "sed -ni '1p' f" "sed --in-place 's/a/b/' f"; do # portable-ok: probes
+    if printf '%s\n' "$bad" | grep -qE "${PATTERNS[0]}"; then
+      echo "  ok   rule 0 flags: $bad"
+    else
+      echo "  FAIL rule 0 misses: $bad" >&2
+      failed=1
+    fi
+  done
   # The negatives matter as much: a gate that flags the portable form is a gate
   # people route around. `sed -i.bak` is what release-bump.sh actually uses.
-  for good in "sed -i.bak 's/a/b/' f" "sed -E 's/(a)/x/' f" "grep -E 'x' f"; do
+  for good in "sed -i.bak 's/a/b/' f" "sed -Ei.bak 's/a/b/' f" "sed -E 's/(a)/x/' f" "grep -E 'x' f"; do
     if printf '%s\n' "$good" | grep -qE "${PATTERNS[0]}|${PATTERNS[1]}|${PATTERNS[2]}"; then
       echo "  FAIL portable form flagged: $good" >&2
       failed=1
@@ -129,6 +140,13 @@ if [ -n "$UNTRACKED" ]; then
   printf '%s\n' "$UNTRACKED" | sed 's/^/  /'
 fi
 
+# Only the listed scripts still on disk: one deleted without `git rm` stays in the
+# index, and grep's "No such file" is the same exit 2 as a bad pattern below.
+PRESENT=()
+while IFS= read -r f; do
+  if [ -f "$f" ]; then PRESENT+=("$f"); fi
+done <<<"$FILES"
+
 VIOLATION=0
 for i in "${!PATTERNS[@]}"; do
   pattern=${PATTERNS[$i]}
@@ -138,8 +156,7 @@ for i in "${!PATTERNS[@]}"; do
   # rule that passes everything, which is how the first draft of this file shipped
   # eight silently-dead rules.
   status=0
-  # shellcheck disable=SC2086
-  hits=$(grep -nE "$pattern" $FILES) || status=$?
+  hits=$(grep -nHE "$pattern" "${PRESENT[@]}") || status=$?
   if [ "$status" -gt 1 ]; then
     echo "error: rule $i is not a valid regex (grep exit $status): $pattern" >&2
     exit 1

@@ -59,6 +59,9 @@ package final class KeyboardModel {
   package var termDraft: String?
   /// When the last term was saved, so the bar can show a check for a moment.
   package var termSavedAt: Date?
+  /// When a new term was refused because the list already holds as many as a
+  /// dictation sends, so the status line can say so for a moment.
+  package var termListFullAt: Date?
   /// The word highlighted in the host's text, when it could be a key term
   /// (`termCandidate`) and the key terms are in reach (Full Access): the +
   /// grows into a chip holding it, and one tap adds it. Read off the proxy

@@ -20,12 +20,14 @@
     }
 
     /// Reads `text` aloud. `onStart` runs once, when the first audio plays —
-    /// the speaker's first level reading — and not at all if none does.
+    /// the speaker's first level reading above silence — and not at all if
+    /// none does. Not its first reading of any kind: the meter reports the
+    /// silence before the first audio, and a final 0 however the read ends.
     @preconcurrency
     public func read(_ text: String, onStart: (@Sendable () -> Void)? = nil) async throws {
       let onLevel: (@Sendable (Float) -> Void)? = onStart.map { onStart in
         let once = OnceFlag()
-        return { _ in if once.claim() { onStart() } }
+        return { level in if level > 0, once.claim() { onStart() } }
       }
       try await speaker.speak(text, style: ReadAloudStyleStore().style.verbatim, onLevel: onLevel)
     }
