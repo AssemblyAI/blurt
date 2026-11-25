@@ -27,6 +27,18 @@ struct HistoryModelTests {
     #expect(!dictation.isTranscript && !read.isTranscript && file.isTranscript && recording.isTranscript)
   }
 
+  @Test("a recording saved with no text awaits transcription, until it gets some")
+  func needsTranscriptionRule() {
+    let audio = URL(filePath: "/tmp/a.m4a")
+    var pending = SavedTranscript(kind: .recording, date: .now, text: "", fileURL: audio)
+    #expect(pending.needsTranscription)
+    #expect(pending.title == "a.m4a")
+    pending.replaceTranscript("Hi.", plain: "Hi.")
+    #expect(!pending.needsTranscription)
+    #expect(!SavedTranscript(kind: .file, date: .now, text: "", fileURL: audio).needsTranscription)
+    #expect(!SavedTranscript(kind: .recording, date: .now, text: "").needsTranscription)
+  }
+
   @Test("plain text is kept only where it differs, on creation and on replacement")
   func plainTextRule() {
     var entry = SavedTranscript(kind: .recording, date: .now, text: "Same.", plainText: "Same.")
