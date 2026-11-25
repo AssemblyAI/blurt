@@ -85,7 +85,7 @@
 /// not a verbatim transcript.
 ///
 /// Exercised by `Tests/BlurtEngineTests/CleanupInstructionTests.swift`.
-enum CleanupInstruction {
+package enum CleanupInstruction {
   /// The sentence in `text` that pins punctuation and capitalization. Left
   /// as-is it beats a style like "no capitals, no commas" even with the
   /// preamble's precedence clause: the model keeps the standard punctuation the
@@ -180,7 +180,7 @@ enum CleanupInstruction {
   ///
   /// `mode` picks the base: `smartText` for Smart, `text` for Fast — each tuned on, and
   /// measured against, the model that mode runs (see `smartText`).
-  static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
+  package static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
     guard let style = custom.trimmedNonEmpty() else {
       return base(for: mode)
     }

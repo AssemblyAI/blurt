@@ -84,4 +84,30 @@ struct DictationSessionGuardTests {
     #expect(await firstTerminalPhase == .pasted)
     #expect(await secondTerminalPhase == .pasted)
   }
+
+  /// #413: a coordinator subscribes from a task while it already takes
+  /// commands, so a replayed opening `.idle` (terminal) could land after a
+  /// press it accepted and end that dictation. Told what it already shows, the
+  /// stream never queues that stale phase — but a phase the session moved to
+  /// first still opens it, so nothing the host hasn't rendered is lost.
+  @Test("phaseStream(alreadyShowing:) skips an opening phase the host already shows, never a newer one")
+  func phaseStreamSkipsAShownOpeningPhase() async {
+    let fixture = makeSession()
+
+    let fresh = await fixture.session.phaseStream(alreadyShowing: .idle)
+    fixture.session.submit(.press())
+    var seen: [PipelinePhase] = []
+    for await phase in fresh {
+      seen.append(phase)
+      if phase == .recording { break }
+    }
+    #expect(seen == [.connecting, .recording], "no stale .idle ahead of the press's own phases")
+
+    // The session took the press before this subscriber caught up: it opens on it.
+    var late = await fixture.session.phaseStream(alreadyShowing: .idle).makeAsyncIterator()
+    let opening = await late.next()
+    #expect(opening == .recording)
+
+    await fixture.session.cancel()
+  }
 }

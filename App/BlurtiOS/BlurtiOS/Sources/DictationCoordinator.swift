@@ -1,4 +1,4 @@
-import AssemblyAI
+import BlurtAssemblyAI
 import BlurtEngine
 import BlurtiOSCore
 import Foundation
@@ -223,7 +223,7 @@ final class DictationCoordinator {
   nonisolated static func keyTerms() -> [String] {
     // Not through the comma-separated form: a contact called "Smith, John"
     // is one name, and the engine takes an array.
-    KeyTerms.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
+    KeyTermList.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
   }
 
   func start() {
@@ -265,19 +265,15 @@ final class DictationCoordinator {
 
   private func observePhases() -> Task<Void, Never> {
     let pipeline = session
+    // Only this loop renders, so `phase` is still what the screen shows when
+    // the subscription is taken: the session skips replaying it (#413).
+    let shown = phase
     return Task { [weak self] in
-      // The stream opens on the session's phase as it stands: a fresh
-      // session's `.idle`, which is terminal. Rendered after the first press
-      // was accepted, it ended that dictation before it began. An opening
-      // phase already shown is no news; any other still renders.
-      var opening = true
-      for await nextPhase in await pipeline.phaseStream() {
+      for await nextPhase in await pipeline.phaseStream(alreadyShowing: shown) {
         guard let self else {
           return
         }
-        let replayed = opening && nextPhase == phase
-        opening = false
-        if !replayed { render(nextPhase) }
+        render(nextPhase)
       }
     }
   }

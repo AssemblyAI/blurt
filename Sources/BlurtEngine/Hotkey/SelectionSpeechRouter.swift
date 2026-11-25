@@ -121,11 +121,17 @@
     /// Whether the recording under way is a command's.
     public var recordsCommand: Bool { routing.recordsCommand }
 
-    /// `clips`, when given, keeps every read's audio and reports each one —
-    /// the host's history of what was read aloud.
-    public convenience init(session: DictationSession, clips: ReadClipSink? = nil) {
+    /// The router `services` provide: their voice reads, and their LLM
+    /// rewrites, composes and plans. `clips`, when given, keeps every read's
+    /// audio and reports each one — the host's history of what was read aloud.
+    public convenience init(session: DictationSession, services: SpeechServices, clips: ReadClipSink? = nil) {
       self.init(
-        session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection
+        session: session,
+        speaker: SelectionSpeaker(services: services, clips: clips),
+        rewriter: SelectionRewriter(gateway: services.gateway),
+        composer: MessageComposer(gateway: services.gateway),
+        planner: VoiceCommandPlanner(gateway: services.gateway),
+        readSelection: SelectionSpeaker.focusedSelection
       )
     }
 
@@ -138,9 +144,9 @@
     public init(
       session: DictationSession,
       speaker: any ReadAloudSpeaker,
-      rewriter: any SelectionRewriting = SelectionRewriter(),
-      composer: any MessageComposing = MessageComposer(),
-      planner: any VoiceCommandPlanning = VoiceCommandPlanner(),
+      rewriter: any SelectionRewriting,
+      composer: any MessageComposing,
+      planner: any VoiceCommandPlanning,
       performer: any VoiceCommandPerforming = SystemVoiceCommandPerformer(),
       readSelection: @escaping @Sendable () async -> String?,
       defaults: UserDefaults = .standard,

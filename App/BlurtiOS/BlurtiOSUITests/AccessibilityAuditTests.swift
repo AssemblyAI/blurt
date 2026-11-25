@@ -21,9 +21,7 @@ import XCTest
 /// - at the default size, "text clipped" and "Dynamic Type partially
 ///   unsupported": both are predictions about a larger size, and this suite
 ///   renders that size and audits it, where the audit judges the real layout
-///   (a sheet's rows it predicted would clip wrap fully at AX XXXL). Every
-///   other Dynamic Type finding — a font that doesn't scale at all — still
-///   fails at the default size.
+///   (a sheet's rows it predicted would clip wrap fully at AX XXXL).
 /// - "Dynamic Type partially unsupported" in a navigation bar or the tab bar:
 ///   the system bar caps its items' text and shows them through the large
 ///   content viewer instead, as it does in every app; Blurt's own tab bar does
@@ -53,14 +51,16 @@ import XCTest
 ///   other text that clips still fails.
 ///
 /// And a finding has to repeat: a screen that raised any is audited again,
-/// untouched, and only what both passes raise fails. On CI, and never on a
-/// Mac, the default-size audit of Settings' last page intermittently called
-/// the system-font rows at its foot ("AssemblyAI's privacy policy",
-/// "Powered by AssemblyAI", "How fast can you type?") "Dynamic Type
-/// unsupported" while the same commit passed an hour apart. A font that
-/// doesn't scale fails both passes, so nothing real gets through. A pass XCTest
-/// times out on, which reports nothing at all, is run again
-/// (`retryAfterTimeout`).
+/// untouched, and only what both passes raise fails.
+///
+/// A default-size "Dynamic Type unsupported" is checked rather than taken on
+/// the audit's word (`ScalingCheck`): it fails only if the same text is no
+/// taller at AX XXXL. On CI the audit intermittently said it of Settings'
+/// last rows, on both passes, while they scaled. A font that doesn't scale
+/// stays the same height, so it still fails.
+///
+/// A pass XCTest times out on, which reports nothing at all, is run again
+/// (`auditPass`).
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
   private static let auditedTypes = XCUIAccessibilityAuditType.all.subtracting(.contrast)
@@ -70,6 +70,9 @@ final class AccessibilityAuditTests: XCTestCase {
 
   private var app = XCUIApplication()
   private var found: [String] = []
+  /// Default-size "Dynamic Type unsupported" findings, failed only if the
+  /// largest size shows the text didn't grow.
+  private var scaling = ScalingCheck()
   /// The text size the screen is being audited at: launch arguments, and the
   /// name the findings carry.
   private var textSize: (arguments: [String], name: String) = ([], "default text")
@@ -78,6 +81,7 @@ final class AccessibilityAuditTests: XCTestCase {
     try await super.setUp()
     continueAfterFailure = false
     found = []
+    scaling = ScalingCheck()
   }
 
   override func tearDown() async throws {
@@ -227,6 +231,7 @@ final class AccessibilityAuditTests: XCTestCase {
       try body()
       app.terminate()
     }
+    found += scaling.unscaled()
     // One failure per issue, each on its own line, so a CI log (which shows
     // a failure's first line) names every one.
     continueAfterFailure = true
@@ -343,36 +348,31 @@ final class AccessibilityAuditTests: XCTestCase {
       + [app.otherElements["brand.tabBar"]].filter(\.exists)
       .map(\.frame)
     let screenArea = app.windows.firstMatch.frame
-    // Each pass starts afresh: one XCTest timed out on reported nothing to
-    // trust, so it runs again (`retryAfterTimeout`).
-    let pass = { [app] () throws -> [String] in
-      var timeouts = 0
-      while true {
-        var raised: [String] = []
-        do {
-          try app.performAccessibilityAudit(for: Self.auditedTypes) { issue in
-            if Self.isKnownArtifact(issue, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea) {
-              return true
-            }
-            raised.append(Self.describe(issue))
-            return true
-          }
-          return raised
-        } catch {
-          try Self.retryAfterTimeout(error, timeouts: &timeouts)
-        }
-      }
+    // One audit of the screen as it stands (`auditPass`), so the second pass
+    // below reads it exactly as the first did.
+    let pass = { [app] () throws -> [(line: String, unscaled: XCUIElement?)] in
+      try Self.auditPass(
+        of: app, for: Self.auditedTypes, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea
+      )
     }
     var issues = try pass()
     // A finding has to hold on a second audit of the same, untouched screen:
-    // a font that doesn't scale fails both, while a reading the audit took
-    // mid-layout — the bottom rows of Settings' last page, on CI only — does
-    // not repeat.
+    // a reading the audit took mid-layout does not repeat.
     if !issues.isEmpty {
       Thread.sleep(forTimeInterval: 1)  // wall-clock-ok: a UI test: the app under test runs on real time
-      let again = Set(try pass())
-      issues = issues.filter(again.contains)
+      let again = Set(try pass().map(\.line))
+      issues = issues.filter { again.contains($0.line) }
     }
-    found += issues.map { "[\(name)] \($0)" }
+    for issue in issues {
+      let finding = "[\(name)] \(issue.line)"
+      if let element = issue.unscaled, element.exists {
+        scaling.hold(finding, about: element, in: app, within: screenArea)
+      } else {
+        found.append(finding)
+      }
+    }
+    if !isDefaultSize {
+      scaling.measure(in: app, within: screenArea)
+    }
   }
 }

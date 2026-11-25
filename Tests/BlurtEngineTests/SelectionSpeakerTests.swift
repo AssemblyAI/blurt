@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("SelectionSpeaker", .timeLimit(.minutes(1)))
@@ -146,7 +147,7 @@ struct SelectionSpeakerTests {
     let sink = RecordingSink()
     let transport = FakeSpeechTransport()
     let gateway = FakeHTTPTransport { _ in (503, Data()) }
-    await #expect(throws: ReadAloudLLMError.status(503)) {
+    await #expect(throws: GatewayChatError.status(503)) {
       try await speaker(transport, sink: sink, gateway: gateway).answer("Explain.", about: "x", style: .standard)
     }
     #expect(transport.requests.isEmpty)

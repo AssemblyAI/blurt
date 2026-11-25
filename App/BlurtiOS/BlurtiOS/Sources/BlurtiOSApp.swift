@@ -1,3 +1,4 @@
+import BlurtAssemblyAI
 import BlurtEngine
 import BlurtiOSCore
 import SwiftUI

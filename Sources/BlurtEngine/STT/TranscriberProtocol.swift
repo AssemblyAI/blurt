@@ -1,5 +1,9 @@
 public import Foundation
 
+/// The dictation seam: one utterance in, one final transcript out. The engine
+/// names no provider; a provider package conforms (`BlurtAssemblyAI`'s
+/// `AssemblyAITranscriber`, over AssemblyAI's dictation API), and a host hands
+/// the conformer to `DictationSession`.
 public protocol TranscriberProtocol: Sendable {
   /// Transcribe an utterance that is **still being recorded**, uploading the
   /// audio in chunks as the microphone produces it.
@@ -13,9 +17,10 @@ public protocol TranscriberProtocol: Sendable {
   /// the user is sitting through. Measured: on a 1 Mbps uplink a 10 s dictation
   /// waits ~3.1 s after speech for a buffered upload versus ~0.5 s chunked.
   /// (A conformer may still finish a recording its streaming route refuses as
-  /// too long by other means — `AssemblyAITranscriber` sends it whole to the
-  /// buffered route — but it does so behind this same call, reading `frames` to
-  /// its end either way, so the caller's contract doesn't change.)
+  /// too long by other means — `BlurtAssemblyAI`'s `AssemblyAITranscriber` sends
+  /// it whole to the buffered route — but it does so behind this same call,
+  /// reading `frames` to its end either way, so the caller's contract doesn't
+  /// change.)
   ///
   /// `context` supplies the per-utterance priming (focused app + text before the
   /// cursor, the user's recent dictations) as a plain value, resolved *before*
@@ -34,9 +39,14 @@ public protocol TranscriberProtocol: Sendable {
   /// thing still runs one way: the caller decides the context, then feeds audio,
   /// and the transcriber holds no reference to whatever assembled either.
   ///
-  /// The dictation API resolves an utterance to a single final transcript, so
-  /// this still returns that transcript in one shot (no incremental deltas) —
-  /// chunking is about the upload, not the response.
+  /// A recording that ends below `SyncSTTLimits.minPCMBytes` may throw
+  /// `TranscriberError.audioTooShort`, which the pipeline treats as nothing
+  /// said. Every other failure surfaces as `BlurtError.sttFailed`, except a
+  /// `BlurtError` (`.apiKeyMissing`), which surfaces as itself.
+  ///
+  /// The utterance resolves to a single final transcript, returned in one
+  /// shot (no incremental deltas) — chunking is about the upload, not the
+  /// response.
   func transcribe(
     frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String

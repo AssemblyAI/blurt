@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// The eval's corpus, scoring and run, apart from the tests that drive them.
@@ -199,14 +200,14 @@ enum PlannerEval {
     for attempt in 1...4 {
       do {
         return .success(try await planner.plan(item.said, context: item.context, trace: PlanTrace()))
-      } catch ReadAloudLLMError.status(429) where attempt < 4 {
+      } catch GatewayChatError.status(429) where attempt < 4 {
         // wall-clock-ok: backs off from the real gateway's rate limit
         try? await Task.sleep(for: .seconds(5 * attempt))
       } catch {
         return .failure(error)
       }
     }
-    return .failure(ReadAloudLLMError.status(429))
+    return .failure(GatewayChatError.status(429))
   }
 
   /// Every case planned `runs` times, four requests at a time, and scored.

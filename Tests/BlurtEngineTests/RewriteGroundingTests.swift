@@ -1,5 +1,6 @@
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 @Suite("RewriteGrounding")
