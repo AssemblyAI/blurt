@@ -25,6 +25,7 @@
 #   scripts/mutate.sh --max 40              # stop after 40 mutants
 #   scripts/mutate.sh --files "a.swift b.swift"
 #   scripts/mutate.sh --list                # enumerate mutants, run nothing
+#   scripts/mutate.sh --shard 2/6           # every 6th mutant from the 2nd (CI)
 #
 # A line ending `// mutate-ok: <reason>` is exempt — for equivalent mutants only
 # (a change that provably cannot alter behaviour), matching check-portability.sh.
@@ -88,6 +89,8 @@ DEFAULT_TARGETS=(
 )
 
 MAX_MUTANTS=0 # 0 = no cap
+SHARD_INDEX=1
+SHARD_COUNT=1
 LIST_ONLY=0
 TARGETS=()
 
@@ -102,13 +105,31 @@ while [ $# -gt 0 ]; do
       TARGETS=(${2:?--files needs a space-separated list})
       shift 2
       ;;
+    --shard)
+      # K/N: keep mutants K, K+N, K+2N, … (1-based), so N parallel runners
+      # (.github/workflows/mutate.yml) split the set evenly whatever the files.
+      SHARD="${2:?--shard needs K/N}"
+      SHARD_INDEX="${SHARD%%/*}"
+      SHARD_COUNT="${SHARD##*/}"
+      case "$SHARD_INDEX$SHARD_COUNT" in
+        '' | *[!0-9]*)
+          echo "error: --shard wants K/N, got '$SHARD'" >&2
+          exit 2
+          ;;
+      esac
+      if [ "$SHARD_COUNT" -lt 1 ] || [ "$SHARD_INDEX" -lt 1 ] || [ "$SHARD_INDEX" -gt "$SHARD_COUNT" ]; then
+        echo "error: --shard wants 1 <= K <= N, got '$SHARD'" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
     --list)
       LIST_ONLY=1
       shift
       ;;
     -h | --help)
       # The whole header block is the help text; keep this range in step with it.
-      sed -n '2,35p' "$0"
+      sed -n '2,36p' "$0"
       exit 0
       ;;
     *)
@@ -349,8 +370,10 @@ PY
 # own process group so the kill reaches the `xctest` grandchild: signalling only
 # `swift-test` leaves the hung test binary orphaned, still holding the build
 # directory, and the next mutant then fails for an unrelated reason.
-TEST_DEADLINE_SECONDS=60
-BUILD_DEADLINE_SECONDS=300
+# Overridable because a shared CI runner is slower than a developer's Mac, and a
+# deadline the *unmutated* suite can miss reports mutants as killed by timeout.
+TEST_DEADLINE_SECONDS="${MUTATE_TEST_DEADLINE_SECONDS:-60}"
+BUILD_DEADLINE_SECONDS="${MUTATE_BUILD_DEADLINE_SECONDS:-300}"
 
 # Returns the command's status, or 124 if it hit the deadline (mirroring what
 # `timeout` would report, so the caller reads the same way).
@@ -381,6 +404,10 @@ run_bounded() {
 
 LIST="$WORK/mutants.tsv"
 enumerate "${TARGETS[@]}" >"$LIST"
+if [ "$SHARD_COUNT" -gt 1 ]; then
+  awk -v k="$SHARD_INDEX" -v n="$SHARD_COUNT" '(NR - 1) % n == k - 1' "$LIST" >"$LIST.shard"
+  mv "$LIST.shard" "$LIST"
+fi
 TOTAL="$(wc -l <"$LIST" | tr -d ' ')"
 
 if [ "$MAX_MUTANTS" -gt 0 ] && [ "$TOTAL" -gt "$MAX_MUTANTS" ]; then

@@ -1,0 +1,132 @@
+name: mutate
+
+# Mutation testing (scripts/mutate.sh) on CI, sharded across macOS runners so the
+# whole default target set finishes in one sitting instead of a laptop afternoon.
+# Not a required check and not part of `check`: survivors need judgement (see the
+# script's header). Run it by hand from the Actions tab; the `report` job lists
+# every survivor and goes red while any remain, so a green run means every viable
+# mutant was killed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Space-separated target files (empty = mutate.sh's default set)"
+        required: false
+        default: ""
+  # TEMPORARY: lets the branch that adds this workflow run it before it is on
+  # main (workflow_dispatch only sees workflows on the default branch).
+  push:
+    branches: [claude/optimistic-turing-4hkfog]
+
+concurrency:
+  group: mutate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep `count` equal to the number of entries in `index`.
+        index: [1, 2, 3, 4, 5, 6, 7, 8]
+        count: [8]
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run mutate.sh
+        working-directory: blurt
+        env:
+          SHARD: ${{ matrix.index }}/${{ matrix.count }}
+          FILES: ${{ inputs.files }}
+          # A shared runner is slower than a developer's Mac; a deadline the
+          # unmutated suite can miss would report mutants as killed by timeout.
+          MUTATE_TEST_DEADLINE_SECONDS: "180"
+        run: |
+          set -o pipefail
+          args=(--shard "$SHARD")
+          if [ -n "${FILES:-}" ]; then args+=(--files "$FILES"); fi
+          scripts/mutate.sh "${args[@]}" | tee mutate.log
+
+      - name: Summarize shard
+        if: always()
+        working-directory: blurt
+        env:
+          SHARD: ${{ matrix.index }}
+        run: |
+          touch mutate.log
+          grep -E 'SURVIVED$' mutate.log | sed -E 's/^\[[0-9]+\/[0-9]+\] //; s/ +SURVIVED$//' >survivors.txt || true
+          {
+            echo "### mutate shard $SHARD"
+            echo '```'
+            sed -n '/==> results/,$p' mutate.log
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload shard log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutate-shard-${{ matrix.index }}
+          path: |
+            blurt/mutate.log
+            blurt/survivors.txt
+          if-no-files-found: warn
+
+  report:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download shard logs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mutate-shard-*
+          path: shards
+
+      - name: Report survivors
+        env:
+          SHARD_RESULT: ${{ needs.shard.result }}
+        run: |
+          survivors="$(cat shards/*/survivors.txt 2>/dev/null | sort || true)"
+          killed=0; survived=0; invalid=0
+          for log in shards/*/mutate.log; do
+            [ -f "$log" ] || continue
+            killed=$((killed + $(grep -cE 'killed( \(timed out.*\))?$' "$log" || true)))
+            survived=$((survived + $(grep -cE 'SURVIVED$' "$log" || true)))
+            invalid=$((invalid + $(grep -cE 'invalid \(does not compile\)$' "$log" || true)))
+          done
+          {
+            echo "## Mutation testing"
+            echo
+            echo "killed: $killed · survived: $survived · invalid (excluded): $invalid"
+            if [ -n "$survivors" ]; then
+              echo
+              echo "### Survivors"
+              echo '```'
+              echo "$survivors"
+              echo '```'
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$SHARD_RESULT" != "success" ]; then
+            echo "::error::a shard did not finish ($SHARD_RESULT) — the count above is partial"
+            exit 1
+          fi
+          if [ "$survived" -gt 0 ]; then
+            echo "::error::$survived mutant(s) survived"
+            exit 1
+          fi
