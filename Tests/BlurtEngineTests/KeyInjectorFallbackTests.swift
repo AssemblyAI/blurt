@@ -38,7 +38,7 @@
           return await KeyInjector.poll(
             for: .seconds(30),
             every: .milliseconds(10),
-            clock: ContinuousClock()
+            clock: ContinuousClock()  // wall-clock-ok: the production poll's shape is what this tests
           ) { false }
         }
       )

@@ -45,6 +45,7 @@ final class GatedSpeaker: ReadAloudSpeaker, Sendable {
     if fails { throw URLError(.badServerResponse) }
     while !state.withLock(\.released) {
       do {
+        // wall-clock-ok: a fake that waits until the test releases or cancels it
         try await Task.sleep(for: .milliseconds(5))
       } catch {
         state.withLock { $0.cancellations += 1 }

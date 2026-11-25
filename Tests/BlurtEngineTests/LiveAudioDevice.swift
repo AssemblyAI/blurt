@@ -28,6 +28,7 @@ enum LiveAudioDevice {
       claimed = true
       return true
     }) {
+      // wall-clock-ok: drives real hardware or a real app, which run on real time
       try? await Task.sleep(for: .milliseconds(20))
     }
   }

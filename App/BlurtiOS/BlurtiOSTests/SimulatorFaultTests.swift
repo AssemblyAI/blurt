@@ -20,14 +20,19 @@
     private static let delay = Duration.seconds(1)
 
     /// The next event, or nil if none arrives in time — a failed test, not a hung one.
-    private static func next(_ events: AsyncStream<SourceEvent>, within: Duration = .seconds(3)) async -> SourceEvent? {
+    /// Every caller expects an event, so `within` only bounds a hang: 30 s, as
+    /// `until`'s is, rather than 3 s a stalled runner can outlast.
+    private static func next(
+      _ events: AsyncStream<SourceEvent>,
+      within: Duration = .seconds(30)
+    ) async -> SourceEvent? {
       await withTaskGroup(of: SourceEvent?.self) { group in
         group.addTask {
           var iterator = events.makeAsyncIterator()
           return await iterator.next()
         }
         group.addTask {
-          try? await Task.sleep(for: within)
+          try? await Task.sleep(for: within)  // wall-clock-ok: the hang bound `within` names
           return nil
         }
         let first = await group.next().flatMap(\.self)

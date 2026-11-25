@@ -84,7 +84,7 @@ struct SelectionSpeechRouterComposeTests {
     let rig = try await compose(StubComposer(hangs: true))
     rig.router.press(key: .rightCommand)
     #expect(rig.events.pills == [.composing, nil])
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(100))  // wall-clock-ok: absence check: a slow runner can only make it pass
     rig.phases.cancel()
     #expect(rig.events.pills == [.composing, nil])
     #expect(await rig.injector.inserted.isEmpty)

@@ -18,20 +18,12 @@ struct TextShortcutEditorSheet: View {
   @State private var expansion: String
   @FocusState private var triggerFocused: Bool
 
-  /// The phrase as the matcher sees it (`TextShortcut.matchKey`) — empty
-  /// when it has no letters or digits.
-  private var triggerKey: String { TextShortcut.matchKey(for: trigger) }
-
   /// A phrase the matcher can't tell from another shortcut's — "personal
   /// email" vs "Personal-Email" — would be dropped by the store's dedupe, so
-  /// it's refused here instead of vanishing.
-  private var duplicatesAnother: Bool {
-    !triggerKey.isEmpty && otherKeys.contains(triggerKey)
-  }
+  /// it's refused here instead of vanishing (`TextShortcut.isTaken`).
+  private var duplicatesAnother: Bool { TextShortcut.isTaken(trigger, by: otherKeys) }
 
-  private var canSave: Bool {
-    !triggerKey.isEmpty && expansion.trimmedNonEmpty() != nil && !duplicatesAnother
-  }
+  private var canSave: Bool { TextShortcut.canSave(trigger: trigger, expansion: expansion, otherKeys: otherKeys) }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {

@@ -24,6 +24,7 @@ struct SelectionSpeechRouterLifecycleTests {
   private func router(
     _ speaker: GatedSpeaker,
     selection: @escaping @Sendable () -> String? = { "Hello there." },
+    // wall-clock-ok: the production clock, for tests that aren't about its timers
     clock: any Clock<Duration> = ContinuousClock()
   ) -> Rig {
     let fixture = makeSession()
@@ -73,7 +74,7 @@ struct SelectionSpeechRouterLifecycleTests {
     #expect(events.ended == 1)
     #expect(!router.ownsPill)
     try await waitUntil { speaker.cancellations == 1 }
-    try await Task.sleep(for: .milliseconds(50))
+    try await Task.sleep(for: .milliseconds(50))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(events.ended == 1, "the cancelled task's end mustn't report again")
     #expect(events.failures == 0, "a stop is not a failure")
   }
@@ -86,7 +87,7 @@ struct SelectionSpeechRouterLifecycleTests {
     try await readThenStop(router, speaker)
     tapRead(router)
     try await waitUntil { speaker.calls.count == 2 && speaker.cancellations == 1 }
-    try await Task.sleep(for: .milliseconds(50))
+    try await Task.sleep(for: .milliseconds(50))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(events.started == 2)
     #expect(events.ended == 1)
     #expect(router.ownsPill)
@@ -100,7 +101,7 @@ struct SelectionSpeechRouterLifecycleTests {
     try await readThenStop(router, speaker)
     let atEnd = events.levels
     try await waitUntil { speaker.cancellations == 1 }
-    try await Task.sleep(for: .milliseconds(50))
+    try await Task.sleep(for: .milliseconds(50))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(atEnd.last == 0, "the end zeroes the meter")
     #expect(events.levels == atEnd, "the stopped speaker's late level was dropped")
   }
@@ -115,7 +116,7 @@ struct SelectionSpeechRouterLifecycleTests {
     let resets = events.resets
     router.press(key: .rightCommand)
     try await waitUntil { speaker.cancellations == 1 }
-    try await Task.sleep(for: .milliseconds(50))
+    try await Task.sleep(for: .milliseconds(50))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(events.resets == resets, "the stopped read must not reset the dictation's gate")
     #expect(events.ended == 1)
   }
@@ -180,7 +181,7 @@ struct SelectionSpeechRouterLifecycleTests {
     try await waitUntil { speaker.calls.count == 1 }
     router.previewSample()
     try await waitUntil { speaker.calls.count == 2 && speaker.cancellations == 1 }
-    try await Task.sleep(for: .milliseconds(50))
+    try await Task.sleep(for: .milliseconds(50))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(events.failures == 0)
     #expect(events.started == 0 && events.ended == 0)
   }
