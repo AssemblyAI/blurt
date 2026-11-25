@@ -14,6 +14,9 @@ actor GatedStopMic: MicCaptureProtocol {
   private let stopError: (any Error & Sendable)?
   private let gate = Gate()
 
+  /// No meter: the races under test never read one.
+  nonisolated var levels: AsyncStream<Float> { .finished }
+
   init(stopError: (any Error & Sendable)? = nil) {
     self.stopError = stopError
   }
@@ -30,9 +33,6 @@ actor GatedStopMic: MicCaptureProtocol {
     // These suites exercise stop races, not the too-short-audio guard.
     return StubPCM.aboveMinimum.count
   }
-
-  /// No meter: the races under test never read one.
-  nonisolated var levels: AsyncStream<Float> { .finished }
 
   /// Stop and discard: the stub's only teardown is `stop()`.
   func cancelCapture() async throws {

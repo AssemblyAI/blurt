@@ -13,7 +13,7 @@
 public struct FocusedFieldContext: Sendable {
   /// A readable field with nothing in it: no signals, and not secure.
   public static let empty = Self(
-    priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil
+    priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, security: .ordinary
   )
 
   /// No focused element could be reached, so nothing is known about the field —

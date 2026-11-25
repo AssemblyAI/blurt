@@ -19,6 +19,9 @@ final class StubPerformer: VoiceCommandPerforming {
   /// How many times the screen was read.
   var screenReads: Int { reads.withLock { $0 } }
 
+  /// No beat between steps: the stub acts synchronously.
+  var settle: Duration { .zero }
+
   init(
     screen: ScreenContext = ScreenContext(appName: nil), error: (any Error & Sendable)? = nil, failingAt: Int? = nil
   ) {
@@ -26,9 +29,6 @@ final class StubPerformer: VoiceCommandPerforming {
     self.error = error
     self.failingAt = failingAt
   }
-
-  /// No beat between steps: the stub acts synchronously.
-  var settle: Duration { .zero }
 
   func commandStarting() { lifecycle.withLock { $0.append("starting") } }
   func commandEnded() { lifecycle.withLock { $0.append("ended") } }

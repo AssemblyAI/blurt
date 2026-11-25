@@ -28,6 +28,9 @@ actor GatedStartMic: MicCaptureProtocol {
   /// false) while a cancel is landing.
   private var failure: (any Error)?
 
+  /// No meter: the bring-up races under test never read one.
+  nonisolated var levels: AsyncStream<Float> { .finished }
+
   func setThrowsIfCancelled(_ value: Bool) { throwsIfCancelled = value }
   func setFailure(_ error: (any Error)?) { failure = error }
 
@@ -54,9 +57,6 @@ actor GatedStartMic: MicCaptureProtocol {
     cancelCaptureCalls += 1
     _ = stop()
   }
-
-  /// No meter: the bring-up races under test never read one.
-  nonisolated var levels: AsyncStream<Float> { .finished }
 
   func warmUp() {
     // Nothing to pre-pay: the stub opens no device.

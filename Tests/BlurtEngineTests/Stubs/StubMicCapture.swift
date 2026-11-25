@@ -15,6 +15,9 @@ actor StubMicCapture: MicCaptureProtocol {
 
   private var framesContinuation: AsyncStream<Data>.Continuation?
 
+  /// No meter: the session suites never read one.
+  nonisolated var levels: AsyncStream<Float> { .finished }
+
   // Actor-isolated methods satisfy these `async` protocol requirements directly,
   // so no `nonisolated` + hop-back-onto-self dance is needed.
   func start() throws -> AsyncStream<Data> {
@@ -52,8 +55,6 @@ actor StubMicCapture: MicCaptureProtocol {
     cancelCaptureCalls += 1
     _ = try stop()
   }
-  /// No meter: the session suites never read one.
-  nonisolated var levels: AsyncStream<Float> { .finished }
   func warmUp() {
     // Nothing to pre-pay: the stub opens no device.
   }
