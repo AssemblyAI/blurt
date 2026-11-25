@@ -33,7 +33,7 @@ extension TranscriptsModel {
       return
     }
     reset()
-    let url = recordingsDirectory.appending(path: Self.recordingName(at: .now))
+    let url = recordingsDirectory.appending(path: TranscriptStore.recordingFileName(at: .now))
     let realtime = makeLiveSession(apiKey)
     // One ordered feed from the recorder's queue to the socket: the recorder
     // yields each slice as it is mixed, and a single task sends them in turn.

@@ -112,7 +112,6 @@ struct TextShortcutsSection: View {
   /// .delete()`): a shortcut is a phrase and a line of text the user typed, and
   /// Text Replacements' − doesn't ask either.
   private func remove(_ id: TextShortcut.ID) {
-    let store = TextShortcutStore()
-    store.shortcuts = store.shortcuts.filter { $0.id != id }
+    TextShortcutStore().remove(id: id)
   }
 }

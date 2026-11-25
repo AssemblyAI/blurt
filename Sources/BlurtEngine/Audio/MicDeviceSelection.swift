@@ -58,10 +58,21 @@ public enum MicDeviceSelection: Hashable, Sendable {
   /// mic should degrade dictation to the built-in one, not break it. The pin
   /// itself stays stored, so reconnecting the device pins it again with no trip
   /// through Settings.
-  func effective(pinnedDevicePresent: Bool) -> Self {
+  public func effective(pinnedDevicePresent: Bool) -> Self {
     guard case .pinned = self, !pinnedDevicePresent else {
       return self
     }
     return .systemDefault
+  }
+
+  /// This pin when none of `connectedUIDs` carries it — what a picker keeps
+  /// selectable so it can show the stored choice, and why dictation is using
+  /// the system default meanwhile — or nil for the system default and for a
+  /// pin that is connected.
+  public func missingPin(amongConnected connectedUIDs: [String]) -> Self? {
+    guard let uid = pinnedUID, !connectedUIDs.contains(uid) else {
+      return nil
+    }
+    return self
   }
 }

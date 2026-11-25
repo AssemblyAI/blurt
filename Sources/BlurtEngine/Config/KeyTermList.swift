@@ -23,4 +23,32 @@ public enum KeyTermList {
   public static func join(_ terms: [String]) -> String {
     terms.joined(separator: ", ")
   }
+
+  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Whether `terms` already holds `term` — trimmed, and compared the way
+  /// `normalized` dedupes, case-insensitively — so "rizz" is already in a list
+  /// holding "Rizz". A blank `term` is in no list.
+  public static func contains(_ term: String, in terms: [String]) -> Bool {
+    guard let wanted = term.trimmedNonEmpty()?.lowercased() else {
+      return false
+    }
+    return terms.contains { $0.lowercased() == wanted }
+  }
+
+  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
+  /// `terms` with what `draft` holds added at the end: one term, or several
+  /// separated by commas (`parse`). Terms already in the list drop
+  /// case-insensitively, and nothing new is added once the list holds
+  /// `maxCount` — a provider's cap, passed in because fitting to it is the
+  /// provider's call. The terms already there are never dropped, even when the
+  /// list is over `maxCount` already: an add must not quietly delete the ones
+  /// past it.
+  public static func appending(_ draft: String, to terms: [String], maxCount: Int = .max) -> [String] {
+    let room = maxCount - terms.count
+    guard room > 0 else {
+      return terms
+    }
+    let fresh = parse(draft).filter { !contains($0, in: terms) }
+    return terms + fresh.prefix(room)
+  }
 }

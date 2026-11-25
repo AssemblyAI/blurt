@@ -17,6 +17,17 @@ struct PCMLevelTests {
     #expect(quiet > 0 && quiet < 1)
   }
 
+  @Test("level(of:) reads a whole chunk: silence and room ambient are 0, full scale is 1")
+  func wholeChunk() {
+    #expect(PCMLevel.level(of: pcm([0, 0, 0, 0])) == 0)
+    #expect(PCMLevel.level(of: pcm([Int16.max, Int16.max, -Int16.max, -Int16.max])) == 1)
+    #expect(PCMLevel.level(of: pcm([3, -3, 2, -2])) == 0)
+    #expect(PCMLevel.level(of: Data()) == 0)
+    #expect(PCMLevel.level(of: Data([0x7F])) == 0)
+    let mid = PCMLevel.level(of: pcm([8_000, -8_000, 8_000, -8_000]))
+    #expect(mid > 0 && mid < 1)
+  }
+
   @Test("one level per window, the last one short, an odd byte ignored")
   func windows() {
     var data = pcm(Array(repeating: 0, count: 50) + Array(repeating: .max, count: 25))

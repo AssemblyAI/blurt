@@ -176,7 +176,7 @@
     private func makeClipWriter() -> WAVWriter? {
       clips.flatMap { clips in
         try? WAVWriter(
-          url: clips.directory.appending(path: "Read \(TranscriptStore.fileStamp(.now)).wav"),
+          url: clips.directory.appending(path: TranscriptStore.readAloudClipFileName(at: .now)),
           sampleRate: synthesizer.sampleRate
         )
       }

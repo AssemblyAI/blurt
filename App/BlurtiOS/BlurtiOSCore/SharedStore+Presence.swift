@@ -91,16 +91,12 @@ nonisolated extension SharedStore {
   /// whether the list changed.
   @discardableResult
   package static func addKeyTerm(_ term: String) -> Bool {
-    let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
+    let terms = keyTerms
+    let updated = KeyTermList.appending(term, to: terms)
+    guard updated != terms else {
       return false
     }
-    var terms = keyTerms
-    guard !terms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
-      return false
-    }
-    terms.append(trimmed)
-    keyTerms = terms
+    keyTerms = updated
     return true
   }
 

@@ -86,24 +86,6 @@ nonisolated final class UtteranceFeed: Sendable {
     pcm.allSatisfy { $0 == 0 }
   }
 
-  /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 by the Mac meter's own
-  /// mapping, so room ambient reads as empty bars on both.
-  static func level(of pcm: Data) -> Float {
-    let count = pcm.count / MemoryLayout<Int16>.size
-    guard count > 0 else {
-      return 0
-    }
-    // Loaded unaligned: a `Data` slice needn't start on an `Int16` boundary.
-    let energy = pcm.withUnsafeBytes { raw -> Double in
-      (0..<count).reduce(0) { sum, index in
-        let value = Double(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self)))
-        return sum + value * value
-      }
-    }
-    let rms = (energy / Double(count)).squareRoot() / Double(Int16.max)
-    return MicCapture.linearLevel(fromPowerDB: Float(20 * log10(rms)))
-  }
-
   /// Starts an utterance: chunks delivered from now on go to the returned
   /// stream. Any utterance still open is finished first. The watchdog waits
   /// for the first chunk with sound in it.
@@ -160,7 +142,7 @@ nonisolated final class UtteranceFeed: Sendable {
       sink.yield(chunk)
       return (true, Self.watch(&state, chunk))
     }
-    if delivered { levelsContinuation.yield(Self.level(of: chunk)) }
+    if delivered { levelsContinuation.yield(PCMLevel.level(of: chunk)) }
     if silent { onSilence() }
   }
 }

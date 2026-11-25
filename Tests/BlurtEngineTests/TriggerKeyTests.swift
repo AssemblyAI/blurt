@@ -27,6 +27,16 @@ struct TriggerKeyTests {
     #expect(TriggerKey.rightCommand.fullName == "Right Command (⌘)")
     #expect(TriggerKey.rightOption.fullName == "Right Option (⌥)")
     #expect(TriggerKey.function.fullName == "Function (fn)")
+    #expect(TriggerKey.leftControl.fullName == "Left Control (⌃)")
+  }
+
+  @Test("the spoken name is the full name without its symbol, for every key")
+  func spokenNames() {
+    #expect(TriggerKey.rightCommand.spokenName == "Right Command")
+    for key in TriggerKey.allCases {
+      #expect(key.fullName.hasPrefix(key.spokenName + " ("))
+      #expect(!key.spokenName.contains("("))
+    }
   }
 
   @Test("raw value round-trips through keyCode")
@@ -85,5 +95,16 @@ struct TriggerKeyTests {
       #expect(mask.nonzeroBitCount == 1, "\(key) mask should be a single bit")
       #expect(seen.insert(mask).inserted, "\(key) mask collides with another trigger")
     }
+  }
+
+  @Test("every action but a read records, a read and an ask speak, and each follows its own cue")
+  func actionCueClassification() {
+    let all: [TriggerKeyAction] = [.off, .dictate, .readAloud, .ask, .rewrite, .compose, .command]
+    #expect(all.filter { !$0.records } == [.readAloud])
+    #expect(all.filter(\.speaks) == [.readAloud, .ask])
+    #expect(TriggerKeyAction.readAloud.cue == .readAloud)
+    #expect(TriggerKeyAction.command.cue == .command)
+    let recordings: [TriggerKeyAction] = [.off, .dictate, .ask, .rewrite, .compose]
+    #expect(recordings.allSatisfy { $0.cue == .dictation })
   }
 }

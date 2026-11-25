@@ -682,7 +682,7 @@ bar — each tab's icon over its mono label, the selected one in the accent, a
 hairline above. Settings opens from either tab's gear; the consent sheet and a
 shared key-term list arrive whichever tab is showing (a list switches to Words).
 
-**Words** (`WordsView`, `WordsEdit`): the serif `Words` headline and the gear;
+**Words** (`WordsView`; the list edits are the engine's `KeyTermList.appending`): the serif `Words` headline and the gear;
 two cards. `KEY TERMS`: the terms as pills (full radius, the page's fill, a
 hairline, × to remove; `FlowLayout`), an input and `ADD` (commas add several;
 duplicates of any case drop; 100 at most, the request's cap), the count and the

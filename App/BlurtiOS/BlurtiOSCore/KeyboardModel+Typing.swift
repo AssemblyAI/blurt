@@ -25,8 +25,7 @@ extension KeyboardModel {
   /// is; only adding to it is refused.
   package static func termListIsFull(adding term: String) -> Bool {
     let terms = SharedStore.keyTerms
-    return terms.count >= KeyTerms.termCap
-      && !terms.contains { $0.caseInsensitiveCompare(term) == .orderedSame }
+    return terms.count >= KeyTerms.termCap && !KeyTermList.contains(term, in: terms)
   }
 
   /// A selection as a key term: trimmed, on one line, short enough to be a
