@@ -1,5 +1,5 @@
 #if os(macOS)
-  import Foundation
+  import AppKit
   import Testing
 
   @testable import BlurtEngine

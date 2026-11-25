@@ -12,6 +12,8 @@
 
     var count: Int { pending.withLock { $0.count } }
 
+    var isEmpty: Bool { pending.withLock { $0.isEmpty } }
+
     func schedule(_ expire: @escaping @Sendable () -> Void) {
       pending.withLock { $0.append(expire) }
     }
@@ -36,7 +38,7 @@
         let clip = SystemClipboard { recorder.schedule($0) }
 
         clip.write("transcript", concealed: false)
-        #expect(recorder.count == 0)
+        #expect(recorder.isEmpty)
 
         clip.write("hunter2", concealed: true)
         #expect(recorder.count == 1)
@@ -81,7 +83,7 @@
         // An ordinary paste over an unreadable clipboard keeps its words, as
         // the `.noTarget` path does: only a secret is worth taking away.
         _ = clip.writeAndPrepareRestore("transcript", concealed: false, over: nil)
-        #expect(recorder.count == 0)
+        #expect(recorder.isEmpty)
       }
     }
 
