@@ -10,11 +10,13 @@ import os
 // `BlockingIPC.queue.async` (see `BlockingIPC` for why that read is off-pool).
 extension DictationSession {
   func performPress(handingBack: Bool, key: TriggerKey?) async {
-    guard phase.isTerminal else { return }
+    guard phase.isTerminal else {
+      return
+    }
     handsBackTranscript = handingBack
     // Drop the last dictation's style now, so a press that exits before
     // `beginContextCapture` resolves its own can't be attributed to it.
-    pressStyle = .none
+    pressStyle = .base
     // Refuse the press before any capture begins when the host reports a
     // blocker (e.g. no API key saved): recording an utterance that can only
     // fail at transcribe time would discard the user's words after the fact.
@@ -102,10 +104,12 @@ extension DictationSession {
       let clock = clock
       autoReleaseTask = Task { [weak self] in
         try? await clock.sleep(for: .seconds(timeout))
-        guard let self, !Task.isCancelled else { return }
+        guard let self, !Task.isCancelled else {
+          return
+        }
         // Enqueues like a manual key-up. If a real release already ran, the
         // queued performRelease sees a non-.recording phase and drops out.
-        await self.release()
+        await release()
       }
     } catch {
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
@@ -181,9 +185,12 @@ extension DictationSession {
     // as well (nor its style). It deliberately carries no focus signals — see `PressContext`,
     // which also owns the wait and the release-side peek.
     let pressKnown = TranscriptionContext(
-      appName: nil, priorText: nil,
-      recentTranscripts: recentTranscripts, keyTerms: keyTerms,
-      styleInstructions: styleInstructions)
+      appName: nil,
+      priorText: nil,
+      recentTranscripts: recentTranscripts,
+      keyTerms: keyTerms,
+      styleInstructions: styleInstructions
+    )
     let press = PressContext(pressKnown: pressKnown.isEmpty ? nil : pressKnown)
     pressContext = press
     // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
@@ -203,9 +210,9 @@ extension DictationSession {
       let field = captureFieldContext()
       let context = TranscriptionContext(
         appName: captured?.processName,
+        priorText: field.priorText,
         windowTitle: field.windowTitle,
         fieldLabel: field.fieldLabel,
-        priorText: field.priorText,
         selectedText: field.selectedText,
         recentTranscripts: recentTranscripts,
         keyTerms: keyTerms,
@@ -214,7 +221,8 @@ extension DictationSession {
         textShortcuts: field.priorText == nil ? [] : textShortcutsProvider(),
         styleInstructions: styleInstructions,
         targetIsSecure: field.isSecure,
-        targetSecurityUnknown: field.securityUnknown)
+        targetSecurityUnknown: field.securityUnknown
+      )
       // One publish, which is what makes the value-before-stream ordering
       // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.
       press.store(resolved: context.isEmpty ? nil : context)

@@ -25,8 +25,14 @@ enum LaunchFlags {
   }
 
   /// `-<key> <value>` as `UserDefaults` reads it: `YES`, `true` and `1` are on.
+  /// Nil when the arguments don't carry the flag, so `persist` leaves it unset.
   static func value(of key: String, in arguments: [String]) -> Bool? {
-    guard let index = arguments.firstIndex(of: "-" + key), arguments.indices.contains(index + 1) else { return nil }
+    // swiftlint:disable:previous discouraged_optional_boolean
+    guard let index = arguments.firstIndex(of: "-" + key), arguments.indices.contains(index + 1) else {
+      return nil
+    }
+    // `NSString.boolValue` is the exact parse `UserDefaults` applies; `String` has no equivalent.
+    // swiftlint:disable:next legacy_objc_type
     return (arguments[index + 1] as NSString).boolValue
   }
 }

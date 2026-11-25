@@ -67,8 +67,14 @@ struct RewriteModeTests {
     for mode in [DictationRewriteMode.fast, .smart] {
       let data = try JSONEncoder().encode(
         DictationConfig(
-          sampleRate: 16_000, channels: 1, sttPrompt: "", keytermsPrompt: [], llmInstruction: nil,
-          rewriteMode: mode))
+          sampleRate: 16_000,
+          channels: 1,
+          sttPrompt: "",
+          keytermsPrompt: [],
+          llmInstruction: nil,
+          rewriteMode: mode
+        )
+      )
       let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
       #expect(object["rewrite_mode"] as? String == mode.rawValue)
     }
@@ -82,14 +88,16 @@ struct RewriteModeTests {
     let reads = Mutex(0)
     let transport = FakeHTTPTransport { _ in (200, Data(#"{"text":"um hello","llm_response":"Hello."}"#.utf8)) }
     let transcriber = AssemblyAITranscriber(
-      apiKeyProvider: { "test-key" }, transport: transport,
+      apiKeyProvider: { "test-key" },
+      transport: transport,
       enhancedTranscripts: {
-        reads.withLock {
-          $0 += 1
-          return $0 == 1
+        reads.withLock { readCount in
+          readCount += 1
+          return readCount == 1
         }
       },
-      rewriteMode: { .smart })
+      rewriteMode: { .smart }
+    )
     #expect(try await collectTranscript(transcriber) == "Hello.")
     #expect(reads.withLock { $0 } == 1)
   }
@@ -118,7 +126,8 @@ struct RewriteModeTests {
       apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, rewriteMode: mode
     )
     .makeConfigData(
-      sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [], customStyle: nil, enhanced: enhancedTranscripts)
+      sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [], customStyle: nil, enhanced: enhancedTranscripts
+    )
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
 }

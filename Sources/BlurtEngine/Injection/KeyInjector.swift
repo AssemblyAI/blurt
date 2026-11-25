@@ -2,28 +2,6 @@
   import AppKit
 
   public actor KeyInjector: InjectorProtocol {
-    private var targetApp: NSRunningApplication?
-
-    /// How long to wait after posting Cmd-V before clearing and restoring the
-    /// pasteboard. The paste is asynchronous: clear too soon and a slow target
-    /// (VNC/Remote Desktop, heavy Electron apps) reads an already-cleared
-    /// clipboard. 400 ms is a pragmatic margin over local apps' near-instant read.
-    /// This wait runs in a background settle task (see `pendingSettle`), *not* on
-    /// `insert`'s caller, so it no longer delays the pipeline re-arming.
-    private let pasteSettleDuration: Duration
-
-    /// Synthesizes the paste keystroke on the given key. Returns `false` if the
-    /// event subsystem couldn't build the events. Injectable so tests exercise the
-    /// clipboard save/restore logic without posting a real Cmd-V into the focused
-    /// app. Synchronous on purpose: nothing may suspend between the final
-    /// cancellation gate and the keystroke.
-    private let postPaste: @Sendable (CGKeyCode) -> Bool
-
-    /// The key that pastes on the user's layout (`KeyInjector.pasteKey`). A
-    /// main-actor read, so it runs ahead of the cancellation gate, not inside
-    /// `postPaste`. Tests default to the US key.
-    private let resolvePasteKey: @Sendable () async -> CGKeyCode
-
     /// Identifies a window by its app's pid plus its title — a pid alone isn't
     /// enough (one browser process hosts many unrelated tabs/documents), and a
     /// title alone isn't stable across apps, so both travel together as one
@@ -47,6 +25,38 @@
         lhs.pid == rhs.pid && lhs.title == rhs.title
       }
     }
+
+    /// What one insert resolves to before anything is activated or pasted: the
+    /// exact text to write (any leading separator included) and the window
+    /// identity to remember it against. Fed straight back in as the next insert's
+    /// `lastInserted` — a resolution and the memory it becomes are the same pair,
+    /// so there is one type for both.
+    struct ResolvedInsert: Equatable {
+      let text: String
+      let window: WindowIdentity?
+    }
+
+    private var targetApp: NSRunningApplication?
+
+    /// How long to wait after posting Cmd-V before clearing and restoring the
+    /// pasteboard. The paste is asynchronous: clear too soon and a slow target
+    /// (VNC/Remote Desktop, heavy Electron apps) reads an already-cleared
+    /// clipboard. 400 ms is a pragmatic margin over local apps' near-instant read.
+    /// This wait runs in a background settle task (see `pendingSettle`), *not* on
+    /// `insert`'s caller, so it no longer delays the pipeline re-arming.
+    private let pasteSettleDuration: Duration
+
+    /// Synthesizes the paste keystroke on the given key. Returns `false` if the
+    /// event subsystem couldn't build the events. Injectable so tests exercise the
+    /// clipboard save/restore logic without posting a real Cmd-V into the focused
+    /// app. Synchronous on purpose: nothing may suspend between the final
+    /// cancellation gate and the keystroke.
+    private let postPaste: @Sendable (CGKeyCode) -> Bool
+
+    /// The key that pastes on the user's layout (`KeyInjector.pasteKey`). A
+    /// main-actor read, so it runs ahead of the cancellation gate, not inside
+    /// `postPaste`. Tests default to the US key.
+    private let resolvePasteKey: @Sendable () async -> CGKeyCode
 
     /// The previous insert's resolution: the exact text it pasted (including any
     /// leading separator it added) and the window it landed in. One value rather
@@ -146,7 +156,8 @@
         hasEditableTarget: FocusCapture.hasEditableFocusedElement,
         isAXOpaqueApp: FocusCapture.isAXOpaqueApp,
         frontmostApp: KeyInjector.frontmostApp,
-        secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput)
+        secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput
+      )
     }
 
     init(
@@ -181,7 +192,7 @@
     /// public seam on every platform. A pid that no longer resolves (the app quit
     /// before the press was even joined) leaves no target, and `insert` then
     /// pastes wherever focus is — the same thing a nil capture always meant.
-    public func setTarget(_ focus: CapturedFocus?) async {
+    public func setTarget(_ focus: CapturedFocus?) {
       targetApp = focus.flatMap { NSRunningApplication(processIdentifier: $0.pid) }
     }
 
@@ -195,7 +206,9 @@
     /// re-reading `targetApp`, so a `setTarget` racing in across the settle
     /// sleep can't swap it mid-paste.
     private func activateTargetApp(_ target: NSRunningApplication?) async throws(BlurtError) {
-      guard let target else { return }
+      guard let target else {
+        return
+      }
       guard !target.isTerminated else { throw BlurtError.targetAppLost }
       guard activateTarget(target) else { throw BlurtError.targetAppLost }
       guard await waitForTargetActivation(target) else { throw BlurtError.targetAppLost }
@@ -217,7 +230,9 @@
     private func enqueue(
       _ text: String, after priorText: String?, windowTitle: String?, pinned: Bool, secure: Bool
     ) async throws {
-      guard !text.isEmpty else { return }
+      guard !text.isEmpty else {
+        return
+      }
       // Serialize the whole paste critical section by chaining behind the previous
       // insert's link (which includes its settle/restore — see `pendingSettle`).
       // The actor is reentrant across the `await`s in `performInsert`, so an
@@ -238,7 +253,8 @@
         let turn = await lock.acquire()
         do {
           let restore = try await self.performInsert(
-            text, after: priorText, windowTitle: windowTitle, pinned: pinned, secure: secure)
+            text, after: priorText, windowTitle: windowTitle, pinned: pinned, secure: secure
+          )
           return (restore, turn)
         } catch {
           turn.end()
@@ -251,7 +267,9 @@
       // (not `self`), so the user's contents come back even if the injector is
       // gone by the time the settle fires.
       pendingSettle = Task {
-        guard let (restore, turn) = try? await paste.value else { return }
+        guard let (restore, turn) = try? await paste.value else {
+          return
+        }
         try? await Task.sleep(for: timeout)
         restore()
         turn.end()
@@ -284,9 +302,12 @@
         secondsSinceUserInput() >= last.at.duration(to: .now) / .seconds(1) ? last.resolved : nil
       }
       let resolved = KeyInjector.resolveInsert(
-        text: text, priorText: priorText, windowTitle: windowTitle,
+        text: text,
+        priorText: priorText,
+        windowTitle: windowTitle,
         targetPID: target?.processIdentifier,
-        lastInserted: continuity)
+        lastInserted: continuity
+      )
       let finalText = resolved.text
       do {
         try await activateTargetApp(target)
@@ -355,46 +376,6 @@
       // restore window — while the next paste still serializes behind the settle.
       lastInserted = (resolved, .now)
       return restore
-    }
-
-    /// What one insert resolves to before anything is activated or pasted: the
-    /// exact text to write (any leading separator included) and the window
-    /// identity to remember it against. Fed straight back in as the next insert's
-    /// `lastInserted` — a resolution and the memory it becomes are the same pair,
-    /// so there is one type for both.
-    struct ResolvedInsert: Equatable {
-      let text: String
-      let window: WindowIdentity?
-    }
-
-    /// Both of `performInsert`'s continuity decisions, as one pure function taking
-    /// the paste target as a plain pid rather than an `NSRunningApplication`:
-    /// which text to write, and which window to remember writing it into.
-    ///
-    /// A pid is all the decision ever needed. Computed inline in `performInsert`,
-    /// it could only be reached through a full `insert`, so its four cases were
-    /// covered by scraping `NSWorkspace` for live processes — one case required
-    /// the host to be running two — which activated the developer's foreground app
-    /// and failed whenever the unordered pick landed on a background-only process.
-    /// Here the same cases are plain values, and `insert` keeps one end-to-end test
-    /// for the wiring.
-    static func resolveInsert(
-      text: String,
-      priorText: String?,
-      windowTitle: String?,
-      targetPID: pid_t?,
-      lastInserted: ResolvedInsert?
-    ) -> ResolvedInsert {
-      let currentWindow = targetPID.flatMap { pid in
-        windowTitle.map { WindowIdentity(pid: pid, title: $0) }
-      }
-      // `currentWindow.map { ... } ?? false` rather than `currentWindow == lastInserted?.window`:
-      // both sides being nil (nothing readable this time, nothing pasted last time)
-      // must not count as a match.
-      let sameWindow = currentWindow.map { $0 == lastInserted?.window } ?? false
-      let basis = InsertionSeparator.basis(
-        priorText: priorText, lastInserted: lastInserted?.text, sameWindow: sameWindow)
-      return ResolvedInsert(text: InsertionSeparator.withLeadingSeparator(text, after: basis), window: currentWindow)
     }
   }
 #endif

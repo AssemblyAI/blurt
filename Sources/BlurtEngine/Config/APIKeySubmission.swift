@@ -45,6 +45,7 @@ public struct APIKeySubmission: Sendable {
   /// UI testing passes an offline stub (so the settings flow runs without a
   /// network), and tests inject outcomes directly to cover the mapping and the
   /// never-save-unverified invariant — all through the one real submit path.
+  @preconcurrency
   public init(
     keyStore: any APIKeyGateway,
     validate: @escaping @Sendable (String) async -> APIKeyValidator.Result
@@ -69,8 +70,10 @@ public struct APIKeySubmission: Sendable {
     switch await validate(key) {
     case .valid:
       return save(key) ? .valid : .saveFailed
+
     case .invalid:
       return .invalid
+
     case .unreachable:
       return .unreachable
     }
@@ -84,10 +87,13 @@ extension APIKeySubmission.Outcome {
     switch self {
     case .valid:
       nil
+
     case .invalid:
       .inline(message: "AssemblyAI rejected that key. Double-check it and try again.")
+
     case .unreachable:
       .inline(message: APIKeySubmission.unreachableMessage)
+
     case .saveFailed:
       .alert(
         title: "Couldn’t Save Your Key",

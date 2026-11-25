@@ -19,6 +19,9 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
   /// asserted end to end rather than only through its builders.
   private let uploaded = Mutex(Data())
 
+  /// The bytes the client streamed as the request body.
+  var uploadedBody: Data { uploaded.withLock { $0 } }
+
   /// `responder` maps each request to an HTTP status and JSON body.
   init(_ responder: @escaping @Sendable (URLRequest) -> (Int, Data)) {
     self.responder = responder
@@ -36,13 +39,14 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
     FakeHTTPTransport(transportError: error)
   }
 
-  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+  func data(for request: URLRequest) throws -> (Data, URLResponse) {
     try respond(to: request)
   }
 
   func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
-    delegate: (any URLSessionTaskDelegate)?
+    for request: URLRequest,
+    streaming body: AsyncThrowingStream<Data, any Error>,
+    delegate _: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
     // Drain the body before answering, the way a real upload does: the producer
     // writes the closing boundary only once the frames finish, so a fake that
@@ -52,9 +56,6 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
     }
     return try respond(to: request)
   }
-
-  /// The bytes the client streamed as the request body.
-  var uploadedBody: Data { uploaded.withLock { $0 } }
 
   private func respond(to request: URLRequest) throws -> (Data, URLResponse) {
     if let transportError { throw transportError }
@@ -84,68 +85,4 @@ func completion(_ content: String?, finishReason: String = "stop") -> Data {
 /// JSON-encodes a string dictionary into a canned mock response body.
 func json(_ object: [String: String]) -> Data {
   (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
-}
-
-/// Thread-safe call counter for asserting how many requests a client issued.
-final class Counter: Sendable {
-  private let count = Mutex(0)
-  func next() -> Int {
-    count.withLock {
-      $0 += 1
-      return $0
-    }
-  }
-  var value: Int {
-    count.withLock { $0 }
-  }
-}
-
-/// An LLM Gateway stub: read-aloud only ever asks the gateway with
-/// `data(for:)`, so a streaming upload is unreachable and needn't be restated
-/// by each stub.
-protocol GatewayStub: HTTPTransport {}
-
-extension GatewayStub {
-  func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
-    delegate: (any URLSessionTaskDelegate)?
-  ) async throws -> (Data, URLResponse) {
-    throw URLError(.unsupportedURL)
-  }
-
-  /// A 200 answering `request` with `body`.
-  func ok(_ request: URLRequest, _ body: Data) throws -> (Data, URLResponse) {
-    let url = try #require(request.url)
-    let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
-    return (body, response)
-  }
-}
-
-/// A `data(for:)` transport whose closure picks, per request, a status and body
-/// or a thrown error — for a client's retry policy, which turns on which
-/// request failed and how (`FakeHTTPTransport.failing` fails every one alike).
-struct ScriptedTransport: GatewayStub {
-  let responder: @Sendable (URLRequest) -> Result<(Int, Data), URLError>
-
-  init(_ responder: @escaping @Sendable (URLRequest) -> Result<(Int, Data), URLError>) {
-    self.responder = responder
-  }
-
-  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    let (status, body) = try responder(request).get()
-    let url = try #require(request.url)
-    let response = try #require(HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil))
-    return (body, response)
-  }
-}
-
-/// A fresh directory holding one small file for an async client to "upload".
-/// The caller removes the directory (`url.deletingLastPathComponent()`).
-func scratchAudioFile() throws -> URL {
-  let directory = FileManager.default.temporaryDirectory
-    .appending(path: "AsyncUpload-\(UUID().uuidString)", directoryHint: .isDirectory)
-  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-  let url = directory.appending(path: "call.m4a")
-  try Data("audio bytes".utf8).write(to: url)
-  return url
 }

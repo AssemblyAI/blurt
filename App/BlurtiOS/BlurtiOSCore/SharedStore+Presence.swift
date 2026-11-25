@@ -2,7 +2,7 @@ import AssemblyAI
 import Foundation
 
 // The presence contract and the shared word lists, split out of
-// SharedState.swift so the records stay under one roof and the file under
+// BlurtShared.swift so the records stay under one roof and the file under
 // swiftlint's length.
 
 nonisolated extension SharedStore {
@@ -24,14 +24,6 @@ nonisolated extension SharedStore {
   /// still in the future. The keyboard then opens the app rather than sending
   /// a press nobody would answer.
   package static var isListening: Bool { isListening(now: Date()) }
-
-  package static func isListening(now: Date) -> Bool {
-    // The session record decides when there is one (`ListeningState`); the
-    // older keys below answer for a build that has not written one yet.
-    if let state = listeningState { return state.isReady(now: now) }
-    guard (listeningUntil ?? .distantPast) > now else { return false }
-    return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
-  }
 
   /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
   package static var isKeyboardPresent: Bool {
@@ -60,19 +52,6 @@ nonisolated extension SharedStore {
   /// the keyboard, which links it too, and the app can't disagree.
   package static let keyTermsKey = "BlurtKeyTerms"
 
-  /// Adds a term unless it is already there (case-insensitively). Returns
-  /// whether the list changed.
-  @discardableResult
-  package static func addKeyTerm(_ term: String) -> Bool {
-    let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return false }
-    var terms = keyTerms
-    guard !terms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return false }
-    terms.append(trimmed)
-    keyTerms = terms
-    return true
-  }
-
   package static var appSeenAt: Date? {
     get { defaults.object(forKey: BlurtShared.Key.appSeenAt) as? Date }
     set { defaults.set(newValue, forKey: BlurtShared.Key.appSeenAt) }
@@ -96,10 +75,40 @@ nonisolated extension SharedStore {
     set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardEverSeen) }
   }
 
+  package static func isListening(now: Date) -> Bool {
+    // The session record decides when there is one (`ListeningState`); the
+    // older keys below answer for a build that has not written one yet.
+    if let state = listeningState {
+      return state.isReady(now: now)
+    }
+    guard (listeningUntil ?? .distantPast) > now else {
+      return false
+    }
+    return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
+  }
+
+  /// Adds a term unless it is already there (case-insensitively). Returns
+  /// whether the list changed.
+  @discardableResult
+  package static func addKeyTerm(_ term: String) -> Bool {
+    let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      return false
+    }
+    var terms = keyTerms
+    guard !terms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+      return false
+    }
+    terms.append(trimmed)
+    keyTerms = terms
+    return true
+  }
+
   /// Fires a Darwin notification. Carries nothing: the receiver reads the
   /// payload back out of these defaults.
   package static func post(_ signal: String) {
     CFNotificationCenterPostNotification(
-      CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(signal as CFString), nil, nil, true)
+      CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(signal as CFString), nil, nil, true
+    )
   }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// Speaks one piece of text through AssemblyAI's Streaming TTS HTTP API
 /// (`POST /v1/speech`), as raw PCM16 little-endian mono at `sampleRate`.
@@ -26,6 +25,22 @@ import Synchronization
 ///   `message`). Each write holds whole samples, but the network can split one,
 ///   so an odd byte is carried into the next chunk.
 struct AssemblyAISpeechSynthesizer: Sendable {
+  // MARK: - Wire format
+
+  private struct Body: Encodable {
+    enum CodingKeys: String, CodingKey {
+      case text
+      case voiceID = "voice_id"
+      case sampleRate = "sample_rate"
+      case encoding
+    }
+
+    let text: String
+    let voiceID: String
+    let sampleRate: Int
+    let encoding: String
+  }
+
   static let sampleRate = 24_000
   static let encoding = "pcm_s16le"
   static let endpoint = URL(staticString: "https://tts.us.assemblyai.com/v1/speech")
@@ -48,6 +63,39 @@ struct AssemblyAISpeechSynthesizer: Sendable {
     self.transport = transport
   }
 
+  static func request(for text: String, voiceID: String, apiKey: String) throws -> URLRequest {
+    try URLRequest.assemblyAIJSONPost(
+      to: endpoint,
+      apiKey: apiKey,
+      timeout: timeout,
+      body: Body(text: text, voiceID: voiceID, sampleRate: sampleRate, encoding: encoding)
+    )
+  }
+
+  /// The start of an error body: enough for any error the docs describe; a
+  /// proxy's page or a stalled stream past it isn't worth waiting on.
+  private static func head(of body: AsyncThrowingStream<Data, any Error>) async throws -> Data {
+    var data = Data()
+    for try await chunk in body {
+      data.append(chunk)
+      if data.count >= 65_536 { break }
+    }
+    return data
+  }
+
+  /// A failed request's reason: the error body's `code` and `message`, or the
+  /// bare status when the body isn't one (a proxy's page).
+  static func failure(status: Int, body: Data) -> String {
+    let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
+    guard let message = (object?["message"] as? String)?.trimmedNonEmpty() else {
+      return "HTTP \(status)"
+    }
+    if let code = object?["code"] as? String {
+      return "(\(code)) \(message)"
+    }
+    return message
+  }
+
   /// PCM chunks of `text` spoken by `voiceID`, in playback order, as they
   /// arrive. Blank text finishes at once without a request. Cancelling the
   /// consumer cancels the request.
@@ -66,11 +114,14 @@ struct AssemblyAISpeechSynthesizer: Sendable {
   }
 
   private func stream(_ text: String, voiceID: String, onAudio: (Data) -> Void) async throws {
-    guard let text = text.trimmedNonEmpty() else { return }
+    guard let trimmed = text.trimmedNonEmpty() else {
+      return
+    }
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else { throw BlurtError.apiKeyMissing }
     do {
       let (response, body) = try await transport.stream(
-        try Self.request(for: text, voiceID: voiceID, apiKey: apiKey))
+        try Self.request(for: trimmed, voiceID: voiceID, apiKey: apiKey)
+      )
       guard response.statusCode == 200 else {
         let reason = Self.failure(status: response.statusCode, body: try await Self.head(of: body))
         throw SpeechSynthesisError.server(reason)
@@ -96,70 +147,6 @@ struct AssemblyAISpeechSynthesizer: Sendable {
       throw CancellationError()
     }
   }
-
-  // MARK: - Wire format
-
-  private struct Body: Encodable {
-    let text: String
-    let voiceID: String
-    let sampleRate: Int
-    let encoding: String
-
-    enum CodingKeys: String, CodingKey {
-      case text
-      case voiceID = "voice_id"
-      case sampleRate = "sample_rate"
-      case encoding
-    }
-  }
-
-  static func request(for text: String, voiceID: String, apiKey: String) throws -> URLRequest {
-    try URLRequest.assemblyAIJSONPost(
-      to: endpoint, apiKey: apiKey, timeout: timeout,
-      body: Body(text: text, voiceID: voiceID, sampleRate: sampleRate, encoding: encoding))
-  }
-
-  /// The start of an error body: enough for any error the docs describe; a
-  /// proxy's page or a stalled stream past it isn't worth waiting on.
-  private static func head(of body: AsyncThrowingStream<Data, any Error>) async throws -> Data {
-    var data = Data()
-    for try await chunk in body {
-      data.append(chunk)
-      if data.count >= 65_536 { break }
-    }
-    return data
-  }
-
-  /// A failed request's reason: the error body's `code` and `message`, or the
-  /// bare status when the body isn't one (a proxy's page).
-  static func failure(status: Int, body: Data) -> String {
-    let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
-    guard let message = (object?["message"] as? String)?.trimmedNonEmpty() else { return "HTTP \(status)" }
-    if let code = object?["code"] as? String { return "(\(code)) \(message)" }
-    return message
-  }
-}
-
-enum SpeechSynthesisError: Error, Equatable, LocalizedError {
-  /// The response went quiet for longer than `AssemblyAISpeechSynthesizer.timeout`.
-  case timedOut
-  /// A failed request, e.g. `(unauthorized) Invalid API key`.
-  case server(String)
-
-  var errorDescription: String? {
-    switch self {
-    case .timedOut: "Text-to-speech stopped responding."
-    case .server(let message): "Text-to-speech failed: \(message)"
-    }
-  }
-}
-
-/// The one network call the synthesizer makes: a request whose response body
-/// is read as it arrives. `URLSession` is the production conformance; the tests
-/// play the service.
-protocol SpeechTransport: Sendable {
-  /// The response head, once it arrives, and its body as it streams in.
-  func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>)
 }
 
 extension URLSession: SpeechTransport {
@@ -188,90 +175,5 @@ extension URLSession: SpeechTransport {
       delegate.fail(CancellationError())
     }
     return (response, body)
-  }
-}
-
-/// One streamed request's delegate: resumes the caller's wait for the head
-/// once it arrives (or the failure, if it never does), then feeds each block
-/// of the body to `body` and finishes it with the request.
-///
-/// The outcome and the wait meet in either order: one that settles before
-/// `arm` is kept and handed over when the wait arrives, so the continuation is
-/// resumed exactly once whatever races.
-final class SpeechStreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  private enum Head {
-    case pending
-    case waiting(CheckedContinuation<HTTPURLResponse, any Error>)
-    case settled(Result<HTTPURLResponse, any Error>)
-    case delivered
-  }
-
-  private let head = Mutex(Head.pending)
-  private let body: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(body: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.body = body
-  }
-
-  /// Waits on the head with `continuation`. False when the outcome was
-  /// already in — it's delivered now, and there is nothing left to start.
-  func arm(_ continuation: CheckedContinuation<HTTPURLResponse, any Error>) -> Bool {
-    let early: Result<HTTPURLResponse, any Error>? = head.withLock { head in
-      switch head {
-      case .pending:
-        head = .waiting(continuation)
-        return nil
-      case .settled(let outcome):
-        head = .delivered
-        return outcome
-      case .waiting, .delivered:
-        return .failure(CancellationError())
-      }
-    }
-    guard let early else { return true }
-    continuation.resume(with: early)
-    return false
-  }
-
-  /// Ends the request with `error`, before the head if it hasn't come yet.
-  func fail(_ error: any Error) {
-    settle(.failure(error))
-    body.finish(throwing: error)
-  }
-
-  func settle(_ outcome: Result<HTTPURLResponse, any Error>) {
-    let waiting: CheckedContinuation<HTTPURLResponse, any Error>? = head.withLock { head in
-      switch head {
-      case .pending:
-        head = .settled(outcome)
-        return nil
-      case .waiting(let continuation):
-        head = .delivered
-        return continuation
-      case .settled, .delivered:
-        return nil
-      }
-    }
-    waiting?.resume(with: outcome)
-  }
-
-  func urlSession(
-    _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse
-  ) async -> URLSession.ResponseDisposition {
-    if let http = response as? HTTPURLResponse {
-      settle(.success(http))
-      return .allow
-    }
-    settle(.failure(URLError(.badServerResponse)))
-    return .cancel
-  }
-
-  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-    body.yield(data)
-  }
-
-  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    settle(.failure(error ?? URLError(.badServerResponse)))
-    if let error { body.finish(throwing: error) } else { body.finish() }
   }
 }

@@ -15,8 +15,6 @@
   /// build clearing the released Blurt's grants, the one app whose permissions
   /// this process has no business touching.
   public enum PermissionsReset {
-    private static let log = HostIdentity.current.logger("PermissionsReset")
-
     /// The TCC services a Blurt install can hold a grant under — the set
     /// `resetAll` sweeps, and the same four `scripts/reset-lib.sh` lists
     /// (bash can't read this enum, so the two are kept in step by hand).
@@ -38,6 +36,16 @@
       case appleEvents = "AppleEvents"
     }
 
+    private static let log = HostIdentity.current.logger("PermissionsReset")
+
+    /// The services a full reset sweeps. Spelled out case by case rather than
+    /// taken from `allCases` because Periphery can't follow a case that is only
+    /// ever reached through `allCases` and reports it as dead;
+    /// `PermissionsResetTests` pins this list against `allCases`, so a service
+    /// added to the enum and forgotten here fails there rather than silently
+    /// surviving every "full" reset.
+    static let sweep: [Service] = [.accessibility, .microphone, .inputMonitoring, .appleEvents]
+
     /// Clears `service` for `bundleID`. Returns whether `tccutil` exited 0 — a
     /// non-zero exit (or a launch failure) is reported rather than thrown, since
     /// every caller's answer to a failed reset is the same: say so, and leave the
@@ -53,24 +61,18 @@
         let ok = proc.terminationStatus == 0
         if !ok {
           log.warning(
-            "tccutil reset \(service.rawValue, privacy: .public) exited \(proc.terminationStatus)")
+            "tccutil reset \(service.rawValue, privacy: .public) exited \(proc.terminationStatus)"
+          )
         }
         return ok
       } catch {
         let reason = error.localizedDescription
         log.error(
-          "tccutil reset \(service.rawValue, privacy: .public) failed to launch: \(reason, privacy: .public)")
+          "tccutil reset \(service.rawValue, privacy: .public) failed to launch: \(reason, privacy: .public)"
+        )
         return false
       }
     }
-
-    /// The services a full reset sweeps. Spelled out case by case rather than
-    /// taken from `allCases` because Periphery can't follow a case that is only
-    /// ever reached through `allCases` and reports it as dead;
-    /// `PermissionsResetTests` pins this list against `allCases`, so a service
-    /// added to the enum and forgotten here fails there rather than silently
-    /// surviving every "full" reset.
-    static let sweep: [Service] = [.accessibility, .microphone, .inputMonitoring, .appleEvents]
 
     /// Clears every service in `sweep` for `bundleID`, returning true only when
     /// all of them succeeded. Every service is attempted even after one fails: a

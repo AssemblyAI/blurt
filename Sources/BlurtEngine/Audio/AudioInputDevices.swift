@@ -1,14 +1,6 @@
 @preconcurrency @unsafe import AVFoundation
 import Foundation
 
-/// One selectable input device: its persistent UID (what `MicDeviceStore` pins)
-/// and its user-facing name (what the Settings picker shows).
-public struct AudioInputDevice: Identifiable, Sendable {
-  public let uid: String
-  public let name: String
-  public var id: String { uid }
-}
-
 /// Every question the capture path and the Settings picker ask about input
 /// devices: what's available, what it's called, whether a pinned UID still names
 /// something connected, and what transport it's on.
@@ -36,6 +28,12 @@ public struct AudioInputDevice: Identifiable, Sendable {
 /// hardware to answer anything, so it is excluded from the coverage gate and
 /// must not be where a decision hides.
 public enum AudioInputDevices {
+  /// The system default input device. One spelling, shared with the recorder's
+  /// fallback and the picker's "Same as system (…)" label.
+  static var systemDefaultDevice: AVCaptureDevice? {
+    AVCaptureDevice.default(for: .audio)
+  }
+
   /// Every microphone the system offers, sorted by name for a stable picker
   /// order. Empty when there are none.
   ///
@@ -63,7 +61,9 @@ public enum AudioInputDevices {
   /// system default when there is no pin (`MicCapture.ResolvedInput` has already
   /// folded a missing pin into nil) — or nil when that device can't be found.
   static func inputName(pinnedUID: String?) -> String? {
-    guard let pinnedUID else { return systemDefaultInputName() }
+    guard let pinnedUID else {
+      return systemDefaultInputName()
+    }
     return device(forUID: pinnedUID)?.localizedName
   }
 
@@ -96,14 +96,10 @@ public enum AudioInputDevices {
   /// pin a moment later to attach it — one spelling of "resolve a pin to a
   /// device", so the two layers can't apply different presence rules.
   static func device(forUID uid: String) -> AVCaptureDevice? {
-    guard let device = AVCaptureDevice(uniqueID: uid), device.isConnected else { return nil }
+    guard let device = AVCaptureDevice(uniqueID: uid), device.isConnected else {
+      return nil
+    }
     return device
-  }
-
-  /// The system default input device. One spelling, shared with the recorder's
-  /// fallback and the picker's "Same as system (…)" label.
-  static var systemDefaultDevice: AVCaptureDevice? {
-    AVCaptureDevice.default(for: .audio)
   }
 
   /// `AVCaptureDevice.transportType` as the `UInt32` four-character code

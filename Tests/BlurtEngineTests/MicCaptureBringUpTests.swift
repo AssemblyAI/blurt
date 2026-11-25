@@ -34,7 +34,7 @@ struct MicCaptureBringUpTests {
     // serialize its own commands produces. `DictationSession` does serialize
     // (its release and cancel run only after the press turn completes), but this
     // is a public actor and the contract has to hold without that.
-    let mic = MicCapture(deviceSelection: { .systemDefault })
+    let mic = MicCapture { .systemDefault }
 
     // Warm first, exactly as the app does at launch, so what is measured below
     // is the property under test and not this process's first touch of the

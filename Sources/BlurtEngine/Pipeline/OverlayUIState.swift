@@ -1,19 +1,3 @@
-/// A failure's reason written out on the pill, in two parts so the shell can
-/// truncate the subject (a device name of any length) and never the predicate,
-/// which is what says what went wrong. A status line, so no closing period.
-public struct PillNotice: Equatable, Sendable {
-  public let subject: String
-  public let predicate: String
-
-  public init(subject: String, predicate: String) {
-    self.subject = subject
-    self.predicate = predicate
-  }
-
-  /// The one line it reads as — what the shell measures.
-  public var text: String { "\(subject) \(predicate)" }
-}
-
 /// The visual state of the dictation overlay pill. It's a pure projection of
 /// `PipelinePhase` — owned here (rather than in the AppKit shell) so the mapping
 /// is unit-testable; the shell just renders whatever this resolves to.
@@ -79,19 +63,44 @@ public enum OverlayUIState: Equatable, Sendable {
   /// notices below, which would otherwise restate the same strings.
   public var accessibilityLabel: String {
     switch self {
-    case .idle: "Blurt."
-    case .connecting: "Connecting to the microphone."
-    case .recording: "Recording."
-    case .speaking: "Reading aloud."
-    case .rewriting: "Rewriting the selection."
-    case .composing: "Writing your message."
-    case .commanding: "Carrying out your command."
-    case .processing: "Processing."
-    case .error(let message, _): message
-    case .pasted: "Your dictation was pasted."
-    case .noTarget: "No text field focused. Your dictation was copied to the clipboard."
-    case .done: "Your command was carried out."
-    case .noted: "Noted: the last command was marked as not working."
+    case .idle:
+      "Blurt."
+
+    case .connecting:
+      "Connecting to the microphone."
+
+    case .recording:
+      "Recording."
+
+    case .speaking:
+      "Reading aloud."
+
+    case .rewriting:
+      "Rewriting the selection."
+
+    case .composing:
+      "Writing your message."
+
+    case .commanding:
+      "Carrying out your command."
+
+    case .processing:
+      "Processing."
+
+    case .error(let message, _):
+      message
+
+    case .pasted:
+      "Your dictation was pasted."
+
+    case .noTarget:
+      "No text field focused. Your dictation was copied to the clipboard."
+
+    case .done:
+      "Your command was carried out."
+
+    case .noted:
+      "Noted: the last command was marked as not working."
     }
   }
 
@@ -104,11 +113,18 @@ public enum OverlayUIState: Equatable, Sendable {
   /// is unit-tested and a new notice can't ship without one.
   public var noticeDwellSeconds: Double? {
     switch self {
-    case .pasted, .done, .noted: 0.8
+    case .pasted, .done, .noted:
+      0.8
+
     // A sentence, not a word: long enough to read the device name.
-    case .error(_, _?): 3.0
-    case .error, .noTarget: 1.6
-    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding: nil
+    case .error(_, _?):
+      3.0
+
+    case .error, .noTarget:
+      1.6
+
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding:
+      nil
     }
   }
 
@@ -116,7 +132,9 @@ public enum OverlayUIState: Equatable, Sendable {
   /// nil for the states the pill shows as a status word or meter. The sentence
   /// form is `accessibilityLabel`.
   public var pillNotice: PillNotice? {
-    guard case .error(_, let notice) = self else { return nil }
+    guard case .error(_, let notice) = self else {
+      return nil
+    }
     return notice
   }
 }
@@ -127,7 +145,9 @@ extension PipelinePhase {
     switch self {
     // `.handedBack` hides the pill: the transcript went to the host (an ask
     // about the selection, answered aloud), so there is nothing to confirm.
-    case .idle, .cancelled, .handedBack: .idle
+    case .idle, .cancelled, .handedBack:
+      .idle
+
     // `.injecting` maps to `.processing`, NOT `.idle`. The shell reads an `.idle`
     // projection as "dismiss the pill", so mapping this working phase to idle
     // started a fade-out mid-dictation: two wasted animation groups on the fast
@@ -135,20 +155,30 @@ extension PipelinePhase {
     // the fade completed, ordering the panel out and tearing down the pill's
     // content — then `.pasted` arrived and faded it back in. A visible blink at
     // the end of a dictation, worst when the user has switched apps mid-transcribe.
-    case .injecting: .processing
+    case .injecting:
+      .processing
+
     // Its own pill state, NOT `.recording`: the phase exists precisely because
     // capture hasn't begun, so projecting it onto the recording pill would put
     // the `● REC` tag and a live meter on screen over a mic that isn't
     // delivering yet — the "speak now" cue the whole gate exists to withhold.
-    case .connecting: .connecting
-    case .recording: .recording
-    case .transcribing: .processing
+    case .connecting:
+      .connecting
+
+    case .recording:
+      .recording
+
+    case .transcribing:
+      .processing
+
     // A setup blocker (a missing API key) is an expected state, not a fault: the
     // shell routes it to the settings window — the actionable fix — so the pill
     // stays calm idle rather than flashing red on the way there. The
     // classification is `PipelinePhase.setupBlocker`, so this and the shell's
     // navigation can't disagree about which failures are setup states.
-    case .failed(let error) where error.isSetupBlocker: .idle
+    case .failed(let error) where error.isSetupBlocker:
+      .idle
+
     case .failed(let error):
       // A capture fault with its own pill notice (the silent mic) speaks in its
       // own sentence, not the "Audio capture failed: …" wrapper.
@@ -157,13 +187,26 @@ extension PipelinePhase {
       } else {
         .error(message: error.errorDescription ?? "Dictation failed.")
       }
-    case .pasted: .pasted
-    case .noTarget: .noTarget
+
+    case .pasted:
+      .pasted
+
+    case .noTarget:
+      .noTarget
     }
   }
 }
 
 extension PipelinePhase {
+  /// The pill once a read ends, this being the session's last phase. A steady
+  /// state still under way (a capture, a transcription) shows again; a notice
+  /// (Pasted, Copied, an error) belonged to a dictation that ended before the
+  /// read did, so the pill settles to idle rather than replaying it — and
+  /// VoiceOver re-announcing it.
+  public var overlayStateAfterSpeech: OverlayUIState {
+    overlayState.noticeDwellSeconds == nil ? overlayState : .idle
+  }
+
   /// The pill for this phase while a read may be playing, or nil to leave the
   /// pill as it is. A read wears the pill until it ends (`.speaking`); only a
   /// new capture takes it over — a press stops the read first — so an earlier
@@ -175,20 +218,15 @@ extension PipelinePhase {
   /// `.commanding` for a command — so the pill
   /// reads as one step from release to the job's end.
   public func overlayState(whileSpeaking speaking: Bool, processingAs: OverlayUIState? = nil) -> OverlayUIState? {
-    if speaking && !isCapturing { return nil }
+    if speaking, !isCapturing {
+      return nil
+    }
     // A rewrite's or a command's words handed back: the router shows its own
     // state ("Rewriting", "Working") the moment it takes them, so hiding the
     // pill here only made it blink — and, mid-fade, vanish (2026-11-04).
-    if case .handedBack = self, processingAs != nil { return nil }
+    if case .handedBack = self, processingAs != nil {
+      return nil
+    }
     return overlayState == .processing ? processingAs ?? overlayState : overlayState
-  }
-
-  /// The pill once a read ends, this being the session's last phase. A steady
-  /// state still under way (a capture, a transcription) shows again; a notice
-  /// (Pasted, Copied, an error) belonged to a dictation that ended before the
-  /// read did, so the pill settles to idle rather than replaying it — and
-  /// VoiceOver re-announcing it.
-  public var overlayStateAfterSpeech: OverlayUIState {
-    overlayState.noticeDwellSeconds == nil ? overlayState : .idle
   }
 }

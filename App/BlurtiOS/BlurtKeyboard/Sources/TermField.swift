@@ -47,22 +47,3 @@ struct TermField: View {
     .padding(.horizontal, DesignTokens.Metrics.termInset)
   }
 }
-
-/// A blinking caret, as a text field's; held on under Reduce Motion.
-private struct Caret: View {
-  var gap: Edge.Set
-  @EnvironmentObject private var keyboardContext: KeyboardContext
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  var body: some View {
-    TimelineView(.periodic(from: .now, by: DesignTokens.Motion.caret)) { timeline in
-      let on = reduceMotion || Int(timeline.date.timeIntervalSinceReferenceDate / DesignTokens.Motion.caret) % 2 == 0
-      RoundedRectangle(cornerRadius: DesignTokens.Metrics.caretRadius)
-        .fill(BlurtTint.signal(keyboardContext.colorScheme))
-        .frame(width: DesignTokens.Metrics.caretWidth, height: DesignTokens.Metrics.caretHeight)
-        .opacity(on ? 1 : 0)
-        .padding(gap, DesignTokens.Metrics.caretLead)
-    }
-    .accessibilityHidden(true)
-  }
-}

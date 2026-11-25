@@ -43,13 +43,15 @@ struct OverlayUIStateTests {
     #expect(phase.overlayState == expected)
   }
 
-  @Test func pastedIsATransientNotice() {
+  @Test
+  func pastedIsATransientNotice() {
     // Pinned alongside the mapping: the "Pasted" pill must auto-clear rather
     // than stick, which is what makes it a notice and not a steady state.
     #expect(OverlayUIState.pasted.noticeDwellSeconds != nil)
   }
 
-  @Test func failedMapsToErrorCarryingTheReason() {
+  @Test
+  func failedMapsToErrorCarryingTheReason() {
     // The mapping projects the failure's localized description into the pill so
     // the reason reaches the user (hover tooltip + VoiceOver) instead of an
     // unexplained red flash.
@@ -57,7 +59,8 @@ struct OverlayUIStateTests {
     #expect(phase.overlayState == .error(message: "No microphone is available."))
   }
 
-  @Test func silentMicFailureNamesTheDeviceOnThePill() {
+  @Test
+  func silentMicFailureNamesTheDeviceOnThePill() {
     // An error carrying a pill notice, so the shell can widen the pill and show
     // the device name — the whole diagnosis — instead of hiding it on hover.
     let error = MicCaptureError.inputNeverDelivered(deviceName: "Aggregate Device")
@@ -66,7 +69,8 @@ struct OverlayUIStateTests {
       state
         == .error(
           message: "Aggregate Device isn't sending any audio.",
-          notice: PillNotice(subject: "Aggregate Device", predicate: "isn't sending any audio")))
+          notice: PillNotice(subject: "Aggregate Device", predicate: "isn't sending any audio")
+        ))
     #expect(state.pillNotice?.text == "Aggregate Device isn't sending any audio")
     #expect(state.pillNotice?.subject == "Aggregate Device")
     #expect(state.pillNotice?.predicate == "isn't sending any audio")
@@ -74,14 +78,16 @@ struct OverlayUIStateTests {
     #expect(state.noticeDwellSeconds != nil)
   }
 
-  @Test func silentMicFailureWithoutANameStillSaysWhatHappened() {
+  @Test
+  func silentMicFailureWithoutANameStillSaysWhatHappened() {
     let error = MicCaptureError.inputNeverDelivered(deviceName: nil)
     let state = PipelinePhase.failed(.audioCaptureFailed(underlying: error)).overlayState
     #expect(state.pillNotice?.text == "The microphone isn't sending any audio")
     #expect(state.accessibilityLabel == "The microphone isn't sending any audio.")
   }
 
-  @Test func onlyTheSilentMicNoticeWritesOnThePill() {
+  @Test
+  func onlyTheSilentMicNoticeWritesOnThePill() {
     // Every other state is a status word or the meter; a pill-text there would
     // widen the pill for it too.
     let others: [OverlayUIState] = [
@@ -90,14 +96,16 @@ struct OverlayUIStateTests {
     #expect(others.allSatisfy { $0.pillNotice == nil })
   }
 
-  @Test func foreignCaptureErrorsKeepTheirContext() {
+  @Test
+  func foreignCaptureErrorsKeepTheirContext() {
     // A conformer's untyped error has no user-facing framing of its own.
     let error = NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Boom."])
     let phase = PipelinePhase.failed(.audioCaptureFailed(underlying: error))
     #expect(phase.overlayState == .error(message: "Audio capture failed: Boom."))
   }
 
-  @Test func missingKeyFailureMapsToIdle() {
+  @Test
+  func missingKeyFailureMapsToIdle() {
     // A missing API key is an expected setup state the shell routes to the
     // settings window — the pill stays calm idle rather than flashing red on
     // the way there. Every other failure keeps the error presentation.
@@ -125,7 +133,8 @@ struct OverlayUIStateTests {
     #expect(PipelinePhase.failed(.apiKeyMissing).overlayState == .idle)
   }
 
-  @Test func failedFallsBackWhenNoDescription() {
+  @Test
+  func failedFallsBackWhenNoDescription() {
     // Defensive: every BlurtError supplies an errorDescription today, but the
     // mapping must still produce a non-empty message if one ever returns nil.
     if case .error(let message, _) = PipelinePhase.failed(.targetAppLost).overlayState {
@@ -133,62 +142,5 @@ struct OverlayUIStateTests {
     } else {
       Issue.record("expected .error")
     }
-  }
-}
-
-/// The pill's VoiceOver label is spoken to the user, so lock the exact wording
-/// of every case here — the AppKit shell reads these strings verbatim and a
-/// silent edit would otherwise ship an unannounced regression.
-@Suite("OverlayUIState.accessibilityLabel")
-struct OverlayUIStateAccessibilityLabelTests {
-  /// One row per fixed-wording state. `.error` is excluded: its label is a rule
-  /// (echo the carried message verbatim), not a constant, so it keeps its own test.
-  static let labels: [(state: OverlayUIState, spoken: String)] = [
-    (.idle, "Blurt."),
-    (.connecting, "Connecting to the microphone."),
-    (.recording, "Recording."),
-    (.processing, "Processing."),
-    (.pasted, "Your dictation was pasted."),
-    (.noTarget, "No text field focused. Your dictation was copied to the clipboard."),
-  ]
-
-  @Test("each state speaks its fixed label", arguments: labels)
-  func stateSpeaksItsLabel(state: OverlayUIState, spoken: String) {
-    #expect(state.accessibilityLabel == spoken)
-  }
-
-  @Test func errorLabelIsTheMessageVerbatim() {
-    // The error case surfaces the failure reason directly as the spoken label,
-    // so it must echo the message it carries with no wrapping.
-    #expect(OverlayUIState.error(message: "AssemblyAI error 401.").accessibilityLabel == "AssemblyAI error 401.")
-  }
-}
-
-/// `noticeDwellSeconds` decides whether the shell holds a state or flashes it
-/// and reverts to `.idle` (nil = held), and for how long. Getting this wrong
-/// would either pin a "copied" notice on the pill forever or drop the recording
-/// indicator, so pin every case. The policy lives on the state (not in the
-/// AppKit controller) so a new notice can't ship without a dwell, and the
-/// asymmetry — errors linger to be read, a successful "Pasted" clears fast —
-/// is pinned here.
-@Suite("OverlayUIState.noticeDwellSeconds")
-struct OverlayUIStateNoticeDwellTests {
-  @Test func pastedClearsFastest() {
-    #expect(OverlayUIState.pasted.noticeDwellSeconds == 0.8)
-  }
-
-  @Test func errorAndCopiedLingerLongEnoughToRead() {
-    #expect(OverlayUIState.error(message: "boom").noticeDwellSeconds == 1.6)
-    #expect(OverlayUIState.noTarget.noticeDwellSeconds == 1.6)
-  }
-
-  @Test func steadyStatesHaveNoDwell() {
-    // Held for as long as the pipeline is in them — no auto-revert.
-    #expect(OverlayUIState.idle.noticeDwellSeconds == nil)
-    // `.connecting` in particular: a dwell would auto-revert the pill to idle
-    // mid-press, dismissing it while the mic was still opening.
-    #expect(OverlayUIState.connecting.noticeDwellSeconds == nil)
-    #expect(OverlayUIState.recording.noticeDwellSeconds == nil)
-    #expect(OverlayUIState.processing.noticeDwellSeconds == nil)
   }
 }

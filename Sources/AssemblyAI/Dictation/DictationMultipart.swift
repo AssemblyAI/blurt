@@ -26,7 +26,8 @@ public enum DictationMultipart {
     framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n",
-      "Content-Type: audio/pcm\r\n\r\n")
+      "Content-Type: audio/pcm\r\n\r\n"
+    )
   }
 
   /// UTF-8 encodes the multipart framing. One definition for all three pieces,
@@ -44,7 +45,8 @@ public enum DictationMultipart {
     var head = framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"config\"\r\n",
-      "Content-Type: application/json\r\n\r\n")
+      "Content-Type: application/json\r\n\r\n"
+    )
     head.append(config)
     head.append(framed("\r\n"))
     return head

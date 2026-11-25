@@ -21,10 +21,12 @@ struct BlurtErrorTests {
   @Test("wrapping cases include the underlying error description")
   func wrappingCasesIncludeUnderlying() {
     let underlying = NSError(
-      domain: "Test", code: 1,
+      domain: "Test",
+      code: 1,
       userInfo: [
         NSLocalizedDescriptionKey: "boom-marker-42"
-      ])
+      ]
+    )
     let wrapped: [BlurtError] = [
       .sttFailed(underlying: underlying),
       .audioCaptureFailed(underlying: underlying),
@@ -108,7 +110,8 @@ struct BlurtErrorTests {
   @Test("diagnosticName is a stable case label, not derived from the description")
   func diagnosticNamesAreCaseLabels() {
     let underlying = NSError(
-      domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "boom"])
+      domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "boom"]
+    )
     #expect(BlurtError.apiKeyMissing.diagnosticName == "apiKeyMissing")
     #expect(BlurtError.sttFailed(underlying: underlying).diagnosticName == "sttFailed")
     // Two `.sttFailed`s with different underlying errors share one bucket.

@@ -15,9 +15,45 @@ import Foundation
 extension WindowedAudioSource {
   static let unknownReason = "unknown"
 
+  /// The system's name for an interruption reason, or its number for one
+  /// this build doesn't know.
+  static func interruptionName(_ raw: Int?) -> String {
+    guard let raw else {
+      return unknownReason
+    }
+    let names: [AVCaptureSession.InterruptionReason: String] = [
+      .videoDeviceNotAvailableInBackground: "videoDeviceNotAvailableInBackground",
+      .audioDeviceInUseByAnotherClient: "audioDeviceInUseByAnotherClient",
+      .videoDeviceInUseByAnotherClient: "videoDeviceInUseByAnotherClient",
+      .videoDeviceNotAvailableWithMultipleForegroundApps: "videoDeviceNotAvailableWithMultipleForegroundApps",
+      .videoDeviceNotAvailableDueToSystemPressure: "videoDeviceNotAvailableDueToSystemPressure",
+    ]
+    return AVCaptureSession.InterruptionReason(rawValue: raw).flatMap { names[$0] } ?? "reason \(raw)"
+  }
+
+  /// The system's name for a route change reason, or its number.
+  static func routeChangeName(_ raw: UInt?) -> String {
+    guard let raw else {
+      return unknownReason
+    }
+    let names: [AVAudioSession.RouteChangeReason: String] = [
+      .unknown: "unknown",
+      .newDeviceAvailable: "newDeviceAvailable",
+      .oldDeviceUnavailable: "oldDeviceUnavailable",
+      .categoryChange: "categoryChange",
+      .override: "override",
+      .wakeFromSleep: "wakeFromSleep",
+      .noSuitableRouteForCategory: "noSuitableRouteForCategory",
+      .routeConfigurationChange: "routeConfigurationChange",
+    ]
+    return AVAudioSession.RouteChangeReason(rawValue: raw).flatMap { names[$0] } ?? "reason \(raw)"
+  }
+
   /// Registers the four observers, once.
   func observeSession() {
-    guard observers.isEmpty else { return }
+    guard observers.isEmpty else {
+      return
+    }
     observers = [
       observe(AVCaptureSession.runtimeErrorNotification, from: session) { source, notification in
         source.sessionFailed(code: (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.code ?? 0)
@@ -39,11 +75,14 @@ extension WindowedAudioSource {
 
   /// One observer, weak on the source, run on the posting thread.
   private func observe(
-    _ name: Notification.Name, from object: AnyObject,
+    _ name: Notification.Name,
+    from object: AnyObject,
     _ handle: @escaping @Sendable (WindowedAudioSource, Notification) -> Void
   ) -> any NSObjectProtocol {
     NotificationCenter.default.addObserver(forName: name, object: object, queue: nil) { [weak self] notification in
-      guard let self else { return }
+      guard let self else {
+        return
+      }
       handle(self, notification)
     }
   }
@@ -76,35 +115,5 @@ extension WindowedAudioSource {
     // The new route may deliver zeros while it comes up: not a dead mic.
     feed.holdSilence()
     eventSink.yield(.routeChanged(reason: reason, input: input))
-  }
-
-  /// The system's name for an interruption reason, or its number for one
-  /// this build doesn't know.
-  static func interruptionName(_ raw: Int?) -> String {
-    guard let raw else { return unknownReason }
-    let names: [AVCaptureSession.InterruptionReason: String] = [
-      .videoDeviceNotAvailableInBackground: "videoDeviceNotAvailableInBackground",
-      .audioDeviceInUseByAnotherClient: "audioDeviceInUseByAnotherClient",
-      .videoDeviceInUseByAnotherClient: "videoDeviceInUseByAnotherClient",
-      .videoDeviceNotAvailableWithMultipleForegroundApps: "videoDeviceNotAvailableWithMultipleForegroundApps",
-      .videoDeviceNotAvailableDueToSystemPressure: "videoDeviceNotAvailableDueToSystemPressure",
-    ]
-    return AVCaptureSession.InterruptionReason(rawValue: raw).flatMap { names[$0] } ?? "reason \(raw)"
-  }
-
-  /// The system's name for a route change reason, or its number.
-  static func routeChangeName(_ raw: UInt?) -> String {
-    guard let raw else { return unknownReason }
-    let names: [AVAudioSession.RouteChangeReason: String] = [
-      .unknown: "unknown",
-      .newDeviceAvailable: "newDeviceAvailable",
-      .oldDeviceUnavailable: "oldDeviceUnavailable",
-      .categoryChange: "categoryChange",
-      .override: "override",
-      .wakeFromSleep: "wakeFromSleep",
-      .noSuitableRouteForCategory: "noSuitableRouteForCategory",
-      .routeConfigurationChange: "routeConfigurationChange",
-    ]
-    return AVAudioSession.RouteChangeReason(rawValue: raw).flatMap { names[$0] } ?? "reason \(raw)"
   }
 }

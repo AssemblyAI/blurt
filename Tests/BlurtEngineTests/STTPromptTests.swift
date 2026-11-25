@@ -23,43 +23,62 @@ struct STTPromptTests {
     Case(name: "nil context → no prompt", context: nil, expected: ""),
     Case(
       name: "empty context → no prompt",
-      context: TranscriptionContext(appName: nil, priorText: nil), expected: ""),
+      context: TranscriptionContext(appName: nil, priorText: nil),
+      expected: ""
+    ),
     Case(
       name: "whitespace-only prior text → no prompt",
-      context: TranscriptionContext(appName: nil, priorText: "  \n\t"), expected: ""),
+      context: TranscriptionContext(appName: nil, priorText: "  \n\t"),
+      expected: ""
+    ),
     Case(
       name: "prior text alone → that text, verbatim",
       context: TranscriptionContext(appName: nil, priorText: "and then the build finished"),
-      expected: "and then the build finished"),
+      expected: "and then the build finished"
+    ),
     Case(
       name: "prior text is trimmed",
       context: TranscriptionContext(appName: nil, priorText: "  hello  "),
-      expected: "hello"),
+      expected: "hello"
+    ),
     Case(
       name: "newlines inside the prior chunk are preserved",
       context: TranscriptionContext(appName: nil, priorText: "Dear Sam,\n\nthanks for"),
-      expected: "Dear Sam,\n\nthanks for"),
+      expected: "Dear Sam,\n\nthanks for"
+    ),
     Case(
       name: "recent dictations alone → the history, oldest first",
       context: TranscriptionContext(
-        appName: nil, priorText: nil, recentTranscripts: ["First one.", "Second one."]),
-      expected: "First one.\nSecond one."),
+        appName: nil, priorText: nil, recentTranscripts: ["First one.", "Second one."]
+      ),
+      expected: "First one.\nSecond one."
+    ),
     Case(
       name: "history then prior chunk — the prior chunk is last",
       context: TranscriptionContext(
-        appName: nil, priorText: "thanks for", recentTranscripts: ["First one."]),
-      expected: "First one.\nthanks for"),
+        appName: nil, priorText: "thanks for", recentTranscripts: ["First one."]
+      ),
+      expected: "First one.\nthanks for"
+    ),
     Case(
       name: "blank history entries are dropped, not joined as empty lines",
       context: TranscriptionContext(
-        appName: nil, priorText: nil, recentTranscripts: ["real", "   ", "\n", "also real"]),
-      expected: "real\nalso real"),
+        appName: nil, priorText: nil, recentTranscripts: ["real", "   ", "\n", "also real"]
+      ),
+      expected: "real\nalso real"
+    ),
     Case(
       name: "every other signal, no history and no prior text → no prompt",
       context: TranscriptionContext(
-        appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message",
-        priorText: nil, selectedText: "the draft", keyTerms: ["Blurt"]),
-      expected: ""),
+        appName: "Slack",
+        priorText: nil,
+        windowTitle: "#eng-backend",
+        fieldLabel: "Message",
+        selectedText: "the draft",
+        keyTerms: ["Blurt"]
+      ),
+      expected: ""
+    ),
   ]
 
   @Test("text maps the history and the prior chunk to one ordered prompt", arguments: cases)
@@ -74,8 +93,10 @@ struct STTPromptTests {
     // it is also the newest history entry. Sent as both, the model sees one
     // utterance twice over.
     let context = TranscriptionContext(
-      appName: "Slack", priorText: "Let's ship Friday. ",
-      recentTranscripts: ["Morning all.", "Let's ship Friday."])
+      appName: "Slack",
+      priorText: "Let's ship Friday. ",
+      recentTranscripts: ["Morning all.", "Let's ship Friday."]
+    )
     #expect(STTPrompt.text(context: context) == "Morning all.\nLet's ship Friday.")
   }
 
@@ -84,8 +105,10 @@ struct STTPromptTests {
     // Three dictations into the same composer: the prior chunk is all three, so all
     // three history entries are already spoken for.
     let context = TranscriptionContext(
-      appName: "Slack", priorText: "One. Two. Three.",
-      recentTranscripts: ["Older elsewhere.", "One.", "Two.", "Three."])
+      appName: "Slack",
+      priorText: "One. Two. Three.",
+      recentTranscripts: ["Older elsewhere.", "One.", "Two.", "Three."]
+    )
     #expect(STTPrompt.text(context: context) == "Older elsewhere.\nOne. Two. Three.")
   }
 
@@ -95,8 +118,10 @@ struct STTPromptTests {
     // of the run is in the chunk, and everything before it is genuine history the
     // chunk cannot speak for — including text that appears earlier in the field.
     let context = TranscriptionContext(
-      appName: "Slack", priorText: "Two. typed by hand. Three.",
-      recentTranscripts: ["Two.", "Three."])
+      appName: "Slack",
+      priorText: "Two. typed by hand. Three.",
+      recentTranscripts: ["Two.", "Three."]
+    )
     #expect(STTPrompt.text(context: context) == "Two.\nTwo. typed by hand. Three.")
   }
 
@@ -105,8 +130,10 @@ struct STTPromptTests {
     // Suffix, not "contains": text the user dictated earlier and that happens to
     // appear mid-field is not what this utterance continues from.
     let context = TranscriptionContext(
-      appName: "Slack", priorText: "Ship it. Then follow up.",
-      recentTranscripts: ["Ship it."])
+      appName: "Slack",
+      priorText: "Ship it. Then follow up.",
+      recentTranscripts: ["Ship it."]
+    )
     #expect(STTPrompt.text(context: context) == "Ship it.\nShip it. Then follow up.")
   }
 
@@ -118,7 +145,8 @@ struct STTPromptTests {
     // getting this wrong is a 400 on every dictation rather than a long request.
     let history = (1...40).map { "\($0) " + String(repeating: "word ", count: 39) + "word" }
     let prompt = STTPrompt.text(
-      context: TranscriptionContext(appName: nil, priorText: nil, recentTranscripts: history))
+      context: TranscriptionContext(appName: nil, priorText: nil, recentTranscripts: history)
+    )
     #expect(prompt.unicodeScalars.count <= STTPrompt.characterCap)
     // A contiguous newest run, separators and all: the newest entry is last, and no
     // older one was skipped to squeeze a shorter one in behind it.
@@ -135,7 +163,9 @@ struct STTPromptTests {
     let history = (1...120).map { "u\($0)" }
     let prompt = STTPrompt.text(
       context: TranscriptionContext(
-        appName: nil, priorText: "at the cursor", recentTranscripts: history))
+        appName: nil, priorText: "at the cursor", recentTranscripts: history
+      )
+    )
     #expect(prompt.components(separatedBy: STTPrompt.turnSeparator).count == 121)
     #expect(prompt.hasSuffix("\nat the cursor"))
   }
@@ -147,7 +177,8 @@ struct STTPromptTests {
     // request would 400 before the audio was read.
     let history = (1...64).map { _ in String(repeating: "a", count: 64) }
     let prompt = STTPrompt.text(
-      context: TranscriptionContext(appName: nil, priorText: nil, recentTranscripts: history))
+      context: TranscriptionContext(appName: nil, priorText: nil, recentTranscripts: history)
+    )
     #expect(prompt.unicodeScalars.count <= STTPrompt.characterCap)
   }
 
@@ -160,7 +191,9 @@ struct STTPromptTests {
     let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"  // 1 grapheme, 5 scalars
     let prompt = STTPrompt.text(
       context: TranscriptionContext(
-        appName: nil, priorText: String(repeating: family, count: 820)))
+        appName: nil, priorText: String(repeating: family, count: 820)
+      )
+    )
     #expect(prompt.unicodeScalars.count <= STTPrompt.characterCap)
     #expect(prompt.count < STTPrompt.characterCap)  // graphemes alone would have fit
   }
@@ -172,9 +205,10 @@ struct STTPromptTests {
     // utterance continues from the text nearest the cursor, so the oldest end is
     // the part worth losing. Dropping it instead would send no context at all,
     // which is strictly worse.
-    let longPrior = String(repeating: "word ", count: 2000) + "end"
+    let longPrior = String(repeating: "word ", count: 2_000) + "end"
     let prompt = STTPrompt.text(
-      context: TranscriptionContext(appName: nil, priorText: longPrior))
+      context: TranscriptionContext(appName: nil, priorText: longPrior)
+    )
     #expect(prompt.unicodeScalars.count == STTPrompt.characterCap)
     #expect(prompt.hasSuffix("end"))
     #expect(!prompt.contains(STTPrompt.turnSeparator))
@@ -188,37 +222,9 @@ struct STTPromptTests {
     let old = String(repeating: "a", count: STTPrompt.characterCap - 6)
     let prompt = STTPrompt.text(
       context: TranscriptionContext(
-        appName: nil, priorText: "newest", recentTranscripts: [old, "middle"]))
+        appName: nil, priorText: "newest", recentTranscripts: [old, "middle"]
+      )
+    )
     #expect(prompt == "middle\nnewest")
-  }
-}
-
-/// What the context is *not* allowed to carry. Every signal below is captured at
-/// press time and kept on the machine: the focus fields drive the paste path
-/// (the leading separator, the injector's window identity) and the developer-mode
-/// log, and the key terms ride their own request field (`KeyTerms`) rather
-/// than this one. `text` is the only door to the wire, so this suite is what
-/// stands between a captured context and AssemblyAI's servers.
-@Suite("STTPrompt scope")
-struct STTPromptScopeTests {
-  /// The richest context the capture path can produce — every signal populated.
-  private let context = TranscriptionContext(
-    appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message",
-    priorText: "thanks for", selectedText: "the draft",
-    recentTranscripts: ["Shipping the release notes now."], keyTerms: ["Blurt"])
-
-  @Test(
-    "no local-only signal reaches the wire",
-    arguments: ["Slack", "#eng-backend", "Message", "the draft", "Blurt"])
-  func signalStaysLocal(_ signal: String) {
-    #expect(!STTPrompt.text(context: context).contains(signal))
-  }
-
-  @Test("the prompt is exactly the history then the prior chunk")
-  func promptIsHistoryThenPriorChunk() {
-    // Pinned whole, not just signal by signal: a new field appended to the prompt
-    // would pass every containment check above and fail here.
-    #expect(
-      STTPrompt.text(context: context) == "Shipping the release notes now.\nthanks for")
   }
 }

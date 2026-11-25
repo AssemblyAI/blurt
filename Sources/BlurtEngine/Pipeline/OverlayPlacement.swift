@@ -28,7 +28,8 @@ public enum OverlayPlacement {
   public static func panelSize(pillSize: CGSize, shadowMargin: CGFloat) -> CGSize {
     CGSize(
       width: pillSize.width + shadowMargin * 2,
-      height: pillSize.height + shadowMargin * 2)
+      height: pillSize.height + shadowMargin * 2
+    )
   }
 
   /// Resolves the *panel* origin from what the shell genuinely owns — the screen's
@@ -44,7 +45,8 @@ public enum OverlayPlacement {
       panelSize: panelSize,
       visibleFrame: visibleFrame,
       customOrigin: customOrigin,
-      bottomOffset: defaultBottomClearance - shadowMargin)
+      bottomOffset: defaultBottomClearance - shadowMargin
+    )
   }
 
   /// Resolves the panel's origin: the user's dragged `customOrigin` clamped
@@ -63,7 +65,8 @@ public enum OverlayPlacement {
     guard let customOrigin else {
       return CGPoint(
         x: visibleFrame.midX - panelSize.width / 2,
-        y: visibleFrame.minY + bottomOffset)
+        y: visibleFrame.minY + bottomOffset
+      )
     }
     return clamped(origin: customOrigin, size: panelSize, into: visibleFrame)
   }
@@ -78,6 +81,7 @@ public enum OverlayPlacement {
     let maxY = rect.maxY - size.height
     return CGPoint(
       x: min(max(origin.x, rect.minX), maxX),
-      y: min(max(origin.y, rect.minY), maxY))
+      y: min(max(origin.y, rect.minY), maxY)
+    )
   }
 }

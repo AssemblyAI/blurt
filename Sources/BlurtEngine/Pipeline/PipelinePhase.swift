@@ -48,8 +48,11 @@ public enum PipelinePhase: Equatable, Sendable {
   /// swallowing the user's next press.
   public var isTerminal: Bool {
     switch self {
-    case .idle, .failed, .cancelled, .pasted, .noTarget, .handedBack: true
-    case .connecting, .recording, .transcribing, .injecting: false
+    case .idle, .failed, .cancelled, .pasted, .noTarget, .handedBack:
+      true
+
+    case .connecting, .recording, .transcribing, .injecting:
+      false
     }
   }
 
@@ -60,8 +63,11 @@ public enum PipelinePhase: Equatable, Sendable {
   /// Exhaustive for the same reason as `isTerminal`.
   public var isCapturing: Bool {
     switch self {
-    case .connecting, .recording: true
-    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget, .handedBack: false
+    case .connecting, .recording:
+      true
+
+    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget, .handedBack:
+      false
     }
   }
 
@@ -77,7 +83,9 @@ public enum PipelinePhase: Equatable, Sendable {
   /// meant remembering both sites, and missing either gives a red flash with no
   /// route to the fix, or a press that silently does nothing.
   public var setupBlocker: BlurtError? {
-    guard case .failed(let error) = self, error.isSetupBlocker else { return nil }
+    guard case .failed(let error) = self, error.isSetupBlocker else {
+      return nil
+    }
     return error
   }
 }
@@ -92,7 +100,9 @@ extension BlurtError {
   /// red flash with no route to the fix.
   var isSetupBlocker: Bool {
     switch self {
-    case .apiKeyMissing: true
+    case .apiKeyMissing:
+      true
+
     case .accessibilityPermissionMissing, .sttFailed, .targetAppLost, .audioCaptureFailed,
       .noEditableTarget:
       false
@@ -108,8 +118,9 @@ extension BlurtError: Equatable {
       (.targetAppLost, .targetAppLost),
       (.noEditableTarget, .noEditableTarget):
       return true
-    case (.sttFailed(let lhsUnderlying), .sttFailed(let rhsUnderlying)),
-      (.audioCaptureFailed(let lhsUnderlying), .audioCaptureFailed(let rhsUnderlying)):
+
+    case let (.sttFailed(lhsUnderlying), .sttFailed(rhsUnderlying)),
+      let (.audioCaptureFailed(lhsUnderlying), .audioCaptureFailed(rhsUnderlying)):
       // Compare wrapped errors by their bridged NSError identity (domain + code)
       // rather than `localizedDescription`. The description is human-facing copy:
       // comparing it would make equality silently depend on message wording, so a
@@ -121,6 +132,7 @@ extension BlurtError: Equatable {
       let lhsError = lhsUnderlying as NSError
       let rhsError = rhsUnderlying as NSError
       return lhsError.domain == rhsError.domain && lhsError.code == rhsError.code
+
     default:
       return false
     }

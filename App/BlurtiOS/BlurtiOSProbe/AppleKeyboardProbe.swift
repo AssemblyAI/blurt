@@ -16,9 +16,13 @@ final class AppleKeyboardProbe: XCTestCase {
       // Let the predictive bar and the key pop-in settle.
       Thread.sleep(forTimeInterval: 1.5)
       let record = KeyboardMeasure.record(
-        face: face, app: app, keyboard: keyboard.frame, keys: keyboard.keys.allElementsBoundByIndex,
+        face: face,
+        app: app,
+        keyboard: keyboard.frame,
+        keys: keyboard.keys.allElementsBoundByIndex,
         others: Array(keyboard.otherElements.allElementsBoundByIndex.prefix(24)),
-        buttons: Array(keyboard.buttons.allElementsBoundByIndex.prefix(24)))
+        buttons: Array(keyboard.buttons.allElementsBoundByIndex.prefix(24))
+      )
       try KeyboardMeasure.attach(record, prefix: "apple", face: face, app: app, to: self)
       app.terminate()
     }

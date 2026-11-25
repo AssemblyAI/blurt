@@ -5,27 +5,55 @@ import UIKit
 // MARK: - The keys that are Blurt's: the term field's, and the undo
 
 extension KeyboardModel {
+  // MARK: Quick-add key term
+
+  /// The most characters a highlighted word may have and still be offered as
+  /// a key term: a name or a phrase, not a sentence.
+  package static let termLengthCap = 48
+
+  /// How long the + (or the chip) shows its check after a term was saved.
+  package static let termNoticeDwell: TimeInterval = 1.2
+
+  /// A selection as a key term: trimmed, on one line, short enough to be a
+  /// name or a phrase. Nil when it is none of those, or nothing is selected.
+  package static func termCandidate(from selected: String?) -> String? {
+    guard let trimmed = selected.trimmedNonEmpty(), trimmed.count <= termLengthCap,
+      !trimmed.contains(where: \.isNewline)
+    else {
+      return nil
+    }
+    return trimmed
+  }
+
   /// A character typed while the term field is open goes into the term, not
   /// the host. (The host's typing is KeyboardKit's.)
   package func termType(_ text: String) {
-    guard termDraft != nil else { return }
+    guard termDraft != nil else {
+      return
+    }
     termDraft?.append(text)
   }
 
   /// A space in the term: one between words, never a run and never first.
   package func termSpace() {
-    guard let draft = termDraft, !draft.isEmpty, !draft.hasSuffix(" ") else { return }
+    guard let draft = termDraft, !draft.isEmpty, !draft.hasSuffix(" ") else {
+      return
+    }
     termDraft?.append(" ")
   }
 
   package func termDelete() {
-    guard termDraft != nil else { return }
+    guard termDraft != nil else {
+      return
+    }
     _ = termDraft?.popLast()
   }
 
   /// Return saves the term.
   package func termReturn() {
-    guard termDraft != nil else { return }
+    guard termDraft != nil else {
+      return
+    }
     saveTerm()
   }
 
@@ -34,21 +62,6 @@ extension KeyboardModel {
   /// notification.
   package func hostEdited() {
     readSelection()
-  }
-
-  // MARK: Quick-add key term
-
-  /// The most characters a highlighted word may have and still be offered as
-  /// a key term: a name or a phrase, not a sentence.
-  package static let termLengthCap = 48
-
-  /// A selection as a key term: trimmed, on one line, short enough to be a
-  /// name or a phrase. Nil when it is none of those, or nothing is selected.
-  package static func termCandidate(from selected: String?) -> String? {
-    guard let trimmed = selected.trimmedNonEmpty(), trimmed.count <= termLengthCap,
-      !trimmed.contains(where: \.isNewline)
-    else { return nil }
-    return trimmed
   }
 
   /// What is highlighted in the host's text, as a key-term candidate, and
@@ -82,7 +95,9 @@ extension KeyboardModel {
   /// the user leaves it, and a chip that stayed with it read as stuck. A tap
   /// on a chip for a word Blurt already has puts the + back at once.
   package func addSelectedTerm() {
-    guard let term = selectedTerm else { return }
+    guard let term = selectedTerm else {
+      return
+    }
     guard !selectedTermIsKnown else {
       dismissSelection()
       return
@@ -158,8 +173,8 @@ extension KeyboardModel {
       (proxy?.documentContextBeforeInput ?? "") == (baseline ?? "")
     {
       // The selection may have carried the spaces around the word; keep them.
-      let lead = selected.prefix { $0.isWhitespace }
-      let trail = selected.reversed().prefix { $0.isWhitespace }.reversed()
+      let lead = selected.prefix(while: \.isWhitespace)
+      let trail = selected.reversed().prefix(while: \.isWhitespace).reversed()
       proxy?.insertText(String(lead) + draft + String(trail))
     }
     // The word is saved; whatever is still highlighted, the + is back with
@@ -180,7 +195,9 @@ extension KeyboardModel {
     let saved = selectedTerm
     termNotice = Task { [weak self] in
       try? await Task.sleep(for: .seconds(Self.termNoticeDwell))
-      guard !Task.isCancelled, let self else { return }
+      guard !Task.isCancelled, let self else {
+        return
+      }
       termSavedAt = nil
       if thenDismissChip, let saved, let current = selectedTerm,
         current.caseInsensitiveCompare(saved) == .orderedSame
@@ -189,9 +206,6 @@ extension KeyboardModel {
       }
     }
   }
-
-  /// How long the + (or the chip) shows its check after a term was saved.
-  package static let termNoticeDwell: TimeInterval = 1.2
 
   /// Brings the app forward — to open the microphone, the one thing a
   /// keyboard cannot do for itself, or to finish its setup — at the URL the

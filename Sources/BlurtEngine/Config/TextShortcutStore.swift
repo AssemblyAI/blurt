@@ -22,13 +22,9 @@ public struct TextShortcutStore {
   public static let triggerLimit = 60
 
   /// The most `Character`s an expansion may hold.
-  public static let expansionLimit = 2000
+  public static let expansionLimit = 2_000
 
   private let defaults: UserDefaults
-
-  public init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
 
   /// The user's shortcuts, in their own order, normalized on the way out as
   /// well as in so a hand-edited defaults value can't reach the expander raw.
@@ -39,19 +35,16 @@ public struct TextShortcutStore {
       // dropping the write beats trapping in a settings sheet.
       guard let data = try? JSONEncoder().encode(Self.normalized(newValue)),
         let json = String(data: data, encoding: .utf8)
-      else { return }
+      else {
+        return
+      }
       defaults.set(json, forKey: Self.defaultsKey)
     }
   }
 
-  /// The shortcuts behind a raw slot value a SwiftUI view has already observed
-  /// — the same decode and normalization the getter uses. Blank or undecodable
-  /// reads as no shortcuts.
-  public func shortcuts(decoding raw: String) -> [TextShortcut] {
-    guard !raw.isEmpty,
-      let decoded = try? JSONDecoder().decode([TextShortcut].self, from: Data(raw.utf8))
-    else { return [] }
-    return Self.normalized(decoded)
+  /// A store over `defaults`; tests pass an isolated suite.
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 
   /// The one funnel every list passes through, on read and on write: trimmed
@@ -65,8 +58,8 @@ public struct TextShortcutStore {
     for shortcut in shortcuts {
       guard result.count < shortcutLimit,
         let trigger = shortcut.trigger.trimmedNonEmpty().map({ String($0.prefix(triggerLimit)) }),
-        let expansion = shortcut.expansion.trimmedNonEmpty().map({
-          String($0.prefix(expansionLimit))
+        let expansion = shortcut.expansion.trimmedNonEmpty().map({ trimmed in
+          String(trimmed.prefix(expansionLimit))
         }),
         case let key = TextShortcut.matchKey(for: trigger), !key.isEmpty,
         seen.insert(key).inserted
@@ -74,5 +67,17 @@ public struct TextShortcutStore {
       result.append(TextShortcut(id: shortcut.id, trigger: trigger, expansion: expansion))
     }
     return result
+  }
+
+  /// The shortcuts behind a raw slot value a SwiftUI view has already observed
+  /// — the same decode and normalization the getter uses. Blank or undecodable
+  /// reads as no shortcuts.
+  public func shortcuts(decoding raw: String) -> [TextShortcut] {
+    guard !raw.isEmpty,
+      let decoded = try? JSONDecoder().decode([TextShortcut].self, from: Data(raw.utf8))
+    else {
+      return []
+    }
+    return Self.normalized(decoded)
   }
 }

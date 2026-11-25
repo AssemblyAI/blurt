@@ -18,6 +18,11 @@ import SwiftUI
 /// The choice is **sticky**: a selection holds until the user makes another,
 /// so a switch is not something to redo before every dictation.
 struct StyleRow: View {
+  private enum Choice: Hashable {
+    case defaultStyle
+    case profile(StyleProfile.ID)
+  }
+
   /// Already decoded and resolved by `ReadyView`, which observes the slots —
   /// this view is pure render-and-write.
   let profiles: [StyleProfile]
@@ -25,10 +30,6 @@ struct StyleRow: View {
   /// the store resolves to the same base styling, so `nil` always shows
   /// Default as the selection.
   let activeID: StyleProfile.ID?
-  private enum Choice: Hashable {
-    case defaultStyle
-    case profile(StyleProfile.ID)
-  }
 
   var body: some View {
     SettingRow(
@@ -60,6 +61,7 @@ struct StyleRow: View {
         switch chosen {
         case .defaultStyle:
           StyleProfileStore().activateDefault()
+
         case .profile(let id):
           // Resolved against the list this view was handed rather than
           // re-read from the store: the tag came from that same list, so a
@@ -68,7 +70,8 @@ struct StyleRow: View {
             StyleProfileStore().activate(profile)
           }
         }
-      })
+      }
+    )
   }
 
   /// Keyboard shortcuts for the styles: ⌘1 selects Default, ⌘2…⌘5 the profiles
@@ -94,26 +97,5 @@ struct StyleRow: View {
       }
     }
     .hidden()
-  }
-}
-
-/// The Style row's section footer, shown only while enhanced transcripts are
-/// off: then every choice gives the same raw transcript, and a pop-up that
-/// changes nothing needs saying so. Otherwise the footer is empty — the
-/// selected style's name is the row's whole readout, its instructions live in
-/// Settings.
-struct StylesInertNotice: View {
-  /// The same caveat inside Settings, where the Enhanced transcripts switch is
-  /// on screen — the Styles pane's and the Keys tab's footer.
-  static let settingsText = "Turn on Enhanced transcripts to use styles."
-
-  /// Observed so the notice follows the toggle in the Settings window live.
-  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
-  private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
-
-  var body: some View {
-    if !enhancedTranscripts {
-      Text("Enhanced transcripts are off in Settings, so styles don't apply.")
-    }
   }
 }

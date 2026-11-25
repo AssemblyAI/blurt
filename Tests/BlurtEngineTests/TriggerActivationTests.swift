@@ -47,7 +47,8 @@ struct TriggerActivationTests {
     #expect(TriggerActivation.tapOrHold.hint(for: .ask) == "Tap to start and stop. Hold to ask.")
   }
 
-  @Test func mainWindowWordingNamesOnlyTheConfiguredGestures() {
+  @Test
+  func mainWindowWordingNamesOnlyTheConfiguredGestures() {
     // The ready screen must not tell a hold-only user to tap, or a tap-only
     // user to release — each gesture it names has to actually work.
     #expect(TriggerActivation.tapOrHold.startVerb == "tap")

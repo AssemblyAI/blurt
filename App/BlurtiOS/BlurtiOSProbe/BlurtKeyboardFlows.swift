@@ -10,10 +10,14 @@ import XCTest
 /// both faces and collects them.
 @MainActor
 final class BlurtKeyboardFlows: XCTestCase {
+  // The flows in `BlurtKeyboardFlows+Case.swift` launch the app again, so it can't be private.
+  // swiftlint:disable:next test_case_accessibility
   var app = XCUIApplication()
+  // The screenshot counter `shot` (in `BlurtKeyboardFlows+Helpers.swift`) numbers by.
+  // swiftlint:disable:next test_case_accessibility
   var shots = 0
 
-  func testFlows() throws {
+  func testFlows() {
     continueAfterFailure = true
     let arguments =
       ProcessInfo.processInfo.environment["BLURT_PROBE_ARGS"]?.split(separator: " ").map(String.init) ?? ["light"]
@@ -38,14 +42,12 @@ final class BlurtKeyboardFlows: XCTestCase {
     check(plus.exists, "the + present")
     checkDrawn(mic, "on appearance")
     if mic.exists { checkPlacement(mic: mic, plus: plus) }
-    try typingFlow()
-    try selectionFlow(app.textFields.firstMatch)
-    try termFlow()
-    try dictationFlow()
-    try switchAwayAndBack()
+    typingFlow()
+    selectionFlow(app.textFields.firstMatch)
+    termFlow()
+    dictationFlow()
+    switchAwayAndBack()
   }
-
-  // MARK: Helpers
 
   /// Where the mic sits: in the bottom row between space and return, on
   /// their centre line (DESIGN.md › The mic's place); the + in the bar above
@@ -56,57 +58,24 @@ final class BlurtKeyboardFlows: XCTestCase {
       NSPredicate(format: "label ==[c] %@ OR label ==[c] %@", "return", "Return")
     ).firstMatch
     check(space.exists && returnKey.exists, "space and return present")
-    guard space.exists, returnKey.exists else { return }
+    guard space.exists, returnKey.exists else {
+      return
+    }
     check(abs(mic.frame.midY - space.frame.midY) < 2, "the mic on the bottom row's centre line")
     check(
       mic.frame.minX >= space.frame.maxX - 1 && mic.frame.maxX <= returnKey.frame.minX + 1,
-      "the mic between space and return (\(mic.frame) vs \(space.frame), \(returnKey.frame))")
+      "the mic between space and return (\(mic.frame) vs \(space.frame), \(returnKey.frame))"
+    )
     let keysTop = letterKey("q").frame.minY
     check(plus.exists && plus.frame.maxY <= keysTop + 1, "the + in the bar above the keys")
     check(plus.exists && plus.frame.maxX > mic.frame.midX, "the + at the bar's trailing end")
-  }
-
-  /// Blurt's mic key, by its identifier: a key, as every KeyboardKit key is
-  /// to XCUITest (the keyboard-key trait); the system's own bottom bar has a
-  /// "Dictate" button too, and a label query lands on it.
-  func micKey() -> XCUIElement {
-    app.keys.matching(NSPredicate(format: "identifier == %@", "blurt-mic")).firstMatch
-  }
-
-  func micKey(labelled label: String) -> XCUIElement {
-    app.keys.matching(NSPredicate(format: "identifier == %@ AND label == %@", "blurt-mic", label)).firstMatch
-  }
-
-  /// A letter key, in either case.
-  func letterKey(_ letter: String) -> XCUIElement {
-    app.keys.matching(NSPredicate(format: "label ==[c] %@", letter)).firstMatch
-  }
-
-  func check(_ condition: Bool, _ what: String) {
-    print("FLOW-\(condition ? "OK" : "FAIL"): \(what)")
-    XCTAssertTrue(condition, what)
-  }
-
-  /// The mic key's pixels are there — a key with nothing drawn in it is the
-  /// failure the frame checks cannot see.
-  func checkDrawn(_ mic: XCUIElement, _ when: String) {
-    let ink = MicPixels.ink(app, mic: mic) ?? 0
-    check(ink > MicPixels.drawnThreshold, "the mic is drawn \(when) (ink \(ink))")
-  }
-
-  func shot(_ name: String) {
-    shots += 1
-    let attachment = XCTAttachment(screenshot: app.screenshot())
-    attachment.name = "flow-\(String(format: "%02d", shots))-\(name).png"
-    attachment.lifetime = .keepAlways
-    add(attachment)
   }
 }
 
 // MARK: - Flows
 
 extension BlurtKeyboardFlows {
-  private func typingFlow() throws {
+  private func typingFlow() {
     let q = letterKey("q")
     check(q.exists, "letter keys present")
     q.tap()
@@ -114,14 +83,15 @@ extension BlurtKeyboardFlows {
     let field = app.textFields.firstMatch
     check(
       (field.value as? String)?.lowercased().contains("qq") == true,
-      "letters type into the field (\(field.value ?? "-"))")
+      "letters type into the field (\(field.value ?? "-"))"
+    )
     check(app.keys["space"].exists, "space present")
     shot("typed")
   }
 
   /// Highlight the word in the field: the + becomes a chip holding it, one
   /// tap adds it, and the chip then says Blurt has it.
-  private func selectionFlow(_ field: XCUIElement) throws {
+  private func selectionFlow(_ field: XCUIElement) {
     // Double-tap the word itself — it sits at the field's leading edge — not
     // the field's empty middle, and once more after a beat if the highlight
     // didn't take the first time (a shot of the miss says why).
@@ -175,9 +145,11 @@ extension BlurtKeyboardFlows {
     Thread.sleep(forTimeInterval: 0.5)
   }
 
-  private func termFlow() throws {
+  private func termFlow() {
     let plus = app.buttons["Add a key term"]
-    guard plus.exists else { return }
+    guard plus.exists else {
+      return
+    }
     plus.tap()
     let cancel = app.buttons["Cancel"]
     check(cancel.waitForExistence(timeout: 3), "the + opens the key-term field")
@@ -191,14 +163,17 @@ extension BlurtKeyboardFlows {
     check(save.exists && save.isEnabled, "save enabled after typing")
     check(
       (field.value as? String) == hostBefore,
-      "the term's letters went to the field in the bar, not the host (\(field.value ?? "-"))")
+      "the term's letters went to the field in the bar, not the host (\(field.value ?? "-"))"
+    )
     cancel.tap()
     check(micKey().waitForExistence(timeout: 3), "cancel returns to the bar")
   }
 
-  private func dictationFlow() throws {
+  private func dictationFlow() {
     let mic = micKey()
-    guard mic.exists else { return }
+    guard mic.exists else {
+      return
+    }
     if mic.label == "Start Blurt" {
       check(false, "mic not ready: the app is not listening (\(mic.label))")
       return

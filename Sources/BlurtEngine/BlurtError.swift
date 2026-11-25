@@ -30,12 +30,23 @@ extension BlurtError {
   /// silently land in the log under a neighbour's name.
   var diagnosticName: String {
     switch self {
-    case .accessibilityPermissionMissing: "accessibilityPermissionMissing"
-    case .apiKeyMissing: "apiKeyMissing"
-    case .sttFailed: "sttFailed"
-    case .targetAppLost: "targetAppLost"
-    case .audioCaptureFailed: "audioCaptureFailed"
-    case .noEditableTarget: "noEditableTarget"
+    case .accessibilityPermissionMissing:
+      "accessibilityPermissionMissing"
+
+    case .apiKeyMissing:
+      "apiKeyMissing"
+
+    case .sttFailed:
+      "sttFailed"
+
+    case .targetAppLost:
+      "targetAppLost"
+
+    case .audioCaptureFailed:
+      "audioCaptureFailed"
+
+    case .noEditableTarget:
+      "noEditableTarget"
     }
   }
 
@@ -58,8 +69,11 @@ extension BlurtError {
   /// than routing through this property. See the case's own doc above.
   var isQuietDegradation: Bool {
     switch self {
-    case .noEditableTarget, .targetAppLost: true
-    case .accessibilityPermissionMissing, .apiKeyMissing, .sttFailed, .audioCaptureFailed: false
+    case .noEditableTarget, .targetAppLost:
+      true
+
+    case .accessibilityPermissionMissing, .apiKeyMissing, .sttFailed, .audioCaptureFailed:
+      false
     }
   }
 }
@@ -67,16 +81,29 @@ extension BlurtError {
 extension BlurtError: LocalizedError {
   public var errorDescription: String? {
     switch self {
-    case .accessibilityPermissionMissing: "Accessibility access is required."
-    case .apiKeyMissing: "Add your AssemblyAI API key in Settings to start dictating."
-    case .sttFailed(let underlying): "Transcription failed: \(underlying.localizedDescription)"
-    case .targetAppLost: "Target app lost focus or quit."
+    case .accessibilityPermissionMissing:
+      "Accessibility access is required."
+
+    case .apiKeyMissing:
+      "Add your AssemblyAI API key in Settings to start dictating."
+
+    case .sttFailed(let underlying):
+      "Transcription failed: \(underlying.localizedDescription)"
+
+    case .targetAppLost:
+      "Target app lost focus or quit."
+
     // `MicCaptureError`'s messages are already written for the user and name the
     // problem, so the prefix would only bury the device name; anything else a
     // capture throws keeps it as context.
-    case .audioCaptureFailed(let underlying as MicCaptureError): underlying.localizedDescription
-    case .audioCaptureFailed(let underlying): "Audio capture failed: \(underlying.localizedDescription)"
-    case .noEditableTarget: "No text field was focused — copied to the clipboard instead."
+    case .audioCaptureFailed(let underlying as MicCaptureError):
+      underlying.localizedDescription
+
+    case .audioCaptureFailed(let underlying):
+      "Audio capture failed: \(underlying.localizedDescription)"
+
+    case .noEditableTarget:
+      "No text field was focused — copied to the clipboard instead."
     }
   }
 }

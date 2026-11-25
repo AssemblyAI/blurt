@@ -93,8 +93,10 @@ struct VoiceCommandStepTests {
   func plainNumbers() throws {
     let steps = try VoiceCommandStep.steps(
       fromReply: #"{"steps": [{"action": "set_value", "element": 1, "value": 0.5}, "#
-        + #"{"action": "set_value", "element": 1, "value": 40}]}"#, maxSteps: 10,
-      listed: [.init(id: 1, kind: "slider", label: "Volume")])
+        + #"{"action": "set_value", "element": 1, "value": 40}]}"#,
+      maxSteps: 10,
+      listed: [.init(id: 1, kind: "slider", label: "Volume")]
+    )
     #expect(steps == [.setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40")])
     #expect(Double("0.5") == 0.5)
   }
@@ -183,7 +185,7 @@ struct VoiceCommandStepTests {
       let layout = KeyboardLayout.current()
       let letters = "abcdefghijklmnopqrstuvwxyz".map { layout[$0] }
       #expect(!letters.contains(nil))
-      #expect(Set(letters.compactMap { $0 }).count == 26)
+      #expect(Set(letters.compactMap(\.self)).count == 26)
     }
 
     @Test("a shortcut's events carry its key and every modifier, on the key-up too")

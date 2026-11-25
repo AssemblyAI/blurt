@@ -60,8 +60,11 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "…and start dictating")
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
     waitForLabel(
-      pastedLabel(in: harness), equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
-      "The dictation should paste")
+      pastedLabel(in: harness),
+      equals: UITestIdentifiers.defaultCannedTranscript,
+      timeout: 15,
+      "The dictation should paste"
+    )
   }
 
   /// A key set to ask, held over a selection, records the request and reads
@@ -74,7 +77,8 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "A held ask should record")
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
     waitForLabel(
-      spoken(in: harness), equals: "Answer to: Summarize this.", timeout: 15, "The answer should be read aloud")
+      spoken(in: harness), equals: "Answer to: Summarize this.", timeout: 15, "The answer should be read aloud"
+    )
     XCTAssertEqual(pasted(in: harness), "", "The request should not be pasted")
   }
 
@@ -92,7 +96,8 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
     let keys = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.keysSettingsTab)
     XCTAssertTrue(
       keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate: Casual")].waitForExistence(timeout: 5),
-      "The new style should have a row")
+      "The new style should have a row"
+    )
     let plain = keys.popUpButtons[UITestIdentifiers.actionKeyPicker("Dictate: No custom style")]
     plain.click()
     plain.menuItems["Right Option"].click()
@@ -102,7 +107,8 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
     dictate(in: harness, expecting: UITestIdentifiers.defaultCannedTranscript, "The bound key should dictate")
     XCTAssertTrue(
       sentStyle(in: harness).contains("keep it breezy"),
-      "The bound key should send the main window's style (got: \(sentStyle(in: harness)))")
+      "The bound key should send the main window's style (got: \(sentStyle(in: harness)))"
+    )
 
     pick("right ⌥", in: harness)
     setTranscript("Plain words.", in: harness)
@@ -131,7 +137,10 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording)
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
     waitForText(
-      pastedLabel(in: harness), containing: "alex@example.com", timeout: 15,
-      "The pasted text should carry the expansion (got: \(pasted(in: harness)))")
+      pastedLabel(in: harness),
+      containing: "alex@example.com",
+      "The pasted text should carry the expansion (got: \(pasted(in: harness)))",
+      timeout: 15
+    )
   }
 }

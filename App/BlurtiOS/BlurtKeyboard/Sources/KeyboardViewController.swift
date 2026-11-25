@@ -10,25 +10,15 @@ import UIKit
 /// the app. It never hears anything: iOS lets no keyboard use the microphone,
 /// so the app listens and this inserts.
 final class KeyboardViewController: KeyboardInputViewController {
+  private static let hostLeavingNotifications: [Notification.Name] = [
+    .NSExtensionHostWillResignActive, .NSExtensionHostDidEnterBackground,
+  ]
+
   private let model = BlurtiOSCore.KeyboardModel()
   /// The host app leaving — resigning active, going to the background —
   /// with the keyboard still up: the field goes with it, so the model ends
   /// a dictation it owns (`KeyboardModel.hostLeaving`). Removed in `deinit`.
   private var hostObservers: [any NSObjectProtocol] = []
-  private static let hostLeavingNotifications: [Notification.Name] = [
-    .NSExtensionHostWillResignActive, .NSExtensionHostDidEnterBackground,
-  ]
-
-  /// iOS drops a keyboard's controller without a word once the host is done
-  /// with it: the model's observers, heartbeat and ticks must not fire into
-  /// a keyboard that is gone. A controller is released on the main thread,
-  /// which is what lets the main-actor model be told from here.
-  deinit {
-    MainActor.assumeIsolated {
-      for observer in hostObservers { NotificationCenter.default.removeObserver(observer) }
-      model.detach()
-    }
-  }
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -38,6 +28,26 @@ final class KeyboardViewController: KeyboardInputViewController {
         Task { @MainActor in self?.model.hostLeaving() }
       }
     }
+  }
+
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    model.appeared()
+  }
+
+  /// The host's traits and text are resolved by now where they may not have
+  /// been in `viewWillAppear`. Never from a trait-change registration — that
+  /// callback runs inside the host's layout pass, and a model change made
+  /// there left the mic's drawing uncommitted in Messages (nothing drew,
+  /// every time).
+  override func viewIsAppearing(_ animated: Bool) {
+    super.viewIsAppearing(animated)
+    model.contextChanged()
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    model.disappeared()
   }
 
   /// KeyboardKit's setup, with Blurt's action handler in place first, as its
@@ -63,30 +73,10 @@ final class KeyboardViewController: KeyboardInputViewController {
   /// never `self`, is captured — the builder outlives this controller's own
   /// references, and a captured self would leak it.
   override func viewWillSetupKeyboardView() {
-    let model = self.model
+    let keyboardModel = self.model
     setupKeyboardView { controller in
-      BlurtKeyboardView(services: controller.services, context: controller.state.keyboardContext, model: model)
+      BlurtKeyboardView(services: controller.services, context: controller.state.keyboardContext, model: keyboardModel)
     }
-  }
-
-  override func viewWillAppear(_ animated: Bool) {
-    super.viewWillAppear(animated)
-    model.appeared()
-  }
-
-  /// The host's traits and text are resolved by now where they may not have
-  /// been in `viewWillAppear`. Never from a trait-change registration — that
-  /// callback runs inside the host's layout pass, and a model change made
-  /// there left the mic's drawing uncommitted in Messages (nothing drew,
-  /// every time).
-  override func viewIsAppearing(_ animated: Bool) {
-    super.viewIsAppearing(animated)
-    model.contextChanged()
-  }
-
-  override func viewWillDisappear(_ animated: Bool) {
-    super.viewWillDisappear(animated)
-    model.disappeared()
   }
 
   override func textDidChange(_ textInput: (any UITextInput)?) {
@@ -107,7 +97,20 @@ final class KeyboardViewController: KeyboardInputViewController {
   /// (the hardware-typing claim deletes back from it), and the term's rule
   /// must win.
   private func applyTermCase() {
-    guard model.termDraft != nil else { return }
+    guard model.termDraft != nil else {
+      return
+    }
     state.keyboardContext.keyboardCase = model.termWantsUppercase ? .uppercased : .lowercased
+  }
+
+  /// iOS drops a keyboard's controller without a word once the host is done
+  /// with it: the model's observers, heartbeat and ticks must not fire into
+  /// a keyboard that is gone. A controller is released on the main thread,
+  /// which is what lets the main-actor model be told from here.
+  deinit {
+    MainActor.assumeIsolated {
+      for observer in hostObservers { NotificationCenter.default.removeObserver(observer) }
+      model.detach()
+    }
   }
 }

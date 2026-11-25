@@ -48,12 +48,15 @@ public struct InstallReset {
         apiKeyCleared ? nil : "your AssemblyAI API key or sign-in",
         permissionsCleared ? nil : "Blurt’s microphone, accessibility and input-monitoring permissions",
         logsCleared ? nil : "the dictation logs",
-      ].compactMap { $0 }
-      guard !survivors.isEmpty else { return nil }
+      ].compactMap(\.self)
+      guard !survivors.isEmpty else {
+        return nil
+      }
       return AlertContent(
         title: "Blurt wasn’t fully reset",
         message: "Couldn’t clear \(survivors.formatted(.list(type: .and))). "
-          + "Everything else was reset. Quit Blurt and try again.")
+          + "Everything else was reset. Quit Blurt and try again."
+      )
     }
   }
 
@@ -82,7 +85,7 @@ public struct InstallReset {
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
       },
       // Both always run: a failed key delete mustn't leave the session behind.
-      clearAPIKey: { [keyStore.save(nil), signInStore.save(nil)].allSatisfy { $0 } },
+      clearAPIKey: { [keyStore.save(nil), signInStore.save(nil)].allSatisfy(\.self) },
       resetPermissions: {
         #if os(macOS)
           return PermissionsReset.resetAll(bundleID: bundleID)
@@ -92,7 +95,8 @@ public struct InstallReset {
           return true
         #endif
       },
-      clearLogs: { DictationLog.removeStoredLogs() })
+      clearLogs: { DictationLog.removeStoredLogs() }
+    )
   }
 
   /// The injectable composition the tests drive. Internal on purpose: the

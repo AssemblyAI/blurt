@@ -30,6 +30,17 @@ public struct SoundPackStore {
   private let defaults: UserDefaults
   private let key: String
 
+  /// The chosen pack for this store's cue, falling back to the catalog's
+  /// default when nothing valid is stored.
+  public var soundPack: SoundPack {
+    get {
+      catalog.fromPersisted(defaults.string(forKey: key))
+    }
+    nonmutating set {
+      defaults.set(newValue.id, forKey: key)
+    }
+  }
+
   /// `catalog` supplies the voices and what an unset setting means, so a
   /// read-aloud store is given a catalog defaulting to read-aloud's pack
   /// (`SoundPackCatalog.defaulting(to:)`).
@@ -38,18 +49,14 @@ public struct SoundPackStore {
     self.defaults = defaults
     self.key =
       switch cue {
-      case .dictation: Self.defaultsKey
-      case .readAloud: Self.readAloudDefaultsKey
-      case .command: Self.commandDefaultsKey
-      }
-  }
+      case .dictation:
+        Self.defaultsKey
 
-  public var soundPack: SoundPack {
-    get {
-      catalog.fromPersisted(defaults.string(forKey: key))
-    }
-    nonmutating set {
-      defaults.set(newValue.id, forKey: key)
-    }
+      case .readAloud:
+        Self.readAloudDefaultsKey
+
+      case .command:
+        Self.commandDefaultsKey
+      }
   }
 }

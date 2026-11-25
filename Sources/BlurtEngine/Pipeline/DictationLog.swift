@@ -14,6 +14,17 @@ import os
 /// switch — see `DictationLog+Errors.swift`.
 public enum DictationLog {
   struct Entry: Encodable {
+    /// Spelled out because a hand-written `encode(to:)` means the compiler no
+    /// longer derives this — the key names are the on-disk contract for anything
+    /// grepping or decoding the corpus, so they're stated rather than left to a
+    /// synthesis that no longer happens.
+    enum CodingKeys: String, CodingKey {
+      case transcript, ts, app, window, field, prior, selected, keyterms
+      case sttPrompt = "stt_prompt"
+      case rewriteMode = "rewrite_mode"
+      case outcome
+    }
+
     let transcript: String
     let ts: String
     /// Focused-app name, when one was captured. Local to this file — it is not
@@ -69,17 +80,6 @@ public enum DictationLog {
     /// 2026-11-04 — looked in the log exactly like one that landed.
     var outcome: String?
 
-    /// Spelled out because a hand-written `encode(to:)` means the compiler no
-    /// longer derives this — the key names are the on-disk contract for anything
-    /// grepping or decoding the corpus, so they're stated rather than left to a
-    /// synthesis that no longer happens.
-    enum CodingKeys: String, CodingKey {
-      case transcript, ts, app, window, field, prior, selected, keyterms
-      case sttPrompt = "stt_prompt"
-      case rewriteMode = "rewrite_mode"
-      case outcome
-    }
-
     /// Hand-written for two fields: `sttPrompt` is a plain string and
     /// `keyterms` a plain array (the repo bans optional collections), so
     /// synthesis would write `"keyterms":[]` and `"stt_prompt":""`
@@ -126,6 +126,26 @@ public enum DictationLog {
     displayPath(of: defaultURL)
   }
 
+  static let timestampFormat = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+  // Appends run on this serial queue rather than the caller's thread. The
+  // public entry point is invoked from the `DictationSession` actor mid-
+  // pipeline; doing the synchronous FileHandle I/O inline would briefly block
+  // the actor. The queue is serial so entries stay append-ordered.
+  //
+  // Internal so a test can `sync {}` on it to drain a dispatched write, rather
+  // than polling the filesystem and hoping.
+  static let queue = DispatchQueue(label: HostIdentity.current.queueLabel("DictationLog"))
+
+  /// What an entry holds in place of a transcript dictated into a password field.
+  static let withheldTranscript = "(withheld: dictated into a password field)"
+
+  /// What an entry holds in place of a transcript dictated into a field that
+  /// could not be checked for a password (`PressContext.TargetSecurity.unknown`).
+  static let unverifiedTranscript = "(withheld: the field could not be checked for a password)"
+
+  private static let logger = HostIdentity.current.logger("DictationLog")
+
   /// Deletes both halves of the developer-mode log — the transcript corpus and
   /// the sibling error log — and the directory they share once it's empty. The
   /// file half of a full reset (`InstallReset`), matching what
@@ -166,7 +186,8 @@ public enum DictationLog {
         // name, and this is the system-wide log.
         let reason = error.localizedDescription
         logger.error(
-          "removing \(url.lastPathComponent, privacy: .public) failed: \(reason, privacy: .public)")
+          "removing \(url.lastPathComponent, privacy: .public) failed: \(reason, privacy: .public)"
+        )
       }
     }
     let directory = dictations.deletingLastPathComponent()
@@ -184,17 +205,6 @@ public enum DictationLog {
     encoder.outputFormatting = [.sortedKeys]
     return encoder
   }
-
-  static let timestampFormat = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
-
-  // Appends run on this serial queue rather than the caller's thread. The
-  // public entry point is invoked from the `DictationSession` actor mid-
-  // pipeline; doing the synchronous FileHandle I/O inline would briefly block
-  // the actor. The queue is serial so entries stay append-ordered.
-  //
-  // Internal so a test can `sync {}` on it to drain a dispatched write, rather
-  // than polling the filesystem and hoping.
-  static let queue = DispatchQueue(label: HostIdentity.current.queueLabel("DictationLog"))
 
   /// Append a completed transcript to the JSONL log. **Gated on developer mode:**
   /// with the switch off (the default) this returns without touching the disk, so
@@ -214,7 +224,7 @@ public enum DictationLog {
   ) {
     // The settings are read behind the gate, like everything else the entry carries.
     gated(store: store) { now in
-      write(transcript: transcript, context: context, rewriteMode: rewriteMode(), outcome: outcome, to: url, now: now)
+      write(transcript: transcript, to: url, now: now, context: context, rewriteMode: rewriteMode(), outcome: outcome)
     }
   }
 
@@ -233,7 +243,9 @@ public enum DictationLog {
   /// file and Swift's `private` is file-scoped; nothing outside the two entry
   /// points should call it.
   static func gated(store: DeveloperModeStore, _ write: @escaping @Sendable (Date) -> Void) {
-    guard store.isEnabled else { return }
+    guard store.isEnabled else {
+      return
+    }
     let now = Date()
     queue.async { write(now) }
   }
@@ -251,16 +263,24 @@ public enum DictationLog {
   /// keeps it out of the recent-dictations ring (`DictationSession`), and
   /// `FocusCapture.mustRedactContents` already keeps the field's own text out.
   static func makeEntry(
-    transcript: String, context: TranscriptionContext?, rewriteMode: RewriteMode? = nil, outcome: PipelinePhase? = nil,
-    now: Date
+    transcript: String,
+    context: TranscriptionContext?,
+    now: Date,
+    rewriteMode: RewriteMode? = nil,
+    outcome: PipelinePhase? = nil
   ) -> Entry {
     Entry(
-      transcript: context?.targetIsSecure == true ? withheldTranscript : transcript, ts: now.formatted(timestampFormat),
-      app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
-      prior: context?.priorText, selected: context?.selectedText,
+      transcript: context?.targetIsSecure == true ? withheldTranscript : transcript,
+      ts: now.formatted(timestampFormat),
+      app: context?.appName,
+      window: context?.windowTitle,
+      field: context?.fieldLabel,
+      prior: context?.priorText,
+      selected: context?.selectedText,
       sttPrompt: STTPrompt.text(context: context),
       keyterms: KeyTerms.fitted(context?.keyTerms ?? []),
-      rewriteMode: rewriteMode.map { $0.rawValue.lowercased() }, outcome: outcome.map(outcomeName)
+      rewriteMode: rewriteMode.map { $0.rawValue.lowercased() },
+      outcome: outcome.map(outcomeName)
     )
   }
 
@@ -271,21 +291,25 @@ public enum DictationLog {
   /// `outcomeName(_: OverlayUIState?)`'s, beside it.
   static func outcomeName(_ phase: PipelinePhase) -> String {
     switch phase {
-    case .pasted: "pasted"
-    case .noTarget: "copied"
-    case .handedBack: "handed back"
-    case .cancelled: "cancelled"
-    case .failed(let error): "failed: \(error.diagnosticName)"
-    case .idle, .connecting, .recording, .transcribing, .injecting: "unfinished"
+    case .pasted:
+      "pasted"
+
+    case .noTarget:
+      "copied"
+
+    case .handedBack:
+      "handed back"
+
+    case .cancelled:
+      "cancelled"
+
+    case .failed(let error):
+      "failed: \(error.diagnosticName)"
+
+    case .idle, .connecting, .recording, .transcribing, .injecting:
+      "unfinished"
     }
   }
-
-  /// What an entry holds in place of a transcript dictated into a password field.
-  static let withheldTranscript = "(withheld: dictated into a password field)"
-
-  /// What an entry holds in place of a transcript dictated into a field that
-  /// could not be checked for a password (`PressContext.TargetSecurity.unknown`).
-  static let unverifiedTranscript = "(withheld: the field could not be checked for a password)"
 
   /// The rewrite the settings ask for: the chosen mode while enhanced
   /// transcripts are on, nil while the verbatim text is pasted. The same two
@@ -298,12 +322,17 @@ public enum DictationLog {
   /// rather than an `append` overload so the gated entry point above can't be
   /// bypassed by accidentally satisfying a different signature.
   static func write(
-    transcript: String, context: TranscriptionContext? = nil, rewriteMode: RewriteMode? = nil,
-    outcome: PipelinePhase? = nil, to url: URL, now: Date
+    transcript: String,
+    to url: URL,
+    now: Date,
+    context: TranscriptionContext? = nil,
+    rewriteMode: RewriteMode? = nil,
+    outcome: PipelinePhase? = nil
   ) {
     appendLine(
-      makeEntry(transcript: transcript, context: context, rewriteMode: rewriteMode, outcome: outcome, now: now),
-      to: url)
+      makeEntry(transcript: transcript, context: context, now: now, rewriteMode: rewriteMode, outcome: outcome),
+      to: url
+    )
   }
 
   /// Encodes one entry and appends it as a JSONL line, creating the file (and
@@ -328,7 +357,8 @@ public enum DictationLog {
       // system-wide log — and the absolute path carries the user's account name.
       let reason = error.localizedDescription
       logger.error(
-        "append to \(url.lastPathComponent, privacy: .public) failed: \(reason, privacy: .public)")
+        "append to \(url.lastPathComponent, privacy: .public) failed: \(reason, privacy: .public)"
+      )
     }
   }
 
@@ -339,7 +369,8 @@ public enum DictationLog {
     let path = url.path(percentEncoded: false)
     if !FileManager.default.fileExists(atPath: path) {
       try FileManager.default.createDirectory(
-        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+      )
       FileManager.default.createFile(atPath: path, contents: nil)
     }
     let handle = try FileHandle(forWritingTo: url)
@@ -349,6 +380,4 @@ public enum DictationLog {
     _ = try handle.seekToEnd()
     try handle.write(contentsOf: line)
   }
-
-  private static let logger = HostIdentity.current.logger("DictationLog")
 }

@@ -24,20 +24,34 @@ public enum MenuBarStatus: Equatable, Sendable {
   /// live in one unit-tested place, mirroring `OverlayUIState.accessibilityLabel`.
   public var symbolName: String {
     switch self {
-    case .idle: "b.circle"
-    case .recording: "b.circle.fill"
-    case .transcribing: "waveform"
-    case .recordingAudio: "record.circle"
+    case .idle:
+      "b.circle"
+
+    case .recording:
+      "b.circle.fill"
+
+    case .transcribing:
+      "waveform"
+
+    case .recordingAudio:
+      "record.circle"
     }
   }
 
   /// Spoken by VoiceOver, since the menu bar glyph is otherwise unlabelled.
   public var accessibilityLabel: String {
     switch self {
-    case .idle: "Blurt — idle"
-    case .recording: "Blurt — recording"
-    case .transcribing: "Blurt — transcribing"
-    case .recordingAudio: "Blurt — recording mic and Mac audio"
+    case .idle:
+      "Blurt — idle"
+
+    case .recording:
+      "Blurt — recording"
+
+    case .transcribing:
+      "Blurt — transcribing"
+
+    case .recordingAudio:
+      "Blurt — recording mic and Mac audio"
     }
   }
 
@@ -45,7 +59,7 @@ public enum MenuBarStatus: Equatable, Sendable {
   /// dictation in progress wins (it's the brief, foreground thing), and
   /// otherwise a recording that's capturing shows — a paused one doesn't,
   /// for the same honesty rule that keeps `.connecting` idle.
-  public func showing(recordingAudio isCapturing: Bool) -> MenuBarStatus {
+  public func showing(recordingAudio isCapturing: Bool) -> Self {
     self == .idle && isCapturing ? .recordingAudio : self
   }
 }
@@ -54,14 +68,19 @@ extension PipelinePhase {
   /// How this phase should be reflected on the menu bar status item.
   public var menuBarStatus: MenuBarStatus {
     switch self {
-    case .recording: .recording
-    case .transcribing: .transcribing
+    case .recording:
+      .recording
+
+    case .transcribing:
+      .transcribing
+
     // `.connecting` reads as idle: the filled glyph means "audio is being
     // captured", and during the mic bring-up it isn't yet — the same honesty
     // rule that holds the start chime. The pill carries the warming-up state,
     // and a distinct fourth glyph isn't worth it for something usually gone
     // within a frame on a wired mic.
-    case .idle, .connecting, .injecting, .cancelled, .failed, .pasted, .noTarget, .handedBack: .idle
+    case .idle, .connecting, .injecting, .cancelled, .failed, .pasted, .noTarget, .handedBack:
+      .idle
     }
   }
 }

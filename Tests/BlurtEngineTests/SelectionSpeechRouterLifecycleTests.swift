@@ -9,17 +9,26 @@ import Testing
 @MainActor
 @Suite("SelectionSpeechRouter lifecycle")
 struct SelectionSpeechRouterLifecycleTests {
+  /// A router under test, what it reported, and the session behind it.
+  private struct Rig {
+    let router: SelectionSpeechRouter
+    let events: Events
+    let fixture: SessionFixture
+  }
+
   private let defaults = freshDefaults()
 
   /// A router over `speaker`, the selection read returning `selection()` each
   /// time, recording every callback it makes.
   private func router(
-    _ speaker: GatedSpeaker, selection: @escaping @Sendable () -> String? = { "Hello there." },
+    _ speaker: GatedSpeaker,
+    selection: @escaping @Sendable () -> String? = { "Hello there." },
     clock: any Clock<Duration> = ContinuousClock()
   ) -> Rig {
     let fixture = makeSession()
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults, clock: clock)
+      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults, clock: clock
+    )
     let events = Events()
     router.speechStarted = { events.started += 1 }
     router.speechEnded = { events.ended += 1 }
@@ -27,13 +36,6 @@ struct SelectionSpeechRouterLifecycleTests {
     router.speechFailed = { _ in events.failures += 1 }
     router.resetGate = { events.resets += 1 }
     return Rig(router: router, events: events, fixture: fixture)
-  }
-
-  /// A router under test, what it reported, and the session behind it.
-  private struct Rig {
-    let router: SelectionSpeechRouter
-    let events: Events
-    let fixture: SessionFixture
   }
 
   /// A tap of left ⌥ (reading aloud by default): press, then the gate's latch.
@@ -218,66 +220,5 @@ struct SelectionSpeechRouterLifecycleTests {
     #expect(clock.sleepingFor == [hold], "the first press's timer outlived the second press")
     clock.advance(by: hold)
     try await waitUntil { events.started == 1 }
-  }
-}
-
-/// What the router reported, in order.
-@MainActor
-private final class Events {
-  var started = 0
-  var ended = 0
-  var levels: [Float] = []
-  var failures = 0
-  var resets = 0
-}
-
-/// A speaker that records each call and "plays" until stopped or released. A
-/// stopped one reports one more meter level as it unwinds — a tick already on
-/// its way — before throwing.
-final class GatedSpeaker: ReadAloudSpeaker, Sendable {
-  struct Call: Sendable {
-    let kind: String
-    let style: ReadAloudStyle
-  }
-
-  private struct State {
-    var calls: [Call] = []
-    var cancellations = 0
-    var released = false
-  }
-
-  private let state = Mutex(State())
-  private let fails: Bool
-
-  init(fails: Bool = false) { self.fails = fails }
-
-  var calls: [Call] { state.withLock(\.calls) }
-  var cancellations: Int { state.withLock(\.cancellations) }
-
-  /// Lets every read playing now, and any later, finish on its own.
-  func finishAll() { state.withLock { $0.released = true } }
-
-  func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws {
-    try await play(Call(kind: "speak: \(text)", style: style), onLevel: onLevel)
-  }
-
-  func answer(
-    _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
-  ) async throws {
-    try await play(Call(kind: "answer: \(request)", style: style), onLevel: onLevel)
-  }
-
-  private func play(_ call: Call, onLevel: (@Sendable (Float) -> Void)?) async throws {
-    state.withLock { $0.calls.append(call) }
-    if fails { throw URLError(.badServerResponse) }
-    while !state.withLock(\.released) {
-      do {
-        try await Task.sleep(for: .milliseconds(5))
-      } catch {
-        state.withLock { $0.cancellations += 1 }
-        onLevel?(0.7)
-        throw error
-      }
-    }
   }
 }

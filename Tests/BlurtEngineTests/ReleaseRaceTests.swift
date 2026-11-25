@@ -12,7 +12,6 @@ import Testing
 /// These tests pin both halves of that ordering.
 @Suite("DictationSession release races", .timeLimit(.minutes(1)))
 struct ReleaseRaceTests {
-
   // Fresh doubles for every test: Swift Testing builds a new suite instance per
   // test. The gated mic parks `stop()` until the test calls `allowStopToFinish()`.
   private let mic = GatedStopMic()
@@ -24,7 +23,7 @@ struct ReleaseRaceTests {
   }
 
   @Test("a second release during mic.stop is dropped, not run twice")
-  func reentrantReleaseRunsPipelineOnce() async throws {
+  func reentrantReleaseRunsPipelineOnce() async {
     await session.press()
     #expect(await session.phase == .recording)
 
@@ -54,7 +53,7 @@ struct ReleaseRaceTests {
   }
 
   @Test("release claims .transcribing before mic.stop completes")
-  func transcribingClaimedBeforeMicStopReturns() async throws {
+  func transcribingClaimedBeforeMicStopReturns() async {
     await session.press()
     let release = Task { await session.release() }
     await mic.waitUntilStopEntered()

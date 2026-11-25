@@ -7,10 +7,16 @@ import Testing
 /// which answer settles which press, the resend and the deadline, what every
 /// command carries, and the term field closing a live dictation. The latch
 /// over another keyboard's dictation, the stop and the record's changes are
-/// in `KeyboardModelGateTests+Latch.swift`.
+/// in `KeyboardModelLatchTests.swift`.
 @Suite("Keyboard model: the handshake and the app's answers", .serialized)
 @MainActor
 struct KeyboardModelGateTests {
+  /// A settable clock for `KeyboardModel.now`.
+  private final class SteppedClock {
+    var now: Date
+
+    init(_ now: Date) { self.now = now }
+  }
 
   @Test("a settled phase settles the gate only when it answers the press; an older notice does not")
   func resetOnSettled() throws {
@@ -137,7 +143,7 @@ struct KeyboardModelGateTests {
   }
 
   @Test("an unanswered press expires at the deadline: the gate comes up, the line says so, and the next tap hops")
-  func unansweredPressExpires() throws {
+  func unansweredPressExpires() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     let rig = KeyboardRig()
@@ -193,7 +199,7 @@ struct KeyboardModelGateTests {
     model.beginAddingTerm()
     #expect(commands.sent.map(\.kind) == [.press, .release])
     #expect(commands.sent.last?.dictationID == dictation)
-    #expect(model.termDraft == "")
+    #expect(model.termDraft?.isEmpty == true)
     // The gate stays the handshake's: it comes up when the stop is answered.
     #expect(!model.gate.isIdle)
     rig.answer(.stopped(dictation))
@@ -277,12 +283,6 @@ struct KeyboardModelGateTests {
     // A hold's lift would have queued the stop, and the answer sent it.
     #expect(model.handshake.isOwned && model.handshake.dictationID == dictation)
     #expect(commands.sent.map(\.kind) == [.press])
-  }
-
-  /// A settable clock for `KeyboardModel.now`.
-  private final class SteppedClock {
-    var now: Date
-    init(_ now: Date) { self.now = now }
   }
 }
 

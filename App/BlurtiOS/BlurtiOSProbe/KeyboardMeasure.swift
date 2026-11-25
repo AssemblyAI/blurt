@@ -21,8 +21,12 @@ enum KeyboardMeasure {
   /// the simulator once by hand (Settings → General → Keyboard → Keyboards).
   static func bringUpBlurt(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
     bringUp(
-      app, until: blurtMark(app), named: "Blurt's keyboard (enable it in Settings → General → Keyboard)",
-      file: file, line: line)
+      app,
+      until: blurtMark(app),
+      named: "Blurt's keyboard (enable it in Settings → General → Keyboard)",
+      file: file,
+      line: line
+    )
   }
 
   /// Cycles the globe until the system keyboard is up — XCUITest's one
@@ -30,9 +34,12 @@ enum KeyboardMeasure {
   /// keyboard the field remembers from the last run.
   static func bringUpSystem(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
     bringUp(
-      app, until: app.keyboards.firstMatch,
-      named: "the system keyboard (turn off 'simulate hardware keyboard' in Device Hub / Simulator)", file: file,
-      line: line)
+      app,
+      until: app.keyboards.firstMatch,
+      named: "the system keyboard (turn off 'simulate hardware keyboard' in Device Hub / Simulator)",
+      file: file,
+      line: line
+    )
   }
 
   /// Blurt's own control: the + that adds a key term.
@@ -55,7 +62,8 @@ enum KeyboardMeasure {
     while !target.waitForExistence(timeout: 2), hops < 4 {
       let globe = app.buttons["Next keyboard"]
       XCTAssertTrue(
-        globe.waitForExistence(timeout: 5), "no globe key: is more than one keyboard enabled?", file: file, line: line)
+        globe.waitForExistence(timeout: 5), "no globe key: is more than one keyboard enabled?", file: file, line: line
+      )
       globe.tap()
       hops += 1
     }
@@ -70,7 +78,11 @@ enum KeyboardMeasure {
   /// `button:` prefix (Apple's shift, return and emoji keys are buttons to
   /// XCUITest, and apple-geometry.sh reads them under that name).
   static func record(
-    face: String, app: XCUIApplication, keyboard: CGRect, keys: [XCUIElement], others: [XCUIElement],
+    face: String,
+    app: XCUIApplication,
+    keyboard: CGRect,
+    keys: [XCUIElement],
+    others: [XCUIElement],
     buttons: [XCUIElement] = []
   ) -> [String: Any] {
     var named: [String: Any] = [:]

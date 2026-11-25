@@ -56,26 +56,6 @@ final class PressContext: Sendable {
     var stream: AsyncStream<TranscriptionContext?>?
   }
 
-  /// What the actor already knew at press. The config's fallback when the read
-  /// misses its budget.
-  let pressKnown: TranscriptionContext?
-
-  private let state: Mutex<State>
-  private let feed: AsyncStream<TranscriptionContext?>.Continuation
-
-  init(pressKnown: TranscriptionContext?) {
-    self.pressKnown = pressKnown
-    let (stream, feed) = AsyncStream.makeStream(
-      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
-    self.feed = feed
-    self.state = Mutex(State(resolved: nil, stream: stream))
-  }
-
-  /// The read, once the capture queue has it. Nil until then — and nil forever
-  /// for a genuinely hung target, which is the case the release-side readers
-  /// cannot do anything about either.
-  var resolved: TranscriptionContext? { state.withLock { $0.resolved } }
-
   /// What the press-time read says about whether the target is a password field.
   enum TargetSecurity: Equatable {
     /// The read landed and the field is an ordinary one: remember the dictation
@@ -92,41 +72,44 @@ final class PressContext: Sendable {
     case unknown
   }
 
+  /// What the actor already knew at press. The config's fallback when the read
+  /// misses its budget.
+  let pressKnown: TranscriptionContext?
+
+  private let state: Mutex<State>
+  private let feed: AsyncStream<TranscriptionContext?>.Continuation
+
+  /// The read, once the capture queue has it. Nil until then — and nil forever
+  /// for a genuinely hung target, which is the case the release-side readers
+  /// cannot do anything about either.
+  var resolved: TranscriptionContext? { state.withLock { $0.resolved } }
+
   /// The verdict the remember decision acts on. Fails closed: only a read that
   /// has *landed* can say `.ordinary`; one still in flight could yet turn out
   /// to be a password field, and replaying on the strength of not knowing is
   /// exactly the leak `targetIsSecure` exists to prevent.
   var targetSecurity: TargetSecurity {
-    state.withLock {
-      guard $0.settled else { return .unknown }
-      if $0.resolved?.targetIsSecure == true { return .secure }
-      if $0.resolved?.targetSecurityUnknown == true { return .unknown }
+    state.withLock { locked in
+      guard locked.settled else {
+        return .unknown
+      }
+      if locked.resolved?.targetIsSecure == true {
+        return .secure
+      }
+      if locked.resolved?.targetSecurityUnknown == true {
+        return .unknown
+      }
       return .ordinary
     }
   }
 
-  /// Publishes the finished read. The value lands before the stream does, so
-  /// `wait` cannot outrun `resolved`.
-  func store(resolved context: TranscriptionContext?) {
-    state.withLock {
-      $0.resolved = context
-      $0.settled = true
-    }
-    feed.yield(context)
-    feed.finish()
-  }
-
-  /// The read if it arrives within `budget`, else nil — the bounded wait
-  /// `startUpload` opens the request behind. Answers nil to a second caller:
-  /// the stream is consumed once, and `resolved` is how anyone later asks.
-  func wait(within budget: Duration, clock: any Clock<Duration>) async -> TranscriptionContext? {
-    let taken: AsyncStream<TranscriptionContext?>? = state.withLock {
-      let stream = $0.stream
-      $0.stream = nil
-      return stream
-    }
-    guard let taken else { return nil }
-    return await Self.firstValue(of: taken, within: budget, clock: clock)
+  init(pressKnown: TranscriptionContext?) {
+    self.pressKnown = pressKnown
+    let (stream, continuation) = AsyncStream.makeStream(
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1)
+    )
+    self.feed = continuation
+    self.state = Mutex(State(resolved: nil, stream: stream))
   }
 
   /// The first value of `stream`, or nil once `budget` elapses on `clock`.
@@ -138,7 +121,8 @@ final class PressContext: Sendable {
   /// can exercise the race on its own; it was a static on `DictationSession`
   /// before the wait moved in here with the value it waits for.
   static func firstValue(
-    of stream: AsyncStream<TranscriptionContext?>, within budget: Duration,
+    of stream: AsyncStream<TranscriptionContext?>,
+    within budget: Duration,
     clock: any Clock<Duration>
   ) async -> TranscriptionContext? {
     await withTaskGroup(of: TranscriptionContext?.self) { group in
@@ -150,9 +134,35 @@ final class PressContext: Sendable {
         try? await clock.sleep(for: budget)
         return nil
       }
-      let winner = await group.next() ?? nil
+      let winner = await group.next().flatMap(\.self)
       group.cancelAll()
       return winner
     }
+  }
+
+  /// Publishes the finished read. The value lands before the stream does, so
+  /// `wait` cannot outrun `resolved`.
+  func store(resolved context: TranscriptionContext?) {
+    state.withLock { locked in
+      locked.resolved = context
+      locked.settled = true
+    }
+    feed.yield(context)
+    feed.finish()
+  }
+
+  /// The read if it arrives within `budget`, else nil — the bounded wait
+  /// `startUpload` opens the request behind. Answers nil to a second caller:
+  /// the stream is consumed once, and `resolved` is how anyone later asks.
+  func wait(within budget: Duration, clock: any Clock<Duration>) async -> TranscriptionContext? {
+    let taken: AsyncStream<TranscriptionContext?>? = state.withLock { locked in
+      let stream = locked.stream
+      locked.stream = nil
+      return stream
+    }
+    guard let taken else {
+      return nil
+    }
+    return await Self.firstValue(of: taken, within: budget, clock: clock)
   }
 }

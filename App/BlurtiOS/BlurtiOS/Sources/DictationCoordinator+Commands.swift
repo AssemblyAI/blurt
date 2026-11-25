@@ -13,46 +13,93 @@ extension DictationCoordinator {
   /// answered the same way (`CommandRouter`); the oldest make room.
   static let answeredCapacity = 32
 
+  /// The phase the router decides on. A press just submitted is in flight
+  /// before the session's `.connecting` has rendered: a second press in that
+  /// gap latches onto it rather than being promised a dictation of its own.
+  private var routerPhase: PhaseSnapshot.State {
+    let rendered = PhaseSnapshot.State(overlay)
+    return inFlight != nil && rendered.isSettled ? .connecting : rendered
+  }
+
+  /// Where an accepted stop sends the words: the field it came from — or, for a
+  /// keyboard build that never named its process, nowhere new, so the press's
+  /// field keeps them.
+  private static func stopAddress(_ command: KeyboardCommand, _ decision: CommandRouter.Decision) -> ResultAddress? {
+    guard decision.recipient != nil else {
+      return nil
+    }
+    return ResultAddress(command)
+  }
+
+  // MARK: The press the session takes
+
+  /// The session accepted a press: the last one asked for becomes the
+  /// dictation's, and is no longer pending. Nil, as the frontmost app: there is
+  /// none to paste into on the iPhone; the words go back to the keyboard.
+  ///
+  /// The stop's recipient is kept, not replaced: a quick release can be
+  /// accepted (`handleCommand`) before the session gets here, and it already
+  /// names where this dictation's words go. Nothing stale can be in it — it is
+  /// cleared when the last dictation ended, before any new press is accepted.
+  nonisolated static func claimPress() -> CapturedFocus? {
+    let press = pendingPress.withLock { pending in
+      defer { pending = Press() }
+      return pending
+    }
+    claimedPress.withLock { claimed in
+      claimed.address = press.address
+      claimed.context = press.context
+    }
+    return nil
+  }
+
+  /// What the keyboard saw around the cursor on the press in flight, once.
+  nonisolated static func fieldContext() -> FocusedFieldContext {
+    claimedPress.withLock { press in
+      defer { press.context = .empty }
+      return press.context
+    }
+  }
+
   /// A command landed (`Signal.command`): decided, acknowledged, and — when
   /// the router says so — submitted to the session. Decided on the window as
   /// it is this instant (`ListeningWindow.liveState`), never on the record it
   /// last wrote: a press that lands while the window is closing is refused,
   /// not promised a microphone on its way out.
   func handleCommand() {
-    guard let command = SharedStore.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) else { return }
+    guard let command = SharedStore.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) else {
+      return
+    }
     // The command is consumed: nothing re-reads it, and the text it carried
     // from the user's field doesn't sit in the group container.
     SharedStore.remove(forKey: BlurtShared.Key.command)
     let decision = CommandRouter.route(
       CommandRouter.Input(
-        command: command, state: window.liveState, phase: routerPhase, inFlight: inFlight,
-        onScreen: SharedStore.keyboardOnScreen()?.processID, answered: answered, launchID: window.launchID))
+        command: command,
+        state: window.liveState,
+        phase: routerPhase,
+        inFlight: inFlight,
+        onScreen: SharedStore.keyboardOnScreen()?.processID,
+        answered: answered,
+        launchID: window.launchID
+      )
+    )
     SharedStore.acknowledge(decision.ack)
     if decision.remember { remember(command.id, decision.ack.outcome) }
     log(command, decision)
-    guard let submit = decision.submit else { return }
+    guard let submit = decision.submit else {
+      return
+    }
     lastCommandID = command.id
     switch submit {
-    case .press(let newDictation, let owner):
-      Self.pendingPress.withLock {
-        $0 = Press(
-          address: ResultAddress(command),
-          // A password field's flag is what keeps its words out of Recent
-          // and every later request's `stt_prompt`, as on the Mac.
-          context: FocusedFieldContext(
-            priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil,
-            isSecure: command.isSecure == true))
-      }
-      inFlight = DictationRef(id: newDictation, ownerProcessID: owner)
-      answers = command.id
-      watchdogReleased = nil
-      stopAccepted = nil
-      startWatchdog()
-      session.submit(.press())
+    case let .press(newDictation, owner):
+      submitPress(command, dictation: newDictation, owner: owner)
+
     case .release:
       stopAccepted = inFlight?.id
       Self.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
       session.submit(.release)
+
     case .cancel:
       stopAccepted = inFlight?.id
       Self.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
@@ -60,20 +107,29 @@ extension DictationCoordinator {
     }
   }
 
-  /// Where an accepted stop sends the words: the field it came from — or, for a
-  /// keyboard build that never named its process, nowhere new, so the press's
-  /// field keeps them.
-  private static func stopAddress(_ command: KeyboardCommand, _ decision: CommandRouter.Decision) -> ResultAddress? {
-    guard decision.recipient != nil else { return nil }
-    return ResultAddress(command)
-  }
-
-  /// The phase the router decides on. A press just submitted is in flight
-  /// before the session's `.connecting` has rendered: a second press in that
-  /// gap latches onto it rather than being promised a dictation of its own.
-  private var routerPhase: PhaseSnapshot.State {
-    let rendered = PhaseSnapshot.State(overlay)
-    return inFlight != nil && rendered.isSettled ? .connecting : rendered
+  /// The router accepted a press: it becomes the pending one, with the field
+  /// it was made in, and the session starts a dictation for it.
+  private func submitPress(_ command: KeyboardCommand, dictation newDictation: UUID, owner: String?) {
+    Self.pendingPress.withLock { pending in
+      pending = Press(
+        address: ResultAddress(command),
+        // A password field's flag is what keeps its words out of Recent
+        // and every later request's `stt_prompt`, as on the Mac.
+        context: FocusedFieldContext(
+          priorText: command.priorText,
+          selectedText: command.selectedText,
+          windowTitle: nil,
+          fieldLabel: nil,
+          isSecure: command.isSecure == true
+        )
+      )
+    }
+    inFlight = DictationRef(id: newDictation, ownerProcessID: owner)
+    answers = command.id
+    watchdogReleased = nil
+    stopAccepted = nil
+    startWatchdog()
+    session.submit(.press())
   }
 
   private func remember(_ id: UUID, _ outcome: CommandAck.Outcome) {
@@ -109,7 +165,9 @@ extension DictationCoordinator {
     watchdog = Task { [weak self] in
       while !Task.isCancelled {
         try? await clock.sleep(for: Self.watchdogTick)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+          return
+        }
         self?.tickWatchdog()
       }
     }
@@ -129,7 +187,9 @@ extension DictationCoordinator {
   func tickWatchdog() {
     guard let inFlight, watchdogReleased != inFlight.id, stopAccepted != inFlight.id,
       OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: Date())
-    else { return }
+    else {
+      return
+    }
     watchdogReleased = inFlight.id
     Self.log.notice("watchdog released \(inFlight.id, privacy: .public): its keyboard is gone")
     DeviceTrace.record("watchdog", ["dictation": inFlight.id.uuidString])
@@ -149,10 +209,17 @@ extension DictationCoordinator {
     if let inFlight {
       let outcome =
         switch phase {
-        case .pasted: "inserted"
-        case .noTarget: "copied"
-        case .cancelled: "cancelled"
-        default: "failed"
+        case .pasted:
+          "inserted"
+
+        case .noTarget:
+          "copied"
+
+        case .cancelled:
+          "cancelled"
+
+        default:
+          "failed"
         }
       Self.log.notice("result for \(inFlight.id, privacy: .public) → \(outcome, privacy: .public)")
       DeviceTrace.record("result", ["dictation": inFlight.id.uuidString, "outcome": outcome])
@@ -162,51 +229,38 @@ extension DictationCoordinator {
     stopAccepted = nil
     Self.claimedPress.withLock { $0.stopAddress = nil }
   }
-
-  // MARK: The press the session takes
-
-  /// The session accepted a press: the last one asked for becomes the
-  /// dictation's, and is no longer pending. Nil, as the frontmost app: there is
-  /// none to paste into on the iPhone; the words go back to the keyboard.
-  ///
-  /// The stop's recipient is kept, not replaced: a quick release can be
-  /// accepted (`handleCommand`) before the session gets here, and it already
-  /// names where this dictation's words go. Nothing stale can be in it — it is
-  /// cleared when the last dictation ended, before any new press is accepted.
-  nonisolated static func claimPress() -> CapturedFocus? {
-    let press = pendingPress.withLock { pending in
-      defer { pending = Press() }
-      return pending
-    }
-    claimedPress.withLock {
-      $0.address = press.address
-      $0.context = press.context
-    }
-    return nil
-  }
-
-  /// What the keyboard saw around the cursor on the press in flight, once.
-  nonisolated static func fieldContext() -> FocusedFieldContext {
-    claimedPress.withLock { press in
-      defer { press.context = .empty }
-      return press.context
-    }
-  }
 }
 
 extension CommandAck.Outcome {
   /// The outcome as the log names it: the case, and the reason where one rides along.
   var logName: String {
     switch self {
-    case .started: "started"
-    case .busy: "busy"
-    case .stopped: "stopped"
-    case .cancelled: "cancelled"
-    case .notListening(let reason): "notListening(\(reason.rawValue))"
-    case .notOwner: "notOwner"
-    case .nothingInFlight: "nothingInFlight"
-    case .stale: "stale"
-    case .duplicate: "duplicate"
+    case .started:
+      "started"
+
+    case .busy:
+      "busy"
+
+    case .stopped:
+      "stopped"
+
+    case .cancelled:
+      "cancelled"
+
+    case .notListening(let reason):
+      "notListening(\(reason.rawValue))"
+
+    case .notOwner:
+      "notOwner"
+
+    case .nothingInFlight:
+      "nothingInFlight"
+
+    case .stale:
+      "stale"
+
+    case .duplicate:
+      "duplicate"
     }
   }
 }

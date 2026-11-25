@@ -36,10 +36,15 @@ struct AddTermKey: View {
 
   private var saved: Bool { model.termSavedAt != nil }
 
+  private static func muted(_ scheme: ColorScheme) -> Color {
+    BlurtTint.legend(scheme).opacity(DesignTokens.Metrics.opacityLegendMuted)
+  }
+
   /// The bare +: a new term typed from nothing (or from the selection, seeded).
   private func plain(_ scheme: ColorScheme) -> some View {
     GlyphKey(
-      symbol: saved ? "checkmark" : "plus", tint: saved ? BlurtTint.signal(scheme) : Self.muted(scheme),
+      symbol: saved ? "checkmark" : "plus",
+      tint: saved ? BlurtTint.signal(scheme) : Self.muted(scheme),
       label: "Add a key term"
     ) {
       model.beginAddingTerm()
@@ -93,19 +98,20 @@ struct AddTermKey: View {
           defer { held = false }
           guard !held,
             KeyboardInteraction.isTap(width: value.translation.width, height: value.translation.height)
-          else { return }
+          else {
+            return
+          }
           model.addSelectedTerm()
         }
     )
-  }
-
-  private static func muted(_ scheme: ColorScheme) -> Color {
-    BlurtTint.legend(scheme).opacity(DesignTokens.Metrics.opacityLegendMuted)
   }
 
   private func glyph(_ symbol: String, tint: Color) -> some View {
     Image(systemName: symbol)
       .font(.system(size: DesignTokens.Typography.sizeGlyph, weight: DesignTokens.Typography.weightGlyph))
       .foregroundStyle(tint)
+      // Decoration: the chip it sits in is one element whose label already says
+      // whether the word is added or known.
+      .accessibilityHidden(true)
   }
 }

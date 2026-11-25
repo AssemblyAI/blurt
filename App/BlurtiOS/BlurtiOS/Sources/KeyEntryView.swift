@@ -8,7 +8,8 @@ import SwiftUI
 /// path for contributors and self-built copies.
 struct KeyEntryView: View {
   var apiKey: APIKeyModel
-  @Environment(\.dismiss) private var dismiss
+  @Environment(\.dismiss)
+  private var dismiss
   @State private var key = ""
   @State private var inlineError: String?
   @State private var isSubmitting = false
@@ -22,7 +23,8 @@ struct KeyEntryView: View {
             .textInputAutocapitalization(.never)
           if let inlineError {
             Text(inlineError).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(
-              BlurtBrand.errorOrange)
+              BlurtBrand.errorOrange
+            )
           }
         } header: {
           Eyebrow("API key")
@@ -47,9 +49,14 @@ struct KeyEntryView: View {
     defer { isSubmitting = false }
     let outcome = await apiKey.submit(key)
     switch outcome.failureReport {
-    case .none: dismiss()
-    case .some(.inline(let message)): inlineError = message
-    case .some(.alert(let title, let message)): inlineError = "\(title) \(message)"
+    case .none:
+      dismiss()
+
+    case .some(.inline(let message)):
+      inlineError = message
+
+    case let .some(.alert(title, message)):
+      inlineError = "\(title) \(message)"
     }
   }
 }

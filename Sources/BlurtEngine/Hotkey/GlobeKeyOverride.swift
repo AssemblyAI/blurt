@@ -54,7 +54,9 @@ public struct GlobeKeyOverride {
   /// warns that fn may double-fire until then and links to Keyboard Settings for
   /// changing it right away.
   public func sync(boundKeys: Set<TriggerKey>) {
-    guard let system, let record else { return }
+    guard let system, let record else {
+      return
+    }
     if boundKeys.contains(.function) {
       if record.object(forKey: Self.replacedUsageKey) == nil {
         let current = system.object(forKey: Self.usageKey) as? Int ?? Self.wasUnset

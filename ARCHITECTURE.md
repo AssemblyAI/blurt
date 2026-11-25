@@ -1121,7 +1121,7 @@ restating them.
 
 ## App shell surfaces
 
-`App/Blurt/Blurt/App.swift` declares four scenes (five in Debug):
+`App/Blurt/Blurt/BlurtApp.swift` declares four scenes (five in Debug):
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
   "ready" screen (`ReadyView`), shaped like a dictation app's home: Blurt's work happens outside the
@@ -1171,7 +1171,7 @@ restating them.
   survived instead. Note macOS titles a preference window
   after its selected pane, which is why the UI-test suite aliases the window title to the first
   tab's label.
-- **`MenuBarExtra`** (`MenuBar/MenuBarScene.swift`) — live dictation indicator plus a
+- **`MenuBarExtra`** (`MenuBar/`) — live dictation indicator plus a
   discoverability menu for the otherwise-invisible hotkey. Convenience layered on the Dock icon.
 - **Overlay** (`Overlay/OverlayWindowController` + `OverlayView`) — the floating pill: meter, phase
   label, notices. Geometry and phase mapping come from the engine (`OverlayPlacement`,

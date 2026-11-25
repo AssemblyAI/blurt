@@ -26,7 +26,12 @@ package nonisolated struct HomeStatus: Equatable {
   package let isSetUp: Bool
 
   package init(
-    state: ListeningState?, windowMinutes: Int, error: String?, micDenied: Bool, hasKey: Bool, micGranted: Bool,
+    state: ListeningState?,
+    windowMinutes: Int,
+    error: String?,
+    micDenied: Bool,
+    hasKey: Bool,
+    micGranted: Bool,
     keyboardSeen: Bool
   ) {
     let window = state?.window ?? .closed
@@ -44,10 +49,13 @@ package nonisolated struct HomeStatus: Equatable {
     switch window {
     case .closed, .closing:
       return "Start a session to dictate with the Blurt keyboard in any app."
+
     case .opening:
       return "Starting the session…"
+
     case .interrupted:
       return "The mic is paused: a call or another app has it. The session carries on when that ends."
+
     case .open:
       let lifetime = state?.windowUntil == nil ? "Stays on until you end it." : endsAfter(minutes: windowMinutes)
       return "Use the Blurt keyboard's mic in any app. \(lifetime) \(micLine(idle: state?.idle ?? .held))"
@@ -58,17 +66,25 @@ package nonisolated struct HomeStatus: Equatable {
   /// the window's "until you stop it".
   static func endsAfter(minutes: Int) -> String {
     switch minutes {
-    case ...0: "Stays on until you end it."
-    case 1: "Ends after 1 idle minute."
-    default: "Ends after \(minutes) idle minutes."
+    case ...0:
+      "Stays on until you end it."
+
+    case 1:
+      "Ends after 1 idle minute."
+
+    default:
+      "Ends after \(minutes) idle minutes."
     }
   }
 
   /// What the orange dot does between dictations, by the idle mode in use.
   static func micLine(idle: ListeningState.Idle) -> String {
     switch idle {
-    case .held: "The mic stays open while the session is on."
-    case .pip: "The mic opens only while you dictate."
+    case .held:
+      "The mic stays open while the session is on."
+
+    case .pip:
+      "The mic opens only while you dictate."
     }
   }
 }

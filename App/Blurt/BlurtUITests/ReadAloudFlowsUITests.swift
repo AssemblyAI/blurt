@@ -25,7 +25,8 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
     for _ in 0..<10 {
       XCTAssertFalse(
         pill.exists && pill.label == "Your dictation was pasted.",
-        "A read's end must not replay the earlier dictation's notice")
+        "A read's end must not replay the earlier dictation's notice"
+      )
       usleep(100_000)
     }
   }
@@ -59,7 +60,8 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     harness.buttons[UITestIdentifiers.hotkeyTapReleaseButton].click()
     waitForLabel(
-      spoken(in: harness), equals: "Answer to: What does this mean?", timeout: 15, "The next tap should end it")
+      spoken(in: harness), equals: "Answer to: What does this mean?", timeout: 15, "The next tap should end it"
+    )
   }
 
   /// An ask with nothing said answers nothing — and leaves the key working.

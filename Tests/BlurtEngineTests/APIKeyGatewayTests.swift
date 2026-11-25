@@ -10,7 +10,6 @@ import Testing
 /// isolated service/account).
 @Suite("APIKeyGateway")
 struct APIKeyGatewayTests {
-
   @Test("in-memory store round-trips a key, trimmed")
   func inMemoryRoundTrip() {
     let store = InMemoryAPIKeyStore()
@@ -38,7 +37,9 @@ struct APIKeyGatewayTests {
     struct FixedGateway: APIKeyGateway {
       let value: String?
       var current: String? { value }
-      @discardableResult func save(_ key: String?) -> Bool { false }
+
+      @discardableResult
+      func save(_: String?) -> Bool { false }
     }
     #expect(FixedGateway(value: "sk-123").hasKey)
     #expect(!FixedGateway(value: nil).hasKey)

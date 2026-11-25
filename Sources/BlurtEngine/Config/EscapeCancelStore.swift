@@ -10,11 +10,8 @@ public struct EscapeCancelStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
   /// it directly (e.g. `@AppStorage`) and re-render on change.
   public static var defaultsKey: String { DefaultsKey.escapeCancelsDictation.key }
-  private let defaults: UserDefaults
 
-  public init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
+  private let defaults: UserDefaults
 
   /// `bool(forKey:)` returns false for a missing key, so unset means off.
   ///
@@ -22,5 +19,10 @@ public struct EscapeCancelStore {
   /// setter here would have no production caller.
   public var isEnabled: Bool {
     defaults.bool(forKey: Self.defaultsKey)
+  }
+
+  /// A store over `defaults`; tests pass an isolated suite.
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 }

@@ -1,5 +1,4 @@
-public import AssemblyAI
-public import Foundation
+import Foundation
 
 /// Read-aloud's two LLM jobs, each one `POST /v1/chat/completions` to
 /// AssemblyAI's LLM Gateway:
@@ -23,6 +22,80 @@ public import Foundation
 /// through, would otherwise read out an answer nobody asked for. An answer has
 /// no such fallback, since there is nothing else to say.
 struct ReadAloudLLM: GatewayClient, Sendable {
+  // MARK: - Wire format
+
+  struct Body: Encodable {
+    struct Message: Encodable {
+      let role: String
+      let content: String
+    }
+
+    enum CodingKeys: String, CodingKey {
+      case model, messages, temperature
+      case maxTokens = "max_tokens"
+      case responseFormat = "response_format"
+    }
+
+    let model: String
+    let messages: [Message]
+    let maxTokens: Int
+    let temperature: Double
+    /// A JSON schema the reply must follow (`VoiceCommandPlanner`'s plan).
+    /// Nil leaves the key off the wire, as every other client sends it.
+    var responseFormat: JSONValue?
+  }
+
+  /// A JSON value built in code: a response format's schema.
+  indirect enum JSONValue: Encodable, Equatable, Sendable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case array([Self])
+    case object([String: Self])
+
+    func encode(to encoder: any Encoder) throws {
+      var container = encoder.singleValueContainer()
+      switch self {
+      case .string(let value):
+        try container.encode(value)
+
+      case .number(let value):
+        try container.encode(value)
+
+      case .bool(let value):
+        try container.encode(value)
+
+      case .array(let value):
+        try container.encode(value)
+
+      case .object(let value):
+        try container.encode(value)
+      }
+    }
+  }
+
+  private struct Completion: Decodable {
+    struct Choice: Decodable {
+      struct Message: Decodable { let content: String? }
+
+      enum CodingKeys: String, CodingKey {
+        case message
+        case finishReason = "finish_reason"
+      }
+
+      let message: Message
+      let finishReason: String?
+    }
+
+    let choices: [Choice]
+  }
+
+  struct Reply: Equatable {
+    let text: String
+    /// The model stopped at `max_tokens`, part-way through.
+    let truncated: Bool
+  }
+
   static let endpoint = URL(staticString: "https://llm-gateway.assemblyai.com/v1/chat/completions")
 
   /// AssemblyAI's own hosted small model: the docs' quickstart model, the
@@ -99,77 +172,11 @@ struct ReadAloudLLM: GatewayClient, Sendable {
     self.gateway = gateway
   }
 
-  func rewriteForListening(_ text: String) async throws -> String {
-    let reply = try await complete(
-      Self.chat(system: Self.rewriteInstruction, user: text, maxTokens: Self.rewriteMaxTokens),
-      timeout: Self.rewriteTimeout)
-    guard !reply.truncated else { throw ReadAloudLLMError.truncated }
-    guard Self.plausible(reply.text, for: text) else { throw ReadAloudLLMError.implausible }
-    return reply.text
-  }
-
-  func answer(_ request: String, about selection: String) async throws -> String {
-    try await complete(
-      Self.chat(
-        system: Self.answerInstruction,
-        user: Self.answerPrompt(request, about: String(selection.prefix(Self.answerSelectionCharacters))),
-        maxTokens: Self.answerMaxTokens),
-      timeout: Self.answerTimeout
-    ).text
-  }
-
   /// The user turn of an answer (and of `SelectionRewriter`'s rewrite): the
   /// selection, then what was said, each in its own tag so the model can't
   /// mistake one for the other.
   static func answerPrompt(_ request: String, about selection: String) -> String {
     "<highlighted_text>\n\(selection)\n</highlighted_text>\n\n<spoken_request>\n\(request)\n</spoken_request>"
-  }
-
-  private func complete(_ body: Body, timeout: TimeInterval) async throws -> Reply {
-    try await gateway.send(body, timeout: timeout)
-  }
-
-  // MARK: - Wire format
-
-  struct Body: Encodable {
-    struct Message: Encodable {
-      let role: String
-      let content: String
-    }
-
-    let model: String
-    let messages: [Message]
-    let maxTokens: Int
-    let temperature: Double
-    /// A JSON schema the reply must follow (`VoiceCommandPlanner`'s plan).
-    /// Nil leaves the key off the wire, as every other client sends it.
-    var responseFormat: JSONValue?
-
-    enum CodingKeys: String, CodingKey {
-      case model, messages, temperature
-      case maxTokens = "max_tokens"
-      case responseFormat = "response_format"
-    }
-  }
-
-  /// A JSON value built in code: a response format's schema.
-  indirect enum JSONValue: Encodable, Equatable, Sendable {
-    case string(String)
-    case number(Double)
-    case bool(Bool)
-    case array([JSONValue])
-    case object([String: JSONValue])
-
-    func encode(to encoder: any Encoder) throws {
-      var container = encoder.singleValueContainer()
-      switch self {
-      case .string(let value): try container.encode(value)
-      case .number(let value): try container.encode(value)
-      case .bool(let value): try container.encode(value)
-      case .array(let value): try container.encode(value)
-      case .object(let value): try container.encode(value)
-      }
-    }
   }
 
   static func chat(system: String, user: String, maxTokens: Int, model: String = model) -> Body {
@@ -185,28 +192,8 @@ struct ReadAloudLLM: GatewayClient, Sendable {
       maxTokens: maxTokens,
       // Copying or answering, not composing: the same input should come back
       // the same way twice.
-      temperature: 0)
-  }
-
-  private struct Completion: Decodable {
-    struct Choice: Decodable {
-      struct Message: Decodable { let content: String? }
-      let message: Message
-      let finishReason: String?
-
-      enum CodingKeys: String, CodingKey {
-        case message
-        case finishReason = "finish_reason"
-      }
-    }
-
-    let choices: [Choice]
-  }
-
-  struct Reply: Equatable {
-    let text: String
-    /// The model stopped at `max_tokens`, part-way through.
-    let truncated: Bool
+      temperature: 0
+    )
   }
 
   /// The first choice's text, trimmed, and whether it hit the token cap. Throws
@@ -225,62 +212,29 @@ struct ReadAloudLLM: GatewayClient, Sendable {
   static func plausible(_ output: String, for input: String) -> Bool {
     output.count <= input.count + max(80, input.count / 4)
   }
-}
 
-enum ReadAloudLLMError: Error, Equatable, LocalizedError {
-  /// A non-2xx answer from the gateway (0 when the response wasn't HTTP).
-  case status(Int)
-  /// A 2xx with no text in it.
-  case empty
-  /// The rewrite stopped at `max_tokens`, part-way through the selection.
-  case truncated
-  /// The rewrite is too much longer than the input to be a rewrite of it.
-  case implausible
-
-  var errorDescription: String? {
-    switch self {
-    case .status(let code): "The LLM Gateway answered HTTP \(code)."
-    case .empty: "The LLM Gateway returned no text."
-    case .truncated: "The LLM Gateway's rewrite was cut short."
-    case .implausible: "The LLM Gateway's rewrite didn't match the selection."
-    }
+  func rewriteForListening(_ text: String) async throws -> String {
+    let reply = try await complete(
+      Self.chat(system: Self.rewriteInstruction, user: text, maxTokens: Self.rewriteMaxTokens),
+      timeout: Self.rewriteTimeout
+    )
+    guard !reply.truncated else { throw ReadAloudLLMError.truncated }
+    guard Self.plausible(reply.text, for: text) else { throw ReadAloudLLMError.implausible }
+    return reply.text
   }
-}
 
-/// The key and transport a gateway client sends with, as one value: what
-/// `ReadAloudLLM`, `TranscriptLLM`, `SelectionRewriter` and
-/// `VoiceCommandPlanner` each hold.
-/// Public so a client's public `init(gateway:)` can take it; everything it
-/// does stays inside the engine.
-public struct GatewayConnection: Sendable {
-  let apiKeyProvider: @Sendable () -> String?
-  let transport: any HTTPTransport
-
-  /// One gateway chat completion: the key check, the request, the status and
-  /// the reply — the one place every gateway client's call is spelled.
-  func send(_ body: ReadAloudLLM.Body, timeout: TimeInterval) async throws -> ReadAloudLLM.Reply {
-    guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else { throw BlurtError.apiKeyMissing }
-    let request = try URLRequest.assemblyAIJSONPost(
-      to: ReadAloudLLM.endpoint, apiKey: apiKey, timeout: timeout, body: body)
-    let (data, response) = try await transport.data(for: request)
-    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-    guard (200..<300).contains(status) else { throw ReadAloudLLMError.status(status) }
-    return try ReadAloudLLM.reply(from: data)
+  func answer(_ request: String, about selection: String) async throws -> String {
+    try await complete(
+      Self.chat(
+        system: Self.answerInstruction,
+        user: Self.answerPrompt(request, about: String(selection.prefix(Self.answerSelectionCharacters))),
+        maxTokens: Self.answerMaxTokens
+      ),
+      timeout: Self.answerTimeout
+    ).text
   }
-}
 
-/// A gateway client built from a `GatewayConnection`. The extension gives
-/// every one the same public `init(apiKeyProvider:transport:)` — the stored
-/// key, `URLSession.shared` — written once rather than per client.
-public protocol GatewayClient {
-  init(gateway: GatewayConnection)
-}
-
-extension GatewayClient {
-  public init(
-    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
-    transport: any HTTPTransport = URLSession.shared
-  ) {
-    self.init(gateway: GatewayConnection(apiKeyProvider: apiKeyProvider, transport: transport))
+  private func complete(_ body: Body, timeout: TimeInterval) async throws -> Reply {
+    try await gateway.send(body, timeout: timeout)
   }
 }

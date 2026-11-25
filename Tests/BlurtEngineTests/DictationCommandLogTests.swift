@@ -8,9 +8,11 @@ import Testing
 @Suite("DictationLog · Commands")
 struct DictationCommandLogTests {
   private let screen = ScreenContext(
-    appName: "Mail", windowTitle: "Inbox",
+    appName: "Mail",
+    windowTitle: "Inbox",
     elements: [.init(id: 4, kind: "button", label: "Reply"), .init(id: 7, kind: "row", label: "Lunch")],
-    incomplete: true)
+    incomplete: true
+  )
 
   @Test("an entry holds what was said, the screen, the plan with each element's label, and how it ended")
   func entry() {
@@ -21,8 +23,15 @@ struct DictationCommandLogTests {
     ]
     let entry = DictationLog.makeCommandEntry(
       .init(
-        command: "reply to lunch saying on my way", context: screen, steps: steps, outcome: .done, failure: nil,
-        duration: .milliseconds(1_234)), now: Date(timeIntervalSince1970: 0))
+        command: "reply to lunch saying on my way",
+        context: screen,
+        steps: steps,
+        outcome: .done,
+        failure: nil,
+        duration: .milliseconds(1_234)
+      ),
+      now: Date(timeIntervalSince1970: 0)
+    )
     #expect(entry.command == "reply to lunch saying on my way")
     #expect(entry.app == "Mail")
     #expect(entry.window == "Inbox")
@@ -41,12 +50,19 @@ struct DictationCommandLogTests {
   func abandoned() {
     let entry = DictationLog.makeCommandEntry(
       .init(
-        command: "open slack and search for budget", context: screen, steps: [.openApp("Slack"), .type("budget")],
-        outcome: nil, failure: nil, duration: .milliseconds(700),
-        ran: [StepRecord(step: "open_app Slack", how: "already running", milliseconds: 40, error: nil)]), now: Date())
+        command: "open slack and search for budget",
+        context: screen,
+        steps: [.openApp("Slack"), .type("budget")],
+        outcome: nil,
+        failure: nil,
+        duration: .milliseconds(700),
+        ran: [StepRecord(step: "open_app Slack", how: "already running", milliseconds: 40, error: nil)]
+      ),
+      now: Date()
+    )
     #expect(entry.outcome == "abandoned")
     #expect(entry.errorKind == nil)
-    #expect(entry.ran.map { $0.step } == ["open_app Slack"])
+    #expect(entry.ran.map(\.step) == ["open_app Slack"])
   }
 
   @Test("a failure is written to the command log and to the error log, beside the dictations' failures")
@@ -56,11 +72,20 @@ struct DictationCommandLogTests {
     let errors = directory.appendingPathComponent("errors.jsonl")
     DictationLog.appendCommand(
       .init(
-        command: "open figma", context: screen, steps: [.openApp("Figma")],
+        command: "open figma",
+        context: screen,
+        steps: [.openApp("Figma")],
         outcome: .error(message: "No app named Figma is installed."),
-        failure: ("VoiceCommandError.appNotFound", "No app named Figma is installed."), duration: .milliseconds(900)),
-      store: developerModeStore(enabled: true), to: commands, errorsTo: errors)
-    DictationLog.queue.sync {}
+        failure: ("VoiceCommandError.appNotFound", "No app named Figma is installed."),
+        duration: .milliseconds(900)
+      ),
+      store: developerModeStore(enabled: true),
+      to: commands,
+      errorsTo: errors
+    )
+    DictationLog.queue.sync {
+      // Nothing to run: the empty sync just waits out the writes already queued.
+    }
     let command = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
     #expect(command?["outcome"] as? String == "failed")
     #expect(command?["errorKind"] as? String == "VoiceCommandError.appNotFound")
@@ -77,15 +102,22 @@ struct DictationCommandLogTests {
     let commands = directory.appendingPathComponent("commands.jsonl")
     let errors = directory.appendingPathComponent("errors.jsonl")
     let mute = DictationLog.CommandRecord(
-      command: "mute", context: screen, steps: [.media(.mute)], outcome: .done, failure: nil, duration: .zero)
+      command: "mute", context: screen, steps: [.media(.mute)], outcome: .done, failure: nil, duration: .zero
+    )
     DictationLog.appendCommand(
-      mute, store: DeveloperModeStore(defaults: freshDefaults()), to: commands, errorsTo: errors)
-    DictationLog.queue.sync {}
+      mute, store: DeveloperModeStore(defaults: freshDefaults()), to: commands, errorsTo: errors
+    )
+    DictationLog.queue.sync {
+      // Nothing to run: the empty sync just waits out the writes already queued.
+    }
     #expect(!FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
 
     DictationLog.appendCommand(
-      mute, store: developerModeStore(enabled: true), to: commands, errorsTo: errors)
-    DictationLog.queue.sync {}
+      mute, store: developerModeStore(enabled: true), to: commands, errorsTo: errors
+    )
+    DictationLog.queue.sync {
+      // Nothing to run: the empty sync just waits out the writes already queued.
+    }
     #expect(FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
     #expect(!FileManager.default.fileExists(atPath: errors.path(percentEncoded: false)))
   }
@@ -113,10 +145,16 @@ struct DictationCommandLogTests {
   @Test("an entry carries what the model saw and answered, and how each step ran")
   func entryTrace() {
     let record = DictationLog.CommandRecord(
-      id: "abc", command: "reply", context: screen, steps: [.pressElement(4)], outcome: .done, failure: nil,
+      command: "reply",
+      context: screen,
+      steps: [.pressElement(4)],
+      outcome: .done,
+      failure: nil,
       duration: .milliseconds(10),
+      id: "abc",
       ran: [StepRecord(step: "press #4 (button \"Reply\")", how: "AXPress", milliseconds: 260, error: nil)],
-      trace: .init(prompt: "<window>…</window>", replies: ["{}", "{\"steps\":[]}"], model: "m", promptVersion: "v1"))
+      trace: .init(prompt: "<window>…</window>", replies: ["{}", "{\"steps\":[]}"], model: "m", promptVersion: "v1")
+    )
     let entry = DictationLog.makeCommandEntry(record, now: Date(timeIntervalSince1970: 0))
     #expect(entry.id == "abc")
     #expect(entry.ran.first?.how == "AXPress")
@@ -131,12 +169,24 @@ struct DictationCommandLogTests {
     let commands = directory.appendingPathComponent("commands.jsonl")
     let errors = directory.appendingPathComponent("errors.jsonl")
     let last = DictationLog.CommandRecord(
-      id: "cmd-1", command: "go to github.com", context: screen, steps: [], outcome: .done, failure: nil,
-      duration: .zero)
+      command: "go to github.com",
+      context: screen,
+      steps: [],
+      outcome: .done,
+      failure: nil,
+      duration: .zero,
+      id: "cmd-1"
+    )
     DictationLog.appendFeedback(
-      "that didn't work", about: last, store: developerModeStore(enabled: true), to: commands,
-      errorsTo: errors)
-    DictationLog.queue.sync {}
+      "that didn't work",
+      about: last,
+      store: developerModeStore(enabled: true),
+      to: commands,
+      errorsTo: errors
+    )
+    DictationLog.queue.sync {
+      // Nothing to run: the empty sync just waits out the writes already queued.
+    }
     let entry = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
     #expect(entry?["feedback"] as? String == "that didn't work")
     #expect(entry?["about"] as? String == "cmd-1")

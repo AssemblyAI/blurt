@@ -22,8 +22,10 @@ struct DictationLogRemovalTests {
   @discardableResult
   private func remove(dictations: URL, errors: URL) -> Bool {
     DictationLog.removeStoredLogs(
-      dictations: dictations, errors: errors,
-      commands: dictations.deletingLastPathComponent().appendingPathComponent("commands.jsonl"))
+      dictations: dictations,
+      errors: errors,
+      commands: dictations.deletingLastPathComponent().appendingPathComponent("commands.jsonl")
+    )
   }
 
   @Test("removes both halves of the log")

@@ -3,94 +3,12 @@ import Testing
 
 @testable import BlurtiOSCore
 
-/// One handshake's world: a fixed clock, one app launch, and the events as
-/// the model would build them. Shared with `PressHandshakeStopTests` and
-/// `PressHandshakeGateTests`.
-enum HandshakeFixture {
-  static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
-  static let app = UUID()
-
-  static let lift = PressHandshake.Event.micUp(heldFor: 0.1)
-  static let holdLift = PressHandshake.Event.micUp(heldFor: 0.5)
-
-  static func at(_ seconds: TimeInterval) -> Date { epoch.addingTimeInterval(seconds) }
-
-  static func ack(_ outcome: CommandAck.Outcome, for id: UUID) -> PressHandshake.Event {
-    .ack(CommandAck(commandID: id, launchID: app, outcome: outcome, at: epoch))
-  }
-
-  static func published(
-    _ state: PhaseSnapshot.State, answers: UUID? = nil, dictation: UUID? = nil, reason: FailureReason? = nil
-  ) -> PressHandshake.Event {
-    .phase(
-      PhaseSnapshot(
-        state: state, message: nil, level: 0, at: epoch, reason: reason, answers: answers,
-        dictation: dictation.map { DictationRef(id: $0, ownerProcessID: nil) }))
-  }
-
-  static func record(
-    _ window: ListeningState.Window, micLive: Bool = true, reason: FailureReason? = nil
-  ) -> ListeningState {
-    ListeningState(launchID: app, sequence: 1, window: window, micLive: micLive, reason: reason, writtenAt: epoch)
-  }
-
-  static func micDown(
-    ready: Bool = true, reason: FailureReason? = nil, phase: PhaseSnapshot.State = .idle, inFlight: UUID? = nil
-  ) -> PressHandshake.Event {
-    let ref = inFlight.map { DictationRef(id: $0, ownerProcessID: nil) }
-    return .micDown(ready: ready, reason: reason, phase: phase, inFlight: ref)
-  }
-
-  /// A press from rest, out and unanswered.
-  static func pressed(_ handshake: inout PressHandshake) -> UUID {
-    _ = handshake.handle(micDown(), now: epoch)
-    let id = UUID()
-    _ = handshake.handle(.pressSent(id: id, at: epoch), now: epoch)
-    return id
-  }
-
-  /// A tap from rest the app answered: the keyboard owns the dictation, at `phase`.
-  static func owned(_ handshake: inout PressHandshake, phase: PhaseSnapshot.State = .connecting) -> UUID {
-    let id = pressed(&handshake)
-    _ = handshake.handle(lift, now: epoch)
-    let dictation = UUID()
-    _ = handshake.handle(ack(.started(dictation), for: id), now: epoch)
-    if phase != .connecting { _ = handshake.handle(published(phase, dictation: dictation), now: epoch) }
-    return dictation
-  }
-
-  /// A dictation the keyboard owns and has pressed again at 5 s, its stop
-  /// out: the handshake is stopping, awaiting the stop's answer.
-  static func stopping(_ handshake: inout PressHandshake) -> (dictation: UUID, stop: UUID) {
-    let dictation = owned(&handshake, phase: .recording)
-    _ = handshake.handle(micDown(phase: .recording, inFlight: dictation), now: at(5))
-    let stop = UUID()
-    _ = handshake.handle(.stopSent(id: stop, at: at(5)), now: at(5))
-    return (dictation, stop)
-  }
-
-  /// A press from rest the app answered with busy, the finger still down:
-  /// latched onto their dictation.
-  static func foreignViaBusy(_ handshake: inout PressHandshake) -> UUID {
-    let id = pressed(&handshake)
-    let dictation = UUID()
-    _ = handshake.handle(ack(.busy(dictation), for: id), now: epoch)
-    return dictation
-  }
-
-  /// A finger down from rest over their dictation, visibly running.
-  static func foreignViaLatch(_ handshake: inout PressHandshake) -> UUID {
-    let dictation = UUID()
-    _ = handshake.handle(micDown(phase: .recording, inFlight: dictation), now: epoch)
-    return dictation
-  }
-}
-
 // `#expect` captures its expression immutably, so each mutating step lands
 // in a local first.
 @Suite("Press handshake: the press and its answers")
 struct PressHandshakeTests {
   typealias Fixture = HandshakeFixture
+
   let epoch = Fixture.epoch
 
   @Test("the numbers are the contract's: the deadlines, the hold, the model's retry")
@@ -112,7 +30,7 @@ struct PressHandshakeTests {
     #expect(handshake.isIdle)
     let id = UUID()
     let sent = handshake.handle(.pressSent(id: id, at: epoch), now: epoch)
-    #expect(sent == [.none])
+    #expect(sent == [.nothing])
     #expect(handshake.state == .pressing(id: id, sentAt: epoch, resent: false, stopWanted: false))
     #expect(handshake.pressID == id)
     #expect(handshake.dictationID == nil)
@@ -124,11 +42,11 @@ struct PressHandshakeTests {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
     let early = handshake.handle(.tick(now: Fixture.at(0.59)), now: Fixture.at(0.59))
-    #expect(early == [.none])
+    #expect(early == [.nothing])
     let due = handshake.handle(.tick(now: Fixture.at(0.6)), now: Fixture.at(0.6))
     #expect(due == [.resendPress(id: id)])
     let again = handshake.handle(.tick(now: Fixture.at(0.9)), now: Fixture.at(0.9))
-    #expect(again == [.none])
+    #expect(again == [.nothing])
     #expect(handshake.state == .pressing(id: id, sentAt: epoch, resent: true, stopWanted: false))
   }
 
@@ -145,7 +63,7 @@ struct PressHandshakeTests {
     let lift = handshake.handle(Fixture.lift, now: Fixture.at(1.3))
     #expect(lift == [.hop(.unanswered)])
     let ticks = handshake.handle(.tick(now: Fixture.at(5)), now: Fixture.at(5))
-    #expect(ticks == [.none])
+    #expect(ticks == [.nothing])
   }
 
   @Test("ack started → owned; the ack for another command is ignored")
@@ -153,11 +71,11 @@ struct PressHandshakeTests {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
     let other = handshake.handle(Fixture.ack(.started(UUID()), for: UUID()), now: epoch)
-    #expect(other == [.none])
+    #expect(other == [.nothing])
     #expect(handshake.pressID == id)
     let dictation = UUID()
     let answer = handshake.handle(Fixture.ack(.started(dictation), for: id), now: epoch)
-    #expect(answer == [.none])
+    #expect(answer == [.nothing])
     #expect(handshake.state == .owned(dictation: dictation, phase: .connecting))
     #expect(handshake.isOwned && handshake.dictationID == dictation && handshake.pressID == nil)
   }
@@ -168,11 +86,12 @@ struct PressHandshakeTests {
     let id = Fixture.pressed(&handshake)
     let dictation = UUID()
     let answer = handshake.handle(
-      Fixture.published(.recording, answers: id, dictation: dictation), now: Fixture.at(0.3))
-    #expect(answer == [.none])
+      Fixture.published(.recording, answers: id, dictation: dictation), now: Fixture.at(0.3)
+    )
+    #expect(answer == [.nothing])
     #expect(handshake.state == .owned(dictation: dictation, phase: .recording))
     let late = handshake.handle(.tick(now: Fixture.at(2)), now: Fixture.at(2))
-    #expect(late == [.none])
+    #expect(late == [.nothing])
     #expect(handshake.isOwned)
   }
 
@@ -181,9 +100,9 @@ struct PressHandshakeTests {
     var handshake = PressHandshake()
     let id = Fixture.pressed(&handshake)
     let previous = handshake.handle(Fixture.published(.pasted, answers: UUID(), dictation: UUID()), now: epoch)
-    #expect(previous == [.none])
+    #expect(previous == [.nothing])
     let unnamed = handshake.handle(Fixture.published(.recording, answers: id), now: epoch)
-    #expect(unnamed == [.none])
+    #expect(unnamed == [.nothing])
     #expect(handshake.pressID == id)
   }
 
@@ -215,7 +134,7 @@ struct PressHandshakeTests {
     #expect(handshake.state == .foreign(dictation: dictation))
     #expect(handshake.dictationID == dictation && !handshake.isOwned)
     let lift = handshake.handle(Fixture.lift, now: Fixture.at(0.2))
-    #expect(lift == [.none])
+    #expect(lift == [.nothing])
     #expect(handshake.state == .foreign(dictation: dictation))
     let down = handshake.handle(Fixture.micDown(phase: .recording, inFlight: dictation), now: Fixture.at(2))
     #expect(down == [.armGate, .sendRelease(dictation: dictation)])
@@ -239,7 +158,7 @@ struct PressHandshakeTests {
       var handshake = PressHandshake()
       let id = Fixture.pressed(&handshake)
       let kept = handshake.handle(Fixture.ack(outcome, for: id), now: Fixture.at(0.1))
-      #expect(kept == [.none])
+      #expect(kept == [.nothing])
       #expect(handshake.state == .pressing(id: id, sentAt: epoch, resent: false, stopWanted: false))
       let late = handshake.handle(.tick(now: Fixture.at(1.2)), now: Fixture.at(1.2))
       #expect(late == [.resetGate, .show(.unanswered)])
@@ -260,12 +179,13 @@ struct PressHandshakeTests {
     _ = ticked.handle(Fixture.lift, now: Fixture.at(1.1))
     _ = ticked.handle(.tick(now: Fixture.at(1.2)), now: Fixture.at(1.2))
     let ignored = ticked.handle(Fixture.ack(.started(UUID()), for: press), now: Fixture.at(1.3))
-    #expect(ignored == [.none])
+    #expect(ignored == [.nothing])
     #expect(ticked.state == .unready(.unanswered))
     var byPhase = PressHandshake()
     let other = Fixture.pressed(&byPhase)
     let phase = byPhase.handle(
-      Fixture.published(.recording, answers: other, dictation: UUID()), now: Fixture.at(1.2))
+      Fixture.published(.recording, answers: other, dictation: UUID()), now: Fixture.at(1.2)
+    )
     #expect(phase == [.resetGate, .show(.unanswered)])
   }
 
@@ -273,12 +193,12 @@ struct PressHandshakeTests {
   func notReady() {
     var handshake = PressHandshake()
     let down = handshake.handle(Fixture.micDown(ready: false, reason: .needsForeground), now: epoch)
-    #expect(down == [.none])
+    #expect(down == [.nothing])
     #expect(handshake.state == .unready(.needsForeground))
     let lift = handshake.handle(Fixture.lift, now: epoch)
     #expect(lift == [.hop(.needsForeground)])
     let unsaid = handshake.handle(Fixture.micDown(ready: false), now: epoch)
-    #expect(unsaid == [.none])
+    #expect(unsaid == [.nothing])
     #expect(handshake.state == .unready(.sessionOff))
   }
 
@@ -295,15 +215,15 @@ struct PressHandshakeTests {
   func ignored() {
     var handshake = PressHandshake()
     let sentAtRest = handshake.handle(.stopSent(id: UUID(), at: epoch), now: epoch)
-    #expect(sentAtRest == [.none])
+    #expect(sentAtRest == [.nothing])
     let ackAtRest = handshake.handle(Fixture.ack(.started(UUID()), for: UUID()), now: epoch)
-    #expect(ackAtRest == [.none])
+    #expect(ackAtRest == [.nothing])
     let phaseAtRest = handshake.handle(Fixture.published(.recording, dictation: UUID()), now: epoch)
-    #expect(phaseAtRest == [.none])
+    #expect(phaseAtRest == [.nothing])
     #expect(handshake.isIdle)
     let id = Fixture.pressed(&handshake)
     let sentAgain = handshake.handle(.pressSent(id: UUID(), at: epoch), now: epoch)
-    #expect(sentAgain == [.none])
+    #expect(sentAgain == [.nothing])
     #expect(handshake.pressID == id)
   }
 }

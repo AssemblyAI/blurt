@@ -53,5 +53,7 @@ public protocol TranscriberProtocol: Sendable {
 extension TranscriberProtocol {
   /// No-op default: a transcriber with nothing to pre-open (e.g. test stubs)
   /// inherits this and `DictationSession` can call `warmUp()` unconditionally.
-  public func warmUp() async {}
+  public func warmUp() {
+    // Nothing to pre-open: see the doc comment above.
+  }
 }

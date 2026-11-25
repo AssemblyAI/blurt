@@ -55,7 +55,8 @@ struct BlurtToolbar: View {
   }
 
   /// One line in the notice colour, or nothing.
-  @ViewBuilder private func line(_ scheme: ColorScheme) -> some View {
+  @ViewBuilder
+  private func line(_ scheme: ColorScheme) -> some View {
     if let line = model.statusLine {
       Button {
         model.tapMic()

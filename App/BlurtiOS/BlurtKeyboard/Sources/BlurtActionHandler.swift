@@ -17,10 +17,30 @@ final class BlurtActionHandler: StandardKeyboardActionHandler {
   /// The mic's finger is down: a lift anywhere — off the key too — is a lift.
   private var micPressed = false
 
+  /// The gestures on which the standard handler edits the host's text.
+  private static func editsHost(_ gesture: Keyboard.Gesture, on action: KeyboardAction) -> Bool {
+    switch (gesture, action) {
+    case (.release, .character), (.release, .space), (.release, .primary), (.release, .emoji), (.release, .text),
+      (.press, .backspace), (.repeatPress, .backspace):
+      true
+
+    default:
+      false
+    }
+  }
+
   override func handle(_ gesture: Keyboard.Gesture, on action: KeyboardAction) {
-    guard let model else { return super.handle(gesture, on: action) }
-    if action == .blurtMic { return handleMic(gesture, model: model) }
-    if model.termDraft != nil, routeToTerm(gesture, on: action, model: model) { return }
+    guard let model else {
+      super.handle(gesture, on: action)
+      return
+    }
+    if action == .blurtMic {
+      handleMic(gesture, model: model)
+      return
+    }
+    if model.termDraft != nil, routeToTerm(gesture, on: action, model: model) {
+      return
+    }
     super.handle(gesture, on: action)
     if Self.editsHost(gesture, on: action) { model.hostEdited() }
   }
@@ -35,10 +55,14 @@ final class BlurtActionHandler: StandardKeyboardActionHandler {
       triggerFeedback(for: gesture, on: .blurtMic)
       micPressed = true
       model.micDown()
+
     case .release, .end:
-      guard micPressed else { return }
+      guard micPressed else {
+        return
+      }
       micPressed = false
       model.micUp()
+
     default:
       break
     }
@@ -52,24 +76,22 @@ final class BlurtActionHandler: StandardKeyboardActionHandler {
     _ gesture: Keyboard.Gesture, on action: KeyboardAction, model: BlurtiOSCore.KeyboardModel
   ) -> Bool {
     switch (gesture, action) {
-    case (.release, .character(let character)): model.termType(character)
-    case (.release, .space): model.termSpace()
-    case (.press, .backspace), (.repeatPress, .backspace): model.termDelete()
-    case (.release, .primary): model.termReturn()
-    default: return false
+    case (.release, .character(let character)):
+      model.termType(character)
+
+    case (.release, .space):
+      model.termSpace()
+
+    case (.press, .backspace), (.repeatPress, .backspace):
+      model.termDelete()
+
+    case (.release, .primary):
+      model.termReturn()
+
+    default:
+      return false
     }
     keyboardContext.keyboardCase = model.termWantsUppercase ? .uppercased : .lowercased
     return true
-  }
-
-  /// The gestures on which the standard handler edits the host's text.
-  private static func editsHost(_ gesture: Keyboard.Gesture, on action: KeyboardAction) -> Bool {
-    switch (gesture, action) {
-    case (.release, .character), (.release, .space), (.release, .primary), (.release, .emoji), (.release, .text),
-      (.press, .backspace), (.repeatPress, .backspace):
-      true
-    default:
-      false
-    }
   }
 }

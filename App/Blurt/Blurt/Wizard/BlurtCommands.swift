@@ -4,8 +4,10 @@ import SwiftUI
 /// `Settings` scene itself (see `BlurtApp`).
 struct BlurtCommands: Commands {
   var appDelegate: AppDelegate
-  @FocusedValue(\.focusHistorySearch) private var focusHistorySearch
-  @FocusedValue(\.importAudioFile) private var importAudioFile
+  @FocusedValue(\.focusHistorySearch)
+  private var focusHistorySearch
+  @FocusedValue(\.importAudioFile)
+  private var importAudioFile
 
   var body: some Commands {
     // "Check for Updates…" sits just below "About Blurt" in the app menu — the

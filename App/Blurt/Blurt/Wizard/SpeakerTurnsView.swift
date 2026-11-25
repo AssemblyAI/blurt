@@ -11,10 +11,10 @@ import SwiftUI
 /// Equatable on `turns` alone, so a live recording's partials — drawn beside
 /// it, not in it — don't re-walk every turn several times a second.
 struct SpeakerTurnsView: View, Equatable {
-  let turns: [SpeakerTurn]
-
   /// The system colours speakers take, in order.
   static let palette: [Color] = [.blue, .orange, .purple, .pink, .teal, .indigo, .brown, .mint]
+
+  let turns: [SpeakerTurn]
 
   var body: some View {
     let colors = Self.colors(for: turns)
@@ -45,28 +45,5 @@ struct SpeakerTurnsView: View, Equatable {
       colors[speaker] = palette[colors.count % palette.count]
     }
     return colors
-  }
-}
-
-/// One turn: the name in the speaker's colour, the words beneath, on a wash
-/// of the colour — the same padding on every turn keeps the text aligned.
-private struct TurnBlock: View {
-  let name: String
-  let text: String
-  let color: Color
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
-      Text(name)
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(color)
-      Text(text)
-        .textSelection(.enabled)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 8)
-    .padding(.vertical, 5)
-    .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-    .accessibilityElement(children: .combine)
   }
 }

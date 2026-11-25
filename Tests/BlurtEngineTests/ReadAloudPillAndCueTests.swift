@@ -48,7 +48,7 @@ struct ReadAloudPillAndCueTests {
     #expect(schedule.routeChanged() == .init(dictation: false, readAloud: true))
     // Dictation's still waits for a press or a terminal phase.
     #expect(schedule.phase(.connecting) == .init(dictation: true, readAloud: false))
-    #expect(schedule.phase(.recording) == .none)
+    #expect(schedule.phase(.recording) == .neither)
   }
 
   @Test("mid-capture, read-aloud's cues wait for the capture's end; dictation's reload at the next press")
@@ -56,16 +56,16 @@ struct ReadAloudPillAndCueTests {
     var schedule = CueReprimeSchedule()
     _ = schedule.phase(.connecting)
     _ = schedule.phase(.recording)
-    #expect(schedule.routeChanged() == .none)
-    #expect(schedule.phase(.transcribing) == .none)
+    #expect(schedule.routeChanged() == .neither)
+    #expect(schedule.phase(.transcribing) == .neither)
     #expect(schedule.phase(.pasted) == .init(dictation: true, readAloud: true))
-    #expect(schedule.phase(.idle) == .none)
+    #expect(schedule.phase(.idle) == .neither)
   }
 
   @Test("with no route change, nothing reloads")
   func nothingPending() {
     var schedule = CueReprimeSchedule()
-    for row in Self.phases { #expect(schedule.phase(row.phase) == .none) }
+    for row in Self.phases { #expect(schedule.phase(row.phase) == .neither) }
   }
 
   @Test("the views' key decisions: extra rows, the dictation key, whether read-aloud does anything")
@@ -75,7 +75,8 @@ struct ReadAloudPillAndCueTests {
     #expect(defaults.dictationKey == .rightCommand)
     #expect(defaults.readsOrAsks)
     let asking = TriggerKeyBindings(
-      boundKeyCode: 54, choicesRaw: #"{"58":"","61":"current","59":"ask"}"#, activationRaw: "")
+      boundKeyCode: 54, choicesRaw: #"{"58":"","61":"current","59":"ask"}"#, activationRaw: ""
+    )
     #expect(asking.extraKeys == [.rightOption, .leftControl])
     #expect(asking.dictatingKeys == [.rightCommand, .rightOption])
     #expect(asking.readsOrAsks)

@@ -5,17 +5,6 @@ import BlurtEngine
 // other tab (meeting notes, a summary…), and Full for a dictation, which keeps
 // no audio, is read aloud in the user's read-aloud voice. Split from TranscriptsModel.swift for the file-length budget.
 extension TranscriptsModel {
-  /// Plays a saved entry's audio, or stops it if it's playing.
-  func togglePlayback(_ entry: SavedTranscript) {
-    guard let url = entry.audioURL else { return }
-    player.toggle(url, id: entry.id)
-  }
-
-  /// Whether `entry`'s audio is what's playing.
-  func isPlaying(_ entry: SavedTranscript) -> Bool {
-    player.playingID == entry.id
-  }
-
   /// Whether the showing content has something to play: Full needs audio; a
   /// task result needs its text in hand.
   var canPlayShown: Bool {
@@ -41,6 +30,19 @@ extension TranscriptsModel {
     !showsOriginalAudio && readingFacet == selection && !readingStarted
   }
 
+  /// Plays a saved entry's audio, or stops it if it's playing.
+  func togglePlayback(_ entry: SavedTranscript) {
+    guard let url = entry.audioURL else {
+      return
+    }
+    player.toggle(url, id: entry.id)
+  }
+
+  /// Whether `entry`'s audio is what's playing.
+  func isPlaying(_ entry: SavedTranscript) -> Bool {
+    player.playingID == entry.id
+  }
+
   /// Plays (or stops) what's showing.
   func togglePlayShown() {
     if showsOriginalAudio {
@@ -52,7 +54,9 @@ extension TranscriptsModel {
       stopReading()
       return
     }
-    guard let text = selectedText else { return }
+    guard let text = selectedText else {
+      return
+    }
     stopReading()
     player.stop()
     let facet = selection
@@ -61,13 +65,17 @@ extension TranscriptsModel {
     // Heard off the main actor, when the first audio plays.
     let started: @Sendable () -> Void = { [weak self] in
       Task { @MainActor [weak self] in
-        guard let self, self.readingFacet == facet else { return }
-        self.readingStarted = true
+        guard let self, readingFacet == facet else {
+          return
+        }
+        readingStarted = true
       }
     }
     readingTask = Task { [weak self, reader] in
       try? await reader.read(text, onStart: started)
-      guard !Task.isCancelled, let self, readingFacet == facet else { return }
+      guard !Task.isCancelled, let self, readingFacet == facet else {
+        return
+      }
       readingFacet = nil
     }
   }

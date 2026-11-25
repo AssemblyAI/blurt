@@ -20,9 +20,8 @@ struct DictationSessionHandBackTests {
   @Test("a request is never remembered as a dictation, nor reported as one")
   func notRemembered() async {
     let delivered = Counter()
-    let fixture = makeSession(
-      mode: .transcript("What does this mean?"),
-      onTranscriptDelivered: { _, _ in _ = delivered.next() })
+    let countDelivery: @Sendable (String, RecentDictations) -> Void = { _, _ in _ = delivered.next() }
+    let fixture = makeSession(mode: .transcript("What does this mean?"), onTranscriptDelivered: countDelivery)
     await fixture.session.dictate(handingBack: true)
 
     #expect(await fixture.session.recentDictations.spokenOldestFirst.isEmpty)
@@ -33,7 +32,8 @@ struct DictationSessionHandBackTests {
   func noShortcutExpansion() async {
     let fixture = makeSession(
       mode: .transcript("Email it to my personal email"),
-      textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
+      textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")]
+    )
     await fixture.session.dictate(handingBack: true)
 
     #expect(await fixture.session.phase == .handedBack("Email it to my personal email"))
@@ -64,7 +64,9 @@ struct DictationSessionHandBackTests {
     let phases = await fixture.session.phaseStream()
     let ended = Task { () -> PipelinePhase? in
       for await phase in phases {
-        if case .handedBack = phase { return phase }
+        if case .handedBack = phase {
+          return phase
+        }
       }
       return nil
     }

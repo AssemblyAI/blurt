@@ -3,7 +3,7 @@ import XCTest
 /// Control Your Mac end to end in the real app: the key's press and release
 /// through the real key tap, the session's recording and transcription, the
 /// router's command path, the pill — with the stub planner and performer
-/// (`UITestSupport`) in place of the gateway and Accessibility.
+/// (`UITestPlanner`, `UITestPerformer`) in place of the gateway and Accessibility.
 final class CommandPipelineUITests: BlurtUITestCase {
   private var pill: XCUIElement { app.anyDescendant(identified: UITestIdentifiers.overlayPill) }
 
@@ -40,7 +40,8 @@ final class CommandPipelineUITests: BlurtUITestCase {
     waitForLabel(planned(in: harness), equals: "Open Slack", timeout: 15, "The spoken command should reach the planner")
     waitForText(performed(in: harness), containing: "openApp(\"Slack\")", "The planned step should be carried out")
     waitForLabel(
-      notice(in: harness), equals: "Your command was carried out.", "The pill should say the command was done")
+      notice(in: harness), equals: "Your command was carried out.", "The pill should say the command was done"
+    )
   }
 
   /// While a command is still planning, the pill stays up saying it's working —
@@ -58,10 +59,11 @@ final class CommandPipelineUITests: BlurtUITestCase {
       // what must never happen is the pill leaving, or saying anything else.
       XCTAssertTrue(
         ["Carrying out your command.", "Your command was carried out."].contains(pill.label),
-        "The pill should say the command is working, got \(pill.label)")
+        "The pill should say the command is working, got \(pill.label)"
+      )
       usleep(100_000)
     }
-    waitForText(performed(in: harness), containing: "openApp(\"Notes\")", timeout: 10, "The command should finish")
+    waitForText(performed(in: harness), containing: "openApp(\"Notes\")", "The command should finish", timeout: 10)
     waitForLabel(notice(in: harness), equals: "Your command was carried out.", "Then the pill should say it's done")
   }
 
@@ -78,7 +80,7 @@ final class CommandPipelineUITests: BlurtUITestCase {
     let harness = readyHarness()
     commandKey(in: harness)
     command("Mute", in: harness)
-    waitForText(performed(in: harness), containing: "media(", timeout: 15, "The first command should run")
+    waitForText(performed(in: harness), containing: "media(", "The first command should run", timeout: 15)
     command("That didn't work", in: harness)
     waitForLabel(
       notice(in: harness), equals: "Noted: the last command was marked as not working.", "The complaint should be noted"
@@ -103,9 +105,10 @@ final class CommandPipelineUITests: BlurtUITestCase {
     commandKey(in: harness)
     command("Juggle the windows", in: harness)
     waitForLabel(
-      notice(in: harness), equals: "Blurt can’t do that command.", timeout: 15, "A command it can't do should say so")
+      notice(in: harness), equals: "Blurt can’t do that command.", timeout: 15, "A command it can't do should say so"
+    )
     command("Open Music", in: harness)
-    waitForText(performed(in: harness), containing: "openApp(\"Music\")", timeout: 15, "The key should still work")
+    waitForText(performed(in: harness), containing: "openApp(\"Music\")", "The key should still work", timeout: 15)
   }
 
   /// A rewrite key: the canned selection rewritten as the spoken instruction asks, pasted over it.
@@ -114,7 +117,8 @@ final class CommandPipelineUITests: BlurtUITestCase {
     bind("left ⌃", with: UITestIdentifiers.harnessSetRewrite, in: harness)
     command("Make it shorter", in: harness)
     waitForText(
-      pastedLabel(in: harness), containing: "Rewritten (Make it shorter)", timeout: 15, "The rewrite should paste")
+      pastedLabel(in: harness), containing: "Rewritten (Make it shorter)", "The rewrite should paste", timeout: 15
+    )
   }
 
   /// A compose key: no selection needed; what the spoken instructions describe is pasted at the cursor.
@@ -123,7 +127,10 @@ final class CommandPipelineUITests: BlurtUITestCase {
     bind("left ⌃", with: UITestIdentifiers.harnessSetCompose, in: harness)
     command("Tell Dan we should ship it", in: harness)
     waitForText(
-      pastedLabel(in: harness), containing: "Composed (Tell Dan we should ship it)", timeout: 15,
-      "The composition should paste")
+      pastedLabel(in: harness),
+      containing: "Composed (Tell Dan we should ship it)",
+      "The composition should paste",
+      timeout: 15
+    )
   }
 }

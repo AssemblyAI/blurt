@@ -4,11 +4,19 @@
 
   // The Accessibility-backed half of the press-time focus capture. `FocusCapture`
   // itself, `CapturedFocus` and `FocusedFieldContext` are declared in
-  // `FocusContext.swift`, which builds on every platform; this file is macOS only.
+  // `FocusCapture+Pure.swift`, `CapturedFocus.swift` and `FocusedFieldContext.swift`,
+  // which build on every platform; this file is macOS only.
   extension FocusCapture {
+    /// Cap on each cross-process AX round trip this process makes. An unresponsive
+    /// frontmost app costs a read this long, not the ~6 s system default; the
+    /// context capture is best-effort priming, so partial answers beat waiting.
+    private static let axMessagingTimeoutSeconds: Float = 1
+
     @MainActor
     static func captureFrontmost() -> CapturedFocus? {
-      guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+      guard let app = NSWorkspace.shared.frontmostApplication else {
+        return nil
+      }
       return CapturedFocus(
         pid: app.processIdentifier,
         processName: app.localizedName
@@ -70,7 +78,8 @@
         selectedText: selected,
         windowTitle: clip(windowTitle(of: element), to: 120),
         fieldLabel: clip(fieldLabel(of: element), to: 80),
-        isSecure: isSecure)
+        isSecure: isSecure
+      )
     }
 
     /// Just the focused field's selected text, up to `maxChars` — the read the
@@ -80,14 +89,22 @@
     /// skips is latency a dictation press doesn't pay. Same secure-field guard,
     /// same off-main rule.
     nonisolated static func captureSelectedText(maxChars: Int) -> SelectionRead {
-      guard AXIsProcessTrusted() else { return .none }
-      guard let (element, isSecure) = focusedElementForReading() else { return .unreadable }
-      guard !isSecure else { return .none }
+      guard AXIsProcessTrusted() else {
+        return .noSelection
+      }
+      guard let (element, isSecure) = focusedElementForReading() else {
+        return .unreadable
+      }
+      guard !isSecure else {
+        return .noSelection
+      }
       let selection = selectedTextRange(of: element)
       // A bare caret is the common case (every dictation press while read-aloud
       // is on), so skip `selectedText`'s `kAXSelectedText` fallback read for it.
       // That fallback is for elements that expose no range at all.
-      if let selection, selection.length == 0 { return .none }
+      if let selection, selection.length == 0 {
+        return .noSelection
+      }
       return selectionRead(rawSelectedText(of: element, selection: selection, maxChars: maxChars), maxChars: maxChars)
     }
 
@@ -99,18 +116,16 @@
     /// The whole decision, including the fail-closed arm, lives in
     /// `mustRedactContents`, where it is unit-tested. This needs a live AX element,
     /// so anything decided inline here would be covered by nothing.
-    private nonisolated static func focusedElementForReading() -> (element: AXUIElement, isSecure: Bool)? {
-      guard let element = systemFocusedElement() else { return nil }
+    nonisolated private static func focusedElementForReading() -> (element: AXUIElement, isSecure: Bool)? {
+      guard let element = systemFocusedElement() else {
+        return nil
+      }
       let isSecure = mustRedactContents(
         role: stringValue(element, kAXRoleAttribute),
-        subrole: stringValue(element, kAXSubroleAttribute))
+        subrole: stringValue(element, kAXSubroleAttribute)
+      )
       return (element, isSecure)
     }
-
-    /// Cap on each cross-process AX round trip this process makes. An unresponsive
-    /// frontmost app costs a read this long, not the ~6 s system default; the
-    /// context capture is best-effort priming, so partial answers beat waiting.
-    private static let axMessagingTimeoutSeconds: Float = 1
 
     // Internal, not private: `hasEditableFocusedElement` in
     // FocusCapture+Editability.swift calls it from another file.
@@ -130,7 +145,9 @@
         unsafe AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
           == .success,
         let focusedRef
-      else { return nil }
+      else {
+        return nil
+      }
       return axElement(focusedRef)
     }
 
@@ -147,7 +164,9 @@
 
     /// `ref` as an `AXUIElement`, or `nil` when it's some other CF type.
     nonisolated static func axElement(_ ref: CFTypeRef) -> AXUIElement? {
-      guard CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
+      guard CFGetTypeID(ref) == AXUIElementGetTypeID() else {
+        return nil
+      }
       // swiftlint:disable:next force_cast
       return (ref as! AXUIElement)
     }
@@ -164,24 +183,30 @@
     /// `empty` is the storage `AXValueGetValue` writes into — plain bytes
     /// (`BitwiseCopyable`), as every `AXValueType` payload is.
     nonisolated static func axValue<T: BitwiseCopyable>(_ ref: CFTypeRef, _ type: AXValueType, _ empty: T) -> T? {
-      guard CFGetTypeID(ref) == AXValueGetTypeID() else { return nil }
+      guard CFGetTypeID(ref) == AXValueGetTypeID() else {
+        return nil
+      }
       // swiftlint:disable:next force_cast
       let value = ref as! AXValue
       var decoded = empty
-      guard unsafe AXValueGetValue(value, type, &decoded) else { return nil }
+      guard unsafe AXValueGetValue(value, type, &decoded) else {
+        return nil
+      }
       return decoded
     }
 
     /// The element's selected text range — a zero-length range when there's just a
     /// caret — or `nil` when it exposes no readable selection. Its `location` is the
     /// insertion point.
-    private nonisolated static func selectedTextRange(of element: AXUIElement) -> CFRange? {
+    nonisolated private static func selectedTextRange(of element: AXUIElement) -> CFRange? {
       var rangeRef: CFTypeRef?
       guard
         unsafe AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
           == .success,
         let rangeRef
-      else { return nil }
+      else {
+        return nil
+      }
       return axRange(rangeRef)
     }
 
@@ -189,23 +214,28 @@
     /// attribute, so only the slice asked for crosses Accessibility IPC rather than
     /// the whole field value. Shared by the prior-text and selected-text reads,
     /// which differ only in the range they request and how they post-process it.
-    private nonisolated static func string(of element: AXUIElement, in range: CFRange) -> String? {
+    nonisolated private static func string(of element: AXUIElement, in range: CFRange) -> String? {
       var range = range
-      guard let axRange = unsafe AXValueCreate(.cfRange, &range) else { return nil }
+      guard let axRange = unsafe AXValueCreate(.cfRange, &range) else {
+        return nil
+      }
       var sliceRef: CFTypeRef?
       guard
         unsafe AXUIElementCopyParameterizedAttributeValue(
-          element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
+          element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef
+        )
           == .success,
         let slice = sliceRef as? String
-      else { return nil }
+      else {
+        return nil
+      }
       return slice
     }
 
     /// Up to `maxChars` of text immediately preceding the insertion point, or
     /// `nil` when the element exposes no readable text before the cursor.
     /// `selection` is the already-read selected range (see `selectedTextRange`).
-    private nonisolated static func priorText(
+    nonisolated private static func priorText(
       of element: AXUIElement, selection: CFRange?, maxChars: Int
     ) -> String? {
       // Insertion point = the location of the (possibly empty) selected range.
@@ -233,7 +263,7 @@
     /// string-for-range attribute first so a huge highlight does not copy the full
     /// selection across Accessibility IPC before being clipped locally; falls back
     /// to `kAXSelectedText` for elements that expose no string-for-range.
-    private nonisolated static func selectedText(
+    nonisolated private static func selectedText(
       of element: AXUIElement, selection: CFRange?, maxChars: Int
     ) -> String? {
       selectionText(rawSelectedText(of: element, selection: selection, maxChars: maxChars), maxChars: maxChars)
@@ -243,30 +273,35 @@
     /// slice, else `kAXSelectedText` — or nil when the element answered neither.
     /// Unfiltered, so `captureSelectedText` can tell an element that holds no
     /// visible selection from one that won't say (`selectionRead`).
-    private nonisolated static func rawSelectedText(
+    nonisolated private static func rawSelectedText(
       of element: AXUIElement, selection: CFRange?, maxChars: Int
     ) -> String? {
       if var selectedRange = selection, selectedRange.length > 0 {
         selectedRange.length = min(selectedRange.length, maxChars)
-        if let slice = string(of: element, in: selectedRange) { return slice }
+        if let slice = string(of: element, in: selectedRange) {
+          return slice
+        }
       }
       return rawStringValue(element, kAXSelectedTextAttribute)
     }
 
     /// The title of the window containing the focused element, if exposed.
-    private nonisolated static func windowTitle(of element: AXUIElement) -> String? {
-      guard let window = elementValue(element, kAXWindowAttribute) else { return nil }
+    nonisolated private static func windowTitle(of element: AXUIElement) -> String? {
+      guard let window = elementValue(element, kAXWindowAttribute) else {
+        return nil
+      }
       return stringValue(window, kAXTitleAttribute)
     }
 
     /// A short, human-meaningful label for the field, chosen by priority from the
     /// attributes the focused element exposes.
-    private nonisolated static func fieldLabel(of element: AXUIElement) -> String? {
+    nonisolated private static func fieldLabel(of element: AXUIElement) -> String? {
       selectLabel(
         placeholder: stringValue(element, kAXPlaceholderValueAttribute),
         description: stringValue(element, kAXDescriptionAttribute),
         title: stringValue(element, kAXTitleAttribute),
-        roleDescription: stringValue(element, kAXRoleDescriptionAttribute))
+        roleDescription: stringValue(element, kAXRoleDescriptionAttribute)
+      )
     }
 
     // Internal for the same reason as `systemFocusedElement`: the editability path in
@@ -288,11 +323,13 @@
     /// and shortens the string, so slicing a trimmed value with an untrimmed caret
     /// silently returns the wrong text (or falls back to the whole tail, which
     /// destroys the trailing-whitespace signal `withLeadingSeparator` reads).
-    private nonisolated static func rawStringValue(_ element: AXUIElement, _ attribute: String) -> String? {
+    nonisolated private static func rawStringValue(_ element: AXUIElement, _ attribute: String) -> String? {
       var ref: CFTypeRef?
       guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
         let value = ref as? String
-      else { return nil }
+      else {
+        return nil
+      }
       return value
     }
 
@@ -301,7 +338,9 @@
       var ref: CFTypeRef?
       guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
         let ref
-      else { return nil }
+      else {
+        return nil
+      }
       return axElement(ref)
     }
   }

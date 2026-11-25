@@ -6,16 +6,16 @@ import Testing
 
 /// The wire framing of the chunked dictation upload: the three pieces of the
 /// multipart body the transcriber writes, and the order they reach the server
-/// in. Split from `AssemblyAITranscriberTests` to stay within the lint
+/// in. Split from `HTTPClientTests` to stay within the lint
 /// type-body-length budget — that suite owns the round trip and the `config`
 /// contents, this one owns the bytes.
 @Suite("AssemblyAITranscriber multipart framing")
 struct AssemblyAITranscriberMultipartTests {
-
   @Test("the multipart parts frame the config and audio the dictation API expects")
   func multipartFramingParts() throws {
     let head = DictationMultipart.configHead(
-      config: Data(#"{"channels":1}"#.utf8), boundary: "BOUND")
+      config: Data(#"{"channels":1}"#.utf8), boundary: "BOUND"
+    )
     let audio = DictationMultipart.audioPartHeader(boundary: "BOUND")
     let close = DictationMultipart.closingBoundary(boundary: "BOUND")
     let headText = try #require(String(data: head, encoding: .utf8))
@@ -56,7 +56,8 @@ struct AssemblyAITranscriberMultipartTests {
     let pcm = StubPCM.everyByteValueAboveMinimum
     let transport = FakeHTTPTransport { _ in (200, json(["text": "ok"])) }
     _ = try await collectTranscript(
-      makeTranscriber(apiKey: "test-key", transport: transport), pcm: pcm)
+      makeTranscriber(apiKey: "test-key", transport: transport), pcm: pcm
+    )
 
     let body = transport.uploadedBody
     let configHeader = try #require(body.range(of: Data("name=\"config\"".utf8)))
@@ -92,7 +93,8 @@ struct AssemblyAITranscriberMultipartTests {
     // The fallback's trigger reads it: `413` alone is not specific enough.
     let refusal = try JSONDecoder().decode(
       ErrorResponse.self,
-      from: json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"]))
+      from: json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"])
+    )
     #expect(refusal.errorCode == "audio_too_large")
     #expect(refusal.message == "audio exceeds 120000 ms")
     // The `{status, title, detail}` shape carries no code.

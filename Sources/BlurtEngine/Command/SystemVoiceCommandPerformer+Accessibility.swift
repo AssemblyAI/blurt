@@ -3,10 +3,178 @@
   import ApplicationServices
   import CoreGraphics
 
+  /// The Accessibility reads the steps make, each nil (or empty) when the
+  /// element doesn't answer.
+  enum AXRead {
+    static func value(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+      var value: CFTypeRef?
+      guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
+        return nil
+      }
+      return value
+    }
+
+    static func element(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+      value(element, attribute).flatMap(FocusCapture.axElement).map(capped)
+    }
+
+    /// `pid`'s application element, its calls capped.
+    static func app(_ pid: pid_t) -> AXUIElement {
+      capped(AXUIElementCreateApplication(pid))
+    }
+
+    /// The app's focused window, else its main one: an app whose main window
+    /// isn't key still has one to act in.
+    /// The focused window, else the main one, else the first the app lists:
+    /// Calculator answered neither of the first two (2026-11-04).
+    static func window(of app: AXUIElement) -> AXUIElement? {
+      element(app, kAXFocusedWindowAttribute) ?? element(app, kAXMainWindowAttribute)
+        ?? (value(app, kAXWindowsAttribute) as? [AXUIElement])?.first.map(capped)
+    }
+
+    /// `element` with its calls capped at `ScreenSnapshot.callTimeout`. The
+    /// cap belongs to each element reference, not the app, and the default
+    /// is six seconds: Music took 18 s over one read with three slow answers
+    /// (2026-11-03). Every element these reads hand on is capped.
+    static func capped(_ element: AXUIElement) -> AXUIElement {
+      AXUIElementSetMessagingTimeout(element, ScreenSnapshot.callTimeout)
+      return element
+    }
+
+    static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+      FocusCapture.stringValue(element, attribute)
+    }
+
+    // An attribute the element doesn't carry is nil, apart from one set to false.
+    // swiftlint:disable:next discouraged_optional_boolean
+    static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {
+      value(element, attribute) as? Bool
+    }
+
+    /// What a user would call it (`ScreenRead.labels`).
+    static func labels(_ node: Node) -> [String] { ScreenRead.labels(node) }
+
+    /// Its labels, else the one it borrows, else the text inside it
+    /// (`ScreenRead.names`). `deadline`: when the read's time is up — the
+    /// lookup inside one row can otherwise outrun the whole read, Music's
+    /// content rows answering at up to ~130 ms a call (measured 2026-11-03).
+    static func names(_ node: Node, until deadline: ContinuousClock.Instant? = nil) -> [String] {
+      ScreenRead.names(node) { deadline.map { ContinuousClock.now >= $0 } ?? false }
+    }
+
+    /// Its frame in global, top-left-origin coordinates — the ones a
+    /// `CGEvent` click takes — in one round trip for the two attributes.
+    static func frame(_ element: AXUIElement) -> CGRect? {
+      Node(element, batch: [kAXPositionAttribute, kAXSizeAttribute]).frame
+    }
+
+    static func isPressable(_ element: AXUIElement) -> Bool {
+      var names: CFArray?
+      guard unsafe AXUIElementCopyActionNames(element, &names) == .success else {
+        return false
+      }
+      return (names as? [String])?.contains(kAXPressAction) ?? false
+    }
+  }
+
+  extension AXRead.Node: ScreenNode {
+    var subrole: String? { string(kAXSubroleAttribute) }
+    var title: String? { string(kAXTitleAttribute) }
+    var nodeDescription: String? { string(kAXDescriptionAttribute) }
+    var placeholder: String? { string(kAXPlaceholderValueAttribute) }
+    var isPressable: Bool { AXRead.isPressable(element) }
+    var titleElement: AXRead.Node? { element(kAXTitleUIElementAttribute).map { AXRead.Node($0) } }
+  }
+
+  extension AXRead {
+    /// One element as a walk sees it: its common attributes fetched in one
+    /// round trip (`AXUIElementCopyMultipleAttributeValues`) the first time any
+    /// is asked for, rather than a call each, and its children and value kept
+    /// once read — so a walk and the row-name lookup inside it share them.
+    /// Never `AXValue` in the batch: for a text field that's what the user
+    /// typed, so it's read on its own, and only for a role whose value is its
+    /// name. One read in one task: not `Sendable`, and it needn't be.
+    final class Node {
+      /// The attributes one round trip fetches: what `describe`, `names`, a
+      /// walk's children, a frame, a scroll area's parent and a menu item's
+      /// enabled state read.
+      static let batch: [String] = [
+        kAXRoleAttribute, kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXTitleAttribute,
+        kAXDescriptionAttribute, kAXPlaceholderValueAttribute, kAXChildrenAttribute, kAXTitleUIElementAttribute,
+        kAXParentAttribute, kAXEnabledAttribute,
+      ]
+
+      let element: AXUIElement
+      private let batch: [String]
+      /// `batch`, read the first time any of it is asked for.
+      private lazy var attributes: [String: CFTypeRef] = Self.read(element, batch)
+
+      var role: String? { string(kAXRoleAttribute) }
+
+      lazy var children: [Node] = (attribute(kAXChildrenAttribute) as? [AXUIElement] ?? []).map { child in
+        Node(AXRead.capped(child))
+      }
+
+      var frame: CGRect? {
+        guard
+          let position = attribute(kAXPositionAttribute).flatMap({ FocusCapture.axValue($0, .cgPoint, CGPoint.zero) }),
+          let size = attribute(kAXSizeAttribute).flatMap({ FocusCapture.axValue($0, .cgSize, CGSize.zero) })
+        else {
+          return nil
+        }
+        return CGRect(origin: position, size: size)
+      }
+
+      /// Its `AXValue`, read once, alone. Asked only for a value-named role
+      /// (`nameValue`) or a row's text inside it (`ScreenSnapshot.firstText`):
+      /// never a text entry's contents.
+      lazy var rawValue: String? = AXRead.string(element, kAXValueAttribute)
+
+      init(_ element: AXUIElement, batch: [String] = Node.batch) {
+        self.element = element
+        self.batch = batch
+      }
+
+      /// `batch` in one call. An attribute the element doesn't have comes back
+      /// as an `AXValue` holding an `AXError`, and is left out.
+      private static func read(_ element: AXUIElement, _ batch: [String]) -> [String: CFTypeRef] {
+        var values: CFArray?
+        guard
+          unsafe AXUIElementCopyMultipleAttributeValues(
+            element, batch as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values
+          ) == .success,
+          let array = values as? [CFTypeRef]
+        else {
+          return [:]
+        }
+        var read: [String: CFTypeRef] = [:]
+        for (name, value) in zip(batch, array) where FocusCapture.axValue(value, .axError, AXError.success) == nil {
+          read[name] = value
+        }
+        return read
+      }
+
+      /// One of `batch`'s attributes, nil when the element doesn't have it.
+      func attribute(_ name: String) -> CFTypeRef? { attributes[name] }
+
+      func string(_ name: String) -> String? { (attribute(name) as? String)?.trimmedNonEmpty() }
+
+      func element(_ name: String) -> AXUIElement? {
+        attribute(name).flatMap(FocusCapture.axElement).map(AXRead.capped)
+      }
+    }
+  }
+
   // The steps carried out through Accessibility: raising an app, pressing a
   // button in its window, choosing an item from its menus. All on the trust
   // the paste already has; nothing here needs Screen Recording.
   extension SystemVoiceCommandPerformer {
+    /// How long a page's menu gets to open before its items are looked for.
+    static let pageMenuOpens: Duration = .milliseconds(400)
+
+    /// The roles a page's menus are made of.
+    private static let pageMenuRoles: Set<String> = ["AXMenuItem", "AXMenuBarItem", "AXMenuButton"]
+
     /// Makes `pid` the frontmost app through its Accessibility element, as
     /// clicking its Dock icon would. Not gated by cooperative activation, which
     /// is what drops `activate()` from an app that isn't active itself.
@@ -25,7 +193,9 @@
     @MainActor
     static func isVerifiedFrontmost(_ app: NSRunningApplication) -> Bool {
       let pid = app.processIdentifier
-      guard isFrontmost(pid) else { return false }
+      guard isFrontmost(pid) else {
+        return false
+      }
       return WindowOrder.isFrontmost(Int(pid), in: onScreenWindows())
     }
 
@@ -34,11 +204,13 @@
     static func onScreenWindows() -> [WindowOrder.Window] {
       let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
       return (info as? [[String: Any]] ?? []).map { window in
-        let bounds = (window[kCGWindowBounds as String] as? NSDictionary)
+        let bounds = (window[kCGWindowBounds as String] as? [String: Any])
           .flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) }
         return WindowOrder.Window(
           owner: window[kCGWindowOwnerPID as String] as? Int ?? -1,
-          layer: window[kCGWindowLayer as String] as? Int ?? -1, bounds: bounds ?? .null)
+          layer: window[kCGWindowLayer as String] as? Int ?? -1,
+          bounds: bounds ?? .null
+        )
       }
     }
 
@@ -90,20 +262,18 @@
       return "page menu"
     }
 
-    /// How long a page's menu gets to open before its items are looked for.
-    static let pageMenuOpens: Duration = .milliseconds(400)
-
-    /// The roles a page's menus are made of.
-    private static let pageMenuRoles: Set<String> = ["AXMenuItem", "AXMenuBarItem", "AXMenuButton"]
-
     /// `searchBounded` among a page's menu items only: "Format" is the menu,
     /// never a toolbar button that mentions it.
     private static func searchMenu(_ name: String, in window: AXUIElement) -> AXUIElement? {
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
       return ElementSearch.best(
-        named: name, from: AXRead.Node(window), children: \.children, labels: AXRead.labels,
+        named: name,
+        from: AXRead.Node(window),
+        children: \.children,
+        labels: AXRead.labels,
         pressable: { $0.role.map(pageMenuRoles.contains) == true && $0.frame != nil },
-        shouldStop: { ContinuousClock.now >= deadline })?.element
+        shouldStop: { ContinuousClock.now >= deadline }
+      )?.element
     }
 
     /// The frontmost app's menu item at `path`, from the menu-bar title down
@@ -114,8 +284,8 @@
         throw VoiceCommandError.menuItemNotFound(path)
       }
       // Each entry's role and title come in one round trip (`Node`).
-      let entries: (AXRead.Node) -> [AXRead.Node] = {
-        $0.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] }
+      let entries: (AXRead.Node) -> [AXRead.Node] = { menu in
+        menu.children.flatMap { $0.role == kAXMenuRole ? $0.children : [$0] }
       }
       let title: (AXRead.Node) -> String? = { $0.string(kAXTitleAttribute) }
       let item: AXRead.Node
@@ -140,8 +310,13 @@
     private static func searchBounded(_ name: String, in window: AXUIElement) -> AXUIElement? {
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
       return ElementSearch.best(
-        named: name, from: AXRead.Node(window), children: \.children, labels: AXRead.labels,
-        pressable: { AXRead.isPressable($0.element) }, shouldStop: { ContinuousClock.now >= deadline })?.element
+        named: name,
+        from: AXRead.Node(window),
+        children: \.children,
+        labels: AXRead.labels,
+        pressable: { AXRead.isPressable($0.element) },
+        shouldStop: { ContinuousClock.now >= deadline }
+      )?.element
     }
 
     static func pid(of element: AXUIElement) -> pid_t? {
@@ -164,159 +339,12 @@
     /// pointer shouldn't stay where Blurt left it.
     static func withPointer(at point: CGPoint, _ body: () throws -> Void) async throws {
       try await ElementActions.withPointer(
-        at: point, home: CGEvent(source: nil)?.location, warp: { CGWarpMouseCursorPosition($0) },
-        beat: { try await Task.sleep(for: .milliseconds(50)) }, body)
-    }
-  }
-
-  /// The Accessibility reads the steps make, each nil (or empty) when the
-  /// element doesn't answer.
-  enum AXRead {
-    static func value(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
-      var value: CFTypeRef?
-      guard unsafe AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
-      return value
-    }
-
-    static func element(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
-      value(element, attribute).flatMap(FocusCapture.axElement).map(capped)
-    }
-
-    /// `pid`'s application element, its calls capped.
-    static func app(_ pid: pid_t) -> AXUIElement {
-      capped(AXUIElementCreateApplication(pid))
-    }
-
-    /// The app's focused window, else its main one: an app whose main window
-    /// isn't key still has one to act in.
-    /// The focused window, else the main one, else the first the app lists:
-    /// Calculator answered neither of the first two (2026-11-04).
-    static func window(of app: AXUIElement) -> AXUIElement? {
-      element(app, kAXFocusedWindowAttribute) ?? element(app, kAXMainWindowAttribute)
-        ?? (value(app, kAXWindowsAttribute) as? [AXUIElement])?.first.map(capped)
-    }
-
-    /// `element` with its calls capped at `ScreenSnapshot.callTimeout`. The
-    /// cap belongs to each element reference, not the app, and the default
-    /// is six seconds: Music took 18 s over one read with three slow answers
-    /// (2026-11-03). Every element these reads hand on is capped.
-    static func capped(_ element: AXUIElement) -> AXUIElement {
-      AXUIElementSetMessagingTimeout(element, ScreenSnapshot.callTimeout)
-      return element
-    }
-
-    static func string(_ element: AXUIElement, _ attribute: String) -> String? {
-      FocusCapture.stringValue(element, attribute)
-    }
-
-    static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {
-      value(element, attribute) as? Bool
-    }
-
-    /// What a user would call it (`ScreenRead.labels`).
-    static func labels(_ node: Node) -> [String] { ScreenRead.labels(node) }
-
-    /// Its labels, else the one it borrows, else the text inside it
-    /// (`ScreenRead.names`). `deadline`: when the read's time is up — the
-    /// lookup inside one row can otherwise outrun the whole read, Music's
-    /// content rows answering at up to ~130 ms a call (measured 2026-11-03).
-    static func names(_ node: Node, until deadline: ContinuousClock.Instant? = nil) -> [String] {
-      ScreenRead.names(node, shouldStop: { deadline.map { ContinuousClock.now >= $0 } ?? false })
-    }
-
-    /// Its frame in global, top-left-origin coordinates — the ones a
-    /// `CGEvent` click takes — in one round trip for the two attributes.
-    static func frame(_ element: AXUIElement) -> CGRect? {
-      Node(element, batch: [kAXPositionAttribute, kAXSizeAttribute]).frame
-    }
-
-    static func isPressable(_ element: AXUIElement) -> Bool {
-      var names: CFArray?
-      guard unsafe AXUIElementCopyActionNames(element, &names) == .success else { return false }
-      return (names as? [String])?.contains(kAXPressAction) ?? false
-    }
-  }
-
-  extension AXRead.Node: ScreenNode {
-    var subrole: String? { string(kAXSubroleAttribute) }
-    var title: String? { string(kAXTitleAttribute) }
-    var nodeDescription: String? { string(kAXDescriptionAttribute) }
-    var placeholder: String? { string(kAXPlaceholderValueAttribute) }
-    var isPressable: Bool { AXRead.isPressable(element) }
-    var titleElement: AXRead.Node? { element(kAXTitleUIElementAttribute).map { AXRead.Node($0) } }
-  }
-
-  extension AXRead {
-    /// One element as a walk sees it: its common attributes fetched in one
-    /// round trip (`AXUIElementCopyMultipleAttributeValues`) the first time any
-    /// is asked for, rather than a call each, and its children and value kept
-    /// once read — so a walk and the row-name lookup inside it share them.
-    /// Never `AXValue` in the batch: for a text field that's what the user
-    /// typed, so it's read on its own, and only for a role whose value is its
-    /// name. One read in one task: not `Sendable`, and it needn't be.
-    final class Node {
-      let element: AXUIElement
-      private let batch: [String]
-      /// `batch`, read the first time any of it is asked for.
-      private lazy var attributes: [String: CFTypeRef] = Self.read(element, batch)
-
-      init(_ element: AXUIElement, batch: [String] = Node.batch) {
-        self.element = element
-        self.batch = batch
-      }
-
-      /// The attributes one round trip fetches: what `describe`, `names`, a
-      /// walk's children, a frame, a scroll area's parent and a menu item's
-      /// enabled state read.
-      static let batch: [String] = [
-        kAXRoleAttribute, kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXTitleAttribute,
-        kAXDescriptionAttribute, kAXPlaceholderValueAttribute, kAXChildrenAttribute, kAXTitleUIElementAttribute,
-        kAXParentAttribute, kAXEnabledAttribute,
-      ]
-
-      /// One of `batch`'s attributes, nil when the element doesn't have it.
-      func attribute(_ name: String) -> CFTypeRef? { attributes[name] }
-
-      func string(_ name: String) -> String? { (attribute(name) as? String)?.trimmedNonEmpty() }
-
-      func element(_ name: String) -> AXUIElement? {
-        attribute(name).flatMap(FocusCapture.axElement).map(AXRead.capped)
-      }
-
-      var role: String? { string(kAXRoleAttribute) }
-
-      lazy var children: [Node] = (attribute(kAXChildrenAttribute) as? [AXUIElement] ?? []).map {
-        Node(AXRead.capped($0))
-      }
-
-      var frame: CGRect? {
-        guard
-          let position = attribute(kAXPositionAttribute).flatMap({ FocusCapture.axValue($0, .cgPoint, CGPoint.zero) }),
-          let size = attribute(kAXSizeAttribute).flatMap({ FocusCapture.axValue($0, .cgSize, CGSize.zero) })
-        else { return nil }
-        return CGRect(origin: position, size: size)
-      }
-
-      /// Its `AXValue`, read once, alone. Asked only for a value-named role
-      /// (`nameValue`) or a row's text inside it (`ScreenSnapshot.firstText`):
-      /// never a text entry's contents.
-      lazy var rawValue: String? = AXRead.string(element, kAXValueAttribute)
-
-      /// `batch` in one call. An attribute the element doesn't have comes back
-      /// as an `AXValue` holding an `AXError`, and is left out.
-      private static func read(_ element: AXUIElement, _ batch: [String]) -> [String: CFTypeRef] {
-        var values: CFArray?
-        guard
-          unsafe AXUIElementCopyMultipleAttributeValues(
-            element, batch as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values) == .success,
-          let array = values as? [CFTypeRef]
-        else { return [:] }
-        var read: [String: CFTypeRef] = [:]
-        for (name, value) in zip(batch, array) where FocusCapture.axValue(value, .axError, AXError.success) == nil {
-          read[name] = value
-        }
-        return read
-      }
+        at: point,
+        home: CGEvent(source: nil)?.location,
+        warp: { CGWarpMouseCursorPosition($0) },
+        beat: { try await Task.sleep(for: .milliseconds(50)) },
+        body
+      )
     }
   }
 #endif

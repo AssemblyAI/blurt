@@ -11,7 +11,6 @@
   /// clipboard activity; `.serialized` because they touch `NSPasteboard.general`.
   @Suite("SystemClipboard", .serialized)
   struct SystemClipboardTests {
-
     /// Snapshot/restore the user's clipboard around a test body so the suite leaves
     /// the real pasteboard as it found it.
     ///
@@ -102,7 +101,8 @@
 
         // An item with a declared type but no retrievable data models the promise.
         let degraded = PasteboardSnapshot(
-          items: [SendablePasteboardItem(dataMap: [:])], plainText: nil)
+          items: [SendablePasteboardItem(dataMap: [:])], plainText: nil
+        )
 
         clip.setString("transcript")
         clip.restore(degraded)
@@ -119,7 +119,8 @@
         let clip = SystemClipboard()
 
         let degraded = PasteboardSnapshot(
-          items: [SendablePasteboardItem(dataMap: [:])], plainText: "original text")
+          items: [SendablePasteboardItem(dataMap: [:])], plainText: "original text"
+        )
 
         clip.setString("transcript")
         clip.restore(degraded)
@@ -187,7 +188,8 @@
         let clip = SystemClipboard()
 
         let concealed = PasteboardSnapshot(
-          items: [SendablePasteboardItem(dataMap: [SystemClipboard.concealedType: Data()])], plainText: "hunter2")
+          items: [SendablePasteboardItem(dataMap: [SystemClipboard.concealedType: Data()])], plainText: "hunter2"
+        )
 
         clip.setString("transcript")
         clip.restore(concealed)

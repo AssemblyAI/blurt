@@ -15,13 +15,10 @@ public import Foundation
 public struct OverlayOriginStore {
   /// Public so the reset sweep and `@AppStorage`-style observers can name them.
   public static var xDefaultsKey: String { DefaultsKey.overlayCustomOriginX.key }
+  /// The `y` half of the pair; see `xDefaultsKey`.
   public static var yDefaultsKey: String { DefaultsKey.overlayCustomOriginY.key }
 
   private let defaults: UserDefaults
-
-  public init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
 
   /// The dragged origin, or `nil` when the pill has never been moved.
   ///
@@ -32,10 +29,13 @@ public struct OverlayOriginStore {
     get {
       guard defaults.object(forKey: Self.xDefaultsKey) != nil,
         defaults.object(forKey: Self.yDefaultsKey) != nil
-      else { return nil }
+      else {
+        return nil
+      }
       return CGPoint(
         x: defaults.double(forKey: Self.xDefaultsKey),
-        y: defaults.double(forKey: Self.yDefaultsKey))
+        y: defaults.double(forKey: Self.yDefaultsKey)
+      )
     }
     nonmutating set {
       guard let newValue else {
@@ -46,5 +46,10 @@ public struct OverlayOriginStore {
       defaults.set(Double(newValue.x), forKey: Self.xDefaultsKey)
       defaults.set(Double(newValue.y), forKey: Self.yDefaultsKey)
     }
+  }
+
+  /// A store over `defaults`; tests pass an isolated suite.
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 }

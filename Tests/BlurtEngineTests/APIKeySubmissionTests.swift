@@ -12,7 +12,9 @@ struct APIKeySubmissionTests {
   /// Gateway whose writes always fail — the Keychain-write-fault branch.
   private struct RejectingKeyStore: APIKeyGateway {
     var current: String? { nil }
-    @discardableResult func save(_ key: String?) -> Bool { false }
+
+    @discardableResult
+    func save(_: String?) -> Bool { false }
   }
 
   /// A submission whose validator deterministically returns `result`.
@@ -113,7 +115,7 @@ struct APIKeySubmissionTests {
     // Retyping the key can't fix a failed Keychain write, so it must not be
     // shown as field text the user is invited to correct.
     let report = APIKeySubmission.Outcome.saveFailed.failureReport
-    guard case .some(.alert(let title, let message)) = report else {
+    guard case let .some(.alert(title, message)) = report else {
       Issue.record("saveFailed must report as an alert, got \(String(describing: report))")
       return
     }

@@ -22,7 +22,7 @@ struct AccountRowView: View {
   @State private var failure: APIKeySubmission.FailureReport?
 
   private var alert: (title: String, message: String)? {
-    if case .alert(let title, let message) = failure { (title, message) } else { nil }
+    if case let .alert(title, message) = failure { (title, message) } else { nil }
   }
 
   private var isPresentingAlert: Binding<Bool> {
@@ -42,7 +42,9 @@ struct AccountRowView: View {
       }
     }
     .alert(alert?.title ?? "", isPresented: isPresentingAlert, presenting: alert) { _ in
-      Button("OK", role: .cancel) {}
+      Button("OK", role: .cancel) {
+        // Dismissing is the whole action: the system closes the alert.
+      }
     } message: { alert in
       Text(alert.message)
     }

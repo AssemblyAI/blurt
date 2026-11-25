@@ -11,7 +11,6 @@
   /// stay within the lint file-length budget.
   @Suite("KeyInjector.insert fallback & cancel")
   struct KeyInjectorFallbackTests {
-
     @Test("a cancel landing during target activation aborts before the paste", .timeLimit(.minutes(1)))
     func cancelDuringActivationSkipsPaste() async throws {
       // Activation itself still succeeds, so only the post-activation
@@ -21,7 +20,8 @@
           cancel()
           return true
         },
-        waitUntilFrontmost: { _ in true })
+        waitUntilFrontmost: { _ in true }
+      )
     }
 
     @Test(
@@ -36,9 +36,12 @@
         waitUntilFrontmost: { cancel in
           cancel()
           return await KeyInjector.poll(
-            for: .seconds(30), every: .milliseconds(10), clock: ContinuousClock(),
-            until: { false })
-        })
+            for: .seconds(30),
+            every: .milliseconds(10),
+            clock: ContinuousClock()
+          ) { false }
+        }
+      )
     }
 
     /// Runs one pinned insert whose activation step cancels the insert's own task
@@ -58,7 +61,8 @@
         postPaste: posted.recordingPaste,
         activateTarget: { _ in activate(cancel) },
         waitForTargetActivation: { _ in await waitUntilFrontmost(cancel) },
-        clipboard: clip)
+        clipboard: clip
+      )
       await injector.setTarget(try liveTargetFocus())
 
       // Park the insert behind a gate until the task handle is stored, so the
@@ -85,7 +89,8 @@
         pasteSettleDuration: .zero,
         postPaste: { _ in true },
         activateTarget: { _ in false },
-        clipboard: clip)
+        clipboard: clip
+      )
       await injector.setTarget(try liveTargetFocus())
 
       await #expect(throws: BlurtError.targetAppLost) {
@@ -104,7 +109,8 @@
         pasteSettleDuration: .zero,
         postPaste: { _ in true },
         hasEditableTarget: { editable.value },
-        clipboard: clip)
+        clipboard: clip
+      )
 
       // First insert: nothing editable focused → copy fallback throws.
       await #expect(throws: BlurtError.noEditableTarget) {

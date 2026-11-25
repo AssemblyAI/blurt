@@ -21,10 +21,14 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
       return
     }
     stop()
-    guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
-    player.delegate = self
-    guard player.play() else { return }
-    self.player = player
+    guard let newPlayer = try? AVAudioPlayer(contentsOf: url) else {
+      return
+    }
+    newPlayer.delegate = self
+    guard newPlayer.play() else {
+      return
+    }
+    player = newPlayer
     playingID = id
   }
 
@@ -34,11 +38,13 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
     playingID = nil
   }
 
-  nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+  nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully _: Bool) {
     // Compared by identity on the main actor; the player itself never crosses.
     let finished = ObjectIdentifier(player)
     Task { @MainActor in
-      guard let current = self.player, ObjectIdentifier(current) == finished else { return }
+      guard let current = self.player, ObjectIdentifier(current) == finished else {
+        return
+      }
       self.stop()
     }
   }

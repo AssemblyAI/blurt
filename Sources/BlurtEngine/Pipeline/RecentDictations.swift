@@ -76,7 +76,9 @@ public struct RecentDictations: Equatable, Sendable {
   /// this is what is sent.
   public var spokenOldestFirst: [String] { entries.reversed().filter(\.replayable).map(\.spoken) }
 
-  public init() {}
+  public init() {
+    // Nothing to set up: the history starts empty.
+  }
 
   /// Records a dictation made at `time` with `style` (see `Entry.style`),
   /// pushing it to the front and dropping the oldest entries beyond `capacity`.
@@ -85,10 +87,11 @@ public struct RecentDictations: Equatable, Sendable {
   /// omitted, the two are the same. `replayable: false` keeps the entry out of
   /// `spokenOldestFirst` (see `Entry.replayable`).
   public mutating func record(
-    _ text: String, spoken: String? = nil, style: String? = nil, at time: Date, replayable: Bool = true
+    _ text: String, at time: Date, spoken: String? = nil, style: String? = nil, replayable: Bool = true
   ) {
     entries.insert(
-      Entry(text: text, spoken: spoken ?? text, timestamp: time, style: style, replayable: replayable), at: 0)
+      Entry(text: text, spoken: spoken ?? text, timestamp: time, style: style, replayable: replayable), at: 0
+    )
     if entries.count > Self.capacity {
       entries.removeLast(entries.count - Self.capacity)
     }

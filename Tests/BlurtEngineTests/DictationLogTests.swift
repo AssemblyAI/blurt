@@ -4,187 +4,25 @@ import Testing
 @testable import AssemblyAI
 @testable import BlurtEngine
 
-private struct DecodedEntry: Decodable {
-  let transcript: String
-  let ts: String
-  /// `stt_prompt` and `keyterms` are the two fields `Entry.encode(to:)` writes only
-  /// when non-empty, so an omitted-key line has to decode rather than throw. Empty,
-  /// not optional — the repo bans optional collections, and it costs nothing here:
-  /// "omitted" vs "written as `[]`" is asserted on the raw line by
-  /// `nilFieldsAreOmitted`, which is the level that contract actually lives at.
-  let sttPrompt: String
-  let keyterms: [String]
-
-  /// Spelled out because the custom `init(from:)` below suppresses the synthesis
-  /// that would otherwise derive these — mirroring `DictationLog.Entry`, which
-  /// states its own keys for the same reason.
-  enum CodingKeys: String, CodingKey {
-    case transcript, ts, keyterms
-    case sttPrompt = "stt_prompt"
-  }
-
-  init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    transcript = try container.decode(String.self, forKey: .transcript)
-    ts = try container.decode(String.self, forKey: .ts)
-    sttPrompt = try container.decodeIfPresent(String.self, forKey: .sttPrompt) ?? ""
-    keyterms = try container.decodeIfPresent([String].self, forKey: .keyterms) ?? []
-  }
-}
-
 /// Each test that genuinely needs a file gets a fresh empty one in a unique temp
 /// directory so the host's real `~/Library/Logs/Blurt/dictations.jsonl` is never
-/// touched. File-scoped so the gate suite below shares it.
+/// touched. Internal so the gate suites (`DictationLogGateTests`,
+/// `DictationErrorLogGateTests`) share it, along with `readLog`.
 func makeTempLogURL() -> URL {
   makeTempLogDirectory().appendingPathComponent("dictations.jsonl")
 }
 
-private func readLog(_ url: URL) -> String {
+func readLog(_ url: URL) -> String {
   (try? String(contentsOf: url, encoding: .utf8)) ?? ""
 }
 
 /// The first written line decoded back, so a test can require the entry actually
 /// landed before asserting anything about what the line does *not* contain.
 private func firstEntry(in url: URL) -> DecodedEntry? {
-  guard let line = readLog(url).split(separator: "\n").first.map(String.init) else { return nil }
+  guard let line = readLog(url).split(separator: "\n").first.map(String.init) else {
+    return nil
+  }
   return try? JSONDecoder().decode(DecodedEntry.self, from: Data(line.utf8))
-}
-
-/// What one entry carries. These drive `makeEntry` and assert the value, because
-/// every one of them is a question about the entry rather than about the file:
-/// asked through `write` they needed a temp directory each, and the negative
-/// cases ("no `selected` key", "no `turns` key") were substring searches that
-/// passed just as happily when nothing had been written.
-@Suite("DictationLog.makeEntry")
-struct DictationLogEntryTests {
-  private let context = TranscriptionContext(
-    appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-    priorText: "Hi Sam,", selectedText: "the old plan")
-
-  @Test("carries the transcript and an ISO-8601 timestamp")
-  func transcriptAndTimestamp() {
-    let entry = DictationLog.makeEntry(
-      transcript: "Polished.", context: nil, now: Date(timeIntervalSince1970: 1_700_000_000))
-    #expect(entry.transcript == "Polished.")
-    #expect(entry.ts.hasPrefix("2023-11-14"))
-  }
-
-  @Test("an entry names how the dictation ended, by the phase it ended in")
-  func outcomeNames() {
-    let names = [PipelinePhase.pasted, .noTarget, .handedBack("x"), .cancelled, .failed(.targetAppLost)]
-      .map(DictationLog.outcomeName)
-    #expect(names == ["pasted", "copied", "handed back", "cancelled", "failed: targetAppLost"])
-    #expect(
-      DictationLog.makeEntry(transcript: "p", context: nil, outcome: .noTarget, now: Date()).outcome == "copied")
-  }
-
-  @Test("a transcript dictated into a password field is withheld: the entry says so, and holds no word of it")
-  func withholdsSecureTranscript() {
-    let secure = TranscriptionContext(appName: "1Password", priorText: nil, targetIsSecure: true)
-    let entry = DictationLog.makeEntry(transcript: "hunter2 correct horse", context: secure, now: Date())
-    #expect(entry.transcript == DictationLog.withheldTranscript)
-    #expect(entry.app == "1Password")
-    #expect(DictationLog.makeEntry(transcript: "hunter2", context: context, now: Date()).transcript == "hunter2")
-  }
-
-  @Test("threads every focus-context field, including the selected text")
-  func threadsContext() {
-    let entry = DictationLog.makeEntry(transcript: "p", context: context, now: Date())
-    #expect(entry.app == "Mail")
-    #expect(entry.window == "Re: Q3 pricing")
-    #expect(entry.field == "Body")
-    #expect(entry.prior == "Hi Sam,")
-    #expect(entry.selected == "the old plan")
-  }
-
-  @Test("leaves every context field nil when nothing was captured")
-  func noContextLeavesFieldsNil() {
-    let entry = DictationLog.makeEntry(transcript: "p", context: nil, now: Date())
-    #expect(entry.app == nil)
-    #expect(entry.window == nil)
-    #expect(entry.field == nil)
-    #expect(entry.prior == nil)
-    #expect(entry.selected == nil)
-    #expect(entry.sttPrompt.isEmpty)
-    #expect(entry.keyterms.isEmpty)
-  }
-
-  @Test("logs the same contextual prompt the transcriber sends, in order")
-  func logsWhatTheRequestCarries() {
-    let withHistory = TranscriptionContext(
-      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-      priorText: "Hi Sam,", selectedText: "the old plan",
-      recentTranscripts: ["Sent the deck over."])
-    let entry = DictationLog.makeEntry(transcript: "p", context: withHistory, now: Date())
-    // The entry mirrors the request because the writer calls the same builder.
-    #expect(entry.sttPrompt == STTPrompt.text(context: withHistory))
-    // So the logged prompt shows the narrowing too: the history and the prior chunk
-    // went on the wire, the window title and the selected text did not — even
-    // though the entry's own fields record all three.
-    #expect(entry.sttPrompt == "Sent the deck over.\nHi Sam,")
-    #expect(!entry.sttPrompt.contains("Re: Q3 pricing"))
-    #expect(!entry.sttPrompt.contains("the old plan"))
-  }
-
-  @Test("keeps the prior chunk raw, where the prompt carrying it is trimmed")
-  func priorIsRawWhereTheTurnIsTrimmed() {
-    // Why `prior` isn't redundant with the prompt's tail. The trailing space is the
-    // whole input to the paste's leading-separator decision
-    // (`InsertionSeparator.withLeadingSeparator` branches on `prior.last.isWhitespace`),
-    // and the wire copy has it trimmed off — so dropping `prior` for being a
-    // duplicate would take the only record of that bit with it.
-    let entry = DictationLog.makeEntry(
-      transcript: "p", context: TranscriptionContext(appName: "Mail", priorText: "Hi Sam, "),
-      now: Date())
-    #expect(entry.prior == "Hi Sam, ")
-    #expect(entry.sttPrompt == "Hi Sam,")
-    #expect(InsertionSeparator.withLeadingSeparator("p", after: entry.prior) == "p")
-    #expect(InsertionSeparator.withLeadingSeparator("p", after: entry.sttPrompt) == " p")
-  }
-
-  @Test("a nil prior tells a history-only prompt apart from a prior chunk")
-  func nilPriorDisambiguatesTheLastTurn() {
-    // The other half: the prompt's last line is a recent dictation here, not text
-    // at the caret, and only `prior == nil` says so.
-    let entry = DictationLog.makeEntry(
-      transcript: "p",
-      context: TranscriptionContext(
-        appName: "Mail", priorText: nil, recentTranscripts: ["Said this before."]),
-      now: Date())
-    #expect(entry.prior == nil)
-    #expect(entry.sttPrompt == "Said this before.")
-  }
-
-  @Test("records the key terms the request boosts, fitted the same way")
-  func logsTheKeytermsTheRequestCarries() {
-    // Through `KeyTerms.fitted`, not the raw list: the log has to show the
-    // steering the API actually saw, so a blank entry is dropped here too.
-    let withTerms = TranscriptionContext(
-      appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "  ", "LeMUR"])
-    let entry = DictationLog.makeEntry(transcript: "p", context: withTerms, now: Date())
-    #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
-  }
-
-  @Test("records which rewrite model was asked for, Fast included, and none with the rewrite off")
-  func logsTheRewriteMode() {
-    func logged(_ mode: RewriteMode?) -> String? {
-      DictationLog.makeEntry(transcript: "p", context: nil, rewriteMode: mode, now: Date()).rewriteMode
-    }
-    #expect(logged(.smart) == "smart")
-    #expect(logged(.fast) == "fast")
-    #expect(logged(nil) == nil)
-  }
-
-  @Test("leaves the key terms empty when the context has none")
-  func noKeytermsLeavesTheFieldEmpty() {
-    #expect(DictationLog.makeEntry(transcript: "p", context: context, now: Date()).keyterms.isEmpty)
-  }
-
-  @Test("keeps a transcript verbatim, including non-ASCII")
-  func unicodeKeptVerbatim() {
-    let transcript = "Café — 北京 🎙️."
-    #expect(DictationLog.makeEntry(transcript: transcript, context: nil, now: Date()).transcript == transcript)
-  }
 }
 
 /// The on-disk format itself: what only a real file can answer — lazy creation,
@@ -204,7 +42,8 @@ struct DictationLogTests {
   func writesOneJSONLine() throws {
     let url = makeTempLogURL()
     DictationLog.write(
-      transcript: "Polished.", to: url, now: Date(timeIntervalSince1970: 1_700_000_000))
+      transcript: "Polished.", to: url, now: Date(timeIntervalSince1970: 1_700_000_000)
+    )
     let contents = readLog(url)
     #expect(contents.hasSuffix("\n"))
     // One data line + one trailing empty (from the \n).
@@ -230,7 +69,7 @@ struct DictationLogTests {
   @Test("a nil entry field is omitted from the line, not written as null")
   func nilFieldsAreOmitted() throws {
     let url = makeTempLogURL()
-    DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
+    DictationLog.write(transcript: "p", to: url, now: Date(), context: nil)
     // Non-vacuous: the line has to exist and carry the transcript before its
     // *missing* keys mean anything.
     let entry = try #require(firstEntry(in: url))
@@ -253,97 +92,13 @@ struct DictationLogTests {
     // the corpus with no record of what steering a request carried.
     let url = makeTempLogURL()
     let context = TranscriptionContext(
-      appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "LeMUR"])
-    DictationLog.write(transcript: "p", context: context, rewriteMode: .smart, to: url, now: Date())
+      appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "LeMUR"]
+    )
+    DictationLog.write(transcript: "p", to: url, now: Date(), context: context, rewriteMode: .smart)
 
     let entry = try #require(firstEntry(in: url))
     #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
     #expect(entry.sttPrompt == "Hi Sam,")
     #expect(readLog(url).contains(#""rewrite_mode":"smart""#))
-  }
-}
-
-/// The shared encoder both logs write through.
-@Suite("DictationLog.makeEncoder")
-struct DictationLogEncoderTests {
-  @Test("sorts keys, so the on-disk JSONL is byte-stable")
-  func sortsKeys() {
-    // Asserted on the encoder rather than by comparing where key names happen to
-    // land in a written line: a stable diff for post-hoc greps is a property of
-    // this configuration, and both logs share it.
-    #expect(DictationLog.makeEncoder().outputFormatting.contains(.sortedKeys))
-  }
-}
-
-/// The developer-mode gate on `append` — the switch's entire privacy guarantee:
-/// "a user who never opts in has no dictation text on disk." Every case in the
-/// suites above drives `makeEntry`/`write` directly, so none of them cross this
-/// guard.
-@Suite("DictationLog developer-mode gate")
-struct DictationLogGateTests {
-  @Test("with developer mode off, append writes nothing to disk")
-  func gateClosedWritesNothing() {
-    let url = makeTempLogURL()
-    // An unset key reads as off, which is the default a user who never opts in has.
-    let store = DeveloperModeStore(defaults: freshDefaults())
-    DictationLog.append(transcript: "private dictation", store: store, to: url)
-    // A dispatched write would have landed by the time this drains the serial queue,
-    // so a missing file means nothing was ever enqueued — not that we looked early.
-    DictationLog.queue.sync {}
-    #expect(!FileManager.default.fileExists(atPath: url.path))
-  }
-
-  @Test("with developer mode on, append writes the transcript")
-  func gateOpenWrites() {
-    let url = makeTempLogURL()
-    let store = developerModeStore(enabled: true)
-    DictationLog.append(transcript: "logged dictation", store: store, to: url)
-    DictationLog.queue.sync {}
-    #expect(readLog(url).contains("logged dictation"))
-  }
-
-  @Test("the gate is checked before the context is touched, for both settings")
-  func gateAppliesToContextualEntries() {
-    // The pipeline always passes the captured context, which is the part carrying
-    // prior text and the assembled context turns. Off must persist none of it.
-    let context = TranscriptionContext(
-      appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
-      priorText: "hunter2", selectedText: nil)
-    let offURL = makeTempLogURL()
-    DictationLog.append(
-      transcript: "p", context: context,
-      store: DeveloperModeStore(defaults: freshDefaults()), to: offURL)
-
-    let onStore = developerModeStore(enabled: true)
-    let onURL = makeTempLogURL()
-    DictationLog.append(transcript: "p", context: context, store: onStore, to: onURL)
-
-    DictationLog.queue.sync {}
-    #expect(!FileManager.default.fileExists(atPath: offURL.path))
-    #expect(readLog(onURL).contains("hunter2"))
-  }
-}
-
-/// The displayed log location. The Settings window's Advanced pane shows this
-/// beside the switch that enables writing, so it has to name the file the writer
-/// actually appends to — the reason the formatting moved out of the view.
-@Suite("DictationLog.defaultDisplayPath")
-struct DictationLogDisplayPathTests {
-  @Test("abbreviates the home directory with a tilde")
-  func abbreviatesHome() {
-    let shown = DictationLog.defaultDisplayPath
-    #expect(shown.hasPrefix("~/"))
-    // No absolute home path leaking into the UI (the label is selectable, and a
-    // user's account name isn't wanted in a screenshot).
-    #expect(!shown.contains(NSHomeDirectory()))
-  }
-
-  @Test("names the same file the writer appends to")
-  func matchesTheWriteTarget() {
-    // The whole point of deriving this next to `defaultURL`: the two can't drift.
-    #expect(DictationLog.defaultDisplayPath.hasSuffix("Library/Logs/Blurt/dictations.jsonl"))
-    #expect(
-      (DictationLog.defaultDisplayPath as NSString).expandingTildeInPath
-        == DictationLog.defaultURL.path(percentEncoded: false))
   }
 }

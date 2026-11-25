@@ -14,23 +14,11 @@ public struct ReadAloudVoice: Sendable, Equatable, Identifiable {
     case library = "Voice Library"
   }
 
-  /// The `voice_id` query parameter: an AssemblyAI library slug.
-  public let id: String
-  public let name: String
-  /// The accent the docs list for a library voice ("British"), or nil.
-  public let accent: String?
-  public let group: Group
-
-  /// The picker's label: "Buford (British)", or just the name.
-  public var label: String {
-    accent.map { "\(name) (\($0))" } ?? name
-  }
-
   /// The service's own default, `aai-jane`, so an untouched install sounds as
   /// a session with no `voice_id` would.
   public static let defaultID = "aai-jane"
 
-  public static let catalog: [ReadAloudVoice] =
+  public static let catalog: [Self] =
     [
       "Jane", "Alba", "Anna", "Charles", "Eve", "George", "Jean", "Mary", "Michael", "Paul", "Vera",
     ].map { builtIn($0) }
@@ -43,17 +31,29 @@ public struct ReadAloudVoice: Sendable, Equatable, Identifiable {
       ("Titus", "American"), ("Troy", "Scottish"), ("Yasmin", "British"),
     ].map { library($0.0, accent: $0.1) }
 
+  /// The `voice_id` query parameter: an AssemblyAI library slug.
+  public let id: String
+  public let name: String
+  /// The accent the docs list for a library voice ("British"), or nil.
+  public let accent: String?
+  public let group: Group
+
+  /// The picker's label: "Buford (British)", or just the name.
+  public var label: String {
+    accent.map { "\(name) (\($0))" } ?? name
+  }
+
   /// The catalog entry for `id`, or nil for an id that isn't one.
-  public static func voice(id: String) -> ReadAloudVoice? {
+  public static func voice(id: String) -> Self? {
     catalog.first { $0.id == id }
   }
 
-  private static func builtIn(_ name: String) -> ReadAloudVoice {
-    ReadAloudVoice(id: slug(name), name: name, accent: nil, group: .builtIn)
+  private static func builtIn(_ name: String) -> Self {
+    Self(id: slug(name), name: name, accent: nil, group: .builtIn)
   }
 
-  private static func library(_ name: String, accent: String?) -> ReadAloudVoice {
-    ReadAloudVoice(id: slug(name), name: name, accent: accent, group: .library)
+  private static func library(_ name: String, accent: String?) -> Self {
+    Self(id: slug(name), name: name, accent: accent, group: .library)
   }
 
   /// The docs' slugs are `aai-` and the lowercased name, for every voice listed.

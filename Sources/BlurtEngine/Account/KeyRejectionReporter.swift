@@ -12,6 +12,7 @@ public struct KeyRejectionReporter: TranscriberProtocol {
   private let base: any TranscriberProtocol
   private let onRejected: @Sendable () -> Void
 
+  @preconcurrency
   public init(_ base: any TranscriberProtocol, onRejected: @escaping @Sendable () -> Void) {
     self.base = base
     self.onRejected = onRejected

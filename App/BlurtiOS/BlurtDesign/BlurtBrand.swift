@@ -23,22 +23,27 @@ package enum BlurtBrand {
 
   /// Green in light, the lifted green in dark: the app's accent.
   package nonisolated static let accent = adaptive(
-    DesignTokens.Keyboard.appAccentLight, DesignTokens.Keyboard.appAccentDark)
+    DesignTokens.Keyboard.appAccentLight, DesignTokens.Keyboard.appAccentDark
+  )
   /// The page: the design system's warm off-white in light, ink in dark.
   package nonisolated static let page = adaptive(DesignTokens.Keyboard.appPageLight, DesignTokens.Keyboard.appPageDark)
   package nonisolated static let text = adaptive(DesignTokens.Keyboard.appTextLight, DesignTokens.Keyboard.appTextDark)
   /// Eyebrows, captions, secondary lines.
   package nonisolated static let muted = adaptive(
-    DesignTokens.Keyboard.appMutedLight, DesignTokens.Keyboard.appMutedDark)
+    DesignTokens.Keyboard.appMutedLight, DesignTokens.Keyboard.appMutedDark
+  )
   /// The card: warm tint on paper, a step up from ink in dark, with a hairline.
   package nonisolated static let cardFill = adaptive(
-    DesignTokens.Keyboard.appCardFillLight, DesignTokens.Keyboard.appCardFillDark)
+    DesignTokens.Keyboard.appCardFillLight, DesignTokens.Keyboard.appCardFillDark
+  )
   package nonisolated static let cardBorder = adaptive(
-    DesignTokens.Keyboard.appCardBorderLight, DesignTokens.Keyboard.appCardBorderDark)
+    DesignTokens.Keyboard.appCardBorderLight, DesignTokens.Keyboard.appCardBorderDark
+  )
   /// The one accent button per row, and its text.
   package nonisolated static let cta = adaptive(DesignTokens.Keyboard.appCtaLight, DesignTokens.Keyboard.appCtaDark)
   package nonisolated static let ctaText = adaptive(
-    DesignTokens.Keyboard.appCtaTextLight, DesignTokens.Keyboard.appCtaTextDark)
+    DesignTokens.Keyboard.appCtaTextLight, DesignTokens.Keyboard.appCtaTextDark
+  )
   /// The wordmark drifting on the Blurt-is-on card takes these in turn, one
   /// per wall it touches: the accent, the text, a lighter green, the muted grey.
   package nonisolated static let keepOpenTints = [
@@ -51,10 +56,10 @@ package enum BlurtBrand {
   /// A colour that follows the interface style it is drawn in, as an asset
   /// catalog colour does, without needing one: the library carries no catalog,
   /// and the keyboard's bundle has none of the app's.
-  private nonisolated static func adaptive(_ light: Color, _ dark: Color) -> Color {
-    let light = UIColor(light)
-    let dark = UIColor(dark)
-    return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+  nonisolated private static func adaptive(_ light: Color, _ dark: Color) -> Color {
+    let lightColor = UIColor(light)
+    let darkColor = UIColor(dark)
+    return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? darkColor : lightColor })
   }
 }
 
@@ -63,6 +68,7 @@ extension Color {
   /// statics, which are nonisolated too, can call it.
   package nonisolated init(hex: UInt32) {
     self.init(
-      red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+      red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255
+    )
   }
 }

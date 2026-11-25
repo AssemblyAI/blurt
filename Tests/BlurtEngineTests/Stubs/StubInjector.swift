@@ -13,23 +13,23 @@ actor StubInjector: InjectorProtocol {
   /// Whether each `insert` was flagged as a dictation into a password field.
   var insertedSecure: [Bool] = []
   var error: (any Error & Sendable)?
+  /// What each `insertAtFocus` pasted: a voice command's typed step.
+  var insertedAtFocus: [String] = []
+  /// The pid of each `setTarget`, nil for "wherever focus is now".
+  var targets: [pid_t?] = []
 
   // Actor-isolated methods satisfy these `async` protocol requirements directly.
-  func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) async throws {
+  func insert(_ text: String, after priorText: String?, windowTitle: String?, secure: Bool) throws {
     if let error { throw error }
     inserted.append(text)
     insertedPrior.append(priorText)
     insertedWindowTitles.append(windowTitle)
     insertedSecure.append(secure)
   }
-  /// What each `insertAtFocus` pasted: a voice command's typed step.
-  var insertedAtFocus: [String] = []
-  func insertAtFocus(_ text: String) async throws {
+  func insertAtFocus(_ text: String) throws {
     if let error { throw error }
     insertedAtFocus.append(text)
   }
-  /// The pid of each `setTarget`, nil for "wherever focus is now".
-  var targets: [pid_t?] = []
-  func setTarget(_ focus: CapturedFocus?) async { targets.append(focus?.pid) }
+  func setTarget(_ focus: CapturedFocus?) { targets.append(focus?.pid) }
   func setError(_ error: (any Error & Sendable)?) { self.error = error }
 }

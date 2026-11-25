@@ -49,7 +49,7 @@ struct AssemblyAISpeechSynthesizerTests {
     let transport = FakeSpeechTransport { _ in (200, [Data([1]), Data([0, 2, 0, 3]), Data([0])]) }
     var audio = Data()
     for try await chunk in synthesizer(transport).speech(for: "Read this.") {
-      #expect(chunk.count % 2 == 0)
+      #expect(chunk.count.isMultiple(of: 2))
       audio.append(chunk)
     }
     #expect(audio == Data([1, 0, 2, 0, 3, 0]))
@@ -61,7 +61,9 @@ struct AssemblyAISpeechSynthesizerTests {
       (401, [Data(#"{"code":"unauthorized","message":"Invalid API key"}"#.utf8)])
     }
     await #expect(throws: SpeechSynthesisError.server("(unauthorized) Invalid API key")) {
-      for try await _ in synthesizer(refused).speech(for: "Read this.") {}
+      for try await _ in synthesizer(refused).speech(for: "Read this.") {
+        // Drained for how the stream ends; its elements don't matter.
+      }
     }
     #expect(AssemblyAISpeechSynthesizer.failure(status: 502, body: Data("<html>".utf8)) == "HTTP 502")
   }
@@ -70,7 +72,9 @@ struct AssemblyAISpeechSynthesizerTests {
   func noRequest() async throws {
     let transport = FakeSpeechTransport()
     await #expect(throws: BlurtError.self) {
-      for try await _ in synthesizer(transport, key: nil).speech(for: "Hello there.") {}
+      for try await _ in synthesizer(transport, key: nil).speech(for: "Hello there.") {
+        // Drained for how the stream ends; its elements don't matter.
+      }
     }
     var chunks = 0
     for try await _ in synthesizer(transport).speech(for: "   ") { chunks += 1 }

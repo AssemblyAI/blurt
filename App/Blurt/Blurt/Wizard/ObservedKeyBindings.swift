@@ -12,10 +12,15 @@ import SwiftUI
 /// not to literals here.
 @propertyWrapper
 struct ObservedKeyBindings: DynamicProperty {
-  @AppStorage(TriggerKeyStore.defaultsKey) private var boundKeyCode = 0
-  @AppStorage(TriggerKeyStyleStore.defaultsKey) private var choicesRaw = ""
-  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+  @AppStorage(TriggerKeyStore.defaultsKey)
+  private var boundKeyCode = 0
+  @AppStorage(TriggerKeyStyleStore.defaultsKey)
+  private var choicesRaw = ""
+  @AppStorage(TriggerActivationStore.defaultsKey)
+  private var activationRaw = ""
 
+  // Read through the property wrapper's syntax, which the analyzer doesn't count as a use.
+  // swiftlint:disable:next unused_declaration
   var wrappedValue: TriggerKeyBindings {
     TriggerKeyBindings(boundKeyCode: boundKeyCode, choicesRaw: choicesRaw, activationRaw: activationRaw)
   }

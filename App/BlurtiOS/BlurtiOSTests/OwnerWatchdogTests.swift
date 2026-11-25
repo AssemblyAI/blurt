@@ -14,7 +14,8 @@ struct OwnerWatchdogTests {
     -> KeyboardPresenceRecord
   {
     KeyboardPresenceRecord(
-      processID: processID, controllerID: "field", pid: 1, seenAt: now.addingTimeInterval(-age), onScreen: onScreen)
+      processID: processID, controllerID: "field", pid: 1, onScreen: onScreen, seenAt: now.addingTimeInterval(-age)
+    )
   }
 
   private func release(_ inFlight: DictationRef?, _ presence: KeyboardPresenceRecord?) -> Bool {

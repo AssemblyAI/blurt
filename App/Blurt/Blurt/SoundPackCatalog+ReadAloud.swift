@@ -22,9 +22,14 @@ extension SoundPackStore {
   /// key — dictate, ask, rewrite, compose, each a recording — like a dictation.
   static func fallback(for action: TriggerKeyAction) -> SoundPackStore {
     switch action {
-    case .readAloud: .readAloud
-    case .command: .command
-    case .off, .dictate, .ask, .rewrite, .compose: .dictation
+    case .readAloud:
+      .readAloud
+
+    case .command:
+      .command
+
+    case .off, .dictate, .ask, .rewrite, .compose:
+      .dictation
     }
   }
 }
@@ -34,7 +39,9 @@ extension TriggerKeySoundStore {
   /// else its action's setting (`SoundPackStore.fallback(for:)`), so a key
   /// nobody has given a voice sounds as it did before keys had their own.
   static func soundPack(id: String?, action: TriggerKeyAction) -> SoundPack {
-    guard let id else { return SoundPackStore.fallback(for: action).soundPack }
+    guard let id else {
+      return SoundPackStore.fallback(for: action).soundPack
+    }
     return SoundPackCatalog.blurt.fromPersisted(id)
   }
 

@@ -36,7 +36,7 @@ actor GatedStartMic: MicCaptureProtocol {
   func waitUntilStartEntered() async { await gate.waitUntilEntered() }
   func allowStartToFinish() { gate.allowToFinish() }
 
-  func stop() async throws -> Int {
+  func stop() -> Int {
     stopCalls += 1
     return StubPCM.aboveMinimum.count
   }
@@ -44,8 +44,8 @@ actor GatedStartMic: MicCaptureProtocol {
   /// Counts the call and delegates, so `stopCalls` keeps meaning "the mic was
   /// stopped" however the teardown was reached — the same shape as
   /// `StubMicCapture`.
-  func cancelCapture() async throws {
+  func cancelCapture() {
     cancelCaptureCalls += 1
-    _ = try await stop()
+    _ = stop()
   }
 }

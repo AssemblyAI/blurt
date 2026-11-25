@@ -19,9 +19,14 @@ package nonisolated enum StylePreset: String, CaseIterable, Identifiable, Sendab
 
   package var symbol: String {
     switch self {
-    case .professional: "briefcase"
-    case .casual: "cup.and.saucer"
-    case .ultracasual: "face.smiling"
+    case .professional:
+      "briefcase"
+
+    case .casual:
+      "cup.and.saucer"
+
+    case .ultracasual:
+      "face.smiling"
     }
   }
 
@@ -30,9 +35,11 @@ package nonisolated enum StylePreset: String, CaseIterable, Identifiable, Sendab
     case .professional:
       "Use a clear, polished, professional tone suitable for work email. Write complete sentences "
         + "with standard capitalization and punctuation. No slang and no emojis."
+
     case .casual:
       "Use a relaxed, friendly tone, like a message to a coworker you get along with. Contractions "
         + "are fine. Keep standard capitalization and punctuation. No emojis."
+
     case .ultracasual:
       "Write like a quick text to a close friend: all lowercase, light punctuation, and no period "
         + "at the end. Keep it short and natural. An emoji is fine when it fits."
@@ -48,8 +55,12 @@ package nonisolated enum StylePreset: String, CaseIterable, Identifiable, Sendab
   /// `profiles` with this preset added at the end, and the style it became;
   /// the existing one when it was already added. Nil when the list is full.
   package func adding(to profiles: [StyleProfile]) -> (profiles: [StyleProfile], style: StyleProfile)? {
-    if let existing = added(in: profiles) { return (profiles, existing) }
-    guard profiles.count < StyleProfileStore.limit else { return nil }
+    if let existing = added(in: profiles) {
+      return (profiles, existing)
+    }
+    guard profiles.count < StyleProfileStore.limit else {
+      return nil
+    }
     let style = StyleProfile(name: name, instructions: instructions)
     return (profiles + [style], style)
   }

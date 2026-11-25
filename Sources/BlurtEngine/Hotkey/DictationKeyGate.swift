@@ -19,7 +19,18 @@ public struct DictationKeyGate: Sendable {
   /// `discard` is the router's alone: a bare Escape with its switch on, which
   /// throws away everything in flight (`DictationKeyRouter.Event.escapeDown`),
   /// where `cancel` is a combo's.
-  public enum Action: Sendable, Equatable { case none, start, stop, cancel, latch, discard }
+  public enum Action: Sendable, Equatable { case ignore, start, stop, cancel, latch, discard }
+
+  private enum State: Sendable, Equatable {
+    case idle
+    /// Recording is active; we're deciding whether this press is a tap or a hold.
+    /// `fromIdle` is true when the press started from idle (so a combo discards
+    /// the fresh capture); false when it started from `latched` (a combo there is
+    /// a real shortcut over an already-running toggle recording).
+    case armed(downAt: Duration, fromIdle: Bool)
+    /// Recording, toggled on by a tap; waiting for the next tap to stop.
+    case latched
+  }
 
   /// A release held at least this long counts as a hold (push-to-talk stop);
   /// shorter is a tap. 1 s is a good default when one key does both jobs.
@@ -33,17 +44,6 @@ public struct DictationKeyGate: Sendable {
   /// same determinism contract as `holdThreshold`; a Settings change reaches the
   /// gate as a fresh one (see `DictationKeyRouter.rebind`).
   public let activation: TriggerActivation
-
-  private enum State: Sendable, Equatable {
-    case idle
-    /// Recording is active; we're deciding whether this press is a tap or a hold.
-    /// `fromIdle` is true when the press started from idle (so a combo discards
-    /// the fresh capture); false when it started from `latched` (a combo there is
-    /// a real shortcut over an already-running toggle recording).
-    case armed(downAt: Duration, fromIdle: Bool)
-    /// Recording, toggled on by a tap; waiting for the next tap to stop.
-    case latched
-  }
 
   private var state: State = .idle
 
@@ -64,18 +64,22 @@ public struct DictationKeyGate: Sendable {
     case .idle:
       state = .armed(downAt: now, fromIdle: true)
       return .start
+
     case .latched:
       // Pressing again over a latched (toggle) recording: decide on key-up
       // whether it's a tap-to-stop or a hold.
       state = .armed(downAt: now, fromIdle: false)
-      return .none
+      return .ignore
+
     case .armed:
-      return .none
+      return .ignore
     }
   }
 
   public mutating func modifierUp(at now: Duration) -> Action {
-    guard case .armed(let downAt, let fromIdle) = state else { return .none }
+    guard case let .armed(downAt, fromIdle) = state else {
+      return .ignore
+    }
     // A release from idle latches recording on (tap-to-toggle) when the activation
     // mode says this press was a tap; every other release — a held push-to-talk,
     // or any release over a latched recording — stops.
@@ -95,9 +99,10 @@ public struct DictationKeyGate: Sendable {
         return .cancel
       }
       state = .latched
-      return .none
+      return .ignore
+
     case .idle, .latched:
-      return .none
+      return .ignore
     }
   }
 

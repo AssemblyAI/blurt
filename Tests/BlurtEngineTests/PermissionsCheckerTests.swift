@@ -6,6 +6,31 @@
 
   @Suite("PermissionsChecker")
   struct PermissionsCheckerTests {
+    /// Smoke tests, deliberately assertion-free: both entry points read
+    /// process-global TCC state this host can't set, so all they can establish is
+    /// that the real probes run without throwing or prompting. The behaviour they
+    /// compose is covered above, against injected probes.
+    @Suite("PermissionsChecker smoke")
+    struct SmokeTests {
+      @Test("the production check() runs against the real probes without prompting")
+      func productionCheckRuns() {
+        _ = PermissionsChecker.check()
+      }
+
+      @Test("forceAccessibilityActivity runs without prompting")
+      @MainActor
+      func forceAccessibilityActivityRuns() {
+        // Best-effort, side-effect-light (a read-only AX query against another
+        // process). This is the no-prompt half of the Accessibility flow —
+        // `openAccessibilitySettings` adds the trust prompt.
+        PermissionsChecker.forceAccessibilityActivity()
+      }
+    }
+
+    /// Every combination of the two probes, so the field each one feeds is pinned.
+    static let probeCases: [(mic: Bool, accessibility: Bool)] = [
+      (true, true), (true, false), (false, true), (false, false),
+    ]
 
     @Test("allGranted requires both microphone and accessibility")
     func allGrantedLogic() {
@@ -17,18 +42,13 @@
 
     @Test("PermissionStatus is value-equatable")
     func equatable() {
-      #expect(
-        PermissionStatus(microphone: true, accessibility: false)
-          == PermissionStatus(microphone: true, accessibility: false))
+      let status = PermissionStatus(microphone: true, accessibility: false)
+      let sameStatus = PermissionStatus(microphone: true, accessibility: false)
+      #expect(status == sameStatus)
       #expect(
         PermissionStatus(microphone: true, accessibility: false)
           != PermissionStatus(microphone: false, accessibility: false))
     }
-
-    /// Every combination of the two probes, so the field each one feeds is pinned.
-    static let probeCases: [(mic: Bool, accessibility: Bool)] = [
-      (true, true), (true, false), (false, true), (false, false),
-    ]
 
     @Test("check reports each probe in its own field", arguments: probeCases)
     func checkWiresProbesToFields(mic: Bool, accessibility: Bool) {
@@ -53,30 +73,10 @@
         axTrusted: {
           _ = axReads.next()
           return true
-        })
+        }
+      )
       #expect(micReads.value == 1)
       #expect(axReads.value == 1)
-    }
-
-    /// Smoke tests, deliberately assertion-free: both entry points read
-    /// process-global TCC state this host can't set, so all they can establish is
-    /// that the real probes run without throwing or prompting. The behaviour they
-    /// compose is covered above, against injected probes.
-    @Suite("PermissionsChecker smoke")
-    struct SmokeTests {
-      @Test("the production check() runs against the real probes without prompting")
-      func productionCheckRuns() {
-        _ = PermissionsChecker.check()
-      }
-
-      @Test("forceAccessibilityActivity runs without prompting")
-      @MainActor
-      func forceAccessibilityActivityRuns() {
-        // Best-effort, side-effect-light (a read-only AX query against another
-        // process). This is the no-prompt half of the Accessibility flow —
-        // `openAccessibilitySettings` adds the trust prompt.
-        PermissionsChecker.forceAccessibilityActivity()
-      }
     }
   }
 #endif

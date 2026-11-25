@@ -339,7 +339,7 @@ targets:
       disableMainThreadChecker: false
       disableThreadPerformanceChecker: false
   # XCUITest integration suite. A UI-testing bundle that launches the real Blurt
-  # app (built Debug, where the `-BlurtUITest` harness in UITestSupport.swift is
+  # app (built Debug, where the `-BlurtUITest` harness in the UITest*.swift files is
   # compiled in) and drives the settings window, the menu bar item, and the
   # record → transcribe → paste pipeline against the app's offline test doubles.
   # Runs from the `Blurt` scheme's test action (`xcodebuild test`).

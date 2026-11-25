@@ -10,11 +10,13 @@ import Foundation
 nonisolated enum DeviceTrace {
   static let fileName = "trace.jsonl"
   static let launchArgument = "BlurtDeviceTrace"
+
   #if DEBUG
     static let isEnabled = UserDefaults.standard.bool(forKey: launchArgument)
   #else
     static let isEnabled = false
   #endif
+
   private static let queue = DispatchQueue(label: HostIdentity.current.subsystem + ".trace")
   private static let encoder = JSONEncoder()
 
@@ -25,7 +27,9 @@ nonisolated enum DeviceTrace {
 
   /// Appends one line, off the caller's thread. Nothing when the flag is off.
   static func record(_ kind: String, _ fields: [String: String] = [:]) {
-    guard isEnabled else { return }
+    guard isEnabled else {
+      return
+    }
     let line = line(kind, fields, at: Date())
     queue.async { append(line) }
   }
@@ -42,13 +46,15 @@ nonisolated enum DeviceTrace {
   }
 
   private static func append(_ line: Data) {
-    let url = url
+    let fileURL = url
     do {
-      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-      if !FileManager.default.fileExists(atPath: url.path) {
-        FileManager.default.createFile(atPath: url.path, contents: nil)
+      try FileManager.default.createDirectory(
+        at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true
+      )
+      if !FileManager.default.fileExists(atPath: fileURL.path) {
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
       }
-      let handle = try FileHandle(forWritingTo: url)
+      let handle = try FileHandle(forWritingTo: fileURL)
       defer { try? handle.close() }
       try handle.seekToEnd()
       try handle.write(contentsOf: line)

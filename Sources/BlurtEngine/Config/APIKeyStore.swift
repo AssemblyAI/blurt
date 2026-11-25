@@ -23,7 +23,8 @@ public enum APIKeyStore {
   /// their own `MemoizedKeyStore`, and `KeychainStoreTests` uses an isolated
   /// service/account — so the real key is never read or written by a test run.
   private static let memo = MemoizedKeyStore(
-    keychain: KeychainStore(service: HostIdentity.current.keychainService, account: keychainAccount))
+    keychain: KeychainStore(service: HostIdentity.current.keychainService, account: keychainAccount)
+  )
 
   /// The stored key, or `nil` if none has been saved (or it's empty).
   public static var current: String? { memo.current }

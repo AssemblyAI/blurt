@@ -17,23 +17,39 @@ struct SoundsSettingsTab: View {
   let coordinator: AppCoordinator
 
   @ObservedKeyBindings private var bindings
-  @AppStorage(TriggerKeySoundStore.defaultsKey) private var soundsRaw = ""
+  @AppStorage(TriggerKeySoundStore.defaultsKey)
+  private var soundsRaw = ""
 
   var body: some View {
-    let bindings = bindings
+    let current = bindings
     let ids = TriggerKeySoundStore.soundIDs(decoding: soundsRaw)
     SettingsPane {
       Section {
-        ForEach(TriggerKey.allCases.filter { bindings.action(for: $0) != .off }, id: \.self) { key in
+        ForEach(TriggerKey.allCases.filter { current.action(for: $0) != .off }, id: \.self) { key in
           PickerSettingRow(
-            title: key.spokenName, systemImage: KeysSettingsTab.symbol(for: key),
+            title: key.spokenName,
+            systemImage: KeysSettingsTab.symbol(for: key),
             accessibilityID: UITestIdentifiers.keySoundPicker(key.keyCode),
-            subtitle: Self.actionName(bindings.action(for: key)),
+            subtitle: Self.actionName(current.action(for: key)),
             pickerLabel: "Sound for \(key.fullName)",
-            selection: selection(for: key, id: ids[key], action: bindings.action(for: key))
+            selection: selection(for: key, id: ids[key], action: current.action(for: key))
           ) {
             packOptions
           }
+        }
+      }
+    }
+  }
+
+  /// Every picker's options: None, then every voice by synth. One catalog's
+  /// voices, so the lists can't drift apart.
+  @ViewBuilder private var packOptions: some View {
+    Text(SoundPack.silent.label).tag(SoundPack.silent)
+    Divider()
+    ForEach(SoundPackCatalog.blurt.groups, id: \.self) { group in
+      Section(group) {
+        ForEach(SoundPackCatalog.blurt.voices(in: group)) { pack in
+          Text(pack.label).tag(pack)
         }
       }
     }
@@ -43,13 +59,26 @@ struct SoundsSettingsTab: View {
   /// pop-ups use.
   private static func actionName(_ action: TriggerKeyAction) -> String {
     switch action {
-    case .off: "Off"
-    case .dictate: "Dictate"
-    case .readAloud: KeyActionName.readAloud
-    case .ask: KeyActionName.ask
-    case .rewrite: KeyActionName.rewrite
-    case .compose: KeyActionName.compose
-    case .command: KeyActionName.command
+    case .off:
+      "Off"
+
+    case .dictate:
+      "Dictate"
+
+    case .readAloud:
+      KeyActionName.readAloud
+
+    case .ask:
+      KeyActionName.ask
+
+    case .rewrite:
+      KeyActionName.rewrite
+
+    case .compose:
+      KeyActionName.compose
+
+    case .command:
+      KeyActionName.command
     }
   }
 
@@ -59,20 +88,7 @@ struct SoundsSettingsTab: View {
       set: { newValue in
         TriggerKeySoundStore().setSoundID(newValue.id, for: key)
         coordinator.keySoundChanged(key)
-      })
-  }
-
-  /// Every picker's options: None, then every voice by synth. One catalog's
-  /// voices, so the lists can't drift apart.
-  @ViewBuilder private var packOptions: some View {
-    Text(SoundPack.none.label).tag(SoundPack.none)
-    Divider()
-    ForEach(SoundPackCatalog.blurt.groups, id: \.self) { group in
-      Section(group) {
-        ForEach(SoundPackCatalog.blurt.voices(in: group)) { pack in
-          Text(pack.label).tag(pack)
-        }
       }
-    }
+    )
   }
 }

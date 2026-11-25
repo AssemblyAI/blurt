@@ -5,16 +5,6 @@
 /// rather than plumbing — `WizardController`, which applied it inline, has no
 /// test target, so the gate and the cadence were covered by nothing.
 public enum SetupReadiness {
-  /// Whether the app is fully configured: every permission granted and an API
-  /// key saved.
-  ///
-  /// The dictation shortcut is deliberately **not** part of this gate — it has a
-  /// default binding and is rebound in Settings, so a shortcut change can never
-  /// trap the user back in the wizard.
-  public static func isReady(permissions: PermissionStatus, hasAPIKey: Bool) -> Bool {
-    permissions.allGranted && hasAPIKey
-  }
-
   /// Poll cadence while the user is still setting up: brisk, so a permission
   /// granted over in System Settings shows as "Granted" almost at once — the
   /// user is watching this window.
@@ -24,6 +14,16 @@ public enum SetupReadiness {
   /// rare revocation, so there's no reason to wake the main actor every second
   /// for the rest of the app's life.
   public static let readyPollInterval: Duration = .seconds(5)
+
+  /// Whether the app is fully configured: every permission granted and an API
+  /// key saved.
+  ///
+  /// The dictation shortcut is deliberately **not** part of this gate — it has a
+  /// default binding and is rebound in Settings, so a shortcut change can never
+  /// trap the user back in the wizard.
+  public static func isReady(permissions: PermissionStatus, hasAPIKey: Bool) -> Bool {
+    permissions.allGranted && hasAPIKey
+  }
 
   /// How long to wait before the next permission poll, given where setup stands.
   public static func pollInterval(isReady: Bool) -> Duration {

@@ -7,7 +7,8 @@ import SwiftUI
 /// Discard…, which asks first: a recording thrown away is gone.
 struct LiveRecordingView: View {
   var model: TranscriptsModel
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceMotion)
+  private var reduceMotion
   @State private var isConfirmingDiscard = false
 
   var body: some View {

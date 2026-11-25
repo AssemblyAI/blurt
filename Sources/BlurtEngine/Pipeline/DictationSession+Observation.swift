@@ -11,7 +11,8 @@ extension DictationSession {
   /// release). `DictationPerformanceTests` guards the same paths with
   /// wall-clock budgets; these intervals are for interactive profiling.
   static let signposter = OSSignposter(
-    subsystem: HostIdentity.current.subsystem, category: "DictationPipeline")
+    subsystem: HostIdentity.current.subsystem, category: "DictationPipeline"
+  )
   /// Signpost interval name for the press → `.recording` startup path.
   static let pressSignpostName: StaticString = "PressStart"
   /// Signpost interval name for the release → transcribe → inject hot path.

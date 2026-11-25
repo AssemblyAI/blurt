@@ -17,17 +17,21 @@ final class ReadyViewUITests: BlurtUITestCase {
     // The dictation row: one element naming the bound key in words (the row
     // itself draws it as a keycap) and how to use it.
     let shortcutPredicate = NSPredicate(
-      format: "label BEGINSWITH %@", "Dictate: Right Command.")
+      format: "label BEGINSWITH %@", "Dictate: Right Command."
+    )
+    let shortcutRow = app.descendants(matching: .any).matching(shortcutPredicate).firstMatch
     XCTAssertTrue(
-      app.descendants(matching: .any).matching(shortcutPredicate).firstMatch
-        .waitForExistence(timeout: 10),
-      "Ready screen should state the dictation shortcut")
+      shortcutRow.waitForExistence(timeout: 10),
+      "Ready screen should state the dictation shortcut"
+    )
     // And a row for each other configured key: left ⌥ reads aloud by default.
     let readPredicate = NSPredicate(
-      format: "label BEGINSWITH %@", "\(KeyActionName.readAloud): Left Option.")
+      format: "label BEGINSWITH %@", "\(KeyActionName.readAloud): Left Option."
+    )
     XCTAssertTrue(
       app.descendants(matching: .any).matching(readPredicate).firstMatch.exists,
-      "Ready screen should list the read-aloud key")
+      "Ready screen should list the read-aloud key"
+    )
 
     // With no custom styles there's no choice to make, so there's no style row.
     let main = app.windows[UITestIdentifiers.mainWindowTitle]
@@ -37,7 +41,8 @@ final class ReadyViewUITests: BlurtUITestCase {
     // that fills the reserved list area.
     XCTAssertTrue(
       emptyRecentPrompt(in: main).exists,
-      "An empty Library should prompt the first dictation")
+      "An empty Library should prompt the first dictation"
+    )
 
     // The toolbar's Settings button — the main window's own route to the
     // Settings scene, alongside ⌘, and the menu-bar item.
@@ -50,7 +55,8 @@ final class ReadyViewUITests: BlurtUITestCase {
     // The Library starts empty.
     XCTAssertTrue(
       emptyRecentPrompt(in: main).waitForExistence(timeout: 10),
-      "The Library should start empty")
+      "The Library should start empty"
+    )
 
     driveDictation(via: harness)
 
@@ -58,10 +64,12 @@ final class ReadyViewUITests: BlurtUITestCase {
     let row = recentRow(in: main)
     XCTAssertTrue(
       row.waitForExistence(timeout: 10),
-      "A completed dictation should appear in the ready screen's Recent list")
+      "A completed dictation should appear in the ready screen's Recent list"
+    )
     XCTAssertFalse(
       emptyRecentPrompt(in: main).exists,
-      "The empty-list prompt should be gone once a dictation is recorded")
+      "The empty-list prompt should be gone once a dictation is recorded"
+    )
   }
 
   func testRecentRowCopyShowsConfirmation() {
@@ -102,8 +110,10 @@ final class ReadyViewUITests: BlurtUITestCase {
       usleep(100_000)
     }
     XCTAssertEqual(
-      copied, UITestIdentifiers.defaultCannedTranscript,
-      "Copying a recent transcript should put it on the pasteboard")
+      copied,
+      UITestIdentifiers.defaultCannedTranscript,
+      "Copying a recent transcript should put it on the pasteboard"
+    )
   }
 
   /// The ready and Settings windows are separate SwiftUI scenes. Deleting the
@@ -129,7 +139,8 @@ final class ReadyViewUITests: BlurtUITestCase {
     let picker = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
     XCTAssertTrue(
       picker.waitForExistence(timeout: 5),
-      "Adding a custom style should give the ready window a real choice")
+      "Adding a custom style should give the ready window a real choice"
+    )
 
     styles.buttons[UITestIdentifiers.styleProfileEdit(0)].click()
     let editSheet = styles.sheets.firstMatch
@@ -139,7 +150,8 @@ final class ReadyViewUITests: BlurtUITestCase {
 
     XCTAssertTrue(
       picker.waitForNonExistence(timeout: 5),
-      "Deleting the final custom style should remove the ready-window pop-up immediately")
+      "Deleting the final custom style should remove the ready-window pop-up immediately"
+    )
     XCTAssertFalse(main.staticTexts["Writing style"].exists, "…and the style row with it")
   }
 

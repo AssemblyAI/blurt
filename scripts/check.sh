@@ -405,12 +405,12 @@ check_sound_catalog() {
     violation=1
   fi
 
-  # `none` belongs to SoundPack.none, which `SoundPackCatalog` keeps reachable
+  # `none` belongs to SoundPack.silent, which `SoundPackCatalog` keeps reachable
   # whatever it is handed — so an entry claiming that id loses its own slot and
   # ships two unreachable cue files rather than costing the user "no sound".
   # Still a generator bug: it means a voice silently vanished from the picker.
   if printf '%s\n' "$catalog_ids" | grep -qx 'none'; then
-    echo "error: a catalog entry uses the reserved id 'none' — SoundPack.none wins the" >&2
+    echo "error: a catalog entry uses the reserved id 'none' — SoundPack.silent wins the" >&2
     echo "       lookup, so that voice is unreachable and its two cues ship for nothing" >&2
     violation=1
   fi
@@ -425,7 +425,7 @@ check_sound_catalog() {
     violation=1
   elif ! printf '%s\n' "$catalog_ids" | grep -qx -- "$default_voice_id"; then
     echo "error: defaultVoiceID '$default_voice_id' names no voice in the catalog —" >&2
-    echo "       a fresh install would resolve to SoundPack.none and play no cues" >&2
+    echo "       a fresh install would resolve to SoundPack.silent and play no cues" >&2
     violation=1
   fi
 
@@ -768,7 +768,7 @@ else
   #                        its IOProc. Only real hardware (and the System Audio
   #                        Recording grant) can create them. Same justification as
   #                        CaptureSessionRecorder. The mix, the 16 kHz conversion
-  #                        and the file and PCM output live in SystemAudioMix.swift,
+  #                        and the file and PCM output live in MixWriter.swift,
   #                        which IS covered.
   #  - Command/SystemVoiceCommandPerformer*.swift : the Control Your Mac
   #                        key's system shell — launching and raising other apps,
@@ -783,7 +783,7 @@ else
   #                        its role and label rules, visibility, the click point,
   #                        window layout, the destructive guard, the key chords,
   #                        and when a press falls back to a click or a focus
-  #                        selects — lives in VoiceCommandStep, CommandMatching,
+  #                        selects — lives in VoiceCommandStep, NameMatch,
   #                        ScreenContext, ScreenRead, WindowLayout,
   #                        VoiceCommandKeys and ElementActions, which ARE
   #                        covered — ScreenRead against real apps' recorded
@@ -796,7 +796,7 @@ else
   #                        turns its answer into start and stop (MeetingAutoRecord)
   #                        IS covered.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift|Command/SystemVoiceCommandPerformer[^/]*\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder(\+BlockBuffer)?\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift|Command/SystemVoiceCommandPerformer[^/]*\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
@@ -923,10 +923,11 @@ if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1
   # The app build above cds into App/Blurt; come back before reading the log.
   cd "$REPO_ROOT"
   # Analyzer rules need the compiler invocations, so feed them the build log
-  # captured above. Catches unused imports — the one dead-code gap periphery
-  # (which covers unused declarations) doesn't. False positives on AVFoundation/
-  # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
-  run_check "swiftlint analyze (unused imports)" \
+  # captured above. Runs every analyzer rule .swiftlint.yml lists — unused imports
+  # (the one dead-code gap periphery doesn't cover), unused declarations, captured
+  # variables, untyped array inits. False positives on AVFoundation/OSLog imports
+  # are suppressed via always_keep_imports in .swiftlint.yml.
+  run_check "swiftlint analyze" \
     swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
 fi
 

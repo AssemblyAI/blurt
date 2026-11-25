@@ -9,7 +9,8 @@
     func textRole() {
       #expect(
         FocusCapture.isEditableTarget(
-          role: "AXTextArea", valueSettable: false, hasInsertionPoint: false))
+          role: "AXTextArea", valueSettable: false, hasInsertionPoint: false
+        ))
     }
 
     @Test("a secure (password) field is still a paste target despite prompt redaction")
@@ -19,21 +20,24 @@
       // field must type, even though its contents are never captured.
       #expect(
         FocusCapture.isEditableTarget(
-          role: FocusCapture.secureFieldRole, valueSettable: false, hasInsertionPoint: false))
+          role: FocusCapture.secureFieldRole, valueSettable: false, hasInsertionPoint: false
+        ))
     }
 
     @Test("a settable value is editable even with an unknown role")
     func settableValue() {
       #expect(
         FocusCapture.isEditableTarget(
-          role: "AXUnknown", valueSettable: true, hasInsertionPoint: false))
+          role: "AXUnknown", valueSettable: true, hasInsertionPoint: false
+        ))
     }
 
     @Test("an insertion point is editable even with an unknown role")
     func insertionPoint() {
       #expect(
         FocusCapture.isEditableTarget(
-          role: nil, valueSettable: false, hasInsertionPoint: true))
+          role: nil, valueSettable: false, hasInsertionPoint: true
+        ))
     }
 
     @Test("anything focused inside a web view's page but a link is web content, pasted into as a browser's is")
@@ -41,22 +45,26 @@
       // Meta's Muse: its reply box reports as a button, inside its web view.
       #expect(
         FocusCapture.isEditableTarget(
-          role: "AXButton", valueSettable: false, hasInsertionPoint: false, inWebArea: true))
+          role: "AXButton", valueSettable: false, hasInsertionPoint: false, inWebArea: true
+        ))
       // The same button in a native window is still not a paste target.
       #expect(
         !FocusCapture.isEditableTarget(
-          role: "AXButton", valueSettable: false, hasInsertionPoint: false, inWebArea: false))
+          role: "AXButton", valueSettable: false, hasInsertionPoint: false, inWebArea: false
+        ))
       // A focused link is a page's, and never edited.
       #expect(
         !FocusCapture.isEditableTarget(
-          role: "AXLink", valueSettable: false, hasInsertionPoint: false, inWebArea: true))
+          role: "AXLink", valueSettable: false, hasInsertionPoint: false, inWebArea: true
+        ))
     }
 
     @Test("a non-text control with no editable signal is not editable")
     func nonEditableControl() {
       #expect(
         !FocusCapture.isEditableTarget(
-          role: "AXButton", valueSettable: false, hasInsertionPoint: false))
+          role: "AXButton", valueSettable: false, hasInsertionPoint: false
+        ))
     }
 
     @Test("an unknown role with no editable signal is not editable (copy, don't beep)")
@@ -68,27 +76,17 @@
       // this signal test.)
       #expect(
         !FocusCapture.isEditableTarget(
-          role: "AXWebArea", valueSettable: false, hasInsertionPoint: false))
+          role: "AXWebArea", valueSettable: false, hasInsertionPoint: false
+        ))
     }
 
     @Test("a focused element with an unreadable role is not editable (copy, don't beep)")
     func nilRoleWithoutSignalCopies() {
       #expect(
         !FocusCapture.isEditableTarget(
-          role: nil, valueSettable: false, hasInsertionPoint: false))
+          role: nil, valueSettable: false, hasInsertionPoint: false
+        ))
     }
   }
 
-  @Suite("noTarget phase + overlay mapping")
-  struct NoTargetPhaseTests {
-    @Test("noTarget is terminal")
-    func terminal() {
-      #expect(PipelinePhase.noTarget.isTerminal)
-    }
-
-    @Test("noTarget maps to the quiet overlay state, not an error")
-    func overlayMapping() {
-      #expect(PipelinePhase.noTarget.overlayState == .noTarget)
-    }
-  }
 #endif

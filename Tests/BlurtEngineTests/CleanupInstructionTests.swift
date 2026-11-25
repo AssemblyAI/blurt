@@ -7,7 +7,7 @@ import Testing
 /// exercise — it's a constant — so these guard the properties a later edit could
 /// break silently, on a string that reaches every user's every dictation. The
 /// wiring itself (that it lands in `config.llm.instruction`) is asserted in
-/// `AssemblyAITranscriberTests`.
+/// `HTTPClientTests`.
 @Suite("CleanupInstruction")
 struct CleanupInstructionTests {
   /// A blank or padded instruction is the failure with no symptom: the service
@@ -113,10 +113,11 @@ struct CleanupInstructionTests {
   /// carries `stt_prompt` and the key terms.
   @Test("the style limit is a generous editor bound well inside the config limit")
   func styleLimitIsAnEditorBound() {
-    #expect(StyleProfileStore.characterLimit >= 2000)
+    #expect(StyleProfileStore.characterLimit >= 2_000)
     let longest = CleanupInstruction.sendable(
-      appending: String(repeating: "x", count: StyleProfileStore.characterLimit))
-    #expect(longest.utf8.count < 16 * 1024)
+      appending: String(repeating: "x", count: StyleProfileStore.characterLimit)
+    )
+    #expect(longest.utf8.count < 16 * 1_024)
   }
 
   /// The unedited rule ("Preserve the original punctuation, capitalization…") beat
@@ -124,7 +125,7 @@ struct CleanupInstructionTests {
   /// must carry the qualified rule instead — and the swap must actually happen:
   /// `replacing` is silently a no-op if a re-optimized `text` rewords the sentence.
   @Test("a styled request qualifies the preservation rule instead of pinning punctuation")
-  func styledTextQualifiesThePreservationRule() throws {
+  func styledTextQualifiesThePreservationRule() {
     #expect(CleanupInstruction.text.contains(CleanupInstruction.preservationRule))
     #expect(CleanupInstruction.styledText.contains(CleanupInstruction.preservationRule) == false)
     #expect(CleanupInstruction.styledText.contains(CleanupInstruction.styledPreservationRule))

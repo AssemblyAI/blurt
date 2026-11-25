@@ -10,7 +10,8 @@ import Testing
 struct ReadClipTests {
   private func directory() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appending(
-      path: "ReadClipTests-\(UUID())", directoryHint: .isDirectory)
+      path: "ReadClipTests-\(UUID())", directoryHint: .isDirectory
+    )
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
   }
@@ -51,10 +52,11 @@ struct ReadClipTests {
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: FakeSpeechTransport()),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut))),
-      clips: ReadClipSink(directory: folder) { clip in clips.withLock { $0.append(clip) } },
-      makeSink: { _ in RecordingSink() })
+      clips: ReadClipSink(directory: folder) { clip in clips.withLock { $0.append(clip) } }
+    ) { _ in RecordingSink() }
     try await speaker.speak(
-      "Read this.", style: ReadAloudStyle(rate: 1, skipsJargon: false), onLevel: nil)
+      "Read this.", style: ReadAloudStyle(rate: 1, skipsJargon: false), onLevel: nil
+    )
     let clip = try #require(clips.withLock { $0.first })
     #expect(clip.text == "Read this.")
     #expect(clip.request == nil)
@@ -70,12 +72,14 @@ struct ReadClipTests {
     let clips = Mutex(0)
     let speaker = SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(
-        apiKeyProvider: { "k" }, transport: FakeSpeechTransport(failing: URLError(.timedOut))),
+        apiKeyProvider: { "k" }, transport: FakeSpeechTransport(failing: URLError(.timedOut))
+      ),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut))),
-      clips: ReadClipSink(directory: folder) { _ in clips.withLock { $0 += 1 } },
-      makeSink: { _ in RecordingSink() })
+      clips: ReadClipSink(directory: folder) { _ in clips.withLock { $0 += 1 } }
+    ) { _ in RecordingSink() }
     _ = try? await speaker.speak(
-      "Read this.", style: ReadAloudStyle(rate: 1, skipsJargon: false), onLevel: nil)
+      "Read this.", style: ReadAloudStyle(rate: 1, skipsJargon: false), onLevel: nil
+    )
     #expect(clips.withLock { $0 } == 0)
     #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).isEmpty)
   }
@@ -90,12 +94,14 @@ struct ReadClipTests {
   @Test("a recording's LLM title replaces its file name; a read clip is titled by its text")
   func titles() {
     var recording = SavedTranscript(
-      kind: .recording, date: .now, text: "…", fileURL: URL(filePath: "/tmp/Recording.m4a"))
+      kind: .recording, date: .now, text: "…", fileURL: URL(filePath: "/tmp/Recording.m4a")
+    )
     #expect(recording.title == "Recording.m4a")
     recording.generatedTitle = "Pipeline Review"
     #expect(recording.title == "Pipeline Review")
     let read = SavedTranscript(
-      kind: .readAloud, date: .now, text: "The selection.", fileURL: URL(filePath: "/tmp/r.wav"))
+      kind: .readAloud, date: .now, text: "The selection.", fileURL: URL(filePath: "/tmp/r.wav")
+    )
     #expect(read.title == "The selection.")
   }
 }

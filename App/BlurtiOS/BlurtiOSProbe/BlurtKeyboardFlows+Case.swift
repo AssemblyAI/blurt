@@ -8,7 +8,7 @@ extension BlurtKeyboardFlows {
   /// shift lifts one letter. Auto-Capitalization is the keyboard's own rule
   /// (KeyboardKit's `isAutocapitalizationEnabled`): iOS tells no third-party
   /// keyboard what the phone's own switch says.
-  func testCase() throws {
+  func testCase() {
     continueAfterFailure = true
     let arguments =
       ProcessInfo.processInfo.environment["BLURT_PROBE_ARGS"]?.split(separator: " ").map(String.init) ?? ["light"]

@@ -21,24 +21,6 @@ import BlurtiOSCore
     /// field's default of none, so Apple's keys are read at rest.
     var sentences = false
 
-    /// `-BlurtProbeField light|dark`: the face the field asks for, so the Blurt
-    /// keyboard comes up that way for a capture of the real extension
-    /// (`scripts/ios-keyboard-shot.sh`, `scripts/ios-keyboard-flows.sh`).
-    static func parse(_ arguments: [String]) -> KeyboardProbeView? {
-      guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else { return nil }
-      let face = arguments.count > flag + 1 ? arguments[flag + 1] : "light"
-      guard face == "light" || face == "dark" else { return nil }
-      // `-BlurtProbeResetTerms`: an empty key-term list, so a flow that adds a
-      // word finds it new on every run (the App Group outlives the test).
-      if arguments.contains("-BlurtProbeResetTerms") { SharedStore.keyTerms = [] }
-      var text = ""
-      if let flag = arguments.firstIndex(of: "-BlurtProbeText"), arguments.count > flag + 1 {
-        text = arguments[flag + 1]
-      }
-      return KeyboardProbeView(
-        dark: face == "dark", text: text, sentences: arguments.contains("-BlurtProbeSentences"))
-    }
-
     var body: some View {
       VStack {
         ProbeField(dark: dark, text: text, sentences: sentences)
@@ -57,30 +39,28 @@ import BlurtiOSCore
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(dark ? Color.black : Color.white)
     }
-  }
 
-  /// A UIKit field, since `keyboardAppearance` and `autocorrectionType` are
-  /// what decide which keyboard iOS shows: the appearance picks the face, and
-  /// autocorrection brings the predictive bar up, which is the band the
-  /// keyboard's voice row stands in for.
-  private struct ProbeField: UIViewRepresentable {
-    let dark: Bool
-    let text: String
-    let sentences: Bool
-
-    func makeUIView(context: Context) -> UITextField {
-      let field = UITextField()
-      field.accessibilityIdentifier = "probe-field"
-      field.text = text
-      field.keyboardAppearance = dark ? .dark : .light
-      field.autocorrectionType = .yes
-      field.autocapitalizationType = sentences ? .sentences : .none
-      field.borderStyle = .roundedRect
-      field.placeholder = "probe"
-      DispatchQueue.main.async { field.becomeFirstResponder() }
-      return field
+    /// `-BlurtProbeField light|dark`: the face the field asks for, so the Blurt
+    /// keyboard comes up that way for a capture of the real extension
+    /// (`scripts/ios-keyboard-shot.sh`, `scripts/ios-keyboard-flows.sh`).
+    static func parse(_ arguments: [String]) -> Self? {
+      guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else {
+        return nil
+      }
+      let face = arguments.count > flag + 1 ? arguments[flag + 1] : "light"
+      guard face == "light" || face == "dark" else {
+        return nil
+      }
+      // `-BlurtProbeResetTerms`: an empty key-term list, so a flow that adds a
+      // word finds it new on every run (the App Group outlives the test).
+      if arguments.contains("-BlurtProbeResetTerms") { SharedStore.keyTerms = [] }
+      var initialText = ""
+      if let textFlag = arguments.firstIndex(of: "-BlurtProbeText"), arguments.count > textFlag + 1 {
+        initialText = arguments[textFlag + 1]
+      }
+      return Self(
+        dark: face == "dark", text: initialText, sentences: arguments.contains("-BlurtProbeSentences")
+      )
     }
-
-    func updateUIView(_ uiView: UITextField, context: Context) {}
   }
 #endif

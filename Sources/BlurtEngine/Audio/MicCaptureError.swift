@@ -29,8 +29,11 @@ enum MicCaptureError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .noInputDevice: "No microphone is available."
-    case .inputNeverDelivered: pillNotice.map { "\($0.text)." }
+    case .noInputDevice:
+      "No microphone is available."
+
+    case .inputNeverDelivered:
+      pillNotice.map { "\($0.text)." }
     }
   }
 
@@ -39,7 +42,9 @@ enum MicCaptureError: LocalizedError {
   /// is built from the same words, so the two can't drift apart.
   var pillNotice: PillNotice? {
     switch self {
-    case .noInputDevice: nil
+    case .noInputDevice:
+      nil
+
     case .inputNeverDelivered(let deviceName):
       PillNotice(subject: deviceName ?? "The microphone", predicate: "isn't sending any audio")
     }

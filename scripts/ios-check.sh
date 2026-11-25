@@ -9,7 +9,7 @@
 #   1. BlurtiOSTests on a simulator, warnings as errors, with BlurtiOSCore's
 #      line-coverage gate (ios-test.sh; the TSan and ASan passes are its
 #      BLURT_IOS_SANITIZER runs, CI's ios-sanitizers job).
-#   2. `swiftlint analyze` — unused imports — over that build's compiler log,
+#   2. `swiftlint analyze` — every analyzer rule — over that build's compiler log,
 #      as check.sh runs it over the Mac app's.
 #   3. periphery over the iPhone project — unused declarations.
 #   4. The probe's XCUITest bundle (BlurtiOSProbe), compiled: its own scheme,
@@ -44,7 +44,7 @@ trap 'rm -f "$BUILD_LOG" "$APP_LOG"' EXIT
 echo "==> ios-test (BlurtiOSTests + BlurtiOSCore coverage gate)"
 BLURT_IOS_BUILD_LOG="$BUILD_LOG" "$REPO_ROOT/scripts/ios-test.sh" || FAILED+=("ios-test")
 
-echo "==> swiftlint analyze (unused imports, App/BlurtiOS)"
+echo "==> swiftlint analyze (App/BlurtiOS)"
 if [ -s "$BUILD_LOG" ]; then
   # The iPhone modules' compile commands only. The build also compiles the
   # engine — for iOS, where its `#if os(macOS)` files are inactive and

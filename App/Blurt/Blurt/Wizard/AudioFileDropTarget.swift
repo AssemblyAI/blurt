@@ -1,38 +1,10 @@
 import SwiftUI
 
-extension View {
-  /// Makes the whole view a drop target for audio and video files, as
-  /// MacWhisper's and ImageOptim's windows are: nothing on screen asks for a
-  /// drop, and only while a file is held over the window does it say what
-  /// letting go will do.
-  func audioFileDropTarget(_ model: TranscriptsModel) -> some View {
-    modifier(AudioFileDropTarget(model: model))
-  }
-}
-
 private struct AudioFileDropTarget: ViewModifier {
   var model: TranscriptsModel
   @State private var isTargeted = false
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  func body(content: Content) -> some View {
-    content
-      .dropDestination(for: URL.self) { urls, _ in
-        // Never over a recording: it owns the sheet until it's saved.
-        guard !model.isRecordingBusy else { return false }
-        model.openFiles(urls)
-        return true
-      } isTargeted: {
-        isTargeted = $0
-      }
-      // The window's content gives way entirely while a file is held over
-      // it: one target, nothing behind it competing.
-      .opacity(isTargeted ? 0 : 1)
-      .overlay {
-        if isTargeted { dropTarget }
-      }
-      .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isTargeted)
-  }
+  @Environment(\.accessibilityReduceMotion)
+  private var reduceMotion
 
   /// What the window becomes while a file is held over it: a large dashed
   /// well in the accent around one glyph and one line, as a Mac app's empty
@@ -56,5 +28,36 @@ private struct AudioFileDropTarget: ViewModifier {
     )
     .allowsHitTesting(false)
     .transition(.opacity)
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .dropDestination(for: URL.self) { urls, _ in
+        // Never over a recording: it owns the sheet until it's saved.
+        guard !model.isRecordingBusy else {
+          return false
+        }
+        model.openFiles(urls)
+        return true
+      } isTargeted: { targeted in
+        isTargeted = targeted
+      }
+      // The window's content gives way entirely while a file is held over
+      // it: one target, nothing behind it competing.
+      .opacity(isTargeted ? 0 : 1)
+      .overlay {
+        if isTargeted { dropTarget }
+      }
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isTargeted)
+  }
+}
+
+extension View {
+  /// Makes the whole view a drop target for audio and video files, as
+  /// MacWhisper's and ImageOptim's windows are: nothing on screen asks for a
+  /// drop, and only while a file is held over the window does it say what
+  /// letting go will do.
+  func audioFileDropTarget(_ model: TranscriptsModel) -> some View {
+    modifier(AudioFileDropTarget(model: model))
   }
 }

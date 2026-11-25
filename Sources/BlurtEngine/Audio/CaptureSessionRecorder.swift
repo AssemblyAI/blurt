@@ -60,6 +60,23 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     var frameCount = 0
   }
 
+  /// The serial queue session *control* runs on — building and starting —
+  /// deliberately not `delegateQueue`. Both steps block for as long as the
+  /// hardware takes, and blocking the delivery queue would stall the very frames
+  /// the liveness gate is then waiting for. A `DispatchQueue` rather than a
+  /// detached `Task`, so those waits park a Dispatch thread instead of one of the
+  /// cooperative pool's — the pool is what the rest of the press runs on (the
+  /// context capture that overlaps this, the transcriber's connection warm-up),
+  /// and starving it is how covering the retired backend in CI deadlocked the
+  /// whole test run.
+  ///
+  /// `static`, so it also serializes across recorders: only one capture session
+  /// is ever meant to be coming up at a time, and AVFoundation asks that session
+  /// control be serialized rather than concurrent.
+  private static let controlQueue = DispatchQueue(
+    label: HostIdentity.current.queueLabel("MicCaptureSessionControl")
+  )
+
   /// The live feed of captured audio, in arrival order — handed out as it lands
   /// so the dictation request can upload it while the user is still speaking.
   /// Nothing is kept behind it; `Guarded.capturedBytes` only counts what went
@@ -91,44 +108,19 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// The serial queue sample buffers are delivered on; only the delegate
   /// method runs here, and it touches nothing but `state`.
   private let delegateQueue = DispatchQueue(
-    label: HostIdentity.current.queueLabel("MicCaptureSession"))
-  /// The serial queue session *control* runs on — building and starting —
-  /// deliberately not `delegateQueue`. Both steps block for as long as the
-  /// hardware takes, and blocking the delivery queue would stall the very frames
-  /// the liveness gate is then waiting for. A `DispatchQueue` rather than a
-  /// detached `Task`, so those waits park a Dispatch thread instead of one of the
-  /// cooperative pool's — the pool is what the rest of the press runs on (the
-  /// context capture that overlaps this, the transcriber's connection warm-up),
-  /// and starving it is how covering the retired backend in CI deadlocked the
-  /// whole test run.
-  ///
-  /// `static`, so it also serializes across recorders: only one capture session
-  /// is ever meant to be coming up at a time, and AVFoundation asks that session
-  /// control be serialized rather than concurrent.
-  private static let controlQueue = DispatchQueue(
-    label: HostIdentity.current.queueLabel("MicCaptureSessionControl"))
+    label: HostIdentity.current.queueLabel("MicCaptureSession")
+  )
   private let state = Mutex(Guarded())
 
-  /// Builds a recorder off the caller's executor, on `controlQueue`.
+  /// Frames the delegate has actually received. 0 until the first buffer lands,
+  /// which is the has-anything-arrived probe `MicLiveness` short-circuits on.
   ///
-  /// The build is not free and not bounded: ~5 ms warm, but ~185 ms the first
-  /// time a process touches AVFoundation's capture stack (~90–125 ms of that the
-  /// first device query alone). Run inline on `MicCapture` it blocked the actor
-  /// for that whole window, which a teardown racing the bring-up then waited out
-  /// — the same defect as a blocking `record()`, and `MicCaptureBringUpTests`
-  /// caught it at 100 ms once its own warm-up probe was removed. Both hops run
-  /// on `controlQueue`.
-  ///
-  /// Deliberately still *separate* from `record()` rather than folded into one
-  /// "make and start" hop: that building leaves the microphone closed is the
-  /// invariant the whole warm-up design rests on, and the live suite can only
-  /// assert it while the two steps are observable apart.
-  static func make(pinnedUID: String?) async throws -> CaptureSessionRecorder {
-    try await withCheckedThrowingContinuation { continuation in
-      controlQueue.async {
-        continuation.resume(with: Result { try CaptureSessionRecorder(pinnedUID: pinnedUID) })
-      }
-    }
+  /// A raw frame count rather than the seconds-since-`record()` the retired
+  /// `AVAudioRecorder` reported: the only consumer asks whether it has moved off
+  /// zero, so dividing by the sample rate manufactured a duration nothing read
+  /// as one.
+  var deliveredFrames: Int {
+    state.withLock { $0.frameCount }
   }
 
   /// Builds and fully configures the session — device input, converted-format
@@ -156,7 +148,8 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
         // without this: "no usable input device" for a device that exists and was
         // refused is the one case that log line can't explain on its own.
         MicCapture.logger.error(
-          "session refused the input device \(device.localizedName, privacy: .public)")
+          "session refused the input device \(device.localizedName, privacy: .public)"
+        )
       }
     }
     // macOS only: `audioSettings` is not in the iOS SDK, so there the output
@@ -174,15 +167,26 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     }
   }
 
-  deinit {
-    // Backstop for a recorder dropped without a stop, so an orphaned instance
-    // can't keep the microphone engaged for the rest of the process — and so a
-    // consumer awaiting `frames` can't be left hanging on a stream nothing will
-    // ever feed again.
-    if session.isRunning {
-      session.stopRunning()
+  /// Builds a recorder off the caller's executor, on `controlQueue`.
+  ///
+  /// The build is not free and not bounded: ~5 ms warm, but ~185 ms the first
+  /// time a process touches AVFoundation's capture stack (~90–125 ms of that the
+  /// first device query alone). Run inline on `MicCapture` it blocked the actor
+  /// for that whole window, which a teardown racing the bring-up then waited out
+  /// — the same defect as a blocking `record()`, and `MicCaptureBringUpTests`
+  /// caught it at 100 ms once its own warm-up probe was removed. Both hops run
+  /// on `controlQueue`.
+  ///
+  /// Deliberately still *separate* from `record()` rather than folded into one
+  /// "make and start" hop: that building leaves the microphone closed is the
+  /// invariant the whole warm-up design rests on, and the live suite can only
+  /// assert it while the two steps are observable apart.
+  static func make(pinnedUID: String?) async throws -> CaptureSessionRecorder {
+    try await withCheckedThrowingContinuation { continuation in
+      controlQueue.async {
+        continuation.resume(with: Result { try CaptureSessionRecorder(pinnedUID: pinnedUID) })
+      }
     }
-    framesContinuation.finish()
   }
 
   /// The device the session records from: the pinned device when its UID still
@@ -215,24 +219,15 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// before the bring-up and re-checks after: a teardown can land during the
   /// open, and it has to win.
   func record() async -> Bool {
-    guard !session.inputs.isEmpty else { return false }
+    guard !session.inputs.isEmpty else {
+      return false
+    }
     return await withCheckedContinuation { continuation in
       Self.controlQueue.async {
         self.session.startRunning()
         continuation.resume(returning: self.session.isRunning)
       }
     }
-  }
-
-  /// Frames the delegate has actually received. 0 until the first buffer lands,
-  /// which is the has-anything-arrived probe `MicLiveness` short-circuits on.
-  ///
-  /// A raw frame count rather than the seconds-since-`record()` the retired
-  /// `AVAudioRecorder` reported: the only consumer asks whether it has moved off
-  /// zero, so dividing by the sample rate manufactured a duration nothing read
-  /// as one.
-  var deliveredFrames: Int {
-    state.withLock { $0.frameCount }
   }
 
   /// The loudest of the capture connection's channels, in dBFS
@@ -268,7 +263,9 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// frames appear will see it.
   func meteredPowerDB() -> Float {
     let channels = output.connection(with: .audio)?.audioChannels ?? []
-    guard !channels.isEmpty else { return -160 }
+    guard !channels.isEmpty else {
+      return -160
+    }
     return channels.reduce(-Float.infinity) { max($0, $1.averagePowerLevel) }
   }
 
@@ -299,9 +296,9 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     // same chunk. A delegate callback still waiting on the lock then lands after
     // both — its bytes reach neither, which is consistent, and it is
     // post-`stopRunning()` audio in the first place.
-    return state.withLock {
+    return state.withLock { guarded in
       framesContinuation.finish()
-      return $0.capturedBytes
+      return guarded.capturedBytes
     }
   }
 
@@ -317,41 +314,16 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   func stopAndDiscard() {
     _ = stopAndReadByteCount()
   }
-}
 
-extension CaptureSessionRecorder {
-  /// The block buffer's `length` bytes, copied exactly **once** — this runs on
-  /// the audio delivery queue, which this file goes to lengths elsewhere to keep
-  /// unblocked.
-  ///
-  /// Prefers the buffer's own pointer, which needs no destination allocation and
-  /// so no zero-fill. `Data(count:)` is documented to hand back *zeroed* bytes,
-  /// so the fallback below writes every byte twice — once by the allocator, once
-  /// by the copy — a wasted ~32 kB/s memset for the length of the recording.
-  /// `CMBlockBufferGetDataPointer` reports how much is contiguous at the offset,
-  /// and anything short of the whole length means the buffer is segmented (which
-  /// LPCM from this output is not, in practice) and the copying path has to run
-  /// rather than be assumed away. Nil when neither read succeeds.
-  fileprivate static func copyBytes(from blockBuffer: CMBlockBuffer, length: Int) -> Data? {
-    var contiguousLength = 0
-    var totalLength = 0
-    var pointer: UnsafeMutablePointer<Int8>?
-    let located = unsafe CMBlockBufferGetDataPointer(
-      blockBuffer, atOffset: 0, lengthAtOffsetOut: &contiguousLength,
-      totalLengthOut: &totalLength, dataPointerOut: &pointer)
-    if located == kCMBlockBufferNoErr, let pointer = unsafe pointer, contiguousLength >= length {
-      return unsafe Data(bytes: pointer, count: length)
+  deinit {
+    // Backstop for a recorder dropped without a stop, so an orphaned instance
+    // can't keep the microphone engaged for the rest of the process — and so a
+    // consumer awaiting `frames` can't be left hanging on a stream nothing will
+    // ever feed again.
+    if session.isRunning {
+      session.stopRunning()
     }
-    var copied = Data(count: length)
-    let status = unsafe copied.withUnsafeMutableBytes { raw -> OSStatus in
-      // Empty is excluded by the caller, so a nil base can't happen; answered as
-      // a plain non-noErr status rather than trapping, since dropping the buffer
-      // is this method's failure mode for every other copy problem too.
-      guard let base = raw.baseAddress else { return OSStatus(-1) }
-      return unsafe CMBlockBufferCopyDataBytes(
-        blockBuffer, atOffset: 0, dataLength: length, destination: base)
-    }
-    return status == kCMBlockBufferNoErr ? copied : nil
+    framesContinuation.finish()
   }
 }
 
@@ -361,19 +333,26 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
   /// bytes can't be copied is dropped whole — better a short gap than a blob
   /// whose byte count and frame count disagree.
   func captureOutput(
-    _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
-    from connection: AVCaptureConnection
+    _: AVCaptureOutput,
+    didOutput sampleBuffer: CMSampleBuffer,
+    from _: AVCaptureConnection
   ) {
-    guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+    guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
+      return
+    }
     let length = CMBlockBufferGetDataLength(blockBuffer)
-    guard length > 0 else { return }
+    guard length > 0 else {
+      return
+    }
     // A failed read drops the buffer whole rather than appending part of it: a
     // tally and a feed that disagree are worse than a gap.
-    guard let chunk = Self.copyBytes(from: blockBuffer, length: length) else { return }
+    guard let chunk = Self.copyBytes(from: blockBuffer, length: length) else {
+      return
+    }
     let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
-    state.withLock {
-      $0.capturedBytes += chunk.count
-      $0.frameCount += frameCount
+    state.withLock { guarded in
+      guarded.capturedBytes += chunk.count
+      guarded.frameCount += frameCount
       // Published *under* the lock, together with the tally, because the two
       // have to agree: `stopAndReadByteCount` finishes the feed and reads the
       // count under this same lock, so a chunk counted here but yielded after

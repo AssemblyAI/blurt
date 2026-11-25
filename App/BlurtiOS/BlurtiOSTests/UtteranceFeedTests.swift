@@ -15,7 +15,7 @@ struct UtteranceFeedTests {
     #expect(UtteranceFeed.level(of: pcm([Int16.max, Int16.max, -Int16.max, -Int16.max])) == 1)
     #expect(UtteranceFeed.level(of: pcm([3, -3, 2, -2])) == 0)
     #expect(UtteranceFeed.level(of: Data()) == 0)
-    let mid = UtteranceFeed.level(of: pcm([8000, -8000, 8000, -8000]))
+    let mid = UtteranceFeed.level(of: pcm([8_000, -8_000, 8_000, -8_000]))
     #expect(mid > 0 && mid < 1)
   }
 
@@ -29,12 +29,12 @@ struct UtteranceFeedTests {
   @Test("chunks reach the utterance between begin and end, the tally counts them, and nothing outside")
   func tally() async {
     let feed = UtteranceFeed()
-    feed.deliver(pcm([1000, -1000]))
+    feed.deliver(pcm([1_000, -1_000]))
     #expect(!feed.isCapturing)
     let stream = feed.begin()
     #expect(feed.isCapturing)
-    feed.deliver(pcm([1000, -1000]))
-    feed.deliver(pcm([1000, -1000, 1000]))
+    feed.deliver(pcm([1_000, -1_000]))
+    feed.deliver(pcm([1_000, -1_000, 1_000]))
     let bytes = feed.end()
     #expect(bytes == 10)
     #expect(!feed.isCapturing)

@@ -20,12 +20,17 @@ extension KeyboardLayoutConfiguration {
       top: DesignTokens.Metrics.marginVertical - DesignTokens.Metrics.rowGap / 2,
       leading: DesignTokens.Metrics.marginSide - DesignTokens.Metrics.keyGap / 2,
       bottom: DesignTokens.Metrics.marginBottomKeys - DesignTokens.Metrics.rowGap / 2,
-      trailing: DesignTokens.Metrics.marginSide - DesignTokens.Metrics.keyGap / 2),
+      trailing: DesignTokens.Metrics.marginSide - DesignTokens.Metrics.keyGap / 2
+    ),
     buttonCornerRadius: DesignTokens.Metrics.keyRadius,
     buttonInsets: EdgeInsets(
-      top: DesignTokens.Metrics.rowGap / 2, leading: DesignTokens.Metrics.keyGap / 2,
-      bottom: DesignTokens.Metrics.rowGap / 2, trailing: DesignTokens.Metrics.keyGap / 2),
-    rowHeight: DesignTokens.Metrics.keyHeight + DesignTokens.Metrics.rowGap)
+      top: DesignTokens.Metrics.rowGap / 2,
+      leading: DesignTokens.Metrics.keyGap / 2,
+      bottom: DesignTokens.Metrics.rowGap / 2,
+      trailing: DesignTokens.Metrics.keyGap / 2
+    ),
+    rowHeight: DesignTokens.Metrics.keyHeight + DesignTokens.Metrics.rowGap
+  )
 }
 
 extension KeyboardLayout {
@@ -39,7 +44,7 @@ extension KeyboardLayout {
   /// and never for the number pad — KeyboardKit draws that one from no rows
   /// at all (`Keyboard.NumberPad`), and Apple's has no mic.
   static func blurt(for context: KeyboardContext) -> KeyboardLayout {
-    let standard = KeyboardLayout.standard(for: context)
+    let standard = Self.standard(for: context)
     let configuration = KeyboardLayoutConfiguration.blurt
     // The standard rows at Apple's cell height and insets, under Apple's
     // edges: the configuration a layout is built with is what its items carry.
@@ -51,11 +56,15 @@ extension KeyboardLayout {
           item.edgeInsets = configuration.buttonInsets
           return item
         }
-      }, configuration: configuration)
+      },
+      configuration: configuration
+    )
     guard context.keyboardType != .numberPad, let bottom = layout.itemRows.last,
       bottom.contains(where: { $0.action == .space }),
       !bottom.contains(where: { $0.action == .blurtMic }), let small = bottom.first
-    else { return layout }
+    else {
+      return layout
+    }
     // The 123 key, and the mic beside space, at Apple's measured width
     // (`key/abc-width-402`, scaled with the keyboard as Apple's scales): a
     // cell is the cap and the gap. KeyboardKit's own small keys are a share
@@ -63,7 +72,8 @@ extension KeyboardLayout {
     let width = context.screenSize?.width ?? DesignTokens.Metrics.keyReferenceWidth
     let cell = KeyboardLayoutItem.Width.points(
       DesignTokens.Metrics.keyAbcWidth402 * width / DesignTokens.Metrics.keyReferenceWidth
-        + DesignTokens.Metrics.keyGap)
+        + DesignTokens.Metrics.keyGap
+    )
     var size = small.size
     size.width = cell
     layout.itemRows[layout.itemRows.count - 1][0].size = size

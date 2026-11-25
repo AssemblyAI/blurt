@@ -31,7 +31,8 @@
   /// to `queue` rather than protected by a lock — see their declarations.
   /// `@safe` for the same reason: that `nonisolated(unsafe)` storage is never
   /// reachable from outside, so a caller has nothing to acknowledge.
-  @safe public final class AudioRouteMonitor: @unchecked Sendable {
+  @safe
+  public final class AudioRouteMonitor: @unchecked Sendable {
     private static let logger = HostIdentity.current.logger("AudioRoute")
 
     /// Fires once per observed route change. `.bufferingNewest(1)` because this is
@@ -54,18 +55,73 @@
     /// in `queue.sync` precisely so a listener can't fire before the property
     /// recording it has been written). Dispatch's serial ordering supplies both the
     /// exclusion and the memory barriers a lock would.
-    private nonisolated(unsafe) var systemListener: AudioObjectPropertyListenerBlock?
-    private nonisolated(unsafe) var deviceListener: (id: AudioDeviceID, block: AudioObjectPropertyListenerBlock)?
+    nonisolated(unsafe) private var systemListener: AudioObjectPropertyListenerBlock?
+    nonisolated(unsafe) private var deviceListener: (id: AudioDeviceID, block: AudioObjectPropertyListenerBlock)?
 
     public init() {
-      let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+      let (stream, routeContinuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
       self.outputRouteChanges = stream
-      self.continuation = continuation
+      self.continuation = routeContinuation
       self.queue = DispatchQueue(label: HostIdentity.current.queueLabel("AudioRoute"))
       queue.sync {
         installDefaultDeviceListener()
         retargetFormatListener()
       }
+    }
+
+    // MARK: - Registration (queue-confined)
+
+    /// Watches for the default output device itself changing. Registered once and
+    /// never re-targeted — the system object is always there.
+    private func installDefaultDeviceListener() {
+      var address = AudioRoute.globalAddress(kAudioHardwarePropertyDefaultOutputDevice)
+      // `[weak self]`, so CoreAudio's strong hold on the block doesn't keep the
+      // monitor alive forever — and so a callback landing during teardown finds
+      // nil rather than a half-destroyed object.
+      let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        guard let self else {
+          return
+        }
+        // Re-target first, then publish: a consumer that re-primes on this tick
+        // should already be behind a listener pointed at the new device.
+        retargetFormatListener()
+        continuation.yield()
+      }
+      let status = unsafe AudioObjectAddPropertyListenerBlock(AudioRoute.systemObject, &address, queue, block)
+      guard status == noErr else {
+        Self.logger.error("default-output listener failed: \(status)")
+        return
+      }
+      unsafe systemListener = unsafe block
+    }
+
+    /// Points the format listener at the current default output device, removing
+    /// the one on the previous device. A no-op when the device hasn't actually
+    /// changed, so a notification that resolves to the same device doesn't churn
+    /// the registration.
+    private func retargetFormatListener() {
+      let device = AudioRoute.defaultOutputDeviceID()
+      if let existing = unsafe deviceListener {
+        guard unsafe existing.id != device else {
+          return
+        }
+        var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
+        _ = unsafe AudioObjectRemovePropertyListenerBlock(existing.id, &address, queue, existing.block)
+        unsafe deviceListener = nil
+      }
+      guard let device else {
+        return
+      }
+      let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        self?.continuation.yield()
+      }
+      var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
+      let status = unsafe AudioObjectAddPropertyListenerBlock(device, &address, queue, block)
+      guard status == noErr else {
+        Self.logger.error("output-format listener failed: \(status)")
+        return
+      }
+      unsafe deviceListener = unsafe (id: device, block: block)
     }
 
     /// The monitor is owned for the app's lifetime, so this never runs in
@@ -92,65 +148,18 @@
     /// not an execution context.)
     deinit {
       continuation.finish()
-      if let systemListener = unsafe systemListener {
+      if let listener = unsafe systemListener {
         var address = AudioRoute.globalAddress(kAudioHardwarePropertyDefaultOutputDevice)
         _ = unsafe AudioObjectRemovePropertyListenerBlock(
-          AudioRoute.systemObject, &address, queue, systemListener)
+          AudioRoute.systemObject, &address, queue, listener
+        )
       }
-      if let deviceListener = unsafe deviceListener {
+      if let listener = unsafe deviceListener {
         var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
         _ = unsafe AudioObjectRemovePropertyListenerBlock(
-          deviceListener.id, &address, queue, deviceListener.block)
+          listener.id, &address, queue, listener.block
+        )
       }
-    }
-
-    // MARK: - Registration (queue-confined)
-
-    /// Watches for the default output device itself changing. Registered once and
-    /// never re-targeted — the system object is always there.
-    private func installDefaultDeviceListener() {
-      var address = AudioRoute.globalAddress(kAudioHardwarePropertyDefaultOutputDevice)
-      // `[weak self]`, so CoreAudio's strong hold on the block doesn't keep the
-      // monitor alive forever — and so a callback landing during teardown finds
-      // nil rather than a half-destroyed object.
-      let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-        guard let self else { return }
-        // Re-target first, then publish: a consumer that re-primes on this tick
-        // should already be behind a listener pointed at the new device.
-        self.retargetFormatListener()
-        self.continuation.yield()
-      }
-      let status = unsafe AudioObjectAddPropertyListenerBlock(AudioRoute.systemObject, &address, queue, block)
-      guard status == noErr else {
-        Self.logger.error("default-output listener failed: \(status)")
-        return
-      }
-      unsafe systemListener = unsafe block
-    }
-
-    /// Points the format listener at the current default output device, removing
-    /// the one on the previous device. A no-op when the device hasn't actually
-    /// changed, so a notification that resolves to the same device doesn't churn
-    /// the registration.
-    private func retargetFormatListener() {
-      let device = AudioRoute.defaultOutputDeviceID()
-      if let existing = unsafe deviceListener {
-        guard unsafe existing.id != device else { return }
-        var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
-        _ = unsafe AudioObjectRemovePropertyListenerBlock(existing.id, &address, queue, existing.block)
-        unsafe deviceListener = nil
-      }
-      guard let device else { return }
-      let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-        self?.continuation.yield()
-      }
-      var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
-      let status = unsafe AudioObjectAddPropertyListenerBlock(device, &address, queue, block)
-      guard status == noErr else {
-        Self.logger.error("output-format listener failed: \(status)")
-        return
-      }
-      unsafe deviceListener = unsafe (id: device, block: block)
     }
   }
 #endif

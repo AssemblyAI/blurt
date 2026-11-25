@@ -13,25 +13,31 @@ public struct OAuthClient: Sendable {
     public let refreshToken: String?
     public let idToken: String?
 
-    public init(accessToken: String, refreshToken: String?, idToken: String?) {
-      self.accessToken = accessToken
-      self.refreshToken = refreshToken
-      self.idToken = idToken
-    }
-
     /// The `email` claim of the ID token, for showing who is signed in. Read
     /// without verifying the signature: it is display text from a token this
     /// client just received over TLS, never an authorization decision.
     public var email: String? {
-      guard let idToken else { return nil }
+      guard let idToken else {
+        return nil
+      }
       let parts = idToken.split(separator: ".")
-      guard parts.count >= 2 else { return nil }
+      guard parts.count >= 2 else {
+        return nil
+      }
       var payload = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
       payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
       guard let data = Data(base64Encoded: payload),
         let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-      else { return nil }
+      else {
+        return nil
+      }
       return (claims["email"] as? String)?.trimmedNonEmpty()
+    }
+
+    public init(accessToken: String, refreshToken: String?, idToken: String?) {
+      self.accessToken = accessToken
+      self.refreshToken = refreshToken
+      self.idToken = idToken
     }
   }
 
@@ -62,17 +68,96 @@ public struct OAuthClient: Sendable {
     case unreachable
   }
 
+  private struct TokenBody: Decodable {
+    enum CodingKeys: String, CodingKey {
+      case accessToken = "access_token"
+      case refreshToken = "refresh_token"
+      case idToken = "id_token"
+    }
+
+    let accessToken: String
+    let refreshToken: String?
+    let idToken: String?
+  }
+
+  private struct APIKeyBody: Decodable {
+    enum CodingKeys: String, CodingKey {
+      case apiKey = "api_key"
+      case apiKeyExpiresAt = "api_key_expires_at"
+      case apiKeyRotatesAt = "api_key_rotates_at"
+    }
+
+    let apiKey: String
+    let apiKeyExpiresAt: String?
+    let apiKeyRotatesAt: String?
+  }
+
   private let configuration: OAuthConfiguration
   private let transport: any HTTPTransport
   private let userAgent: String?
 
   public init(
-    configuration: OAuthConfiguration, transport: any HTTPTransport = URLSession.shared,
+    configuration: OAuthConfiguration,
+    transport: any HTTPTransport = URLSession.shared,
     userAgent: String? = nil
   ) {
     self.configuration = configuration
     self.transport = transport
     self.userAgent = userAgent
+  }
+
+  /// Logs a refused or failed call: the path, the status, and the body's
+  /// `error`, `error_description` or `detail` (an OAuth error or FastAPI's).
+  /// Those fields describe the failure, never carry a credential.
+  static func logRefusal(_ request: URLRequest, status: Int, data: Data) {
+    let path = request.url?.path ?? "?"
+    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    let fields = ["error", "error_description", "detail"].compactMap { key in
+      (body?[key] as? String).map { "\(key)=\($0)" }
+    }
+    let reason = fields.isEmpty ? "-" : fields.joined(separator: " ")
+    SDKLog.oauth.error("\(path, privacy: .public) -> \(status, privacy: .public): \(reason, privacy: .public)")
+  }
+
+  /// Whether a token-endpoint error body names a dead credential: the refresh
+  /// token or code (`invalid_grant`) or the client (`invalid_client`).
+  static func isRefusedGrant(_ data: Data) -> Bool {
+    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    return ["invalid_grant", "invalid_client"].contains(body?["error"] as? String)
+  }
+
+  /// The 403's reason: `error_description` from an `insufficient_scope` body, or
+  /// FastAPI's `detail`.
+  static func explanation(in data: Data) -> String? {
+    guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      return nil
+    }
+    return ((body["error_description"] ?? body["detail"]) as? String)?.trimmedNonEmpty()
+  }
+
+  /// RFC 3339, with or without fractional seconds.
+  static func date(from string: String) -> Date? {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let date = formatter.date(from: string) {
+      return date
+    }
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter.date(from: string)
+  }
+
+  static func formEncoded(_ fields: [String: String]) -> String {
+    // RFC 3986 unreserved characters only: `+`, `&` and `=` in a value would
+    // otherwise be read as form syntax.
+    let allowed = CharacterSet(
+      charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+    return fields.sorted { $0.key < $1.key }
+      .map { key, value in
+        let escaped = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+        return "\(key)=\(escaped)"
+      }
+      .joined(separator: "&")
   }
 
   /// Trades the consent page's code for tokens.
@@ -106,12 +191,17 @@ public struct OAuthClient: Sendable {
         let apiKey = body.apiKey.trimmedNonEmpty()
       else { throw .unreachable }
       return ConnectionKey(
-        apiKey: apiKey, expiresAt: body.apiKeyExpiresAt.flatMap(Self.date(from:)),
-        rotatesAt: body.apiKeyRotatesAt.flatMap(Self.date(from:)))
+        apiKey: apiKey,
+        expiresAt: body.apiKeyExpiresAt.flatMap(Self.date(from:)),
+        rotatesAt: body.apiKeyRotatesAt.flatMap(Self.date(from:))
+      )
+
     case 401:
       throw .rejected
+
     case 403:
       throw .forbidden(Self.explanation(in: data))
+
     default:
       throw .unreachable
     }
@@ -123,9 +213,12 @@ public struct OAuthClient: Sendable {
     let request = authorizedPost(configuration.revokeURL, accessToken: accessToken)
     let (status, _) = try await send(request)
     switch status {
-    case 200..<300: return
+    case 200..<300:
+      return
+
     case 401:
       throw .rejected
+
     // 503 is the server saying the grant revoke failed: the grant is still
     // live, so this must not look like a sign-out.
     default:
@@ -148,14 +241,18 @@ public struct OAuthClient: Sendable {
         let accessToken = body.accessToken.trimmedNonEmpty()
       else { throw .unreachable }
       return Tokens(
-        accessToken: accessToken, refreshToken: body.refreshToken?.trimmedNonEmpty(),
-        idToken: body.idToken?.trimmedNonEmpty())
+        accessToken: accessToken,
+        refreshToken: body.refreshToken?.trimmedNonEmpty(),
+        idToken: body.idToken?.trimmedNonEmpty()
+      )
+
     // RFC 6749 §5.2: a refused grant is a 400 or 401 whose `error` names it.
     // Only `invalid_grant` and `invalid_client` say the credential is dead; any
     // other 400 (`invalid_request` mid-deploy, a proxy's own page) says nothing
     // about it, and reading it as a refusal would sign the user out.
     case 400...401 where Self.isRefusedGrant(data):
       throw .rejected
+
     default:
       throw .unreachable
     }
@@ -184,78 +281,5 @@ public struct OAuthClient: Sendable {
     }
     if !(200..<300).contains(status) { Self.logRefusal(request, status: status, data: data) }
     return (status, data)
-  }
-
-  private struct TokenBody: Decodable {
-    let accessToken: String
-    let refreshToken: String?
-    let idToken: String?
-
-    enum CodingKeys: String, CodingKey {
-      case accessToken = "access_token"
-      case refreshToken = "refresh_token"
-      case idToken = "id_token"
-    }
-  }
-
-  private struct APIKeyBody: Decodable {
-    let apiKey: String
-    let apiKeyExpiresAt: String?
-    let apiKeyRotatesAt: String?
-
-    enum CodingKeys: String, CodingKey {
-      case apiKey = "api_key"
-      case apiKeyExpiresAt = "api_key_expires_at"
-      case apiKeyRotatesAt = "api_key_rotates_at"
-    }
-  }
-
-  /// Logs a refused or failed call: the path, the status, and the body's
-  /// `error`, `error_description` or `detail` (an OAuth error or FastAPI's).
-  /// Those fields describe the failure, never carry a credential.
-  static func logRefusal(_ request: URLRequest, status: Int, data: Data) {
-    let path = request.url?.path ?? "?"
-    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    let fields = ["error", "error_description", "detail"].compactMap { key in
-      (body?[key] as? String).map { "\(key)=\($0)" }
-    }
-    let reason = fields.isEmpty ? "-" : fields.joined(separator: " ")
-    SDKLog.oauth.error("\(path, privacy: .public) -> \(status, privacy: .public): \(reason, privacy: .public)")
-  }
-
-  /// Whether a token-endpoint error body names a dead credential: the refresh
-  /// token or code (`invalid_grant`) or the client (`invalid_client`).
-  static func isRefusedGrant(_ data: Data) -> Bool {
-    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    return ["invalid_grant", "invalid_client"].contains(body?["error"] as? String)
-  }
-
-  /// The 403's reason: `error_description` from an `insufficient_scope` body, or
-  /// FastAPI's `detail`.
-  static func explanation(in data: Data) -> String? {
-    guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-    return ((body["error_description"] ?? body["detail"]) as? String)?.trimmedNonEmpty()
-  }
-
-  /// RFC 3339, with or without fractional seconds.
-  static func date(from string: String) -> Date? {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = formatter.date(from: string) { return date }
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter.date(from: string)
-  }
-
-  static func formEncoded(_ fields: [String: String]) -> String {
-    // RFC 3986 unreserved characters only: `+`, `&` and `=` in a value would
-    // otherwise be read as form syntax.
-    let allowed = CharacterSet(
-      charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-    return fields.sorted { $0.key < $1.key }
-      .map { key, value in
-        let escaped = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
-        return "\(key)=\(escaped)"
-      }
-      .joined(separator: "&")
   }
 }

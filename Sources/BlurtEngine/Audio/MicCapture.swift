@@ -11,14 +11,44 @@ import os
 /// switch, raising `-10868` or quietly capturing all-zero buffers; per-session
 /// recorders can't go stale.
 public actor MicCapture: MicCaptureProtocol {
+  // MARK: - Input resolution
+
+  /// What a press needs to know about its input, and nothing more: the UID the
+  /// session must pin to (nil for the system default — no pin, or the
+  /// missing-device fallback), and the transport the two transport-keyed
+  /// policies read (`MicLiveness.timeout`, `AudioTransport.tailLinger`).
+  ///
+  /// It used to carry the resolved device's `AudioDeviceID` as well, purely so a
+  /// warm recorder could be checked for still being bound to it. With no warm
+  /// recorder to validate, nothing asks which device this is — only how to open
+  /// it and how its link behaves.
+  struct ResolvedInput {
+    let pinnedUID: String?
+    let transportType: UInt32?
+  }
+
   // Subsystem/category make these lines findable via:
   //   log show --predicate 'subsystem == "dev.alex.blurt"' --last 1h
   // Stderr is unreachable for .app bundles launched via Finder/LaunchServices,
   // so go through the unified logging system instead.
   static let logger = HostIdentity.current.logger("MicCapture")
+  /// How often the meter is sampled for the overlay, in seconds. 20 Hz reads as
+  /// smooth for a voice-level meter while cutting the per-tick work (recorder poll
+  /// + stream yield, and the SwiftUI bar redraw it drives) by a third versus 30 Hz.
+  ///
+  /// Public, and the single definition: the pill's continuous animations cap their
+  /// redraw to this cadence because the level feed can't show anything faster, so
+  /// the view reads it here rather than restating `1.0 / 20.0` behind a comment
+  /// claiming the two match — a coupling nothing enforced, which a change here
+  /// would silently break, leaving the view under-sampling frames the meter is
+  /// paying to produce.
+  public static let meterIntervalSeconds: Double = 0.05
 
-  public nonisolated let levels: AsyncStream<Float>
-  private nonisolated let levelsContinuation: AsyncStream<Float>.Continuation
+  /// `meterIntervalSeconds` as the `Duration` the meter task sleeps for.
+  private static let meterInterval = Duration.seconds(meterIntervalSeconds)
+
+  nonisolated public let levels: AsyncStream<Float>
+  nonisolated private let levelsContinuation: AsyncStream<Float>.Continuation
 
   /// Reads the persisted microphone selection, once per session bring-up (and
   /// per warm-up). A closure so tests inject a fixed selection instead of the
@@ -53,21 +83,8 @@ public actor MicCapture: MicCaptureProtocol {
   /// dropped. Reset per capture in `start()` — a fresh recording must emit its
   /// first level even when it matches where the previous one left off.
   private var lastEmittedLevel: Float?
-  /// How often the meter is sampled for the overlay, in seconds. 20 Hz reads as
-  /// smooth for a voice-level meter while cutting the per-tick work (recorder poll
-  /// + stream yield, and the SwiftUI bar redraw it drives) by a third versus 30 Hz.
-  ///
-  /// Public, and the single definition: the pill's continuous animations cap their
-  /// redraw to this cadence because the level feed can't show anything faster, so
-  /// the view reads it here rather than restating `1.0 / 20.0` behind a comment
-  /// claiming the two match — a coupling nothing enforced, which a change here
-  /// would silently break, leaving the view under-sampling frames the meter is
-  /// paying to produce.
-  public static let meterIntervalSeconds: Double = 0.05
 
-  /// `meterIntervalSeconds` as the `Duration` the meter task sleeps for.
-  private static let meterInterval = Duration.seconds(meterIntervalSeconds)
-
+  @preconcurrency
   public init(
     deviceSelection: @escaping @Sendable () -> MicDeviceSelection = { MicDeviceStore().selection }
   ) {
@@ -78,6 +95,33 @@ public actor MicCapture: MicCaptureProtocol {
     let (stream, continuation) = AsyncStream<Float>.makeStream(bufferingPolicy: .bufferingNewest(1))
     self.levels = stream
     self.levelsContinuation = continuation
+  }
+
+  /// One trip through the selection policy: check whether the pinned UID still
+  /// names a connected device, let `MicDeviceSelection.effective` — the pure,
+  /// unit-tested rule — pick the fallback, and read the transport of whichever
+  /// input won. Hardware-adjacent glue in a coverage-excluded file; the decision
+  /// itself stays testable.
+  static func resolveInput(selection: MicDeviceSelection) -> ResolvedInput {
+    // One device lookup, answering both questions: the transport is nil exactly
+    // when no connected device carries the pin (see
+    // `AudioInputDevices.transportType(forUID:)`), so presence is `!= nil` and
+    // the value is reused below instead of read a second time.
+    let pinnedTransport = selection.pinnedUID.flatMap(AudioInputDevices.transportType(forUID:))
+    switch selection.effective(pinnedDevicePresent: pinnedTransport != nil) {
+    case .pinned(let uid):
+      return ResolvedInput(pinnedUID: uid, transportType: pinnedTransport)
+
+    case .systemDefault:
+      if case .pinned = selection {
+        // Graceful degradation, not an error: the pin stays stored, and this
+        // capture records what an un-pinned one would.
+        logger.info("pinned microphone not connected — recording the system default input")
+      }
+      return ResolvedInput(
+        pinnedUID: nil, transportType: AudioInputDevices.systemDefaultTransportType()
+      )
+    }
   }
 
   /// Absorbs the one-off cost of this process's first touch of AVFoundation's
@@ -180,17 +224,22 @@ public actor MicCapture: MicCaptureProtocol {
     // `activeRecorder` yet, and the meter task hasn't started. Meters read stale
     // until refreshed, exactly as in `emitLevel`.
     let gap = await MicLiveness.waitUntilLive(
-      timeout: timeout, clock: ContinuousClock(),
+      timeout: timeout,
+      clock: ContinuousClock(),
       deliveredFrames: { recorder.deliveredFrames },
-      inputPowerDB: { recorder.meteredPowerDB() })
+      inputPowerDB: { recorder.meteredPowerDB() }
+    )
 
     try checkStillWanted(since: generationBeforeBringUp, stage: "the liveness wait")
 
     // The gate's outcome, worded in `MicLiveness` so the line a field report is
     // read off is unit-tested. See `logSummary` for what it has to carry.
     let summary = MicLiveness.logSummary(
-      gap: gap, timeout: timeout, transportType: resolved.transportType,
-      powerDB: recorder.meteredPowerDB())
+      gap: gap,
+      timeout: timeout,
+      transportType: resolved.transportType,
+      powerDB: recorder.meteredPowerDB()
+    )
     Self.logger.log(level: gap == nil ? .error : .info, "\(summary, privacy: .public)")
     // No confirmed signal within the cap: fail CLOSED — tear the capture down and
     // surface the same `.audioCaptureFailed` presentation as the record()-false
@@ -204,7 +253,9 @@ public actor MicCapture: MicCaptureProtocol {
       // extra device lookup.
       throw BlurtError.audioCaptureFailed(
         underlying: MicCaptureError.inputNeverDelivered(
-          deviceName: AudioInputDevices.inputName(pinnedUID: resolved.pinnedUID)))
+          deviceName: AudioInputDevices.inputName(pinnedUID: resolved.pinnedUID)
+        )
+      )
     }
 
     activeRecorder = recorder
@@ -212,16 +263,19 @@ public actor MicCapture: MicCaptureProtocol {
     lastEmittedLevel = nil
     installed = true
     Self.logger.info(
-      "start recording from \(resolved.pinnedUID ?? "system default", privacy: .public)")
+      "start recording from \(resolved.pinnedUID ?? "system default", privacy: .public)"
+    )
     startMeterTimer()
     // The feed of the recorder just installed, so the caller cannot hold one
     // that belongs to no capture.
     return recorder.frames
   }
 
-  public func stop() async throws -> Int {
+  public func stop() async -> Int {
     let linger = activeTailLinger
-    guard let recorder = detachActiveRecorder() else { return 0 }
+    guard let recorder = detachActiveRecorder() else {
+      return 0
+    }
     if linger > .zero {
       // Keep capturing for a moment past key-up so the audio still travelling
       // over the link lands in the recording instead of being truncated. See
@@ -251,7 +305,9 @@ public actor MicCapture: MicCaptureProtocol {
   /// (which can throw, via `stop()`) still conforms and `stopAndCancel`'s
   /// developer-mode failure log keeps working for hosts that take it.
   public func cancelCapture() {
-    guard let recorder = detachActiveRecorder() else { return }
+    guard let recorder = detachActiveRecorder() else {
+      return
+    }
     recorder.stopAndDiscard()
     Self.logger.info("cancelled capture, discarded audio")
   }
@@ -296,47 +352,6 @@ public actor MicCapture: MicCaptureProtocol {
     return activeRecorder
   }
 
-  // MARK: - Input resolution
-
-  /// What a press needs to know about its input, and nothing more: the UID the
-  /// session must pin to (nil for the system default — no pin, or the
-  /// missing-device fallback), and the transport the two transport-keyed
-  /// policies read (`MicLiveness.timeout`, `AudioTransport.tailLinger`).
-  ///
-  /// It used to carry the resolved device's `AudioDeviceID` as well, purely so a
-  /// warm recorder could be checked for still being bound to it. With no warm
-  /// recorder to validate, nothing asks which device this is — only how to open
-  /// it and how its link behaves.
-  struct ResolvedInput {
-    let pinnedUID: String?
-    let transportType: UInt32?
-  }
-
-  /// One trip through the selection policy: check whether the pinned UID still
-  /// names a connected device, let `MicDeviceSelection.effective` — the pure,
-  /// unit-tested rule — pick the fallback, and read the transport of whichever
-  /// input won. Hardware-adjacent glue in a coverage-excluded file; the decision
-  /// itself stays testable.
-  static func resolveInput(selection: MicDeviceSelection) -> ResolvedInput {
-    // One device lookup, answering both questions: the transport is nil exactly
-    // when no connected device carries the pin (see
-    // `AudioInputDevices.transportType(forUID:)`), so presence is `!= nil` and
-    // the value is reused below instead of read a second time.
-    let pinnedTransport = selection.pinnedUID.flatMap(AudioInputDevices.transportType(forUID:))
-    switch selection.effective(pinnedDevicePresent: pinnedTransport != nil) {
-    case .pinned(let uid):
-      return ResolvedInput(pinnedUID: uid, transportType: pinnedTransport)
-    case .systemDefault:
-      if case .pinned = selection {
-        // Graceful degradation, not an error: the pin stays stored, and this
-        // capture records what an un-pinned one would.
-        logger.info("pinned microphone not connected — recording the system default input")
-      }
-      return ResolvedInput(
-        pinnedUID: nil, transportType: AudioInputDevices.systemDefaultTransportType())
-    }
-  }
-
   // MARK: - Level metering
 
   private func startMeterTimer() {
@@ -346,22 +361,28 @@ public actor MicCapture: MicCaptureProtocol {
         // Bail when it's gone: deinit doesn't cancel this task, so the weak
         // capture is what stops an orphaned meter from spinning at ~20 Hz for
         // the rest of the process if a capture is dropped without stop().
-        guard let self else { return }
-        await self.emitLevel()
+        guard let self else {
+          return
+        }
+        await emitLevel()
         try? await Task.sleep(for: Self.meterInterval)
       }
     }
   }
 
   private func emitLevel() {
-    guard let recorder = activeRecorder else { return }
+    guard let recorder = activeRecorder else {
+      return
+    }
     let level = Self.linearLevel(fromPowerDB: recorder.meteredPowerDB())
     // Only yield transitions. `linearLevel` floors room ambient to exactly 0, so a
     // silent stretch would otherwise push the same value 20×/s, resuming the
     // host's `@MainActor` observer each time just to have it discard the
     // duplicate. Hosts still guard their own side (the range contract is the
     // seam's), but the cheapest place to drop a no-op tick is before it crosses.
-    guard level != lastEmittedLevel else { return }
+    guard level != lastEmittedLevel else {
+      return
+    }
     lastEmittedLevel = level
     levelsContinuation.yield(level)
   }

@@ -16,17 +16,24 @@ enum ElementActions {
   /// every control that changes nothing it reads — Calculator's keys went in
   /// twice (2026-11-04). The destructive guard is the caller's, first.
   static func press(
-    _ action: String = "AXPress", fingerprint: (() -> PressFingerprint)?, press: () -> Bool,
-    settle: () async throws -> Void, click: () async throws -> Void
+    _ action: String = "AXPress",
+    fingerprint: (() -> PressFingerprint)?,
+    press: () -> Bool,
+    settle: () async throws -> Void,
+    click: () async throws -> Void
   ) async throws -> String {
     let before = fingerprint?()
     guard press() else {
       try await click()
       return "click: \(action) refused"
     }
-    guard let before, let fingerprint else { return action }
+    guard let before, let fingerprint else {
+      return action
+    }
     try await settle()
-    guard !fingerprint().changed(since: before) else { return action }
+    guard !fingerprint().changed(since: before) else {
+      return action
+    }
     try await click()
     return "\(action), then click: nothing visibly changed"
   }
@@ -36,8 +43,11 @@ enum ElementActions {
   /// lands wherever the cursor is. `setFocus` sets the attribute and gives the
   /// app its beat to move the cursor.
   static func focus(
-    singleLine: Bool, setFocus: () async throws -> Void, isFocused: () -> Bool,
-    click: () async throws -> Void, selectAll: () -> String
+    singleLine: Bool,
+    setFocus: () async throws -> Void,
+    isFocused: () -> Bool,
+    click: () async throws -> Void,
+    selectAll: () -> String
   ) async throws -> String {
     try await setFocus()
     var how = "AX focus"
@@ -45,8 +55,12 @@ enum ElementActions {
       try await click()
       how = "click: AX focus not taken"
     }
-    guard singleLine else { return how + "; a text area keeps its cursor" }
-    guard isFocused() else { return how + "; still not focused, nothing selected" }
+    guard singleLine else {
+      return how + "; a text area keeps its cursor"
+    }
+    guard isFocused() else {
+      return how + "; still not focused, nothing selected"
+    }
     return how + "; " + selectAll()
   }
 
@@ -89,7 +103,9 @@ enum ElementActions {
       found += level.filter { title($0).map(NameMatch.normalized) == key }
       queue += level
     }
-    guard let only = found.onlyElement else { return nil }
+    guard let only = found.onlyElement else {
+      return nil
+    }
     guard !DestructiveGuard.isDestructive(label: name) else { throw VoiceCommandError.refused("choose \(name)") }
     return only
   }
@@ -98,7 +114,10 @@ enum ElementActions {
   /// event, then the pointer back `home` — however it ends: a click that
   /// throws, or a command cancelled during the beat, leaves it where it was.
   static func withPointer(
-    at point: CGPoint, home: CGPoint?, warp: (CGPoint) -> Void, beat: () async throws -> Void,
+    at point: CGPoint,
+    home: CGPoint?,
+    warp: (CGPoint) -> Void,
+    beat: () async throws -> Void,
     _ body: () throws -> Void
   ) async throws {
     warp(point)

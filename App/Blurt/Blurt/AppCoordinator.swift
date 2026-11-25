@@ -63,6 +63,12 @@ final class AppCoordinator {
   /// recording — and the transcript sheet's state for whichever is open.
   let transcripts: TranscriptsModel
 
+  // MARK: - Dictation render
+
+  /// The record start/stop chimes (`CueSoundPlayer` below), and the music pause on the same edges.
+  private let cues = CueSoundPlayer()
+  private let media = MediaPauseController()
+
   /// `components` defaults to the production pipeline, its transcriber dictating
   /// against the account's `dictationOrigin`; `apiKey` defaults to the
   /// production Keychain-backed model. Tests/UI-tests inject deterministic
@@ -81,52 +87,45 @@ final class AppCoordinator {
     self.triggerKeySeams = triggerKeys
     self.apiKey = apiKey
     let info = Bundle.main.infoDictionary ?? [:]
-    let account =
+    let resolvedAccount =
       account
       ?? AssemblyAIAccount(
         configuration: .blurt(infoDictionary: info),
-        dictationHost: OAuthConfiguration.blurtDictationOrigin(infoDictionary: info),
-        apiKey: apiKey)
-    self.account = account
-    let components =
+        apiKey: apiKey,
+        dictationHost: OAuthConfiguration.blurtDictationOrigin(infoDictionary: info)
+      )
+    self.account = resolvedAccount
+    let resolvedComponents =
       components
-      ?? .production(
-        dictationOrigin: account.dictationOrigin,
-        onKeyRejected: { Task { await account.keyWasRejected() } })
+      ?? .production(dictationOrigin: resolvedAccount.dictationOrigin) {
+        Task { await resolvedAccount.keyWasRejected() }
+      }
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
     // delivery, not a delta, so a value dropped under contention is one the next
     // one already contains. (An append-only feed of individual transcripts had to
     // be unbounded, because there every dropped element was a lost dictation.)
-    let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
-      of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1))
-    self.transcriptStream = transcriptStream
+    let (stream, transcriptContinuation) = AsyncStream.makeStream(
+      of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1)
+    )
+    self.transcriptStream = stream
 
-    self.mic = components.mic
+    self.mic = resolvedComponents.mic
     self.transcripts = transcripts ?? TranscriptsModel()
     self.transcripts.setAutoRecordMeetings(MeetingAutoRecordStore().isEnabled)
     self.session = DictationSession(
-      mic: components.mic,
-      transcriber: components.transcriber,
-      injector: components.injector,
+      mic: resolvedComponents.mic,
+      transcriber: resolvedComponents.transcriber,
+      injector: resolvedComponents.injector,
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
-      readinessCheck: apiKey.readinessCheck(),
+      readinessCheck: apiKey.readinessCheck()
+    ) { _, recents in
       // The session stamps and records each entry inside its own actor, so the
       // Recent row's time can't drift if this observer drains the buffer late
       // under contention — and the text needs no separate channel.
-      onTranscriptDelivered: { _, recents in transcriptContinuation.yield(recents) }
-    )
-  }
-
-  /// AppCoordinator lives for the whole app session, so these observers are
-  /// never torn down in practice — but cancelling them here mirrors the care
-  /// taken to keep them `[weak self]`, documenting that their lifetime is owned
-  /// rather than leaked.
-  deinit {
-    phaseObserver?.cancel()
-    levelsObserver?.cancel()
-    transcriptObserver?.cancel()
+      transcriptContinuation.yield(recents)
+    }
   }
 
   func start() {
@@ -142,8 +141,8 @@ final class AppCoordinator {
     // the user opts in via the setup screen's "Allow Microphone Access" button,
     // and the first dictation after that simply pays the build itself.
     if PermissionsChecker.check().microphone {
-      let mic = mic
-      Task { await mic.warmUp() }
+      let capture = mic
+      Task { await capture.warmUp() }
     }
     // Note: no initial overlay render. The overlay pill stays hidden until the
     // app is fully configured — `WizardController` calls `showOverlay()` on the
@@ -159,21 +158,7 @@ final class AppCoordinator {
   /// than a Carbon global hotkey: the latter leaks the trigger's auto-repeat key
   /// events into the focused app while held.
   private func startDictationDriver() {
-    // Every trigger command goes through the read-aloud router, which forwards
-    // a dictating key's commands to `session.submit` and handles read and ask
-    // keys itself.
-    let router =
-      triggerKeySeams.map {
-        SelectionSpeechRouter(
-          session: session, speaker: $0.speaker, rewriter: $0.rewriter, composer: $0.composer, planner: $0.planner,
-          performer: $0.performer, readSelection: $0.readSelection)
-      }
-      ?? SelectionSpeechRouter(
-        session: session,
-        // Every read is kept, findable and playable from the Recent list.
-        clips: ReadClipSink(directory: TranscriptStore.readAloudDirectory) { [weak self] clip in
-          Task { @MainActor in self?.transcripts.saveReadClip(clip) }
-        })
+    let router = makeSpeechRouter()
     keyTap = DictationKeyTap(
       // The key rides the press, and the session resolves its style for that one
       // dictation (`PressStyle`); the main window's selection is never written.
@@ -193,6 +178,44 @@ final class AppCoordinator {
     )
     router.syncGateAfterSession = { [weak self] in self?.keyTap?.syncAfterTerminalPhase() }
     router.resetGate = { [weak self] in self?.keyTap?.resetGate() }
+    wirePill(to: router)
+    speechRouter = router
+    // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
+    // itself what surfaces the system permission prompt, so creating the tap at
+    // launch pops that prompt before the user ever reaches the "Grant
+    // Accessibility" button in onboarding. The tap is instead installed by
+    // `showOverlay()`, which the wizard calls on the transition into "ready" —
+    // by then the process is trusted. On an already-configured launch that
+    // transition fires from `WizardController.init`, so the tap still comes up.
+  }
+
+  /// Every trigger command goes through the read-aloud router, which forwards
+  /// a dictating key's commands to `session.submit` and handles read and ask
+  /// keys itself.
+  private func makeSpeechRouter() -> SelectionSpeechRouter {
+    guard let seams = triggerKeySeams else {
+      return SelectionSpeechRouter(
+        session: session,
+        // Every read is kept, findable and playable from the Recent list.
+        clips: ReadClipSink(directory: TranscriptStore.readAloudDirectory) { [weak self] clip in
+          Task { @MainActor in self?.transcripts.saveReadClip(clip) }
+        }
+      )
+    }
+    return SelectionSpeechRouter(
+      session: session,
+      speaker: seams.speaker,
+      rewriter: seams.rewriter,
+      composer: seams.composer,
+      planner: seams.planner,
+      performer: seams.performer,
+      readSelection: seams.readSelection
+    )
+  }
+
+  /// Hooks the router's reads and jobs up to the pill, the cues and the music
+  /// pause.
+  private func wirePill(to router: SelectionSpeechRouter) {
     // A read wears the dictation pill — orb and meter, the meter following the
     // voice — between the same start and stop cues. Pill first, then the cue,
     // as `render(_:)` orders them.
@@ -202,34 +225,30 @@ final class AppCoordinator {
       self?.cues.speechStarted()
     }
     router.speechEnded = { [weak self] in
-      guard let self else { return }
-      self.isReadingAloud = false
+      guard let self else {
+        return
+      }
+      isReadingAloud = false
       // Back to what the session is doing — a capture or transcription still
       // under way — and never a dictation's old notice (the engine's rule).
-      self.overlay?.show(state: self.lastPhase.overlayStateAfterSpeech)
-      self.cues.speechEnded()
+      overlay?.show(state: lastPhase.overlayStateAfterSpeech)
+      cues.speechEnded()
     }
     // A rewrite or a command shows as working while it runs, then as its
     // outcome: Pasted (Done, for a command), Copied or the error, the notices a
     // dictation ends with. Abandoned by a press, the pill goes back to what the
     // session is doing.
     router.jobPill = { [weak self] state in
-      guard let self else { return }
-      self.overlay?.show(state: state ?? self.lastPhase.overlayStateAfterSpeech)
+      guard let self else {
+        return
+      }
+      overlay?.show(state: state ?? lastPhase.overlayStateAfterSpeech)
     }
     router.speechLevel = { [weak self] level in self?.overlay?.pushLevel(level) }
     // An ask's music stays paused through its answer, a job's until it's done.
     router.pressSettled = { [weak self] in self?.media.pressSettled() }
     // The pill just goes away on a failed read, so say something went wrong.
     router.speechFailed = { _ in NSSound.beep() }
-    speechRouter = router
-    // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
-    // itself what surfaces the system permission prompt, so creating the tap at
-    // launch pops that prompt before the user ever reaches the "Grant
-    // Accessibility" button in onboarding. The tap is instead installed by
-    // `showOverlay()`, which the wizard calls on the transition into "ready" —
-    // by then the process is trusted. On an already-configured launch that
-    // transition fires from `WizardController.init`, so the tap still comes up.
   }
 
   /// Observes the session's phase stream (drives the pill + menu bar), the mic's
@@ -246,28 +265,17 @@ final class AppCoordinator {
 
   private func observePhases() -> Task<Void, Never> {
     Task { [weak self] in
-      guard let phases = await self?.session.phaseStream() else { return }
-      for await phase in phases {
-        guard let self else { return }
-        if Task.isCancelled { return }
-        self.render(phase)
+      guard let phases = await self?.session.phaseStream() else {
+        return
       }
-    }
-  }
-
-  /// Spawns a MainActor observer that runs `action` for each value of `stream`
-  /// until cancelled — the shared shape behind the level/transcript observers.
-  /// (`observePhases` stays separate: it must `await` the session for its
-  /// stream before it can loop.)
-  private func observe<Value>(
-    _ stream: AsyncStream<Value>,
-    _ action: @escaping @MainActor (AppCoordinator, Value) -> Void
-  ) -> Task<Void, Never> {
-    Task { [weak self] in
-      for await value in stream {
-        guard let self else { return }
-        if Task.isCancelled { return }
-        action(self, value)
+      for await phase in phases {
+        guard let self else {
+          return
+        }
+        if Task.isCancelled {
+          return
+        }
+        render(phase)
       }
     }
   }
@@ -296,19 +304,6 @@ final class AppCoordinator {
     overlay?.hide()
   }
 
-  /// Re-attempts the key tap install after a failed `ensureRunning()`.
-  /// `showOverlay()` runs once, on the not-ready→ready transition; if
-  /// `CGEvent.tapCreate` fails at that moment (a fresh Accessibility grant can
-  /// lag behind `AXIsProcessTrusted()` flipping true), nothing else would try
-  /// again — `isReady` stays true, so the transition never re-fires and the
-  /// hotkey stayed dead until relaunch. The wizard's lifetime permission poll
-  /// calls this on each tick while the app is ready, so the install keeps being
-  /// retried until it lands. No-op once the tap exists.
-  func retryKeyTapInstallIfNeeded() {
-    guard let keyTap, !keyTap.isInstalled else { return }
-    keyTap.ensureRunning()
-  }
-
   /// Called when the user rebinds the dictation trigger in the Shortcut picker,
   /// so the event tap starts matching the new key. The shortcut no longer gates
   /// readiness (it has a default and lives in Settings), so there's nothing else
@@ -320,24 +315,6 @@ final class AppCoordinator {
     // can mean a new voice to load.
     cues.refresh()
   }
-
-  /// Turns macOS's own 🌐 action off while `fn` is a trigger, and back on
-  /// otherwise (see `GlobeKeyOverride`). Also run from `start()`, so the relaunch
-  /// after a settings reset restores the user's setting.
-  private func syncGlobeKeyOverride() {
-    #if UITEST_HOOKS
-      // UI tests set fn to every action; the 🌐 setting it writes is the Mac's
-      // own, one per login, and no test may change it.
-      if UITestMode.isActive { return }
-    #endif
-    GlobeKeyOverride().sync(boundKeys: TriggerKeyBindings().enabledKeys)
-  }
-
-  // MARK: - Dictation render
-
-  /// The record start/stop chimes (`CueSoundPlayer` below), and the music pause on the same edges.
-  private let cues = CueSoundPlayer()
-  private let media = MediaPauseController()
 
   /// Called when the user changes a key's sound in Settings: reload that key's
   /// cue players and preview the new voice so the choice is audible immediately.
@@ -370,8 +347,8 @@ final class AppCoordinator {
     // A rewrite press's instruction transcribes as "Rewriting", and a command
     // press's as "Working", not "Transcribing".
     if let state = phase.overlayState(
-      whileSpeaking: speechRouter?.ownsPill ?? false, processingAs: speechRouter?.processingState)
-    {
+      whileSpeaking: speechRouter?.ownsPill ?? false, processingAs: speechRouter?.processingState
+    ) {
       overlay?.show(state: state)
     }
     // Mirror the phase onto the menu bar indicator (mapping lives in the engine,
@@ -396,5 +373,15 @@ final class AppCoordinator {
     // phase, not just the terminal ones, so it can tell an earlier dictation
     // still finishing from the end of a request it is waiting on.
     speechRouter?.sessionPhaseChanged(phase)
+  }
+
+  /// AppCoordinator lives for the whole app session, so these observers are
+  /// never torn down in practice — but cancelling them here mirrors the care
+  /// taken to keep them `[weak self]`, documenting that their lifetime is owned
+  /// rather than leaked.
+  deinit {
+    phaseObserver?.cancel()
+    levelsObserver?.cancel()
+    transcriptObserver?.cancel()
   }
 }

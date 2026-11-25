@@ -182,7 +182,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 
 - **Dock app first — no `LSUIElement`, no menu-bar-_only_ mode.** Blurt has a
   `MenuBarExtra` status item (dictation indicator + hotkey discoverability menu,
-  in `MenuBar/MenuBarScene.swift`) layered on the Dock icon. Keep the Dock icon
+  in `MenuBar/`) layered on the Dock icon. Keep the Dock icon
   as the guaranteed entry point: the notch can hide a status item on a crowded
   menu bar, so nothing may depend on it being visible. A menu-bar-_only_ variant
   (no Dock icon) was tried and reverted twice for that reason — don't drop the

@@ -11,10 +11,12 @@ public struct TriggerActivationStore {
 
   private let defaults: UserDefaults
 
+  /// A store over `defaults` (a suite of its own in tests).
   public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }
 
+  /// Saves `activation` as the mode every trigger key is pressed under.
   public func setActivation(_ activation: TriggerActivation) {
     defaults.set(activation.rawValue, forKey: Self.defaultsKey)
   }

@@ -12,7 +12,6 @@ import Testing
 /// auto-release fires).
 @Suite("Hotkey press/release races", .timeLimit(.minutes(1)))
 struct HotkeyRaceTests {
-
   // Fresh doubles for every test: Swift Testing builds a new suite instance per test.
   private let mic = GatedStartMic()
   private let injector = StubInjector()
@@ -32,7 +31,7 @@ struct HotkeyRaceTests {
   }
 
   @Test("release during mic.start is honored, not dropped")
-  func releaseDuringStartIsHonored() async throws {
+  func releaseDuringStartIsHonored() async {
     let pressed = await parkPress()
     // Fast tap: the release arrives before .recording is set. It queues behind
     // the in-flight press (awaiting it inline would deadlock against the gate).
@@ -49,7 +48,7 @@ struct HotkeyRaceTests {
   }
 
   @Test("cancel during mic.start is honored, not dropped")
-  func cancelDuringStartIsHonored() async throws {
+  func cancelDuringStartIsHonored() async {
     let pressed = await parkPress()
     // Fast tap: the cancel arrives before .recording is set. It queues behind
     // the in-flight press and ends the freshly started recording.
@@ -70,7 +69,7 @@ struct HotkeyRaceTests {
   /// press after the first, where the non-terminal `.recording` phase drops it
   /// — the mic must never be started twice.
   @Test("a second press during mic.start is dropped, not double-started")
-  func secondPressDuringStartIsDropped() async throws {
+  func secondPressDuringStartIsDropped() async {
     let pressed = await parkPress()
     // Queues behind the in-flight press (awaiting it inline would deadlock
     // against the gate) and must be dropped when its turn comes.
@@ -91,7 +90,7 @@ struct HotkeyRaceTests {
   /// tap ends `.cancelled` with nothing transcribed — not a full
   /// transcribe→inject run.
   @Test("cancel overrides a pending release during mic.start")
-  func cancelOverridesPendingReleaseDuringStart() async throws {
+  func cancelOverridesPendingReleaseDuringStart() async {
     let pressed = await parkPress()
     // Both queue behind the in-flight press. Waiting until the cancel has
     // *recorded* its request — the condition itself, rather than a fixed yield

@@ -11,7 +11,7 @@ struct CommandMatchingTests {
   private struct Item {
     let id: Int
     var labels: [String] = []
-    var children: [Item] = []
+    var children: [Self] = []
   }
 
   @Test("of two names the same once folded, the first listed wins")
@@ -29,14 +29,19 @@ struct CommandMatchingTests {
   func exactMatchStopsTheWalk() {
     let root = Item(
       id: 0,
-      children: [Item(id: 1, labels: ["Save"]), Item(id: 2, labels: ["Save As…"]), Item(id: 3, labels: ["Save"])])
+      children: [Item(id: 1, labels: ["Save"]), Item(id: 2, labels: ["Save As…"]), Item(id: 3, labels: ["Save"])]
+    )
     var asked: [Int] = []
     let found = ElementSearch.best(
-      named: "save", from: root, children: \.children,
-      labels: {
-        asked.append($0.id)
-        return $0.labels
-      }, pressable: { _ in true })
+      named: "save",
+      from: root,
+      children: \.children,
+      labels: { node in
+        asked.append(node.id)
+        return node.labels
+      },
+      pressable: { _ in true }
+    )
     #expect(found?.id == 1)
     #expect(asked == [0, 1])
   }
@@ -45,8 +50,13 @@ struct CommandMatchingTests {
   func callerStopEndsTheSearch() {
     let root = Item(id: 0, children: [Item(id: 1, labels: ["Send"])])
     let found = ElementSearch.best(
-      named: "send", from: root, children: \.children, labels: \.labels, pressable: { _ in true },
-      shouldStop: { true })
+      named: "send",
+      from: root,
+      children: \.children,
+      labels: \.labels,
+      pressable: { _ in true },
+      shouldStop: { true }
+    )
     #expect(found == nil)
   }
 
@@ -54,9 +64,11 @@ struct CommandMatchingTests {
   func nearerOfTwoTheSameLabelWins() {
     let root = Item(
       id: 0,
-      children: [Item(id: 1, children: [Item(id: 3, labels: ["Send Now"])]), Item(id: 2, labels: ["Send Now"])])
+      children: [Item(id: 1, children: [Item(id: 3, labels: ["Send Now"])]), Item(id: 2, labels: ["Send Now"])]
+    )
     let found = ElementSearch.best(
-      named: "send", from: root, children: \.children, labels: \.labels, pressable: { _ in true })
+      named: "send", from: root, children: \.children, labels: \.labels
+    ) { _ in true }
     #expect(found?.id == 2)
   }
 

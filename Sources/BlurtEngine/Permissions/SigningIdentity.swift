@@ -42,11 +42,17 @@
     /// the result to /Applications by hand: they re-grant per rebuild, and
     /// `tccutil reset Accessibility dev.alex.blurt.dev` is the way out.
     public static func current() -> String? {
-      guard let code = staticCodeForSelf() else { return nil }
+      guard let code = staticCodeForSelf() else {
+        return nil
+      }
       // A team identifier is present exactly when the signature isn't ad-hoc, so it
       // is the probe for that carve-out — never the recorded value.
-      guard teamIdentifier(of: code) != nil else { return nil }
-      guard let requirement = designatedRequirement(of: code) else { return nil }
+      guard teamIdentifier(of: code) != nil else {
+        return nil
+      }
+      guard let requirement = designatedRequirement(of: code) else {
+        return nil
+      }
       return requirementPrefix + requirement
     }
 
@@ -54,10 +60,14 @@
     /// `Security` handshake fails.
     static func staticCodeForSelf() -> SecStaticCode? {
       var code: SecCode?
-      guard unsafe SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else { return nil }
+      guard unsafe SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else {
+        return nil
+      }
       var staticCode: SecStaticCode?
       guard unsafe SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode
-      else { return nil }
+      else {
+        return nil
+      }
       return staticCode
     }
 
@@ -67,7 +77,9 @@
       let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
       guard unsafe SecCodeCopySigningInformation(code, flags, &info) == errSecSuccess,
         let dict = info as? [String: Any]
-      else { return nil }
+      else {
+        return nil
+      }
       return dict[kSecCodeInfoTeamIdentifier as String] as? String
     }
 
@@ -86,10 +98,14 @@
       var requirement: SecRequirement?
       guard unsafe SecCodeCopyDesignatedRequirement(code, SecCSFlags(), &requirement) == errSecSuccess,
         let requirement
-      else { return nil }
+      else {
+        return nil
+      }
       var text: CFString?
       guard unsafe SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess, let text
-      else { return nil }
+      else {
+        return nil
+      }
       return text as String
     }
   }

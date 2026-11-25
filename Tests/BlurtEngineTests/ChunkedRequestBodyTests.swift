@@ -10,7 +10,6 @@ import Testing
 /// lint file-length budget.
 @Suite("Chunked request body", .timeLimit(.minutes(1)))
 struct ChunkedRequestBodyTests {
-
   @Test("the body pipe delivers every chunk, in order")
   func pipeDeliversChunksInOrder() async throws {
     let body = try ChunkedRequestBody()
@@ -47,7 +46,7 @@ struct ChunkedRequestBodyTests {
     body.input.close()
 
     await #expect(throws: (any Error).self) {
-      try await body.drain(.chunks(Data(count: 128 * 1024)))
+      try await body.drain(.chunks(Data(count: 128 * 1_024)))
     }
   }
 
@@ -57,7 +56,7 @@ struct ChunkedRequestBodyTests {
     // Nobody ever reads, so the pipe fills and the writer lands in its
     // backpressure loop. Cancellation is what has to get it out — `send` relies
     // on exactly this when the response arrives before the body is done.
-    let writer = Task { try await body.drain(.chunks(Data(count: 512 * 1024))) }
+    let writer = Task { try await body.drain(.chunks(Data(count: 512 * 1_024))) }
     // Let it reach the loop before cancelling, so this exercises the wait rather
     // than the pre-flight `checkCancellation`.
     try await Task.sleep(for: .milliseconds(50))
@@ -75,7 +74,7 @@ struct ChunkedRequestBodyTests {
     // far larger than the pipe, so the writer is certainly mid-write.
     let (data, response) = try await ChunkedRequestBody.send(
       URLRequest(url: URL(staticString: "https://example.invalid")),
-      body: .chunks(Data(count: 512 * 1024)),
+      body: .chunks(Data(count: 512 * 1_024)),
       delegate: nil
     ) { request, _ in
       let url = try #require(request.url)
@@ -97,7 +96,7 @@ struct ChunkedRequestBodyTests {
     // sending" — the substitution the precedence rule exists to prevent.
     let (data, response) = try await ChunkedRequestBody.send(
       URLRequest(url: URL(staticString: "https://example.invalid")),
-      body: .chunks(Data(count: 512 * 1024)),
+      body: .chunks(Data(count: 512 * 1_024)),
       delegate: nil
     ) { request, _ in
       request.httpBodyStream?.open()
@@ -196,34 +195,11 @@ extension ChunkedRequestBodyTests {
 /// readers on a small CI runner starve the pool, stalling every other test in
 /// the run past its time budget.
 private func readToEnd(_ stream: InputStream?) async -> Data {
-  guard let stream else { return Data() }
+  guard let stream else {
+    return Data()
+  }
   let reader = BlockingReader(stream)
   return await withCheckedContinuation { continuation in
     Thread.detachNewThread { continuation.resume(returning: reader.read()) }
   }
 }
-
-/// Carries the stream to the reading thread. `@unchecked Sendable` by
-/// confinement: only that thread touches it once it is handed over.
-private final class BlockingReader: @unchecked Sendable {
-  private let stream: InputStream
-
-  init(_ stream: InputStream) { self.stream = stream }
-
-  func read() -> Data {
-    stream.open()
-    defer { stream.close() }
-    var received = Data()
-    var buffer = [UInt8](repeating: 0, count: 64)
-    while true {
-      let count = unsafe stream.read(&buffer, maxLength: buffer.count)
-      if count <= 0 { break }
-      received.append(contentsOf: buffer[0..<count])
-    }
-    return received
-  }
-}
-
-/// Stands in for whatever the body producer might fail with — an unencodable
-/// `config` part, in production.
-private struct ProducerFailure: Error {}

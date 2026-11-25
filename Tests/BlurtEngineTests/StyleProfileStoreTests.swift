@@ -90,8 +90,8 @@ struct StyleProfileStoreTests {
   @Test("writing more than the limit keeps the first profiles")
   func writeTrimsToTheProfileLimit() {
     let store = makeStore()
-    store.profiles = (1...StyleProfileStore.profileLimit + 3).map {
-      StyleProfile(name: "Style \($0)", instructions: "instruction \($0)")
+    store.profiles = (1...StyleProfileStore.profileLimit + 3).map { index in
+      StyleProfile(name: "Style \(index)", instructions: "instruction \(index)")
     }
     #expect(store.profiles.count == StyleProfileStore.profileLimit)
     #expect(store.profiles.last?.name == "Style \(StyleProfileStore.profileLimit)")
@@ -130,7 +130,8 @@ struct StyleProfileStoreTests {
     let store = makeStore()
     store.profiles = [
       StyleProfile(
-        name: String(repeating: "n", count: StyleProfileStore.nameLimit + 10), instructions: "a"),
+        name: String(repeating: "n", count: StyleProfileStore.nameLimit + 10), instructions: "a"
+      ),
       StyleProfile(name: "   ", instructions: "b"),
     ]
     #expect(store.profiles.first?.name.count == StyleProfileStore.nameLimit)

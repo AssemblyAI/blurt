@@ -5,6 +5,29 @@ import os
 /// switch, and the one place a rewrite that is not a rewrite of the speech
 /// (`RewriteGrounding`) is turned away.
 extension AssemblyAITranscriber {
+  /// The choice itself, pure: the verbatim transcript, or the rewrite when
+  /// enhanced transcripts are on and there is something to rewrite.
+  ///
+  /// A dictation that caught no speech comes back with an empty `text` — and,
+  /// since every request carries the user's style instruction, a rewrite the
+  /// model wrote from the instruction alone. Nothing spoken means nothing to
+  /// paste, whatever the rewrite says.
+  ///
+  /// Speech the cleanup rules empty out ("Yeah.") gets the same rewrite — the
+  /// instruction's own tail, the user's style preferences word for word, which
+  /// on the phone was pasted as a dictation (2026-11-05). `instruction` is what
+  /// the request carried; a rewrite that is a run of it, or that says nothing
+  /// ("."), is not a rewrite of the speech and loses to the verbatim transcript
+  /// (`RewriteGrounding`).
+  static func chooseTranscript(verbatim: String, rewrite: String?, enhanced: Bool, instruction: String? = nil)
+    -> String
+  {
+    guard enhanced, verbatim.trimmedNonEmpty() != nil, let rewritten = rewrite.trimmedNonEmpty() else {
+      return verbatim
+    }
+    return RewriteGrounding.isSpeech(rewritten, instruction: instruction) ? rewritten : verbatim
+  }
+
   /// Which of the two transcripts in the response to paste.
   ///
   /// **This is the enhanced-transcripts switch.** The config always asks for the
@@ -32,38 +55,17 @@ extension AssemblyAITranscriber {
   /// that is that instruction read back (`RewriteGrounding`) is caught here too.
   func transcript(from response: DictationResponse, enhanced: Bool, instruction: String?) -> String {
     let chosen = Self.chooseTranscript(
-      verbatim: response.text, rewrite: response.llmResponse, enhanced: enhanced, instruction: instruction)
+      verbatim: response.text, rewrite: response.llmResponse, enhanced: enhanced, instruction: instruction
+    )
     if enhanced, chosen != response.llmResponse {
       if let error = response.llmError {
         Self.log.warning(
-          "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
+          "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript"
+        )
       } else if response.llmResponse.trimmedNonEmpty() != nil {
         Self.log.notice("llm rewrite is not a rewrite of the speech; using verbatim transcript")
       }
     }
     return chosen
-  }
-
-  /// The choice itself, pure: the verbatim transcript, or the rewrite when
-  /// enhanced transcripts are on and there is something to rewrite.
-  ///
-  /// A dictation that caught no speech comes back with an empty `text` — and,
-  /// since every request carries the user's style instruction, a rewrite the
-  /// model wrote from the instruction alone. Nothing spoken means nothing to
-  /// paste, whatever the rewrite says.
-  ///
-  /// Speech the cleanup rules empty out ("Yeah.") gets the same rewrite — the
-  /// instruction's own tail, the user's style preferences word for word, which
-  /// on the phone was pasted as a dictation (2026-11-05). `instruction` is what
-  /// the request carried; a rewrite that is a run of it, or that says nothing
-  /// ("."), is not a rewrite of the speech and loses to the verbatim transcript
-  /// (`RewriteGrounding`).
-  static func chooseTranscript(verbatim: String, rewrite: String?, enhanced: Bool, instruction: String? = nil)
-    -> String
-  {
-    guard enhanced, verbatim.trimmedNonEmpty() != nil, let rewrite = rewrite.trimmedNonEmpty() else {
-      return verbatim
-    }
-    return RewriteGrounding.isSpeech(rewrite, instruction: instruction) ? rewrite : verbatim
   }
 }

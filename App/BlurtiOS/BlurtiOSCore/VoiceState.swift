@@ -39,27 +39,6 @@ package nonisolated struct VoiceState: Equatable {
   /// The error's own words, for VoiceOver.
   package let message: String?
 
-  package init(phase: Phase, isReady: Bool, level: Float = 0, message: String? = nil) {
-    self.phase = phase
-    self.isReady = isReady
-    self.level = level
-    self.message = message
-  }
-
-  /// The keyboard's: from the phase the app published.
-  package init(snapshot: PhaseSnapshot, isReady: Bool) {
-    self.init(phase: snapshot.state, isReady: isReady, level: Float(snapshot.level), message: snapshot.message)
-  }
-
-  /// The app's: from the engine's overlay state, mapped as the app publishes
-  /// it to the keyboard.
-  package init(overlay: OverlayUIState, windowOpen: Bool, level: Float) {
-    let phase = Phase(overlay)
-    self.init(
-      phase: phase, isReady: windowOpen, level: phase == .recording ? level : 0,
-      message: PhaseSnapshot.message(for: overlay))
-  }
-
   /// The meter is up and is the key.
   package var isRecording: Bool { isReady && phase == .recording }
 
@@ -77,10 +56,17 @@ package nonisolated struct VoiceState: Equatable {
 
   package var ring: Ring {
     switch phase {
-    case .error: return .solid(.error)
-    case .pasted, .copied: return .solid(.ok)
-    case .connecting, .processing: return isReady ? .sweeping : .still
-    case .idle, .recording: return .still
+    case .error:
+      return .solid(.error)
+
+    case .pasted, .copied:
+      return .solid(.ok)
+
+    case .connecting, .processing:
+      return isReady ? .sweeping : .still
+
+    case .idle, .recording:
+      return .still
     }
   }
 
@@ -90,9 +76,14 @@ package nonisolated struct VoiceState: Equatable {
   /// beneath the dimmed key says which.
   package var glyph: Glyph? {
     switch phase {
-    case .copied: return isReady ? .clipboard : nil
-    case .error: return .exclamation
-    case .idle, .connecting, .recording, .processing, .pasted: return nil
+    case .copied:
+      return isReady ? .clipboard : nil
+
+    case .error:
+      return .exclamation
+
+    case .idle, .connecting, .recording, .processing, .pasted:
+      return nil
     }
   }
 
@@ -100,12 +91,38 @@ package nonisolated struct VoiceState: Equatable {
   package var dimmed: Bool { !isReady }
 
   package var accessibilityLabel: String {
-    guard isReady else { return "Start Blurt" }
+    guard isReady else {
+      return "Start Blurt"
+    }
     return isRecording ? "Stop dictation" : "Dictate"
   }
 
   package var accessibilityValue: String {
     phase == .error ? message ?? "Dictation failed." : ""
+  }
+
+  package init(phase: Phase, isReady: Bool, level: Float = 0, message: String? = nil) {
+    self.phase = phase
+    self.isReady = isReady
+    self.level = level
+    self.message = message
+  }
+
+  /// The keyboard's: from the phase the app published.
+  package init(snapshot: PhaseSnapshot, isReady: Bool) {
+    self.init(phase: snapshot.state, isReady: isReady, level: Float(snapshot.level), message: snapshot.message)
+  }
+
+  /// The app's: from the engine's overlay state, mapped as the app publishes
+  /// it to the keyboard.
+  package init(overlay: OverlayUIState, windowOpen: Bool, level: Float) {
+    let mapped = Phase(overlay)
+    self.init(
+      phase: mapped,
+      isReady: windowOpen,
+      level: mapped == .recording ? level : 0,
+      message: PhaseSnapshot.message(for: overlay)
+    )
   }
 }
 
@@ -113,8 +130,11 @@ extension PhaseSnapshot.State {
   /// Nothing in flight: a notice, or rest.
   nonisolated package var isSettled: Bool {
     switch self {
-    case .idle, .pasted, .copied, .error: true
-    case .connecting, .recording, .processing: false
+    case .idle, .pasted, .copied, .error:
+      true
+
+    case .connecting, .recording, .processing:
+      false
     }
   }
 
@@ -125,13 +145,26 @@ extension PhaseSnapshot.State {
     self =
       switch overlay {
       // Reading aloud, rewriting, composing and commands are the Mac's alone, so the iPhone never sees them.
-      case .idle, .speaking, .rewriting, .composing, .commanding, .done, .noted: .idle
-      case .connecting: .connecting
-      case .recording: .recording
-      case .processing: .processing
-      case .pasted: .pasted
-      case .noTarget: .copied
-      case .error: .error
+      case .idle, .speaking, .rewriting, .composing, .commanding, .done, .noted:
+        .idle
+
+      case .connecting:
+        .connecting
+
+      case .recording:
+        .recording
+
+      case .processing:
+        .processing
+
+      case .pasted:
+        .pasted
+
+      case .noTarget:
+        .copied
+
+      case .error:
+        .error
       }
   }
 }
@@ -141,7 +174,9 @@ extension PhaseSnapshot {
   /// silent mic's sentence, with the device name, included).
   nonisolated package static func message(for overlay: OverlayUIState) -> String? {
     switch overlay {
-    case .error(let message, _): message
+    case .error(let message, _):
+      message
+
     case .idle, .connecting, .recording, .processing, .speaking, .rewriting, .composing, .commanding, .pasted,
       .noTarget, .done, .noted:
       nil

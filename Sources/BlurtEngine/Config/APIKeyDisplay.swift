@@ -29,21 +29,15 @@ public enum APIKeyDisplay: Equatable, Sendable {
   /// credential worth identifying by its ending.
   public static let minimumLengthToMask = revealedTailLength * 2
 
-  /// Resolves what to show for the stored key. Trims first (the engine's shared
-  /// rule), so a whitespace-only value reads as no key at all — the same way
-  /// `APIKeyGateway` treats it.
-  public static func resolve(key: String?) -> APIKeyDisplay {
-    guard let key = key?.trimmedNonEmpty() else { return .notConnected }
-    guard key.count >= minimumLengthToMask else { return .connected(maskedTail: nil) }
-    return .connected(maskedTail: "••••\(key.suffix(revealedTailLength))")
-  }
-
   /// Whether a key is stored. Drives the first-connect vs. rotate wording below
   /// and the row's accessibility identifiers.
   public var isConnected: Bool {
     switch self {
-    case .notConnected: false
-    case .connected: true
+    case .notConnected:
+      false
+
+    case .connected:
+      true
     }
   }
 
@@ -51,8 +45,11 @@ public enum APIKeyDisplay: Equatable, Sendable {
   /// question a checkmark can't answer), otherwise plain prose.
   public var statusText: String {
     switch self {
-    case .notConnected: "Not connected"
-    case .connected(let maskedTail): maskedTail ?? "Connected"
+    case .notConnected:
+      "Not connected"
+
+    case .connected(let maskedTail):
+      maskedTail ?? "Connected"
     }
   }
 
@@ -61,8 +58,11 @@ public enum APIKeyDisplay: Equatable, Sendable {
   /// reading as a sentence). False for the bare "Connected"/"Not connected".
   public var rendersIdentifier: Bool {
     switch self {
-    case .connected(let maskedTail): maskedTail != nil
-    case .notConnected: false
+    case .connected(let maskedTail):
+      maskedTail != nil
+
+    case .notConnected:
+      false
     }
   }
 
@@ -71,7 +71,9 @@ public enum APIKeyDisplay: Equatable, Sendable {
   /// things — the same split as `OverlayUIState.accessibilityLabel`.
   public var accessibilityLabel: String {
     switch self {
-    case .notConnected: "Not connected"
+    case .notConnected:
+      "Not connected"
+
     case .connected(let maskedTail):
       // Drop the mask bullets and name just the revealed characters, which is
       // what a screen-reader user needs to identify the account.
@@ -99,5 +101,18 @@ public enum APIKeyDisplay: Equatable, Sendable {
     isConnected
       ? "Paste a new key to replace the one Blurt is using."
       : "Paste an API key from your AssemblyAI dashboard. A free-tier key works."
+  }
+
+  /// Resolves what to show for the stored key. Trims first (the engine's shared
+  /// rule), so a whitespace-only value reads as no key at all — the same way
+  /// `APIKeyGateway` treats it.
+  public static func resolve(key: String?) -> Self {
+    guard let trimmed = key?.trimmedNonEmpty() else {
+      return .notConnected
+    }
+    guard trimmed.count >= minimumLengthToMask else {
+      return .connected(maskedTail: nil)
+    }
+    return .connected(maskedTail: "••••\(trimmed.suffix(revealedTailLength))")
   }
 }

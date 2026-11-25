@@ -39,7 +39,8 @@ struct MicCaptureFormatTests {
 
   // MARK: - dBFS → linear level
 
-  @Test func fullScalePowerMapsToOne() {
+  @Test
+  func fullScalePowerMapsToOne() {
     #expect(MicCapture.linearLevel(fromPowerDB: 0) == 1)
   }
 
@@ -50,13 +51,15 @@ struct MicCaptureFormatTests {
     #expect(MicCapture.linearLevel(fromPowerDB: powerDB) == 0)
   }
 
-  @Test func aboveFullScaleClampsToOne() {
+  @Test
+  func aboveFullScaleClampsToOne() {
     // dBFS can momentarily read above 0 on clipping input; the meter must pin
     // at full bars, not overshoot past the 0…1 range the overlay expects.
     #expect(MicCapture.linearLevel(fromPowerDB: 3) == 1)
   }
 
-  @Test func midScaleMapsLinearlyInDecibels() {
+  @Test
+  func midScaleMapsLinearlyInDecibels() {
     // Linear across [-50 dB, 0 dB]: halfway (-25 dB) ≈ 0.5, and louder reads higher.
     #expect(abs(MicCapture.linearLevel(fromPowerDB: -25) - 0.5) < 0.01)
     #expect(MicCapture.linearLevel(fromPowerDB: -11) > MicCapture.linearLevel(fromPowerDB: -22))
@@ -64,14 +67,16 @@ struct MicCaptureFormatTests {
 
   // MARK: - Error wording
 
-  @Test func noInputDeviceHasHumanReadableMessage() {
+  @Test
+  func noInputDeviceHasHumanReadableMessage() {
     // This message reaches the overlay via BlurtError.audioCaptureFailed's
     // interpolation of the underlying error, so it must read like a sentence,
     // not the default "(… error 0.)" gibberish a bare enum produces.
     #expect(MicCaptureError.noInputDevice.errorDescription == "No microphone is available.")
   }
 
-  @Test func inputNeverDeliveredNamesTheSilentDevice() {
+  @Test
+  func inputNeverDeliveredNamesTheSilentDevice() {
     // The liveness gate's fail-closed outcome — same route to the pill as
     // noInputDevice above, and the same sentence requirement. Naming the device
     // is the point: a silent aggregate or loopback input is a settings problem,
@@ -81,7 +86,8 @@ struct MicCaptureFormatTests {
         == "Aggregate Device isn't sending any audio.")
   }
 
-  @Test func inputNeverDeliveredWithoutANameStillReadsAsASentence() {
+  @Test
+  func inputNeverDeliveredWithoutANameStillReadsAsASentence() {
     // The device vanished before its name could be read. Together with the two
     // above, keeps MicCaptureError.swift's errorDescription fully covered.
     #expect(

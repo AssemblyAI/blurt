@@ -24,12 +24,18 @@ import UIKit
 final class PictureInPictureKeeper: NSObject {
   nonisolated private static let log = HostIdentity.current.logger("PictureInPicture")
   /// Typeless's content aspect: 369 pt over 0.079 pt ≈ 4683 : 1.
-  static let frameWidth = 4683
+  static let frameWidth = 4_683
   static let frameHeight = 1
   /// The layer's size on screen in points, the same aspect.
   static let sourceSize = CGSize(width: 369, height: 0.079)  // literal-ok: the PiP source's aspect, not a design size
   /// AVKit's private `controlsStyle` value for no controls at all.
   private static let hiddenControls = 2
+
+  static var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+  private static let startAttempts = 6
+  private static let startRetry: Duration = .milliseconds(500)
+
+  private static let stopPollStep: Duration = .milliseconds(50)
 
   let layer = AVSampleBufferDisplayLayer()
   private(set) var isArmed = false
@@ -44,11 +50,60 @@ final class PictureInPictureKeeper: NSObject {
   @ObservationIgnored private var possible: NSKeyValueObservation?
   @ObservationIgnored private var startWanted = false
 
-  static var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+  @ObservationIgnored private var attempts = 0
 
   override init() {
     super.init()
     layer.videoGravity = .resize
+  }
+
+  private static func sampleBuffer(width: Int, height: Int) -> CMSampleBuffer? {
+    let attributes: [CFString: Any] = [
+      kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+      kCVPixelBufferIOSurfacePropertiesKey: [CFString: Any](),
+    ]
+    var pixels: CVPixelBuffer?
+    guard
+      CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &pixels)
+        == kCVReturnSuccess, let pixels
+    else {
+      return nil
+    }
+    CVPixelBufferLockBaseAddress(pixels, [])
+    if let base = CVPixelBufferGetBaseAddress(pixels) {
+      memset(base, 0, CVPixelBufferGetBytesPerRow(pixels) * height)
+    }
+    CVPixelBufferUnlockBaseAddress(pixels, [])
+    var format: CMVideoFormatDescription?
+    guard
+      CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pixels, formatDescriptionOut: &format)
+        == noErr, let format
+    else {
+      return nil
+    }
+    var timing = CMSampleTimingInfo(
+      duration: .invalid, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()), decodeTimeStamp: .invalid
+    )
+    var sample: CMSampleBuffer?
+    guard
+      CMSampleBufferCreateReadyWithImageBuffer(
+        allocator: nil, imageBuffer: pixels, formatDescription: format, sampleTiming: &timing, sampleBufferOut: &sample
+      )
+        == noErr, let sample
+    else {
+      return nil
+    }
+    if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
+      CFArrayGetCount(attachments) > 0
+    {
+      let first = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+      CFDictionarySetValue(
+        first,
+        Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+        Unmanaged.passUnretained(kCFBooleanTrue).toOpaque()
+      )
+    }
+    return sample
   }
 
   /// Creates the controller, enqueues the frame, and makes the window start
@@ -61,17 +116,17 @@ final class PictureInPictureKeeper: NSObject {
     }
     if controller == nil {
       let source = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: layer, playbackDelegate: self)
-      let controller = AVPictureInPictureController(contentSource: source)
-      controller.delegate = self
-      controller.requiresLinearPlayback = true
+      let pip = AVPictureInPictureController(contentSource: source)
+      pip.delegate = self
+      pip.requiresLinearPlayback = true
       // Hides the window's play/pause and skip controls — the only thing a
       // zero-height window still draws, and what Typeless's shows as
       // `controlsStyle: None` in the phone log. The key is not public API
       // (0 default, 1 minimal, 2 hidden); the same call ships in Typeless and
       // in open-source call apps. App Review risk noted in the plan.
-      controller.setValue(Self.hiddenControls, forKey: "controlsStyle")
-      self.controller = controller
-      possible = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] _, change in
+      pip.setValue(Self.hiddenControls, forKey: "controlsStyle")
+      self.controller = pip
+      possible = pip.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] _, change in
         let value = change.newValue ?? false
         Task { @MainActor in self?.possibleChanged(value) }
       }
@@ -79,8 +134,8 @@ final class PictureInPictureKeeper: NSObject {
     controller?.canStartPictureInPictureAutomaticallyFromInline = true
     isArmed = true
     enqueueFrame()
-    let possible = controller?.isPictureInPicturePossible ?? false
-    Self.log.notice("armed; possible: \(possible) state: \(UIApplication.shared.applicationState.rawValue)")
+    let possibleNow = controller?.isPictureInPicturePossible ?? false
+    Self.log.notice("armed; possible: \(possibleNow) state: \(UIApplication.shared.applicationState.rawValue)")
   }
 
   /// Starts the window while Blurt is in front — once the first frame has
@@ -93,10 +148,6 @@ final class PictureInPictureKeeper: NSObject {
     Task { await startWhenRendering() }
   }
 
-  @ObservationIgnored private var attempts = 0
-  private static let startAttempts = 6
-  private static let startRetry: Duration = .milliseconds(500)
-
   private func startWhenRendering() async {
     for _ in 0..<20 where layer.sampleBufferRenderer.status != .rendering || layer.superlayer == nil {
       try? await Task.sleep(for: .milliseconds(50))
@@ -105,7 +156,9 @@ final class PictureInPictureKeeper: NSObject {
   }
 
   private func tryStart() {
-    guard startWanted, let controller else { return }
+    guard startWanted, let controller else {
+      return
+    }
     guard !controller.isPictureInPictureActive else {
       // Up already — or still stopping, in which case the start keeps and
       // `didStop` tries it again.
@@ -155,8 +208,6 @@ final class PictureInPictureKeeper: NSObject {
     Self.log.notice("disarmed")
   }
 
-  private static let stopPollStep: Duration = .milliseconds(50)
-
   /// Waits for a stop `disarm()` asked for to land, at most `timeout`: a
   /// window still stopping past that is logged and left to its `didStop`.
   func waitUntilStopped(timeout: Duration) async {
@@ -179,64 +230,25 @@ final class PictureInPictureKeeper: NSObject {
     renderer.enqueue(sample)
     Self.log.notice("frame enqueued \(Self.frameWidth)x\(Self.frameHeight); renderer \(renderer.status.rawValue)")
   }
-
-  private static func sampleBuffer(width: Int, height: Int) -> CMSampleBuffer? {
-    let attributes: [CFString: Any] = [
-      kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-      kCVPixelBufferIOSurfacePropertiesKey: [CFString: Any](),
-    ]
-    var pixels: CVPixelBuffer?
-    guard
-      CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &pixels)
-        == kCVReturnSuccess, let pixels
-    else { return nil }
-    CVPixelBufferLockBaseAddress(pixels, [])
-    if let base = CVPixelBufferGetBaseAddress(pixels) {
-      memset(base, 0, CVPixelBufferGetBytesPerRow(pixels) * height)
-    }
-    CVPixelBufferUnlockBaseAddress(pixels, [])
-    var format: CMVideoFormatDescription?
-    guard
-      CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pixels, formatDescriptionOut: &format)
-        == noErr, let format
-    else { return nil }
-    var timing = CMSampleTimingInfo(
-      duration: .invalid, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()), decodeTimeStamp: .invalid)
-    var sample: CMSampleBuffer?
-    guard
-      CMSampleBufferCreateReadyWithImageBuffer(
-        allocator: nil, imageBuffer: pixels, formatDescription: format, sampleTiming: &timing, sampleBufferOut: &sample)
-        == noErr, let sample
-    else { return nil }
-    if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
-      CFArrayGetCount(attachments) > 0
-    {
-      let first = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
-      CFDictionarySetValue(
-        first, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
-        Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
-    }
-    return sample
-  }
 }
 
 extension PictureInPictureKeeper: AVPictureInPictureControllerDelegate {
-  func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+  func pictureInPictureControllerWillStartPictureInPicture(_: AVPictureInPictureController) {
     Self.log.notice("will start")
   }
 
-  func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+  func pictureInPictureControllerDidStartPictureInPicture(_: AVPictureInPictureController) {
     isActive = true
     startWanted = false
     Self.log.notice("did start; state: \(UIApplication.shared.applicationState.rawValue)")
     onStart?()
   }
 
-  func pictureInPictureControllerWillStopPictureInPicture(_ controller: AVPictureInPictureController) {
+  func pictureInPictureControllerWillStopPictureInPicture(_: AVPictureInPictureController) {
     Self.log.notice("will stop")
   }
 
-  func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+  func pictureInPictureControllerDidStopPictureInPicture(_: AVPictureInPictureController) {
     isActive = false
     isStopping = false
     Self.log.notice("did stop; state: \(UIApplication.shared.applicationState.rawValue)")
@@ -250,7 +262,7 @@ extension PictureInPictureKeeper: AVPictureInPictureControllerDelegate {
   }
 
   func pictureInPictureController(
-    _ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: any Error
+    _: AVPictureInPictureController, failedToStartPictureInPictureWithError error: any Error
   ) {
     let code = (error as NSError).code
     Self.log.error("failed to start: \(error.localizedDescription, privacy: .public) code \(code)")
@@ -258,8 +270,8 @@ extension PictureInPictureKeeper: AVPictureInPictureControllerDelegate {
   }
 
   func pictureInPictureController(
-    _ controller: AVPictureInPictureController,
-    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    _: AVPictureInPictureController,
+    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: (Bool) -> Void
   ) {
     Self.log.notice("restore user interface")
     completionHandler(true)
@@ -268,69 +280,35 @@ extension PictureInPictureKeeper: AVPictureInPictureControllerDelegate {
 
 /// Nothing to play, pause or skip: the controls answer and change nothing.
 extension PictureInPictureKeeper: AVPictureInPictureSampleBufferPlaybackDelegate {
-  nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, setPlaying playing: Bool) {}
+  nonisolated func pictureInPictureController(_: AVPictureInPictureController, setPlaying _: Bool) {
+    // Nothing plays: the window only keeps the app alive, so play and pause change nothing.
+  }
 
   nonisolated func pictureInPictureControllerTimeRangeForPlayback(
-    _ controller: AVPictureInPictureController
+    _: AVPictureInPictureController
   ) -> CMTimeRange {
     CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
   }
 
-  nonisolated func pictureInPictureControllerIsPlaybackPaused(_ controller: AVPictureInPictureController) -> Bool {
+  nonisolated func pictureInPictureControllerIsPlaybackPaused(_: AVPictureInPictureController) -> Bool {
     false
   }
 
   nonisolated func pictureInPictureController(
-    _ controller: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions
+    _: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions
   ) {
     Self.log.notice("render size \(newRenderSize.width)x\(newRenderSize.height)")
   }
 
   nonisolated func pictureInPictureController(
-    _ controller: AVPictureInPictureController, skipByInterval skipInterval: CMTime,
-    completion completionHandler: @escaping () -> Void
+    _: AVPictureInPictureController,
+    skipByInterval _: CMTime,
+    completion completionHandler: () -> Void
   ) {
     completionHandler()
   }
 
   nonisolated func pictureInPictureControllerShouldProhibitBackgroundAudioPlayback(
-    _ controller: AVPictureInPictureController
+    _: AVPictureInPictureController
   ) -> Bool { false }
-}
-
-/// Where the window starts from: the keeper's layer, inline, 369 × 0.079 pt.
-/// It has to be in the view hierarchy for Picture in Picture to be possible.
-struct PictureInPictureSource: UIViewRepresentable {
-  let keeper: PictureInPictureKeeper
-
-  func makeUIView(context: Context) -> LayerHost {
-    LayerHost(hosted: keeper.layer)
-  }
-
-  func updateUIView(_ view: LayerHost, context: Context) {}
-
-  final class LayerHost: UIView {
-    private let hosted: CALayer
-
-    init(hosted: CALayer) {
-      self.hosted = hosted
-      super.init(frame: .zero)
-      layer.addSublayer(hosted)
-      clipsToBounds = true
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { nil }
-
-    /// The layer keeps its 0.079-pt height whatever the host is laid out at:
-    /// SwiftUI rounds a view that thin to nothing, and a layer of no height
-    /// is refused by Picture in Picture (Pegasus -1003).
-    override func layoutSubviews() {
-      super.layoutSubviews()
-      CATransaction.begin()
-      CATransaction.setDisableActions(true)
-      hosted.frame = CGRect(x: 0, y: 0, width: bounds.width, height: PictureInPictureKeeper.sourceSize.height)
-      CATransaction.commit()
-    }
-  }
 }

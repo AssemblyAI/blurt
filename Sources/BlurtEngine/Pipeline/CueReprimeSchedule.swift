@@ -12,24 +12,28 @@
 public struct CueReprimeSchedule: Sendable, Equatable {
   /// Which pairs to reload now.
   public struct Reloads: Sendable, Equatable {
+    public static let neither = Self(dictation: false, readAloud: false)
+
     public let dictation: Bool
     public let readAloud: Bool
-
-    public static let none = Reloads(dictation: false, readAloud: false)
   }
 
   private var dictationPending = false
   private var readAloudPending = false
   private var capturing = false
 
-  public init() {}
+  public init() {
+    // Nothing to set up: a fresh schedule owes no reload and isn't capturing.
+  }
 
   /// The output route changed.
   public mutating func routeChanged() -> Reloads {
     dictationPending = true
-    guard capturing else { return Reloads(dictation: false, readAloud: true) }
+    guard capturing else {
+      return Reloads(dictation: false, readAloud: true)
+    }
     readAloudPending = true
-    return .none
+    return .neither
   }
 
   /// The session moved to `phase`.

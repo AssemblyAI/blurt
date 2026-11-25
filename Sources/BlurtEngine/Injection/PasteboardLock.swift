@@ -15,6 +15,17 @@
   /// is one process-wide `system`, while a test's in-memory fake brings its own,
   /// so parallel tests never queue behind each other.
   final class PasteboardLock: Sendable {
+    /// A held turn. Ending it twice is harmless.
+    struct Turn: Sendable {
+      private let continuation: AsyncStream<Never>.Continuation
+
+      init(continuation: AsyncStream<Never>.Continuation) {
+        self.continuation = continuation
+      }
+
+      func end() { continuation.finish() }
+    }
+
     /// `NSPasteboard.general`'s lock, shared by every `SystemClipboard`.
     static let system = PasteboardLock()
 
@@ -26,20 +37,17 @@
     /// pasteboard for good.
     func acquire() async -> Turn {
       let (ended, continuation) = AsyncStream<Never>.makeStream()
-      let mine = Task { for await _ in ended {} }
+      let mine = Task {
+        for await _ in ended {
+          // Never yields: the stream only finishes, when the turn ends.
+        }
+      }
       let previous = tail.withLock { tail in
         defer { tail = mine }
         return tail
       }
       await previous?.value
       return Turn(continuation: continuation)
-    }
-
-    /// A held turn. Ending it twice is harmless.
-    struct Turn: Sendable {
-      fileprivate let continuation: AsyncStream<Never>.Continuation
-
-      func end() { continuation.finish() }
     }
   }
 #endif

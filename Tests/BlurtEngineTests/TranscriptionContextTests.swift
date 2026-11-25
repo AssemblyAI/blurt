@@ -56,7 +56,8 @@ struct TranscriptionContextTests {
     // The history needs no focus signal at all to be worth carrying: dictating
     // into an app with no accessible field still sends the prior turns.
     let context = TranscriptionContext(
-      appName: nil, priorText: nil, recentTranscripts: ["Said this before."])
+      appName: nil, priorText: nil, recentTranscripts: ["Said this before."]
+    )
     #expect(!context.isEmpty)
     #expect(STTPrompt.text(context: context) == "Said this before.")
   }
@@ -80,7 +81,7 @@ struct TranscriptionContextTests {
     // the developer-mode log) and carry nothing the request may have.
     let withoutSendable = [
       TranscriptionContext(appName: "Mail", priorText: nil),
-      TranscriptionContext(appName: nil, windowTitle: "Re: Q3 pricing", priorText: nil),
+      TranscriptionContext(appName: nil, priorText: nil, windowTitle: "Re: Q3 pricing"),
       TranscriptionContext(appName: nil, priorText: nil, selectedText: "selected"),
     ]
     for context in withoutSendable {
@@ -95,9 +96,9 @@ struct TranscriptionContextTests {
 
   @Test("Equatable compares every field")
   func equatable() {
-    #expect(
-      TranscriptionContext(appName: "Notes", priorText: "x")
-        == TranscriptionContext(appName: "Notes", priorText: "x"))
+    let context = TranscriptionContext(appName: "Notes", priorText: "x")
+    let sameContext = TranscriptionContext(appName: "Notes", priorText: "x")
+    #expect(context == sameContext)
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x")
         != TranscriptionContext(appName: "Notes", priorText: "y"))
@@ -108,11 +109,11 @@ struct TranscriptionContextTests {
       TranscriptionContext(appName: "Notes", priorText: "x", selectedText: "a")
         != TranscriptionContext(appName: "Notes", priorText: "x", selectedText: "b"))
     #expect(
-      TranscriptionContext(appName: "Notes", windowTitle: "a", priorText: "x")
-        != TranscriptionContext(appName: "Notes", windowTitle: "b", priorText: "x"))
+      TranscriptionContext(appName: "Notes", priorText: "x", windowTitle: "a")
+        != TranscriptionContext(appName: "Notes", priorText: "x", windowTitle: "b"))
     #expect(
-      TranscriptionContext(appName: "Notes", fieldLabel: "To", priorText: "x")
-        != TranscriptionContext(appName: "Notes", fieldLabel: "Subject", priorText: "x"))
+      TranscriptionContext(appName: "Notes", priorText: "x", fieldLabel: "To")
+        != TranscriptionContext(appName: "Notes", priorText: "x", fieldLabel: "Subject"))
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["a"])
         != TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["b"]))

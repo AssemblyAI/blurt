@@ -25,14 +25,18 @@ public struct MediaPauseGate: Sendable {
   /// A pause was queued and its resume wasn't yet.
   private(set) var owesResume = false
 
-  public init() {}
+  public init() {
+    // Nothing to set up: a fresh gate has seen no phase and owes no resume.
+  }
 
   /// The action for `phase`: a pause on the edge into recording, unless it's a
   /// command's (`recordsCommand`) or the switch is off. `isEnabled` only counts
   /// on that edge, so a switch turned off mid-dictation still resumes what it
   /// paused.
   public mutating func action(for phase: PipelinePhase, isEnabled: Bool, recordsCommand: Bool) -> Action? {
-    guard edges.edge(for: phase) == .began, isEnabled, !recordsCommand else { return nil }
+    guard edges.edge(for: phase) == .began, isEnabled, !recordsCommand else {
+      return nil
+    }
     owesResume = true
     return .pause
   }
@@ -41,7 +45,9 @@ public struct MediaPauseGate: Sendable {
   /// every routing step that leaves it there — a level, not an edge): the resume
   /// is due, unless the mic is still open.
   public mutating func pressSettled() -> Action? {
-    guard owesResume, !edges.isRecording else { return nil }
+    guard owesResume, !edges.isRecording else {
+      return nil
+    }
     owesResume = false
     return .resume
   }

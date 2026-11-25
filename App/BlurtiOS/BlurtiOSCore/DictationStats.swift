@@ -12,29 +12,18 @@ package nonisolated struct DictationStats: Codable, Equatable, Sendable {
   /// 2019).
   package static let averageTypingWordsPerMinute: Double = 36
 
+  // MARK: - Persistence
+
+  /// The JSON-encoded totals, a `Data` slot so a view can observe it with
+  /// `@AppStorage` and redraw as dictations land.
+  package static let defaultsKey = "DictationStats"
+
   package private(set) var dictations = 0
   package private(set) var words = 0
   package private(set) var secondsSpoken: Double = 0
 
-  package init() {}
-
-  /// How long typing every dictated word would have taken at `wordsPerMinute`,
-  /// minus the time actually spent talking. Never negative.
-  package func timeSaved(typingWordsPerMinute wordsPerMinute: Double = averageTypingWordsPerMinute) -> Duration {
-    guard wordsPerMinute > 0 else { return .zero }
-    let typingSeconds = Double(words) / wordsPerMinute * 60
-    return .seconds(max(0, typingSeconds - secondsSpoken))
-  }
-
-  /// One delivered dictation: the words as inserted (text shortcuts expanded,
-  /// since that's what wasn't typed) and how long the user spoke. Empty text
-  /// isn't a dictation.
-  package mutating func record(_ text: String, spokenFor seconds: Double) {
-    let count = Self.wordCount(of: text)
-    guard count > 0 else { return }
-    dictations += 1
-    words += count
-    secondsSpoken += max(0, seconds)
+  package init() {
+    // Nothing to set: every tally starts at zero.
   }
 
   /// Linguistic words, not whitespace runs, so punctuation and languages
@@ -47,24 +36,14 @@ package nonisolated struct DictationStats: Codable, Equatable, Sendable {
     return count
   }
 
-  // MARK: - Persistence
-
-  /// The JSON-encoded totals, a `Data` slot so a view can observe it with
-  /// `@AppStorage` and redraw as dictations land.
-  package static let defaultsKey = "DictationStats"
-
-  package static func load(from defaults: UserDefaults = .standard) -> DictationStats {
+  package static func load(from defaults: UserDefaults = .standard) -> Self {
     decode(defaults.data(forKey: defaultsKey))
   }
 
   /// The totals behind a slot value a view already observed; blank or
   /// unreadable is no dictations yet.
-  package static func decode(_ data: Data?) -> DictationStats {
-    data.flatMap { try? JSONDecoder().decode(DictationStats.self, from: $0) } ?? DictationStats()
-  }
-
-  package func save(to defaults: UserDefaults = .standard) {
-    if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.defaultsKey) }
+  package static func decode(_ data: Data?) -> Self {
+    data.flatMap { try? JSONDecoder().decode(Self.self, from: $0) } ?? Self()
   }
 
   /// Records one dictation straight into `defaults`. The app calls this and
@@ -79,27 +58,31 @@ package nonisolated struct DictationStats: Codable, Equatable, Sendable {
   package static func reset(in defaults: UserDefaults = .standard) {
     defaults.removeObject(forKey: defaultsKey)
   }
-}
 
-/// The stats card's renderings. Counts stay short; time saved is shown in full
-/// ("1 hr 25 min 45 sec"), because watching every second add up is the point.
-package nonisolated enum StatFormat {
-  /// A count, compact past four digits: `9,999`, then `12K`.
-  package static func count(_ value: Int) -> String {
-    value < 10_000 ? value.formatted() : value.formatted(.number.notation(.compactName))
+  /// How long typing every dictated word would have taken at `wordsPerMinute`,
+  /// minus the time actually spent talking. Never negative.
+  package func timeSaved(typingWordsPerMinute wordsPerMinute: Double = averageTypingWordsPerMinute) -> Duration {
+    guard wordsPerMinute > 0 else {
+      return .zero
+    }
+    let typingSeconds = Double(words) / wordsPerMinute * 60
+    return .seconds(max(0, typingSeconds - secondsSpoken))
   }
 
-  /// A duration as number-and-unit parts, largest first, skipping zero parts:
-  /// `[("1", "hr"), ("25", "min"), ("45", "sec")]`. Under a second is `0 sec`.
-  package static func durationParts(_ duration: Duration) -> [(value: String, unit: String)] {
-    var remaining = Int(duration.components.seconds)
-    guard remaining > 0 else { return [("0", "sec")] }
-    var parts: [(String, String)] = []
-    for (unit, size) in [("day", 86_400), ("hr", 3_600), ("min", 60), ("sec", 1)] {
-      let amount = remaining / size
-      remaining %= size
-      if amount > 0 { parts.append((amount.formatted(), unit)) }
+  /// One delivered dictation: the words as inserted (text shortcuts expanded,
+  /// since that's what wasn't typed) and how long the user spoke. Empty text
+  /// isn't a dictation.
+  package mutating func record(_ text: String, spokenFor seconds: Double) {
+    let count = Self.wordCount(of: text)
+    guard count > 0 else {
+      return
     }
-    return parts
+    dictations += 1
+    words += count
+    secondsSpoken += max(0, seconds)
+  }
+
+  package func save(to defaults: UserDefaults = .standard) {
+    if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.defaultsKey) }
   }
 }

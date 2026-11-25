@@ -1,37 +1,5 @@
 public import Foundation
 
-/// One named set of style instructions — free text (e.g. "add some emojis where
-/// appropriate sparingly", "always write in lowercase") that the dictation API's
-/// server-side rewrite applies on top of the base cleanup instruction (see
-/// `CleanupInstruction.sendable(appending:)`).
-///
-/// The `id` is what the active-profile pointer and the main window's switcher
-/// are keyed on, so it is assigned once at creation and never re-derived from
-/// the name: renaming a profile must not silently deactivate it.
-public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
-  public let id: UUID
-  public var name: String
-  public var instructions: String
-
-  /// A brand-new profile. The id is generated here rather than by the caller so
-  /// there is one place that mints them.
-  public init(name: String, instructions: String) {
-    self.init(id: UUID(), name: name, instructions: instructions)
-  }
-
-  /// Full init, used by the decoder and by the migration's fixed-id profile.
-  init(id: UUID, name: String, instructions: String) {
-    self.id = id
-    self.name = name
-    self.instructions = instructions
-  }
-
-  /// What this profile appends to the cleanup instruction: its text, or nil
-  /// when blank — which must mean "send the base instruction untouched", not
-  /// an empty suffix.
-  var appendedInstructions: String? { instructions.trimmedNonEmpty() }
-}
-
 /// Storage for the user's style profiles and which one is active — possibly
 /// none of them: the main window's switcher leads with a **Default** button
 /// that selects the base styling, i.e. no profile instructions appended at all.
@@ -74,7 +42,8 @@ public struct StyleProfileStore {
   /// ready window observes this explicit signal so deleting the final custom
   /// style replaces its pop-up with the passive **Default** value immediately.
   public static let profilesDidChangeNotification = Notification.Name(
-    "dev.alex.blurt.styleProfilesDidChange")
+    "dev.alex.blurt.styleProfilesDidChange"
+  )
 
   /// `UserDefaults` key holding the JSON-encoded profile list. Public so SwiftUI
   /// views can observe it directly (e.g. `@AppStorage`) and re-render on change.
@@ -131,7 +100,7 @@ public struct StyleProfileStore {
   /// style — set far below the one limit the service still has, 64 KiB on the
   /// whole `config` part. Bytes rather than characters so that bound holds for
   /// emoji and non-Latin text too.
-  public static let characterLimit = 4000
+  public static let characterLimit = 4_000
 
   /// The most `Character`s a profile name may hold. Counted in characters, not
   /// the UTF-8 bytes `characterLimit` uses, because this limit exists for a
@@ -158,13 +127,10 @@ public struct StyleProfileStore {
     uuid: (
       0x62, 0x6C, 0x75, 0x72, 0x74, 0x73, 0x74, 0x79, 0x6C, 0x65, 0x6C, 0x65, 0x67, 0x61, 0x63,
       0x79
-    ))
+    )
+  )
 
   private let defaults: UserDefaults
-
-  public init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
 
   /// The user's profiles, in their own order. Normalized on the way out as well
   /// as in, so a hand-edited or truncated defaults value can't put an over-long
@@ -179,40 +145,17 @@ public struct StyleProfileStore {
       // U+FFFD for a malformed byte instead of saying so.
       guard let data = try? JSONEncoder().encode(Self.normalized(newValue)),
         let json = String(data: data, encoding: .utf8)
-      else { return }
+      else {
+        return
+      }
       defaults.set(json, forKey: Self.defaultsKey)
       NotificationCenter.default.post(name: Self.profilesDidChangeNotification, object: defaults)
     }
   }
 
-  /// Makes `profile` the one the next dictation uses. **Sticky** — nothing
-  /// resets it, so a style chosen once stays chosen until the user picks another
-  /// or deletes it. A method rather than a settable `activeProfileID` because
-  /// there is exactly one thing a caller ever wants to say here, and "unset it"
-  /// is not it: the fallback in `active(in:id:)` already covers every way the pointer
-  /// can stop naming a profile.
-  public func activate(_ profile: StyleProfile) {
-    defaults.set(profile.id.uuidString, forKey: Self.activeDefaultsKey)
-  }
-
-  /// Makes **Default** — the base styling, no profile appended — the choice.
-  /// As sticky as `activate(_:)`: it holds until another style is selected.
-  public func activateDefault() {
-    defaults.set(Self.defaultStyleID, forKey: Self.activeDefaultsKey)
-  }
-
-  /// The profile a dictation uses when its trigger key asked for `styleID`
-  /// (`TriggerKeyStyleStore`): that style while it still exists — `nil` for
-  /// `defaultStyleID`, base styling — and otherwise the active one. A key whose
-  /// style was deleted therefore follows the main window's selection, rather
-  /// than `active(in:id:)`'s first-profile fallback. Never writes the pointer.
-  func profile(for styleID: String?) -> StyleProfile? {
-    let profiles = profiles
-    if let styleID {
-      if styleID == Self.defaultStyleID { return nil }
-      if let match = Self.match(styleID, in: profiles) { return match }
-    }
-    return Self.active(in: profiles, id: defaults.string(forKey: Self.activeDefaultsKey) ?? "")
+  /// A store over `defaults`; tests pass an isolated suite.
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 
   /// Whether `id` names a style that exists: `defaultStyleID`, or one of
@@ -225,29 +168,10 @@ public struct StyleProfileStore {
   /// stored style id is matched, so `active(in:id:)`, `profile(for:)` and
   /// `isStyle(_:in:)` can't disagree about whether a style still exists.
   private static func match(_ raw: String, in profiles: [StyleProfile]) -> StyleProfile? {
-    guard let id = UUID(uuidString: raw) else { return nil }
-    return profiles.first { $0.id == id }
-  }
-
-  /// The profiles behind a raw slot value a SwiftUI view has **already
-  /// observed**, so the view can bind `@AppStorage` to `defaultsKey` — which is
-  /// what re-renders it when a write lands — and still get the decode, the caps
-  /// and the pre-profiles fallback from here rather than re-implementing them.
-  /// The store's own getter is this same call over its own defaults, so the two
-  /// cannot drift.
-  ///
-  /// An empty `raw` is "no list stored": `@AppStorage`'s default for a `String`
-  /// slot is `""` and is indistinguishable from an absent key, so blank has to
-  /// mean unset — which is safe, because a stored empty list is `"[]"`.
-  public func profiles(decoding raw: String) -> [StyleProfile] {
-    // Only "never had a list" defers to the legacy field. A stored value that
-    // won't decode reads as no profiles rather than reviving the pre-profiles
-    // text, which would be a surprising resurrection years later.
-    guard !raw.isEmpty else { return Self.legacyProfiles(defaults) }
-    guard let decoded = try? JSONDecoder().decode([StyleProfile].self, from: Data(raw.utf8)) else {
-      return []
+    guard let id = UUID(uuidString: raw) else {
+      return nil
     }
-    return Self.normalized(decoded)
+    return profiles.first { $0.id == id }
   }
 
   /// Which of `profiles` a raw active-id slot selects. `defaultStyleID` — the
@@ -261,7 +185,9 @@ public struct StyleProfileStore {
   /// for the same reason as `profiles(decoding:)` — the switcher observes that
   /// slot and resolves it through this.
   public static func active(in profiles: [StyleProfile], id raw: String) -> StyleProfile? {
-    guard raw != defaultStyleID else { return nil }
+    guard raw != defaultStyleID else {
+      return nil
+    }
     return match(raw, in: profiles) ?? profiles.first
   }
 
@@ -289,7 +215,65 @@ public struct StyleProfileStore {
         name: String((profile.name.trimmedNonEmpty() ?? fallbackName).prefix(nameLimit)),
         // Whole graphemes, so an emoji at the boundary is dropped rather than
         // split into an invalid fragment (see `String.prefix(maxUTF8Bytes:)`).
-        instructions: profile.instructions.prefix(maxUTF8Bytes: characterLimit))
+        instructions: profile.instructions.prefix(maxUTF8Bytes: characterLimit)
+      )
     }
+  }
+
+  /// Makes `profile` the one the next dictation uses. **Sticky** — nothing
+  /// resets it, so a style chosen once stays chosen until the user picks another
+  /// or deletes it. A method rather than a settable `activeProfileID` because
+  /// there is exactly one thing a caller ever wants to say here, and "unset it"
+  /// is not it: the fallback in `active(in:id:)` already covers every way the pointer
+  /// can stop naming a profile.
+  public func activate(_ profile: StyleProfile) {
+    defaults.set(profile.id.uuidString, forKey: Self.activeDefaultsKey)
+  }
+
+  /// Makes **Default** — the base styling, no profile appended — the choice.
+  /// As sticky as `activate(_:)`: it holds until another style is selected.
+  public func activateDefault() {
+    defaults.set(Self.defaultStyleID, forKey: Self.activeDefaultsKey)
+  }
+
+  /// The profile a dictation uses when its trigger key asked for `styleID`
+  /// (`TriggerKeyStyleStore`): that style while it still exists — `nil` for
+  /// `defaultStyleID`, base styling — and otherwise the active one. A key whose
+  /// style was deleted therefore follows the main window's selection, rather
+  /// than `active(in:id:)`'s first-profile fallback. Never writes the pointer.
+  func profile(for styleID: String?) -> StyleProfile? {
+    let stored = profiles
+    if let styleID {
+      if styleID == Self.defaultStyleID {
+        return nil
+      }
+      if let match = Self.match(styleID, in: stored) {
+        return match
+      }
+    }
+    return Self.active(in: stored, id: defaults.string(forKey: Self.activeDefaultsKey) ?? "")
+  }
+
+  /// The profiles behind a raw slot value a SwiftUI view has **already
+  /// observed**, so the view can bind `@AppStorage` to `defaultsKey` — which is
+  /// what re-renders it when a write lands — and still get the decode, the caps
+  /// and the pre-profiles fallback from here rather than re-implementing them.
+  /// The store's own getter is this same call over its own defaults, so the two
+  /// cannot drift.
+  ///
+  /// An empty `raw` is "no list stored": `@AppStorage`'s default for a `String`
+  /// slot is `""` and is indistinguishable from an absent key, so blank has to
+  /// mean unset — which is safe, because a stored empty list is `"[]"`.
+  public func profiles(decoding raw: String) -> [StyleProfile] {
+    // Only "never had a list" defers to the legacy field. A stored value that
+    // won't decode reads as no profiles rather than reviving the pre-profiles
+    // text, which would be a surprising resurrection years later.
+    guard !raw.isEmpty else {
+      return Self.legacyProfiles(defaults)
+    }
+    guard let decoded = try? JSONDecoder().decode([StyleProfile].self, from: Data(raw.utf8)) else {
+      return []
+    }
+    return Self.normalized(decoded)
   }
 }

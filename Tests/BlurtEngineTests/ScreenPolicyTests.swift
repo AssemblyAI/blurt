@@ -20,19 +20,26 @@ struct ScreenPolicyTests {
     }
     #expect(
       ScreenSnapshot.listedKind(
-        role: "AXButton", subrole: nil, frame: inside, bounds: window, pressable: pressable(false)) == "button")
+        role: "AXButton", subrole: nil, frame: inside, bounds: window, pressable: pressable(false)
+      ) == "button")
     #expect(
       ScreenSnapshot.listedKind(
-        role: "AXGroup", subrole: nil, frame: inside, bounds: window, pressable: pressable(true)) == "clickable")
+        role: "AXGroup", subrole: nil, frame: inside, bounds: window, pressable: pressable(true)
+      ) == "clickable")
     #expect(
       ScreenSnapshot.listedKind(
-        role: "AXGroup", subrole: nil, frame: inside, bounds: window, pressable: pressable(false)) == nil)
+        role: "AXGroup", subrole: nil, frame: inside, bounds: window, pressable: pressable(false)
+      ) == nil)
     // Off screen: settled before the round trip `pressable` costs.
     let before = asked
     #expect(
       ScreenSnapshot.listedKind(
-        role: "AXGroup", subrole: nil, frame: CGRect(x: 10, y: 2_000, width: 50, height: 20), bounds: window,
-        pressable: pressable(true)) == nil)
+        role: "AXGroup",
+        subrole: nil,
+        frame: CGRect(x: 10, y: 2_000, width: 50, height: 20),
+        bounds: window,
+        pressable: pressable(true)
+      ) == nil)
     #expect(asked == before)
     // A password field is never listed, by role or by subrole.
     #expect(ScreenSnapshot.kind(role: "AXSecureTextField", subrole: nil) == nil)
@@ -45,15 +52,21 @@ struct ScreenPolicyTests {
   func labelChoice() {
     #expect(
       ScreenSnapshot.label(
-        role: "AXButton", own: ["Send"], placeholder: nil, borrowed: { nil }, inner: { nil }) == "Send")
+        role: "AXButton", own: ["Send"], placeholder: nil, borrowed: { nil }, inner: { nil }
+      ) == "Send")
     #expect(
       ScreenSnapshot.label(
-        role: "AXTextField", own: [], placeholder: "Search", borrowed: { "Name" },
-        inner: { "typed" })
+        role: "AXTextField",
+        own: [],
+        placeholder: "Search",
+        borrowed: { "Name" },
+        inner: { "typed" }
+      )
         == "Search")
     #expect(
       ScreenSnapshot.label(
-        role: "AXTextArea", own: [], placeholder: nil, borrowed: { nil }, inner: { "typed" })
+        role: "AXTextArea", own: [], placeholder: nil, borrowed: { nil }, inner: { "typed" }
+      )
         // Nothing to name it by: never its contents (`inner`), and its kind
         // is `describe`'s to add.
         == nil)
@@ -74,22 +87,25 @@ struct ScreenPolicyTests {
       let role: String
       var text: String?
       var title: String?
-      var children: [Cell] = []
+      var children: [Self] = []
     }
     let row = Cell(
       role: "AXRow",
       children: [
         Cell(
           role: "AXCell",
-          children: [Cell(role: "AXImage", title: "radio"), Cell(role: "AXStaticText", text: "Radio")])
-      ])
+          children: [Cell(role: "AXImage", title: "radio"), Cell(role: "AXStaticText", text: "Radio")]
+        )
+      ]
+    )
     func find(_ root: Cell, stop: @escaping () -> Bool = { false }) -> String? {
       ScreenSnapshot.firstText(
-        under: root, children: \.children, role: { $0.role }, text: \.text, title: \.title, shouldStop: stop)
+        under: root, children: \.children, role: { $0.role }, text: \.text, title: \.title, shouldStop: stop
+      )
     }
     #expect(find(row) == "Radio")
     #expect(find(Cell(role: "AXRow", children: [Cell(role: "AXImage", title: "pin")])) == nil)
     #expect(find(Cell(role: "AXRow", children: [Cell(role: "AXGroup", title: "Pins")])) == "Pins")
-    #expect(find(row, stop: { true }) == nil)
+    #expect(find(row) { true } == nil)
   }
 }

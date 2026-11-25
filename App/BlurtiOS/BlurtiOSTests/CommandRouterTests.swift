@@ -12,19 +12,28 @@ struct CommandRouterTests {
   static let launchID = UUID()
   /// An open window with a live mic, the record most rows start from.
   static let open = ListeningState(
-    launchID: launchID, sequence: 1, window: .open, micLive: true, writtenAt: now)
+    launchID: launchID, sequence: 1, window: .open, micLive: true, writtenAt: now
+  )
 
   let owner = "keyboard-owner"
   let other = "keyboard-other"
   let current = DictationRef(id: UUID(), ownerProcessID: "keyboard-owner")
 
   func command(
-    _ kind: KeyboardCommand.Kind, keyboard: String? = "keyboard-owner", dictationID: UUID? = nil,
+    _ kind: KeyboardCommand.Kind,
+    keyboard: String? = "keyboard-owner",
+    dictationID: UUID? = nil,
     age: TimeInterval = 0
   ) -> KeyboardCommand {
     KeyboardCommand(
-      id: UUID(), kind: kind, priorText: nil, selectedText: nil, sentAt: Self.now.addingTimeInterval(-age),
-      keyboard: keyboard, dictationID: dictationID)
+      id: UUID(),
+      kind: kind,
+      priorText: nil,
+      selectedText: nil,
+      sentAt: Self.now.addingTimeInterval(-age),
+      keyboard: keyboard,
+      dictationID: dictationID
+    )
   }
 
   func record(
@@ -32,22 +41,38 @@ struct CommandRouterTests {
   ) -> ListeningState {
     let writtenAt = leaseLapsed ? Self.now.addingTimeInterval(-(ListeningState.lease + 1)) : Self.now
     return ListeningState(
-      launchID: Self.launchID, sequence: 1, window: window, micLive: micLive, reason: reason, writtenAt: writtenAt)
+      launchID: Self.launchID, sequence: 1, window: window, micLive: micLive, reason: reason, writtenAt: writtenAt
+    )
   }
 
   func route(
-    _ command: KeyboardCommand, state: ListeningState? = CommandRouterTests.open, phase: PhaseSnapshot.State = .idle,
-    inFlight: DictationRef? = nil, onScreen: String? = nil, answered: [UUID: CommandAck.Outcome] = [:],
+    _ command: KeyboardCommand,
+    state: ListeningState? = Self.open,
+    phase: PhaseSnapshot.State = .idle,
+    inFlight: DictationRef? = nil,
+    onScreen: String? = nil,
+    answered: [UUID: CommandAck.Outcome] = [:],
     newDictationID: UUID = UUID()
   ) -> CommandRouter.Decision {
     CommandRouter.route(
       CommandRouter.Input(
-        command: command, state: state, phase: phase, inFlight: inFlight, onScreen: onScreen, answered: answered,
-        now: Self.now, launchID: Self.launchID, newDictationID: newDictationID))
+        command: command,
+        state: state,
+        phase: phase,
+        inFlight: inFlight,
+        onScreen: onScreen,
+        answered: answered,
+        launchID: Self.launchID,
+        now: Self.now,
+        newDictationID: newDictationID
+      )
+    )
   }
 
   func startedID(_ decision: CommandRouter.Decision) -> UUID? {
-    if case .started(let id) = decision.ack.outcome { return id }
+    if case .started(let id) = decision.ack.outcome {
+      return id
+    }
     return nil
   }
 

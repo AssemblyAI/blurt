@@ -24,10 +24,6 @@ public struct MediaPauseStore {
 
   private let defaults: UserDefaults
 
-  public init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
-
   /// `bool(forKey:)` returns false for a missing key, so unset means off.
   ///
   /// Read-only, like `DeveloperModeStore.isEnabled`: the Settings toggle writes
@@ -35,5 +31,10 @@ public struct MediaPauseStore {
   /// caller.
   public var isEnabled: Bool {
     defaults.bool(forKey: Self.defaultsKey)
+  }
+
+  /// A store over `defaults`; tests pass an isolated suite.
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 }

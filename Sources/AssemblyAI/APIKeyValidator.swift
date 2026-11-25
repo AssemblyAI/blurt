@@ -40,7 +40,9 @@ public struct APIKeyValidator: Sendable {
   }
 
   public func validate(_ key: String) async -> Result {
-    guard let trimmed = key.trimmedNonEmpty() else { return .invalid }
+    guard let trimmed = key.trimmedNonEmpty() else {
+      return .invalid
+    }
 
     var components = URLComponents(
       url: baseURL.appendingPathComponent("v2/transcript"),
@@ -49,7 +51,9 @@ public struct APIKeyValidator: Sendable {
       resolvingAgainstBaseURL: false  // mutate-ok: absolute URL, nothing to resolve
     )
     components?.queryItems = [URLQueryItem(name: "limit", value: "1")]
-    guard let url = components?.url else { return .unreachable }
+    guard let url = components?.url else {
+      return .unreachable
+    }
 
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
@@ -59,9 +63,13 @@ public struct APIKeyValidator: Sendable {
 
     do {
       let (_, response) = try await transport.data(for: request)
-      guard let http = response as? HTTPURLResponse else { return .unreachable }
+      guard let http = response as? HTTPURLResponse else {
+        return .unreachable
+      }
       switch http.statusCode {
-      case 200..<300: return .valid
+      case 200..<300:
+        return .valid
+
       // Only the statuses that actually mean "this credential was rejected" or
       // "this key is malformed" may report `.invalid`, because `.invalid` HARD
       // BLOCKS setup: `APIKeySubmission.submit` refuses to persist the key, so the
@@ -73,10 +81,13 @@ public struct APIKeyValidator: Sendable {
       // `.unreachable`, the outcome designed for "couldn't determine".
       // 403 stays on the rejected side: AssemblyAI answers an authenticated request
       // it won't serve with it, which is a verdict on the credential.
-      case 401, 403, 400, 422: return .invalid
+      case 401, 403, 400, 422:
+        return .invalid
+
       // 5xx and anything unexpected: server-side / can't determine — report
       // unreachable so the user retries rather than seeing a false rejection.
-      default: return .unreachable
+      default:
+        return .unreachable
       }
     } catch {
       return .unreachable

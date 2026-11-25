@@ -14,10 +14,11 @@ struct DictationSessionTranscriptTests {
   // (and thus the synchronous callback that precedes it) has already happened.
 
   @Test("onTranscriptDelivered fires with the transcript on the pasted outcome")
-  func transcriptDeliveredOnPaste() async throws {
+  func transcriptDeliveredOnPaste() async {
     let spy = StringListBox()
     let session = makeSession(
-      mode: .transcript("Hello world."), onTranscriptDelivered: { text, _ in spy.append(text) }
+      mode: .transcript("Hello world."),
+      onTranscriptDelivered: spy.recordingDelivery
     ).session
 
     await session.dictate()
@@ -27,10 +28,12 @@ struct DictationSessionTranscriptTests {
   }
 
   @Test("onTranscriptDelivered fires on the noTarget (copied) outcome")
-  func transcriptDeliveredOnNoTarget() async throws {
+  func transcriptDeliveredOnNoTarget() async {
     let spy = StringListBox()
     let fixture = makeSession(
-      mode: .transcript("Copied text."), onTranscriptDelivered: { text, _ in spy.append(text) })
+      mode: .transcript("Copied text."),
+      onTranscriptDelivered: spy.recordingDelivery
+    )
     await fixture.injector.setError(BlurtError.noEditableTarget)
 
     await fixture.session.dictate()
@@ -40,13 +43,15 @@ struct DictationSessionTranscriptTests {
   }
 
   @Test("onTranscriptDelivered fires even when the paste hard-fails")
-  func transcriptDeliveredWhenPasteFails() async throws {
+  func transcriptDeliveredWhenPasteFails() async {
     let spy = StringListBox()
     // A real injection failure (not the quiet .noTarget degrade): the phase ends
     // .failed, but the transcript was still produced, so it must be delivered —
     // every dictation that yields text lands in the "Recent" list.
     let fixture = makeSession(
-      mode: .transcript("Spoken but unpasted."), onTranscriptDelivered: { text, _ in spy.append(text) })
+      mode: .transcript("Spoken but unpasted."),
+      onTranscriptDelivered: spy.recordingDelivery
+    )
     await fixture.injector.setError(BlurtError.accessibilityPermissionMissing)
 
     await fixture.session.dictate()
@@ -56,7 +61,7 @@ struct DictationSessionTranscriptTests {
   }
 
   @Test("onTranscriptDelivered hands over the ring the transcript just joined")
-  func deliveryCarriesTheUpdatedRing() async throws {
+  func deliveryCarriesTheUpdatedRing() async {
     // The property the app's "Recent" list depends on: it assigns this value
     // wholesale rather than recording into a ring of its own, so the value must
     // already include the transcript being reported — and must be the same history
@@ -65,11 +70,13 @@ struct DictationSessionTranscriptTests {
     // dictations is one readable expectation (`StringListBox` is the existing
     // thread-safe recorder; the ring itself is asserted on the session below).
     let pushed = StringListBox()
+    let recordRecents: @Sendable (String, RecentDictations) -> Void = { _, recents in
+      pushed.append(recents.entries.map(\.text).joined(separator: " | "))
+    }
     let fixture = makeSession(
       mode: .transcript("Hello world."),
-      onTranscriptDelivered: { _, recents in
-        pushed.append(recents.entries.map(\.text).joined(separator: " | "))
-      })
+      onTranscriptDelivered: recordRecents
+    )
 
     for _ in 1...2 {
       await fixture.session.dictate()
@@ -84,10 +91,10 @@ struct DictationSessionTranscriptTests {
   }
 
   @Test("onTranscriptDelivered does not fire when STT fails")
-  func transcriptNotDeliveredOnFailure() async throws {
+  func transcriptNotDeliveredOnFailure() async {
     struct Boom: Error {}
     let spy = StringListBox()
-    let session = makeSession(mode: .throwError(Boom()), onTranscriptDelivered: { text, _ in spy.append(text) })
+    let session = makeSession(mode: .throwError(Boom()), onTranscriptDelivered: spy.recordingDelivery)
       .session
 
     await session.dictate()
@@ -96,11 +103,11 @@ struct DictationSessionTranscriptTests {
   }
 
   @Test("onTranscriptDelivered does not fire when the transcript is empty/whitespace")
-  func transcriptNotDeliveredOnEmpty() async throws {
+  func transcriptNotDeliveredOnEmpty() async {
     let spy = StringListBox()
     // A normally-sized clip (StubMicCapture's default) so the too-short-clip
     // guard doesn't short-circuit before the transcribe step is reached.
-    let session = makeSession(mode: .transcript("   "), onTranscriptDelivered: { text, _ in spy.append(text) })
+    let session = makeSession(mode: .transcript("   "), onTranscriptDelivered: spy.recordingDelivery)
       .session
 
     await session.dictate()
@@ -110,10 +117,11 @@ struct DictationSessionTranscriptTests {
   }
 
   @Test("onTranscriptDelivered does not fire when the dictation is cancelled")
-  func transcriptNotDeliveredOnCancel() async throws {
+  func transcriptNotDeliveredOnCancel() async {
     let spy = StringListBox()
     let session = makeSession(
-      mode: .transcript("Hello world."), onTranscriptDelivered: { text, _ in spy.append(text) }
+      mode: .transcript("Hello world."),
+      onTranscriptDelivered: spy.recordingDelivery
     ).session
 
     // Cancel while still recording, before release() can hand off to

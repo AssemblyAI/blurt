@@ -9,14 +9,13 @@ import Testing
 /// never records an utterance the pipeline could only fail to transcribe.
 @Suite("DictationSession readiness", .timeLimit(.minutes(1)))
 struct DictationSessionReadinessTests {
-
   @Test("press is refused before capture when the readiness check blocks")
-  func blockedPressFailsBeforeCapture() async throws {
+  func blockedPressFailsBeforeCapture() async {
     let mic = StubMicCapture()
     let stt = StubTranscriber(mode: .transcript("never"))
     let injector = StubInjector()
-    let session = makeSession(
-      transcriber: stt, mic: mic, injector: injector, readinessCheck: { .apiKeyMissing })
+    let notReady: @Sendable () -> BlurtError? = { .apiKeyMissing }
+    let session = makeSession(transcriber: stt, mic: mic, injector: injector, readinessCheck: notReady)
 
     await session.press()
 
@@ -26,14 +25,18 @@ struct DictationSessionReadinessTests {
   }
 
   @Test("press succeeds once the blocker clears")
-  func pressRecoversWhenReady() async throws {
+  func pressRecoversWhenReady() async {
     let mic = StubMicCapture()
     let stt = StubTranscriber(mode: .transcript("Hello."))
     let injector = StubInjector()
     let ready = Mutex(false)
+    let readiness: @Sendable () -> BlurtError? = { ready.withLock { $0 } ? nil : .apiKeyMissing }
     let session = makeSession(
-      transcriber: stt, mic: mic, injector: injector,
-      readinessCheck: { ready.withLock { $0 } ? nil : .apiKeyMissing })
+      transcriber: stt,
+      mic: mic,
+      injector: injector,
+      readinessCheck: readiness
+    )
 
     await session.press()
     #expect(await session.phase == .failed(.apiKeyMissing))

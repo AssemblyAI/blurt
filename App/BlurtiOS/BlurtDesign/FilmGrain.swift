@@ -8,8 +8,6 @@ import SwiftUI
 package struct FilmGrain: View {
   let seed: Int
 
-  package init(seed: Int) { self.seed = seed }
-
   package var body: some View {
     Canvas { context, size in
       var state = UInt64(truncatingIfNeeded: seed &* 6_364_136_223_846_793_005 &+ 1)
@@ -23,9 +21,12 @@ package struct FilmGrain: View {
         let shade = next()
         context.fill(
           Path(ellipseIn: CGRect(x: point.x, y: point.y, width: 1, height: 1)),
-          with: .color(shade > 0.5 ? .white.opacity(0.18) : .black.opacity(0.22)))
+          with: .color(shade > 0.5 ? .white.opacity(0.18) : .black.opacity(0.22))
+        )
       }
     }
     .accessibilityHidden(true)
   }
+
+  package init(seed: Int) { self.seed = seed }
 }

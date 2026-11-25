@@ -23,18 +23,33 @@ struct DictationCoordinatorTests {
   func coordinator(startDelay: Duration = .zero, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
     let rig = WindowRig(closeDelay: closeDelay, startDelay: startDelay)
     let coordinator = DictationCoordinator(
-      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()), window: rig.window,
-      transcriber: StubTranscriber(text: Self.transcript), clock: rig.clock)
+      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()),
+      window: rig.window,
+      transcriber: StubTranscriber(text: Self.transcript),
+      clock: rig.clock
+    )
     return (coordinator, rig)
   }
 
   func command(
-    _ kind: KeyboardCommand.Kind, id: UUID = UUID(), keyboard: String = "kb-1", controllerID: String? = nil,
-    documentID: UUID? = nil, isSecure: Bool? = nil
+    _ kind: KeyboardCommand.Kind,
+    id: UUID = UUID(),
+    keyboard: String = "kb-1",
+    controllerID: String? = nil,
+    documentID: UUID? = nil,
+    isSecure: Bool? = nil  // swiftlint:disable:this discouraged_optional_boolean
   ) -> KeyboardCommand {
     KeyboardCommand(
-      id: id, kind: kind, priorText: isSecure == true ? nil : "Hi", selectedText: nil, sentAt: Date(),
-      keyboard: keyboard, controllerID: controllerID, documentID: documentID, isSecure: isSecure)
+      id: id,
+      kind: kind,
+      priorText: isSecure == true ? nil : "Hi",
+      selectedText: nil,
+      sentAt: Date(),
+      keyboard: keyboard,
+      controllerID: controllerID,
+      documentID: documentID,
+      isSecure: isSecure
+    )
   }
 
   /// Writes the command where the keyboard would and lets the coordinator take it.
@@ -168,25 +183,5 @@ struct DictationCoordinatorTests {
     #expect(DictationCoordinator.watchdogTick == .seconds(2))
     #expect(BlurtShared.ownerWatchdog + 2 <= 12)
     #expect(DictationCoordinator.watchdogTick < .seconds(SharedStore.keyboardHeartbeatInterval))
-  }
-}
-
-/// The device trace's line: one JSON object per event, the fields given and
-/// nothing else, newline-terminated — and off unless the launch argument says.
-@Suite("Device trace")
-struct DeviceTraceTests {
-  @Test("a line is one JSON object with the kind, the time and the fields, and ends the line")
-  func line() throws {
-    let at = Date(timeIntervalSinceReferenceDate: 800_000_000)
-    let line = DeviceTrace.line("press", ["id": "abc", "outcome": "started"], at: at)
-    #expect(line.last == UInt8(ascii: "\n"))
-    let object = try JSONSerialization.jsonObject(with: line.dropLast()) as? [String: String]
-    #expect(object?["kind"] == "press")
-    #expect(object?["id"] == "abc")
-    #expect(object?["outcome"] == "started")
-    #expect(object?["t"]?.hasPrefix("2026-05-") == true)
-    #expect(object?.count == 4)
-    #expect(!DeviceTrace.isEnabled, "off unless -BlurtDeviceTrace YES")
-    #expect(DeviceTrace.url.lastPathComponent == DeviceTrace.fileName)
   }
 }

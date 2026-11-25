@@ -20,23 +20,31 @@
   /// Main-actor because its callers are: the key tap's callbacks, the session's
   /// phase observer and Settings all run on the main thread, and isolation lets
   /// the compiler prove single-threaded access to the routing state.
+  @preconcurrency
   @MainActor
   public final class SelectionSpeechRouter {
     static let logger = HostIdentity.current.logger("SelectionSpeech")
 
+    /// The beat between an ask's end and its answer's start. The spoken
+    /// request ends with dictation's stop chime, and the answer would start
+    /// with read-aloud's start chime in the same instant — two sounds run
+    /// together. Holding the second back this long keeps them apart.
+    static let answerCueGap: Duration = .milliseconds(400)
+
     private let session: DictationSession
-    private let speaker: any ReadAloudSpeaker
+    let speaker: any ReadAloudSpeaker
     private let rewriter: any SelectionRewriting
     private let composer: any MessageComposing
     private let planner: any VoiceCommandPlanning
     private let performer: any VoiceCommandPerforming
     private let readSelection: @Sendable () async -> String?
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
     /// What the hold timer and the answer's start-cue gap sleep on; a test's
-    /// `TestClock` steps them instead of waiting them out.
-    private let clock: any Clock<Duration>
-    private var routing = SelectionSpeechRouting()
-    private var speech: Task<Void, Never>?
+    /// `TestClock` steps them instead of waiting them out. This and the other
+    /// members without `private` are reached from `SelectionSpeechRouter+Speech`.
+    let clock: any Clock<Duration>
+    var routing = SelectionSpeechRouting()
+    var speech: Task<Void, Never>?
     /// The job in flight — a rewrite or a composition until it pastes, a
     /// command until its last step. Cancelled by any press.
     private var job: Task<Void, Never>?
@@ -50,42 +58,75 @@
     private var holdTimer: Task<Void, Never>?
     /// A voice sample playing from Settings. Apart from `speech`, so it never
     /// touches the routing state a key press owns.
-    private var preview: Task<Void, Never>?
+    var preview: Task<Void, Never>?
     /// The key tap's `syncAfterTerminalPhase`: a dictation ended without a key event.
-    public var syncGateAfterSession: () -> Void = {}
+    public var syncGateAfterSession: () -> Void = {
+      // Nothing to sync until the key tap is wired in.
+    }
     /// The key tap's `resetGate`: a read ended without a key event.
-    public var resetGate: () -> Void = {}
+    public var resetGate: () -> Void = {
+      // Nothing to reset until the key tap is wired in.
+    }
     /// A read or answer began (the pill appears, the start cue plays) and ended
     /// (the pill goes, the stop cue plays): once each per read, whether it ran
     /// out, was stopped, or failed.
-    public var speechStarted: () -> Void = {}
-    public var speechEnded: () -> Void = {}
+    public var speechStarted: () -> Void = {
+      // No pill to show until the host wires one in.
+    }
+    /// The other end of `speechStarted`.
+    public var speechEnded: () -> Void = {
+      // No pill to take down until the host wires one in.
+    }
     /// The loudness of the voice playing, ~20 times a second: the pill's meter.
-    public var speechLevel: (Float) -> Void = { _ in }
+    public var speechLevel: (Float) -> Void = { _ in
+      // No meter until the host wires one in.
+    }
     /// A read, answer or voice sample failed (it's already logged): the app
     /// beeps, since the pill just goes away.
-    public var speechFailed: (any Error) -> Void = { _ in }
+    public var speechFailed: (any Error) -> Void = { _ in
+      // Already logged; the host adds the beep.
+    }
     /// What the pill shows for a job: `.rewriting`, `.composing` or `.commanding` as it
     /// starts, then its outcome — Pasted (Done, for a command), Copied, or the
     /// error — or nil when a press abandoned it, and the pill goes back to
     /// what the session is doing.
-    public var jobPill: (OverlayUIState?) -> Void = { _ in }
+    public var jobPill: (OverlayUIState?) -> Void = { _ in
+      // No pill until the host wires one in.
+    }
     /// Called after every routing step that leaves the router at rest — a
     /// level, not an edge: every dictation key event and every session phase at
     /// rest calls it too, as does the step that ends an answer or a job. The
     /// music pause resumes here, once the mic has closed.
-    public var pressSettled: () -> Void = {}
+    public var pressSettled: () -> Void = {
+      // Nothing to resume until the host wires it in.
+    }
     /// Counts reads, so a stopped read's late end can't take down a newer read's pill.
-    private var speechGeneration = 0
+    var speechGeneration = 0
     /// The read the pill is showing, or nil once it ended: a level still on its
     /// way from a read that's over must not land on the pill.
-    private var activeGeneration: Int?
+    var activeGeneration: Int?
+    /// Whether a dictation, press, request, read, answer or job is under way.
+    public var isBusy: Bool { routing.isBusy }
+
+    /// Whether a read, answer, rewrite, composition or command is wearing the pill — what
+    /// `PipelinePhase.overlayState(whileSpeaking:)` asks, so a session phase
+    /// arriving under any of them can't cover it.
+    public var ownsPill: Bool { activeGeneration != nil || job != nil }
+
+    /// What the session's transcription shows as when it's a job's spoken
+    /// words — "Rewriting", "Writing", "Working" — or nil for a dictation's "Transcribing":
+    /// what `PipelinePhase.overlayState(whileSpeaking:processingAs:)` asks.
+    public var processingState: OverlayUIState? { routing.processingState }
+
+    /// Whether the recording under way is a command's.
+    public var recordsCommand: Bool { routing.recordsCommand }
 
     /// `clips`, when given, keeps every read's audio and reports each one —
     /// the host's history of what was read aloud.
     public convenience init(session: DictationSession, clips: ReadClipSink? = nil) {
       self.init(
-        session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection)
+        session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection
+      )
     }
 
     /// The seams: what speaks, what rewrites, what composes, what plans and carries out a
@@ -93,13 +134,16 @@
     /// settings each press reads come from, and the clock its timers run on.
     /// Public so a host can run the whole read-aloud path offline (Blurt's UI
     /// tests do).
+    @preconcurrency
     public init(
-      session: DictationSession, speaker: any ReadAloudSpeaker,
+      session: DictationSession,
+      speaker: any ReadAloudSpeaker,
       rewriter: any SelectionRewriting = SelectionRewriter(),
       composer: any MessageComposing = MessageComposer(),
       planner: any VoiceCommandPlanning = VoiceCommandPlanner(),
       performer: any VoiceCommandPerforming = SystemVoiceCommandPerformer(),
-      readSelection: @escaping @Sendable () async -> String?, defaults: UserDefaults = .standard,
+      readSelection: @escaping @Sendable () async -> String?,
+      defaults: UserDefaults = .standard,
       clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.session = session
@@ -122,25 +166,6 @@
       perform(routing.press(key: key, action: action, holds: holds))
     }
 
-    /// Speaks a short sample in the chosen voice at the chosen speed, as picking
-    /// a cue sound plays it. A newer pick cuts off the one still playing.
-    public func previewSample() {
-      let style = ReadAloudStyleStore(defaults: defaults).style
-      let name = ReadAloudVoice.voice(id: style.voiceID)?.name ?? "your voice"
-      let sample = style.verbatim
-      preview?.cancel()
-      preview = Task { [weak self, speaker] in
-        do {
-          let line = "Hi, I'm \(name). This is how Blurt reads your selection."
-          try await speaker.speak(line, style: sample, onLevel: nil)
-        } catch is CancellationError {
-        } catch {
-          Self.logger.error("voice preview failed: \(error.localizedDescription, privacy: .public)")
-          self?.speechFailed(error)
-        }
-      }
-    }
-
     /// The gate's other commands: `.release`, `.cancel`, `.cancelRecording`.
     public func submit(_ command: DictationSession.Command) {
       perform(routing.submit(command))
@@ -148,19 +173,18 @@
 
     /// A bare Escape with something in flight: stop it all (`SelectionSpeechRouting.escape`).
     public func escape() { perform(routing.escape()) }
-    /// Whether a dictation, press, request, read, answer or job is under way.
-    public var isBusy: Bool { routing.isBusy }
 
     /// `DictationKeyTap`'s latch: the press was a tap.
     public func keyLatched() {
       perform(routing.keyLatched())
     }
 
+    /// The session moved to `phase`: a dictation ending can free the gate.
     public func sessionPhaseChanged(_ phase: PipelinePhase) {
       perform(routing.sessionPhaseChanged(phase))
     }
 
-    private func perform(_ actions: [SelectionSpeechRouting.Action]) {
+    func perform(_ actions: [SelectionSpeechRouting.Action]) {
       for action in actions { perform(action) }
       // Every routing step comes through here, so this sees every return to rest.
       if !routing.isHandlingPress { pressSettled() }
@@ -168,21 +192,36 @@
 
     private func perform(_ action: SelectionSpeechRouting.Action) {
       switch action {
-      case .forward(let command): session.submit(command)
-      case .prepareCommand: Task { [performer] in await performer.commandStarting() }
+      case .forward(let command):
+        session.submit(command)
+
+      case .prepareCommand:
+        Task { [performer] in await performer.commandStarting() }
+
       case .readScreen:
         screenRead?.cancel()
         screenRead = Task { [performer] in await performer.screenContext() }
+
       case .readSelection:
         Task { [weak self] in
           let selection = await self?.readSelection()
-          guard let self else { return }
-          self.perform(self.routing.selectionResolved(selection))
+          guard let self else {
+            return
+          }
+          perform(routing.selectionResolved(selection))
         }
-      case .startHoldTimer: startHoldTimer()
-      case .syncGateAfterSession: syncGateAfterSession()
-      case .resetGate: resetGate()
-      case .speak, .answer, .stopSpeech, .rewrite, .compose, .runCommand, .stopJob: performTask(action)
+
+      case .startHoldTimer:
+        startHoldTimer()
+
+      case .syncGateAfterSession:
+        syncGateAfterSession()
+
+      case .resetGate:
+        resetGate()
+
+      case .speak, .answer, .stopSpeech, .rewrite, .compose, .runCommand, .stopJob:
+        performTask(action)
       }
     }
 
@@ -195,11 +234,13 @@
         // to the next read.
         let style = ReadAloudStyleStore(defaults: defaults).style
         run { [speaker] onLevel in try await speaker.speak(text, style: style, onLevel: onLevel) }
-      case .answer(let request, let selection):
+
+      case let .answer(request, selection):
         let style = ReadAloudStyleStore(defaults: defaults).style
         run(startCueDelay: Self.answerCueGap) { [speaker] onLevel in
           try await speaker.answer(request, about: selection, style: style, onLevel: onLevel)
         }
+
       case .stopSpeech:
         speech?.cancel()
         speech = nil
@@ -207,9 +248,16 @@
         // dictation the same press starts must not have its pill taken down
         // by this read's late end.
         endSpeech()
-      case .rewrite(let request, let selection): rewrite(selection, as: request)
-      case .compose(let request): compose(request)
-      case .runCommand(let command): run(command)
+
+      case let .rewrite(request, selection):
+        rewrite(selection, as: request)
+
+      case .compose(let request):
+        compose(request)
+
+      case .runCommand(let command):
+        run(command)
+
       case .stopJob:
         // A stopped command's own end never runs, so stop its screen read and
         // undo its preparation here — before it ran, too; for a rewrite or a
@@ -217,12 +265,15 @@
         screenRead?.cancel()
         screenRead = nil
         Task { [performer] in await performer.commandEnded() }
-        guard let task = job else { return }
+        guard let task = job else {
+          return
+        }
         task.cancel()
         job = nil
         // Ended now, as a stopped read is, so the press that stopped it
         // shows its own state rather than this job's late end.
         jobPill(nil)
+
       case .forward, .prepareCommand, .readScreen, .readSelection, .startHoldTimer, .syncGateAfterSession, .resetGate:
         break
       }
@@ -234,9 +285,11 @@
       holdTimer?.cancel()
       holdTimer = Task { [weak self, clock] in
         try? await clock.sleep(for: SelectionSpeechRouting.holdDelay)
-        guard !Task.isCancelled, let self else { return }
-        self.holdTimer = nil
-        self.perform(self.routing.holdElapsed())
+        guard !Task.isCancelled, let self else {
+          return
+        }
+        holdTimer = nil
+        perform(routing.holdElapsed())
       }
     }
 
@@ -275,14 +328,18 @@
           outcome = try await session.replaceSelection(with: text).overlayState
         } catch {
           // Abandoned only if cancelled; otherwise a dropped request, a failure.
-          if Self.isCancellation(error) && Task.isCancelled { return }
+          if Self.isCancellation(error), Task.isCancelled {
+            return
+          }
           Self.logger.error("\(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
           outcome = Self.failure(error)
         }
-        guard !Task.isCancelled, let self else { return }
-        self.job = nil
-        self.jobPill(outcome)
-        self.perform(self.routing.jobFinished())
+        guard !Task.isCancelled, let self else {
+          return
+        }
+        job = nil
+        jobPill(outcome)
+        perform(routing.jobFinished())
       }
     }
 
@@ -308,91 +365,25 @@
       jobPill(.commanding)
       job = Task { [weak self, planner, performer, session] in
         let record = await Self.execute(
-          command, screen: started, planner: planner, performer: performer, session: session)
+          command, screen: started, planner: planner, performer: performer, session: session
+        )
         // In full, to the developer-mode log (`DictationLog+Commands`), an
         // abandoned command too.
         DictationLog.appendCommand(record)
         // A command a press abandoned ends through `.stopJob`, never here: a
         // late end from it — a cancelled request can throw a URLError rather
         // than a CancellationError — must not undo a newer command's start.
-        guard !Task.isCancelled, let outcome = record.outcome else { return }
+        guard !Task.isCancelled, let outcome = record.outcome else {
+          return
+        }
         await performer.commandEnded()
-        guard !Task.isCancelled, let self else { return }
-        self.lastCommand = record
-        self.job = nil
-        self.jobPill(outcome)
-        self.perform(self.routing.jobFinished())
-      }
-    }
-
-    /// Whether a read, answer, rewrite, composition or command is wearing the pill — what
-    /// `PipelinePhase.overlayState(whileSpeaking:)` asks, so a session phase
-    /// arriving under any of them can't cover it.
-    public var ownsPill: Bool { activeGeneration != nil || job != nil }
-
-    /// What the session's transcription shows as when it's a job's spoken
-    /// words — "Rewriting", "Writing", "Working" — or nil for a dictation's "Transcribing":
-    /// what `PipelinePhase.overlayState(whileSpeaking:processingAs:)` asks.
-    public var processingState: OverlayUIState? { routing.processingState }
-
-    /// Whether the recording under way is a command's.
-    public var recordsCommand: Bool { routing.recordsCommand }
-
-    /// Reports the read the pill is showing as over, once: the meter to 0, then
-    /// `speechEnded`.
-    private func endSpeech() {
-      guard activeGeneration != nil else { return }
-      activeGeneration = nil
-      speechLevel(0)
-      speechEnded()
-    }
-
-    /// The beat between an ask's end and its answer's start. The spoken
-    /// request ends with dictation's stop chime, and the answer would start
-    /// with read-aloud's start chime in the same instant — two sounds run
-    /// together. Holding the second back this long keeps them apart.
-    static let answerCueGap: Duration = .milliseconds(400)
-
-    /// Runs one read or answer as the current speech task, handing it the meter
-    /// callback, and reports its start and end. `startCueDelay` holds back the
-    /// start (the pill and its chime) — skipped if the speech has already
-    /// ended by then.
-    private func run(
-      startCueDelay: Duration = .zero,
-      _ work: @escaping @Sendable (_ onLevel: @escaping @Sendable (Float) -> Void) async throws -> Void
-    ) {
-      speechGeneration += 1
-      let generation = speechGeneration
-      activeGeneration = generation
-      if startCueDelay == .zero {
-        speechStarted()
-      } else {
-        Task { [weak self, clock] in
-          try? await clock.sleep(for: startCueDelay)
-          guard let self, self.activeGeneration == generation else { return }
-          self.speechStarted()
+        guard !Task.isCancelled, let self else {
+          return
         }
-      }
-      let onLevel: @Sendable (Float) -> Void = { [weak self] level in
-        Task { @MainActor in
-          guard let self, self.activeGeneration == generation else { return }
-          self.speechLevel(level)
-        }
-      }
-      speech = Task { [weak self] in
-        do {
-          try await work(onLevel)
-        } catch is CancellationError {
-        } catch {
-          Self.logger.error("read-aloud failed: \(error.localizedDescription, privacy: .public)")
-          self?.speechFailed(error)
-        }
-        if let self, self.activeGeneration == generation { self.endSpeech() }
-        // A read this router stopped was cancelled, and a newer one may already
-        // be playing, so only a read that ended on its own reports back.
-        guard !Task.isCancelled, let self else { return }
-        self.speech = nil
-        self.perform(self.routing.speechFinished())
+        lastCommand = record
+        job = nil
+        jobPill(outcome)
+        perform(routing.jobFinished())
       }
     }
   }

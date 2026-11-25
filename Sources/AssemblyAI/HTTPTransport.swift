@@ -23,7 +23,8 @@ public protocol HTTPTransport: Sendable {
   /// past its 120 s cap — goes through `data(for:)` with an `httpBody`, so it
   /// cannot be mistaken for, or substituted into, this streaming path.
   func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    for request: URLRequest,
+    streaming body: AsyncThrowingStream<Data, any Error>,
     delegate: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse)
 }
@@ -33,7 +34,8 @@ extension URLSession: HTTPTransport {
   /// error-precedence policy — see there for why that logic does not live in
   /// this conformance.
   public func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    for request: URLRequest,
+    streaming body: AsyncThrowingStream<Data, any Error>,
     delegate: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
     try await ChunkedRequestBody.send(request, body: body, delegate: delegate) { streamed, hook in

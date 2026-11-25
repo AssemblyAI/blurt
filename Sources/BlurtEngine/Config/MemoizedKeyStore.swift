@@ -33,19 +33,6 @@ final class MemoizedKeyStore: Sendable {
   /// without an `@unchecked` escape hatch.
   private let cache = Mutex<Cached>(.unloaded)
 
-  init(
-    read: @escaping @Sendable () -> KeychainStore.ReadResult,
-    write: @escaping @Sendable (String?) -> Bool
-  ) {
-    self.read = read
-    self.write = write
-  }
-
-  /// Memoizes over a keychain item.
-  convenience init(keychain: KeychainStore) {
-    self.init(read: { keychain.read() }, write: { keychain.write($0) })
-  }
-
   /// The stored key, or `nil` if none has been saved (or it's empty).
   ///
   /// Served from the memo after the first successful read. Every hot path funnels
@@ -58,14 +45,18 @@ final class MemoizedKeyStore: Sendable {
   /// refreshes the memo.
   var current: String? {
     cache.withLock { state in
-      if case .loaded(let value) = state { return value }
+      if case .loaded(let value) = state {
+        return value
+      }
       switch read() {
       case .value(let key):
         state = .loaded(key)
         return key
+
       case .absent:
         state = .loaded(nil)
         return nil
+
       case .unavailable:
         // Deliberately NOT memoized. A transient read failure — a locked login
         // keychain, or the user denying the item's ACL prompt (which re-signing the
@@ -77,6 +68,19 @@ final class MemoizedKeyStore: Sendable {
         return nil
       }
     }
+  }
+
+  init(
+    read: @escaping @Sendable () -> KeychainStore.ReadResult,
+    write: @escaping @Sendable (String?) -> Bool
+  ) {
+    self.read = read
+    self.write = write
+  }
+
+  /// Memoizes over a keychain item.
+  convenience init(keychain: KeychainStore) {
+    self.init(read: { keychain.read() }, write: { keychain.write($0) })
   }
 
   /// Stores `key`. Passing `nil` or an empty/whitespace string deletes it.
@@ -95,9 +99,14 @@ final class MemoizedKeyStore: Sendable {
       // what `current` would now return, and a failed write leaves no stale value.
       // Unreadable storage leaves the memo unloaded so the next read retries.
       switch read() {
-      case .value(let stored): state = .loaded(stored)
-      case .absent: state = .loaded(nil)
-      case .unavailable: state = .unloaded
+      case .value(let stored):
+        state = .loaded(stored)
+
+      case .absent:
+        state = .loaded(nil)
+
+      case .unavailable:
+        state = .unloaded
       }
       return didWrite
     }

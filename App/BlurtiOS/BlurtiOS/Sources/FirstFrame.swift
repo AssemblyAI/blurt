@@ -22,9 +22,11 @@ nonisolated final class FirstFrame: Sendable {
       case .armed:
         state = .arrived
         return nil
+
       case .waiting(let continuation):
         state = .idle
         return continuation
+
       case .idle, .arrived:
         return nil
       }
@@ -37,19 +39,25 @@ nonisolated final class FirstFrame: Sendable {
     let timer = Task {
       // Only a timer that ran out fails the wait; one cancelled because the
       // wait ended must not touch the next press's state.
-      guard (try? await Task.sleep(for: timeout)) != nil else { return }
+      guard (try? await Task.sleep(for: timeout)) != nil else {
+        return
+      }
       cancel()
     }
     defer { timer.cancel() }
     return await withCheckedContinuation { continuation in
+      // The wait's answer if it is already known; nil leaves the continuation waiting.
+      // swiftlint:disable:next discouraged_optional_boolean
       let early = state.withLock { state -> Bool? in
         switch state {
         case .arrived:
           state = .idle
           return true
+
         case .armed:
           state = .waiting(continuation)
           return nil
+
         case .idle, .waiting:
           // Cancelled before the wait began.
           return false
@@ -63,7 +71,9 @@ nonisolated final class FirstFrame: Sendable {
   func cancel() {
     let waiter = state.withLock { state -> CheckedContinuation<Bool, Never>? in
       defer { state = .idle }
-      if case .waiting(let continuation) = state { return continuation }
+      if case .waiting(let continuation) = state {
+        return continuation
+      }
       return nil
     }
     waiter?.resume(returning: false)

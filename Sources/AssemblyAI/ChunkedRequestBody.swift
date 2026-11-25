@@ -24,11 +24,6 @@ import os
 /// `upload(for:streaming:delegate:)` and never touched here again, and `output`
 /// is touched only by the single task running `drain`.
 final class ChunkedRequestBody: @unchecked Sendable {
-  /// `URLSession`'s end of the pair. Handed over unopened — `URLSession` opens
-  /// it itself, and opening it here makes the upload fail.
-  let input: InputStream
-  private let output: OutputStream
-
   /// Bound-pair buffer size — one second of the 16 kHz mono S16LE geometry.
   ///
   /// Deliberately small. The buffer is not a place audio should accumulate: any
@@ -62,6 +57,11 @@ final class ChunkedRequestBody: @unchecked Sendable {
   private static let minSpaceRetry = Duration.milliseconds(5)
   private static let maxSpaceRetry = Duration.milliseconds(40)
 
+  /// `URLSession`'s end of the pair. Handed over unopened — `URLSession` opens
+  /// it itself, and opening it here makes the upload fail.
+  let input: InputStream
+  private let output: OutputStream
+
   /// Throws when `CFStreamCreateBoundPair` hands back a half-nil pair. It has
   /// no documented failure mode for a valid buffer size and the default
   /// allocator, but the alternative to checking is force-unwrapping a body the
@@ -70,85 +70,11 @@ final class ChunkedRequestBody: @unchecked Sendable {
     var readStream: Unmanaged<CFReadStream>?
     var writeStream: Unmanaged<CFWriteStream>?
     unsafe CFStreamCreateBoundPair(nil, &readStream, &writeStream, CFIndex(Self.bufferSize))
-    guard let readStream = unsafe readStream, let writeStream = unsafe writeStream else {
+    guard let reader = unsafe readStream, let writer = unsafe writeStream else {
       throw ChunkedUploadError.bodyStreamUnavailable
     }
-    input = unsafe readStream.takeRetainedValue() as InputStream
-    output = unsafe writeStream.takeRetainedValue() as OutputStream
-  }
-
-  /// Writes every chunk `body` produces into the pipe, in order, then closes it
-  /// — and closing is what tells the server the multipart body is complete.
-  ///
-  /// Rethrows whatever `body` throws, so a producer failure (e.g. the `config`
-  /// part failing to encode) surfaces as an error instead of a body that simply
-  /// stops mid-part and leaves the server to reject a truncated request.
-  func drain(_ body: AsyncThrowingStream<Data, any Error>) async throws {
-    output.open()
-    defer { output.close() }
-    for try await chunk in body {
-      try await write(chunk)
-    }
-  }
-
-  /// Writes one chunk, waiting out backpressure rather than dropping audio.
-  ///
-  /// `OutputStream.write` on a bound pair takes only what fits, so a partial
-  /// write is normal and the remainder has to be retried — dropping it would
-  /// desynchronise the multipart body, not merely lose a few milliseconds of
-  /// sound. Polling `hasSpaceAvailable` (rather than scheduling the stream on a
-  /// run loop and waiting for `.hasSpaceAvailable`) keeps this a plain async
-  /// function: it suspends the task instead of parking a thread, so a stalled
-  /// uplink costs nothing but the retry ticks.
-  ///
-  /// Cancellation is checked before the chunk starts rather than between its
-  /// partial writes, so a chunk the pipe is taking is finished, not cut part
-  /// way through a sample. Only a wait for space (a stalled uplink) still ends
-  /// on a cancel mid-chunk, and the writer is only cancelled once the request's
-  /// outcome no longer depends on the body (`send`).
-  private func write(_ chunk: Data) async throws {
-    try Task.checkCancellation()
-    var remaining = chunk
-    var retry = Self.minSpaceRetry
-    while !remaining.isEmpty {
-      guard output.hasSpaceAvailable else {
-        // A pipe that has been torn down — `URLSession` abandoned the body after
-        // an early response, or asked for a replay it cannot have — can stop
-        // accepting bytes without ever reporting itself writable *or* returning
-        // a short write, so the zero-write branch below would never be reached
-        // and this would poll until the task was cancelled. Treat a dead stream
-        // as the failure it is.
-        switch output.streamStatus {
-        case .error, .atEnd, .closed:
-          throw ChunkedUploadError.bodyStreamClosed
-        default:
-          try await Task.sleep(for: retry)
-          retry = min(retry * 2, Self.maxSpaceRetry)
-          continue
-        }
-      }
-      let written = unsafe remaining.withUnsafeBytes { raw -> Int in
-        guard let base = unsafe raw.bindMemory(to: UInt8.self).baseAddress else { return -1 }
-        return unsafe output.write(base, maxLength: remaining.count)
-      }
-      guard written > 0 else {
-        // 0 means the reader went away, negative means a real stream error;
-        // either way the body can never be completed, so fail rather than spin.
-        //
-        // Not `streamError ?? …`: probed against a real bound pair for both
-        // teardown shapes (reader opened-then-closed, and closed mid-stream),
-        // `write` answers -1 with `streamStatus == .open` and a **nil**
-        // `streamError`, so the fallback was the only value it ever produced.
-        // Logged instead, on the rare chance a future OS does populate it.
-        if let streamError = output.streamError {
-          SDKLog.transport.error(
-            "upload pipe write failed: \(streamError.localizedDescription, privacy: .public)")
-        }
-        throw ChunkedUploadError.bodyStreamClosed
-      }
-      remaining = remaining.dropFirst(written)
-      retry = Self.minSpaceRetry
-    }
+    input = unsafe reader.takeRetainedValue() as InputStream
+    output = unsafe writer.takeRetainedValue() as OutputStream
   }
 
   /// Streams `body` as `request`'s HTTP body, with `fetch` standing in for
@@ -217,28 +143,87 @@ final class ChunkedRequestBody: @unchecked Sendable {
   /// into a quiet no-op, rather than as whatever a truncated body earns.
   private static func producerFailure(in outcome: Result<Void, any Error>) -> (any Error)? {
     guard case .failure(let error) = outcome, !(error is CancellationError), !(error is ChunkedUploadError)
-    else { return nil }
+    else {
+      return nil
+    }
     return error
   }
 
-}
+  /// Writes every chunk `body` produces into the pipe, in order, then closes it
+  /// — and closing is what tells the server the multipart body is complete.
+  ///
+  /// Rethrows whatever `body` throws, so a producer failure (e.g. the `config`
+  /// part failing to encode) surfaces as an error instead of a body that simply
+  /// stops mid-part and leaves the server to reject a truncated request.
+  func drain(_ body: AsyncThrowingStream<Data, any Error>) async throws {
+    output.open()
+    defer { output.close() }
+    for try await chunk in body {
+      try await write(chunk)
+    }
+  }
 
-/// Failures specific to feeding a streamed request body. Wrapped in
-/// the caller's own error before reaching a UI (Blurt wraps it in
-/// `BlurtError.sttFailed`).
-enum ChunkedUploadError: Error, LocalizedError {
-  /// The pipe closed before the whole body was written — `URLSession` gave up
-  /// on the request while audio was still being produced.
-  case bodyStreamClosed
-  /// The platform refused to create the pipe the body is written through.
-  case bodyStreamUnavailable
+  /// Writes one chunk, waiting out backpressure rather than dropping audio.
+  ///
+  /// `OutputStream.write` on a bound pair takes only what fits, so a partial
+  /// write is normal and the remainder has to be retried — dropping it would
+  /// desynchronise the multipart body, not merely lose a few milliseconds of
+  /// sound. Polling `hasSpaceAvailable` (rather than scheduling the stream on a
+  /// run loop and waiting for `.hasSpaceAvailable`) keeps this a plain async
+  /// function: it suspends the task instead of parking a thread, so a stalled
+  /// uplink costs nothing but the retry ticks.
+  ///
+  /// Cancellation is checked before the chunk starts rather than between its
+  /// partial writes, so a chunk the pipe is taking is finished, not cut part
+  /// way through a sample. Only a wait for space (a stalled uplink) still ends
+  /// on a cancel mid-chunk, and the writer is only cancelled once the request's
+  /// outcome no longer depends on the body (`send`).
+  private func write(_ chunk: Data) async throws {
+    try Task.checkCancellation()
+    var remaining = chunk
+    var retry = Self.minSpaceRetry
+    while !remaining.isEmpty {
+      guard output.hasSpaceAvailable else {
+        // A pipe that has been torn down — `URLSession` abandoned the body after
+        // an early response, or asked for a replay it cannot have — can stop
+        // accepting bytes without ever reporting itself writable *or* returning
+        // a short write, so the zero-write branch below would never be reached
+        // and this would poll until the task was cancelled. Treat a dead stream
+        // as the failure it is.
+        switch output.streamStatus {
+        case .error, .atEnd, .closed:
+          throw ChunkedUploadError.bodyStreamClosed
 
-  var errorDescription: String? {
-    switch self {
-    case .bodyStreamClosed:
-      return "The upload connection closed before the recording finished sending."
-    case .bodyStreamUnavailable:
-      return "Couldn't open an upload stream for the recording."
+        default:
+          try await Task.sleep(for: retry)
+          retry = min(retry * 2, Self.maxSpaceRetry)
+          continue
+        }
+      }
+      let written = unsafe remaining.withUnsafeBytes { raw -> Int in
+        guard let base = unsafe raw.bindMemory(to: UInt8.self).baseAddress else {
+          return -1
+        }
+        return unsafe output.write(base, maxLength: remaining.count)
+      }
+      guard written > 0 else {
+        // 0 means the reader went away, negative means a real stream error;
+        // either way the body can never be completed, so fail rather than spin.
+        //
+        // Not `streamError ?? …`: probed against a real bound pair for both
+        // teardown shapes (reader opened-then-closed, and closed mid-stream),
+        // `write` answers -1 with `streamStatus == .open` and a **nil**
+        // `streamError`, so the fallback was the only value it ever produced.
+        // Logged instead, on the rare chance a future OS does populate it.
+        if let streamError = output.streamError {
+          SDKLog.transport.error(
+            "upload pipe write failed: \(streamError.localizedDescription, privacy: .public)"
+          )
+        }
+        throw ChunkedUploadError.bodyStreamClosed
+      }
+      remaining = remaining.dropFirst(written)
+      retry = Self.minSpaceRetry
     }
   }
 }

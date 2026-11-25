@@ -8,27 +8,31 @@ import UIKit
 /// thump, and the result becomes the typing speed time saved is measured
 /// against, in place of the 36 wpm phone average.
 struct TypingTestView: View {
-  @Environment(\.dismiss) private var dismiss
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
   private enum Phase: Equatable {
     case ready
     case running(since: Date)
     case finished(wordsPerMinute: Double, accuracy: Double, result: TypingSpeed.Result)
 
     var startDate: Date? {
-      if case .running(let since) = self { return since }
+      if case .running(let since) = self {
+        return since
+      }
       return nil
     }
   }
+
+  private static let seconds = Double(TypingTest.duration.components.seconds)
+
+  @Environment(\.dismiss)
+  private var dismiss
+  @Environment(\.accessibilityReduceMotion)
+  private var reduceMotion
 
   @State private var test = TypingTest()
   @State private var phase = Phase.ready
   @State private var input = ""
   @State private var best = TypingSpeed.best()
   @FocusState private var isTyping: Bool
-
-  private static let seconds = Double(TypingTest.duration.components.seconds)
 
   var body: some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
@@ -51,7 +55,8 @@ struct TypingTestView: View {
       switch phase {
       case .ready, .running:
         sprint
-      case .finished(let wordsPerMinute, let accuracy, let result):
+
+      case let .finished(wordsPerMinute, accuracy, result):
         results(wordsPerMinute: wordsPerMinute, accuracy: accuracy, result: result)
       }
     }
@@ -65,34 +70,7 @@ struct TypingTestView: View {
 
   private var sprint: some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
-      // Ticks only once the clock runs: before the first key nothing it shows changes.
-      let schedule = AnimationTimelineSchedule(
-        minimumInterval: DesignTokens.Motion.typingTick, paused: phase.startDate == nil)
-      TimelineView(schedule) { context in
-        let remaining = remainingSeconds(at: context.date)
-        let isFinalStretch =
-          phase.startDate != nil && remaining <= Double(TypingTest.finalStretch.components.seconds)
-        HStack(alignment: .firstTextBaseline) {
-          Text(String(format: "%.1f", remaining))
-            .font(BlurtType.mono(DesignTokens.Typography.sizeTypingClock, weight: .bold))
-            .monospacedDigit()
-            .foregroundStyle(isFinalStretch ? BlurtBrand.errorOrange : BlurtBrand.text)
-            .scaleEffect(
-              isFinalStretch && !reduceMotion && pulse(at: context.date) ? DesignTokens.Metrics.typingPulse : 1,
-              anchor: .leading
-            )
-            .animation(.easeOut(duration: DesignTokens.Motion.typingFlash), value: Int(remaining))
-          Spacer()
-          VStack(alignment: .trailing, spacing: DesignTokens.Metrics.appLineGap) {
-            Eyebrow("WPM")
-            Text(liveWordsPerMinute(at: context.date))
-              .font(BlurtType.mono(DesignTokens.Typography.sizeTypingLive, weight: .bold))
-              .monospacedDigit()
-              .foregroundStyle(BlurtBrand.accent)
-          }
-        }
-        .accessibilityElement(children: .combine)
-      }
+      clock
 
       wordsText
         .font(BlurtType.mono(DesignTokens.Typography.sizeTypingWords, weight: .medium))
@@ -113,7 +91,8 @@ struct TypingTestView: View {
           RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusInput)
             .strokeBorder(
               input.isEmpty || test.isOnTrack(input) ? BlurtBrand.cardBorder : BlurtBrand.errorOrange,
-              lineWidth: DesignTokens.Metrics.typingFieldBorder)
+              lineWidth: DesignTokens.Metrics.typingFieldBorder
+            )
         )
         .animation(.easeInOut(duration: DesignTokens.Motion.typingFlash), value: test.isOnTrack(input))
         .onChange(of: input) { _, typed in handle(typed) }
@@ -121,6 +100,40 @@ struct TypingTestView: View {
       Text(phase == .ready ? "30 seconds. The clock starts on your first key." : "Space after each word.")
         .brandFootnote()
       Spacer(minLength: 0)
+    }
+  }
+
+  /// The countdown and the live speed. Ticks only once the clock runs: before
+  /// the first key nothing it shows changes.
+  private var clock: some View {
+    let schedule = AnimationTimelineSchedule(
+      minimumInterval: DesignTokens.Motion.typingTick, paused: phase.startDate == nil
+    )
+
+    return TimelineView(schedule) { context in
+      let remaining = remainingSeconds(at: context.date)
+      let isFinalStretch =
+        phase.startDate != nil && remaining <= Double(TypingTest.finalStretch.components.seconds)
+      HStack(alignment: .firstTextBaseline) {
+        Text(String(format: "%.1f", remaining))
+          .font(BlurtType.mono(DesignTokens.Typography.sizeTypingClock, weight: .bold))
+          .monospacedDigit()
+          .foregroundStyle(isFinalStretch ? BlurtBrand.errorOrange : BlurtBrand.text)
+          .scaleEffect(
+            isFinalStretch && !reduceMotion && pulse(at: context.date) ? DesignTokens.Metrics.typingPulse : 1,
+            anchor: .leading
+          )
+          .animation(.easeOut(duration: DesignTokens.Motion.typingFlash), value: Int(remaining))
+        Spacer()
+        VStack(alignment: .trailing, spacing: DesignTokens.Metrics.appLineGap) {
+          Eyebrow("WPM")
+          Text(liveWordsPerMinute(at: context.date))
+            .font(BlurtType.mono(DesignTokens.Typography.sizeTypingLive, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(BlurtBrand.accent)
+        }
+      }
+      .accessibilityElement(children: .combine)
     }
   }
 
@@ -148,10 +161,14 @@ struct TypingTestView: View {
 
   private func handle(_ typed: String) {
     if phase == .ready, !typed.isEmpty { phase = .running(since: .now) }
-    guard case .running = phase, let last = typed.last, last.isWhitespace else { return }
+    guard case .running = phase, let last = typed.last, last.isWhitespace else {
+      return
+    }
     let word = typed.trimmingCharacters(in: .whitespaces)
     input = ""
-    guard !word.isEmpty else { return }
+    guard !word.isEmpty else {
+      return
+    }
     if test.submit(word) {
       UIImpactFeedbackGenerator(style: .light).impactOccurred()
     } else {
@@ -162,16 +179,22 @@ struct TypingTestView: View {
   /// Runs once per sprint: waits out the clock, thumps through the final
   /// stretch, then scores.
   private func runClock() async {
-    guard let start = phase.startDate else { return }
+    guard let start = phase.startDate else {
+      return
+    }
     let stretch = Int(TypingTest.finalStretch.components.seconds)
     let untilStretch = start.addingTimeInterval(Self.seconds - Double(stretch)).timeIntervalSinceNow
     try? await Task.sleep(for: .seconds(max(0, untilStretch)))
     for _ in 0..<stretch {
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled else {
+        return
+      }
       UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 1)
       try? await Task.sleep(for: .seconds(1))
     }
-    guard !Task.isCancelled else { return }
+    guard !Task.isCancelled else {
+      return
+    }
     finish()
   }
 
@@ -193,50 +216,39 @@ struct TypingTestView: View {
   }
 
   private func remainingSeconds(at date: Date) -> Double {
-    guard let start = phase.startDate else { return Self.seconds }
+    guard let start = phase.startDate else {
+      return Self.seconds
+    }
     return max(0, Self.seconds - date.timeIntervalSince(start))
   }
 
   private func liveWordsPerMinute(at date: Date) -> String {
-    guard let start = phase.startDate else { return "--" }
+    guard let start = phase.startDate else {
+      return "--"
+    }
     let elapsed = date.timeIntervalSince(start)
     // The first couple of seconds swing wildly, so hold off.
-    guard elapsed >= 2 else { return "--" }
+    guard elapsed >= 2 else {
+      return "--"
+    }
     return "\(Int(test.wordsPerMinute(after: .seconds(min(elapsed, Self.seconds))).rounded()))"
   }
 
   private func pulse(at date: Date) -> Bool {
     date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) < DesignTokens.Motion.typingFlash
   }
+}
 
-  // MARK: - The result
+// MARK: - The result
 
+extension TypingTestView {
   private func results(wordsPerMinute: Double, accuracy: Double, result: TypingSpeed.Result) -> some View {
     let rank = TypingTest.rank(for: wordsPerMinute)
     let rounded = Int(wordsPerMinute.rounded())
     let speedup = TypingTest.speakingWordsPerMinute / max(wordsPerMinute, 1)
     let talking = "Talking runs about \(Int(TypingTest.speakingWordsPerMinute)) words a minute."
     return VStack(alignment: .leading, spacing: DesignTokens.Metrics.typingResultGap) {
-      VStack(alignment: .leading, spacing: DesignTokens.Metrics.appChipGap) {
-        Eyebrow(
-          result.isBest ? "New personal best" : "Best \(Int(best.rounded())) wpm",
-          color: result.isBest ? BlurtBrand.accent : BlurtBrand.muted)
-        HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Metrics.appChipGap) {
-          Text("\(rounded)")
-            .font(BlurtType.mono(DesignTokens.Typography.sizeTypingResult, weight: .bold))
-            .foregroundStyle(BlurtBrand.text)
-          Text("WPM")
-            .font(BlurtType.mono(DesignTokens.Typography.sizeTypingUnit, weight: .medium))
-            .foregroundStyle(BlurtBrand.muted)
-        }
-        Text(rank.title)
-          .font(BlurtType.heading(DesignTokens.Typography.sizeTypingRank))
-          .foregroundStyle(BlurtBrand.text)
-        Text(rank.line)
-          .font(BlurtType.body(DesignTokens.Typography.sizeBody))
-          .foregroundStyle(BlurtBrand.text)
-      }
-      .accessibilityElement(children: .combine)
+      headline(rounded: rounded, rank: rank, result: result)
 
       Eyebrow("\(Int((accuracy * 100).rounded()))% accuracy")
 
@@ -255,11 +267,37 @@ struct TypingTestView: View {
       Eyebrow(
         result.setsSpeed
           ? "Time saved now uses your \(rounded) wpm" : "Too few words to measure. Time saved is unchanged",
-        color: result.setsSpeed ? BlurtBrand.accent : BlurtBrand.muted)
+        color: result.setsSpeed ? BlurtBrand.accent : BlurtBrand.muted
+      )
 
       Button("Try again", action: restart)
         .buttonStyle(BrandButtonStyle())
       Spacer(minLength: 0)
     }
+  }
+
+  /// The speed, its rank and the best so far, read as one element.
+  private func headline(rounded: Int, rank: TypingTest.Rank, result: TypingSpeed.Result) -> some View {
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appChipGap) {
+      Eyebrow(
+        result.isBest ? "New personal best" : "Best \(Int(best.rounded())) wpm",
+        color: result.isBest ? BlurtBrand.accent : BlurtBrand.muted
+      )
+      HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Metrics.appChipGap) {
+        Text("\(rounded)")
+          .font(BlurtType.mono(DesignTokens.Typography.sizeTypingResult, weight: .bold))
+          .foregroundStyle(BlurtBrand.text)
+        Text("WPM")
+          .font(BlurtType.mono(DesignTokens.Typography.sizeTypingUnit, weight: .medium))
+          .foregroundStyle(BlurtBrand.muted)
+      }
+      Text(rank.title)
+        .font(BlurtType.heading(DesignTokens.Typography.sizeTypingRank))
+        .foregroundStyle(BlurtBrand.text)
+      Text(rank.line)
+        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+        .foregroundStyle(BlurtBrand.text)
+    }
+    .accessibilityElement(children: .combine)
   }
 }

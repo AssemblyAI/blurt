@@ -147,15 +147,18 @@ package final class KeyboardModel {
   /// the handshake's stamps use, so a hold is one length to both.
   package var elapsed: Duration { .seconds(now().timeIntervalSince(clockStart)) }
 
-  package init() {}
+  /// The term's own case rule, for the keys while the field is open: a key
+  /// term is usually a name, or two — capitalised to start and after a
+  /// space, then as typed. The host's sentence is KeyboardKit's to read.
+  package var termWantsUppercase: Bool {
+    guard let termDraft else {
+      return false
+    }
+    return termDraft.isEmpty || termDraft.last == " "
+  }
 
-  deinit {
-    heartbeat?.cancel()
-    leaving?.cancel()
-    noticeDwell?.cancel()
-    noticeClock?.cancel()
-    termNotice?.cancel()
-    ticks.forEach { $0.cancel() }
+  package init() {
+    // Nothing to set up: every property has its resting value, and the controller wires the rest.
   }
 
   /// The cursor moved or the text around it changed, including by our own
@@ -179,27 +182,30 @@ package final class KeyboardModel {
     guard termDraft != nil, termDraftFromSelection == nil, let baseline = termHostBaseline, let proxy else {
       return
     }
-    let now = proxy.documentContextBeforeInput ?? ""
-    let delta = now.count - baseline.count
+    let textBefore = proxy.documentContextBeforeInput ?? ""
+    let delta = textBefore.count - baseline.count
     // Typing lengthens the text before the cursor by one character at a time
     // and leaves the text after it alone; a cursor move changes both; a
     // selection is neither; a block (a paste, the system's own dictation
     // under the keyboard) is never typing and stays in the field.
     guard delta == 1, proxy.selectedText == nil,
       (proxy.documentContextAfterInput ?? "") == (termHostBaselineAfter ?? ""),
-      now.dropLast(delta).hasSuffix(baseline.suffix(24))
-    else { return }
-    let typed = String(now.suffix(delta))
+      textBefore.dropLast(delta).hasSuffix(baseline.suffix(24))
+    else {
+      return
+    }
+    let typed = String(textBefore.suffix(delta))
     proxy.deleteBackward()
     termDraft?.append(typed)
     termHostBaseline = proxy.documentContextBeforeInput ?? ""
   }
 
-  /// The term's own case rule, for the keys while the field is open: a key
-  /// term is usually a name, or two — capitalised to start and after a
-  /// space, then as typed. The host's sentence is KeyboardKit's to read.
-  package var termWantsUppercase: Bool {
-    guard let termDraft else { return false }
-    return termDraft.isEmpty || termDraft.last == " "
+  deinit {
+    heartbeat?.cancel()
+    leaving?.cancel()
+    noticeDwell?.cancel()
+    noticeClock?.cancel()
+    termNotice?.cancel()
+    ticks.forEach { $0.cancel() }
   }
 }

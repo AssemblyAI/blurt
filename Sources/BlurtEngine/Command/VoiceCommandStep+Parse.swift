@@ -4,6 +4,122 @@ import Foundation
 // asks for, checked step by step before any of it runs.
 
 extension VoiceCommandStep {
+  /// Every field a step can carry, by its name on the wire: the keys this
+  /// parser decodes and the planner's schema spells (`VoiceCommandPlanner.fields`),
+  /// one list so the two can't disagree.
+  enum Field: String, CodingKey, CaseIterable {
+    case action, app, url, keys, text, control, name, path, element, direction, operation, value
+  }
+
+  private struct Plan: Decodable {
+    let steps: [RawStep]
+  }
+
+  /// One step as the instruction spells it: an `action` and the one field it uses.
+  private struct RawStep: Decodable {
+    let action: String
+    let app: String?
+    let url: String?
+    let keys: String?
+    let text: String?
+    let control: String?
+    let name: String?
+    /// Empty when absent, which `menuPath` refuses.
+    let path: [String]
+    let element: Int?
+    let direction: String?
+    let operation: String?
+    /// A slider's or stepper's value, the schema's number written as `plain`.
+    let value: String?
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: Field.self)
+      action = try container.decode(String.self, forKey: .action)
+      app = try container.decodeIfPresent(String.self, forKey: .app)
+      url = try container.decodeIfPresent(String.self, forKey: .url)
+      keys = try container.decodeIfPresent(String.self, forKey: .keys)
+      text = try container.decodeIfPresent(String.self, forKey: .text)
+      control = try container.decodeIfPresent(String.self, forKey: .control)
+      name = try container.decodeIfPresent(String.self, forKey: .name)
+      path = try container.decodeIfPresent([String].self, forKey: .path) ?? []
+      element = try container.decodeIfPresent(Int.self, forKey: .element)
+      direction = try container.decodeIfPresent(String.self, forKey: .direction)
+      operation = try container.decodeIfPresent(String.self, forKey: .operation)
+      value = try container.decodeIfPresent(Double.self, forKey: .value).map(Self.plain)
+    }
+
+    /// A number as `Double(_:)` reads it back: "40", "0.5" — never the
+    /// user's locale's "0,5", which it can't.
+    static func plain(_ number: Double) -> String {
+      number == number.rounded() && abs(number) < 1e15 ? String(Int(number)) : String(number)
+    }
+  }
+
+  /// The key names a `type` step means as the key: a whole step of just one.
+  static let typedKeyNames: Set<String> = ["return", "enter", "tab", "escape"]
+
+  /// The actions that do the same the second time: never planned twice running.
+  static let idempotent: Set<Action> = [
+    .openApp, .quitApp, .hideApp, .openURL, .window, .focus, .select, .setValue,
+  ]
+
+  /// The actions after which the window the snapshot read is surely still
+  /// the one listed — the condition for rewriting a later `press_button` to
+  /// a listed element. Not typing, which changes what a search or a
+  /// switcher lists, nor selecting, which changes the pane a row opens.
+  static let keepsWindow: Set<Action> = [.focus, .scroll, .setValue, .increment, .decrement, .media]
+
+  /// The kinds a `press_button` may mean: anything pressable — a row by its
+  /// name included — never a field or a slider.
+  static let pressableKinds: Set<String> = ScreenSnapshot.kinds(of: pressableRoles).union(["clickable"])
+
+  /// The roles behind `pressableKinds`.
+  private static let pressableRoles: Set<String> = [
+    "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuButton", "AXPopUpButton", "AXDisclosureTriangle",
+    "AXRow", "AXMenuItem",
+  ]
+
+  /// The kinds of listed element each element action takes, as the snapshot
+  /// names them (`ScreenSnapshot.kinds(of:)`), from the same role lists the
+  /// performer checks at the step's turn. An action absent takes any kind.
+  static let kinds: [Action: Set<String>] = [
+    .focus: ScreenSnapshot.kinds(of: ScreenSnapshot.textEntryRoles),
+    .select: ScreenSnapshot.kinds(of: ScreenSnapshot.selectableRoles),
+    .setValue: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
+    .increment: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
+    .decrement: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
+  ]
+
+  /// The app, link and keyboard steps, then the ones aimed at what's on screen.
+  private init(raw: RawStep) throws {
+    guard let action = Action(rawValue: raw.action) else { throw VoiceCommandError.unsupportedAction(raw.action) }
+    switch action {
+    case .openApp:
+      self = .openApp(try Self.field(raw.app))
+
+    case .quitApp:
+      self = .quitApp(try Self.field(raw.app))
+
+    case .hideApp:
+      self = .hideApp(try Self.field(raw.app))
+
+    case .openURL:
+      self = .openURL(try Self.url(raw.url))
+
+    case .shortcut:
+      self = .shortcut(try Self.chord(raw.keys))
+
+    case .type:
+      self = .type(try Self.typed(raw.text))
+
+    case .media:
+      self = .media(try Self.mediaKey(raw.control))
+
+    default:
+      self = try Self.screenStep(action, raw)
+    }
+  }
+
   /// The steps in a planner reply: the JSON object `{"steps": [...]}` the
   /// schema (`VoiceCommandPlanner.responseFormat`) holds the gateway to — no
   /// fence, prose or shape around it to forgive. Every step must parse, or
@@ -34,7 +150,7 @@ extension VoiceCommandStep {
       let sameWindow = steps[..<index].allSatisfy { Self.keepsWindow.contains($0.action) }
       steps[index] = steps[index].canonical(among: sameWindow ? listed : [])
     }
-    let elements = Dictionary(listed.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let elements = Dictionary(listed.map { ($0.id, $0) }) { first, _ in first }
     for step in steps {
       try step.check(against: elements)
     }
@@ -73,187 +189,71 @@ extension VoiceCommandStep {
       for start in 0...(steps.count - 2 * length) {
         let block = steps[start..<start + length]
         guard block.contains(where: { $0 != block.first }) else { continue }  // mutate-ok: same test either end
-        if block.elementsEqual(steps[start + length..<start + 2 * length]) { return Array(block) }
+        if block.elementsEqual(steps[start + length..<start + 2 * length]) {
+          return Array(block)
+        }
       }
     }
     return []
   }
 
-  /// The step as Blurt carries it out best, where the model wrote it another
-  /// way: a button by name that is listed, under that name or one it
-  /// starts (`NameMatch`) and as something pressable, as the listed element — read already, so not
-  /// searched for again; and a type of one line break as the return key,
-  /// which sends a message where a pasted line break only starts a new line.
-  func canonical(among listed: [ScreenContext.Element]) -> VoiceCommandStep {
-    switch self {
-    case .pressButton(let name):
-      // By `NameMatch`, as the search at the step's turn would match: "Marketing"
-      // is the row "Marketing (has unread messages)". Only one listed under it.
-      let pressable = listed.filter { Self.pressableKinds.contains($0.kind) }
-      guard let match = NameMatch.best(for: name, among: pressable.map(\.label)) else { return self }
-      let named = pressable.filter { $0.label == match }
-      guard let only = named.onlyElement else { return self }
-      return .pressElement(only.id)
-    case .type(let text) where ["\n", "\r\n", "\r"].contains(text):
-      return .shortcut(KeyChord(modifiers: [], key: .code(KeyChord.namedKeyCodes["return"] ?? 0x24)))
-    // A key's name typed as text: a model's slip for pressing it ("return"
-    // pasted into Slack's quick switcher, 2026-11-04).
-    case .type(let text) where Self.typedKeyNames.contains(text.lowercased()):
-      return KeyChord(text.lowercased()).map(VoiceCommandStep.shortcut) ?? self
-    default: return self
-    }
-  }
-
-  /// The key names a `type` step means as the key: a whole step of just one.
-  static let typedKeyNames: Set<String> = ["return", "enter", "tab", "escape"]
-
-  /// The actions that do the same the second time: never planned twice running.
-  static let idempotent: Set<Action> = [
-    .openApp, .quitApp, .hideApp, .openURL, .window, .focus, .select, .setValue,
-  ]
-
-  /// The actions after which the window the snapshot read is surely still
-  /// the one listed — the condition for rewriting a later `press_button` to
-  /// a listed element. Not typing, which changes what a search or a
-  /// switcher lists, nor selecting, which changes the pane a row opens.
-  static let keepsWindow: Set<Action> = [.focus, .scroll, .setValue, .increment, .decrement, .media]
-
-  /// The kinds a `press_button` may mean: anything pressable — a row by its
-  /// name included — never a field or a slider.
-  static let pressableKinds: Set<String> = ScreenSnapshot.kinds(
-    of: [
-      "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuButton", "AXPopUpButton", "AXDisclosureTriangle",
-      "AXRow", "AXMenuItem",
-    ]
-  ).union(["clickable"])
-
-  /// The checks a step needs the listed elements for: the number is listed,
-  /// its kind takes the action, and nothing it would press is named as
-  /// destructive — a listed element's label, a button's or a menu item's name.
-  private func check(against listed: [Int: ScreenContext.Element]) throws {
-    switch self {
-    case .pressButton(let name) where DestructiveGuard.isDestructive(label: name):
-      throw VoiceCommandError.refused("press \(name)")
-    case .chooseMenuItem(let path) where path.contains(where: DestructiveGuard.isDestructive(label:)):
-      throw VoiceCommandError.refused("choose \(path.joined(separator: " › "))")
-    default: break
-    }
-    guard let id = elementID else { return }
-    guard let element = listed[id] else { throw VoiceCommandError.unknownElement(id) }
-    if let kinds = Self.kinds[action], !kinds.contains(element.kind) {
-      throw VoiceCommandError.wrongKind(action: action.rawValue, id: id, kind: element.kind)
-    }
-    if [.press, .showMenu, .select].contains(action), DestructiveGuard.isDestructive(label: element.label) {
-      throw VoiceCommandError.refused("press \(element.label)")
-    }
-  }
-
-  /// The kinds of listed element each element action takes, as the snapshot
-  /// names them (`ScreenSnapshot.kinds(of:)`), from the same role lists the
-  /// performer checks at the step's turn. An action absent takes any kind.
-  static let kinds: [Action: Set<String>] = [
-    .focus: ScreenSnapshot.kinds(of: ScreenSnapshot.textEntryRoles),
-    .select: ScreenSnapshot.kinds(of: ScreenSnapshot.selectableRoles),
-    .setValue: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
-    .increment: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
-    .decrement: ScreenSnapshot.kinds(of: ScreenSnapshot.adjustableRoles),
-  ]
-
-  /// Every field a step can carry, by its name on the wire: the keys this
-  /// parser decodes and the planner's schema spells (`VoiceCommandPlanner.fields`),
-  /// one list so the two can't disagree.
-  enum Field: String, CodingKey, CaseIterable {
-    case action, app, url, keys, text, control, name, path, element, direction, operation, value
-  }
-
-  private struct Plan: Decodable {
-    let steps: [RawStep]
-  }
-
-  /// One step as the instruction spells it: an `action` and the one field it uses.
-  private struct RawStep: Decodable {
-    let action: String
-    let app: String?
-    let url: String?
-    let keys: String?
-    let text: String?
-    let control: String?
-    let name: String?
-    /// Empty when absent, which `menuPath` refuses.
-    let path: [String]
-    let element: Int?
-    let direction: String?
-    let operation: String?
-    /// A slider's or stepper's value, the schema's number written as `plain`.
-    let value: String?
-
-    /// A number as `Double(_:)` reads it back: "40", "0.5" — never the
-    /// user's locale's "0,5", which it can't.
-    static func plain(_ number: Double) -> String {
-      number == number.rounded() && abs(number) < 1e15 ? String(Int(number)) : String(number)
-    }
-
-    init(from decoder: any Decoder) throws {
-      let container = try decoder.container(keyedBy: Field.self)
-      action = try container.decode(String.self, forKey: .action)
-      app = try container.decodeIfPresent(String.self, forKey: .app)
-      url = try container.decodeIfPresent(String.self, forKey: .url)
-      keys = try container.decodeIfPresent(String.self, forKey: .keys)
-      text = try container.decodeIfPresent(String.self, forKey: .text)
-      control = try container.decodeIfPresent(String.self, forKey: .control)
-      name = try container.decodeIfPresent(String.self, forKey: .name)
-      path = try container.decodeIfPresent([String].self, forKey: .path) ?? []
-      element = try container.decodeIfPresent(Int.self, forKey: .element)
-      direction = try container.decodeIfPresent(String.self, forKey: .direction)
-      operation = try container.decodeIfPresent(String.self, forKey: .operation)
-      value = try container.decodeIfPresent(Double.self, forKey: .value).map(Self.plain)
-    }
-  }
-
-  /// The app, link and keyboard steps, then the ones aimed at what's on screen.
-  private init(raw: RawStep) throws {
-    guard let action = Action(rawValue: raw.action) else { throw VoiceCommandError.unsupportedAction(raw.action) }
-    switch action {
-    case .openApp: self = .openApp(try Self.field(raw.app))
-    case .quitApp: self = .quitApp(try Self.field(raw.app))
-    case .hideApp: self = .hideApp(try Self.field(raw.app))
-    case .openURL: self = .openURL(try Self.url(raw.url))
-    case .shortcut: self = .shortcut(try Self.chord(raw.keys))
-    case .type: self = .type(try Self.typed(raw.text))
-    case .media: self = .media(try Self.mediaKey(raw.control))
-    default: self = try Self.screenStep(action, raw)
-    }
-  }
-
   private static func screenStep(_ action: Action, _ raw: RawStep) throws -> VoiceCommandStep {
     switch action {
-    case .pressButton: .pressButton(try field(raw.name))
-    case .menu: .chooseMenuItem(try menuPath(raw.path))
-    case .press: .pressElement(try element(raw.element))
-    case .focus: .focusElement(try element(raw.element))
-    case .select: .select(try element(raw.element))
-    case .showMenu: .showMenu(try element(raw.element))
-    default: try controlStep(action, raw)
+    case .pressButton:
+      .pressButton(try field(raw.name))
+
+    case .menu:
+      .chooseMenuItem(try menuPath(raw.path))
+
+    case .press:
+      .pressElement(try element(raw.element))
+
+    case .focus:
+      .focusElement(try element(raw.element))
+
+    case .select:
+      .select(try element(raw.element))
+
+    case .showMenu:
+      .showMenu(try element(raw.element))
+
+    default:
+      try controlStep(action, raw)
     }
   }
 
   /// The steps that adjust a control, scroll, or move a window.
   private static func controlStep(_ action: Action, _ raw: RawStep) throws -> VoiceCommandStep {
     switch action {
-    case .setValue: .setValue(element: try element(raw.element), value: try field(raw.value))
-    case .increment: .increment(try element(raw.element))
-    case .decrement: .decrement(try element(raw.element))
+    case .setValue:
+      .setValue(element: try element(raw.element), value: try field(raw.value))
+
+    case .increment:
+      .increment(try element(raw.element))
+
+    case .decrement:
+      .decrement(try element(raw.element))
+
     case .scroll:
-      .scroll(try ScrollDirection(rawValue: field(raw.direction)).orThrow(.malformedReply), element: raw.element)
+      .scroll(try required(ScrollDirection(rawValue: field(raw.direction)), or: .malformedReply), element: raw.element)
+
     case .window:
-      .window(try WindowOperation(rawValue: field(raw.operation)).orThrow(.unsupportedAction("window")))
-    default: throw VoiceCommandError.unsupportedAction(raw.action)
+      .window(try required(WindowOperation(rawValue: field(raw.operation)), or: .unsupportedAction("window")))
+
+    default:
+      throw VoiceCommandError.unsupportedAction(raw.action)
     }
   }
 
-  private static func field(_ value: String?) throws -> String {
-    guard let value = value?.trimmedNonEmpty() else { throw VoiceCommandError.malformedReply }
+  /// The value, or `error` thrown: a parse step's "this must be here".
+  private static func required<Wrapped>(_ value: Wrapped?, or error: VoiceCommandError) throws -> Wrapped {
+    guard let value else { throw error }
     return value
+  }
+
+  private static func field(_ value: String?) throws -> String {
+    guard let trimmed = value?.trimmedNonEmpty() else { throw VoiceCommandError.malformedReply }
+    return trimmed
   }
 
   private static func url(_ value: String?) throws -> URL {
@@ -294,12 +294,63 @@ extension VoiceCommandStep {
     guard let key = MediaKey(rawValue: name) else { throw VoiceCommandError.unsupportedAction("media \(name)") }
     return key
   }
-}
 
-extension Optional {
-  /// The value, or `error` thrown: a parse step's "this must be here".
-  fileprivate func orThrow(_ error: VoiceCommandError) throws -> Wrapped {
-    guard let self else { throw error }
-    return self
+  /// The step as Blurt carries it out best, where the model wrote it another
+  /// way: a button by name that is listed, under that name or one it
+  /// starts (`NameMatch`) and as something pressable, as the listed element — read already, so not
+  /// searched for again; and a type of one line break as the return key,
+  /// which sends a message where a pasted line break only starts a new line.
+  func canonical(among listed: [ScreenContext.Element]) -> VoiceCommandStep {
+    switch self {
+    case .pressButton(let name):
+      // By `NameMatch`, as the search at the step's turn would match: "Marketing"
+      // is the row "Marketing (has unread messages)". Only one listed under it.
+      let pressable = listed.filter { Self.pressableKinds.contains($0.kind) }
+      guard let match = NameMatch.best(for: name, among: pressable.map(\.label)) else {
+        return self
+      }
+      let named = pressable.filter { $0.label == match }
+      guard let only = named.onlyElement else {
+        return self
+      }
+      return .pressElement(only.id)
+
+    case .type(let text) where ["\n", "\r\n", "\r"].contains(text):
+      return .shortcut(KeyChord(modifiers: [], key: .code(KeyChord.namedKeyCodes["return"] ?? 0x24)))
+
+    // A key's name typed as text: a model's slip for pressing it ("return"
+    // pasted into Slack's quick switcher, 2026-11-04).
+    case .type(let text) where Self.typedKeyNames.contains(text.lowercased()):
+      return KeyChord(text.lowercased()).map(Self.shortcut) ?? self
+
+    default:
+      return self
+    }
+  }
+
+  /// The checks a step needs the listed elements for: the number is listed,
+  /// its kind takes the action, and nothing it would press is named as
+  /// destructive — a listed element's label, a button's or a menu item's name.
+  private func check(against listed: [Int: ScreenContext.Element]) throws {
+    switch self {
+    case .pressButton(let name) where DestructiveGuard.isDestructive(label: name):
+      throw VoiceCommandError.refused("press \(name)")
+
+    case .chooseMenuItem(let path) where path.contains(where: DestructiveGuard.isDestructive(label:)):
+      throw VoiceCommandError.refused("choose \(path.joined(separator: " › "))")
+
+    default:
+      break
+    }
+    guard let id = elementID else {
+      return
+    }
+    guard let element = listed[id] else { throw VoiceCommandError.unknownElement(id) }
+    if let allowedKinds = Self.kinds[action], !allowedKinds.contains(element.kind) {
+      throw VoiceCommandError.wrongKind(action: action.rawValue, id: id, kind: element.kind)
+    }
+    if [.press, .showMenu, .select].contains(action), DestructiveGuard.isDestructive(label: element.label) {
+      throw VoiceCommandError.refused("press \(element.label)")
+    }
   }
 }

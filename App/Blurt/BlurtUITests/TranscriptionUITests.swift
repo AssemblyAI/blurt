@@ -16,6 +16,11 @@ final class TranscriptionUITests: BlurtUITestCase {
     [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.seedHistoryLaunchArgument]
   }
 
+  /// The open item's toolbar View menu.
+  private var viewPicker: XCUIElement {
+    app.menuButtons[UITestIdentifiers.facetPicker].firstMatch
+  }
+
   // MARK: - Recent list
 
   func testSeededHistoryIsListedAndFiltered() {
@@ -60,7 +65,8 @@ final class TranscriptionUITests: BlurtUITestCase {
     XCTAssertTrue(search.exists, "The main window should have a search field")
     search.typeText("zzqx")
     XCTAssertTrue(
-      text(containing: "No results").waitForExistence(timeout: 5), "A search with no matches should say so")
+      text(containing: "No results").waitForExistence(timeout: 5), "A search with no matches should say so"
+    )
   }
 
   // MARK: - Open item
@@ -85,7 +91,8 @@ final class TranscriptionUITests: BlurtUITestCase {
     showView("Meeting notes")
     XCTAssertTrue(
       windowText(containing: UITestIdentifiers.cannedTaskResult).waitForExistence(timeout: 10),
-      "Meeting notes shows the LLM's result")
+      "Meeting notes shows the LLM's result"
+    )
 
     // Esc pops back to the Library, as the navigation's back button does.
     app.typeKey(.escape, modifierFlags: [])
@@ -136,8 +143,8 @@ final class TranscriptionUITests: BlurtUITestCase {
   /// A Library row by its title. The row is one combined element whose text
   /// ("<title>, <details>") XCUITest may report as its label or its value.
   private func row(titled title: String) -> XCUIElement {
-    app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any)
-      .matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title)).firstMatch
+    let titled = NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title)
+    return app.windows[UITestIdentifiers.mainWindowTitle].descendants(matching: .any).matching(titled).firstMatch
   }
 
   /// Static text in the main window containing `text`. A typed query:
@@ -155,11 +162,6 @@ final class TranscriptionUITests: BlurtUITestCase {
       .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
   }
 
-  /// The open item's toolbar View menu.
-  private var viewPicker: XCUIElement {
-    app.menuButtons[UITestIdentifiers.facetPicker].firstMatch
-  }
-
   /// Shows the view titled `title`, from the toolbar's View menu.
   private func showView(_ title: String) {
     XCTAssertTrue(viewPicker.waitForExistence(timeout: 5), "The open item's View menu not found")
@@ -173,34 +175,5 @@ final class TranscriptionUITests: BlurtUITestCase {
     XCTAssertTrue(menu.waitForExistence(timeout: 3), "The Filter menu not found")
     menu.click()
     app.menuItems[title].click()
-  }
-}
-
-/// Transcribing a file end to end: launched with `-BlurtUITestTranscribeSample`,
-/// the app transcribes a sample file at launch through the canned async API —
-/// XCUITest can't drive a Finder drag — and names it with the canned LLM.
-final class TranscribeFileUITests: BlurtUITestCase {
-  override var extraLaunchArguments: [String] {
-    [UITestIdentifiers.readyLaunchArgument, UITestIdentifiers.transcribeSampleLaunchArgument]
-  }
-
-  func testTranscribingAFileSavesItUnderItsTitle() {
-    let main = mainWindow()
-    // The window slides to the new transcript, its turns under each speaker…
-    XCTAssertTrue(
-      app.descendants(matching: .any)
-        .matching(
-          NSPredicate(
-            format: "label CONTAINS %@ OR value CONTAINS %@", UITestIdentifiers.cannedFileSpeakerA,
-            UITestIdentifiers.cannedFileSpeakerA)
-        ).firstMatch.waitForExistence(timeout: 15),
-      "The window opens the new transcript")
-    // …and the entry is saved under the LLM's title.
-    let title = UITestIdentifiers.cannedFileTitle
-    XCTAssertTrue(
-      main.descendants(matching: .any)
-        .matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title)).firstMatch
-        .waitForExistence(timeout: 15),
-      "The transcribed file is saved under the LLM's title")
   }
 }

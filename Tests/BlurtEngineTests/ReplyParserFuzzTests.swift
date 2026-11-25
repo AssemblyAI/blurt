@@ -25,14 +25,29 @@ struct ReplyParserFuzzTests {
 
   static func value(_ rng: inout Seeded) -> Any {
     switch Int.random(in: 0..<8, using: &rng) {
-    case 0: return strings.randomElement(using: &rng) ?? ""
-    case 1: return Int.random(in: -3...9, using: &rng)
-    case 2: return [Int.max, Int.min, 0, 1_000_000][Int.random(in: 0..<4, using: &rng)]
-    case 3: return Double.random(in: -1e6...1e6, using: &rng)
-    case 4: return Bool.random(using: &rng)
-    case 5: return NSNull()
-    case 6: return (0..<Int.random(in: 0...5, using: &rng)).map { _ in strings.randomElement(using: &rng) ?? "" }
-    default: return ["nested": strings.randomElement(using: &rng) ?? ""]
+    case 0:
+      return strings.randomElement(using: &rng) ?? ""
+
+    case 1:
+      return Int.random(in: -3...9, using: &rng)
+
+    case 2:
+      return [Int.max, Int.min, 0, 1_000_000][Int.random(in: 0..<4, using: &rng)]
+
+    case 3:
+      return Double.random(in: -1e6...1e6, using: &rng)
+
+    case 4:
+      return Bool.random(using: &rng)
+
+    case 5:
+      return NSNull()
+
+    case 6:
+      return (0..<Int.random(in: 0...5, using: &rng)).map { _ in strings.randomElement(using: &rng) ?? "" }
+
+    default:
+      return ["nested": strings.randomElement(using: &rng) ?? ""]
     }
   }
 
@@ -51,17 +66,32 @@ struct ReplyParserFuzzTests {
   /// The fields of an action that names what it acts on; empty for one on a listed element.
   static func namedFields(_ action: VoiceCommandStep.Action, _ rng: inout Seeded) -> [String: Any] {
     switch action {
-    case .openApp, .quitApp, .hideApp: ["app": pick(["Slack", "Finder", "", "Terminal"], &rng)]
-    case .openURL: ["url": pick(strings.filter { $0.contains(":") }, &rng)]
+    case .openApp, .quitApp, .hideApp:
+      ["app": pick(["Slack", "Finder", "", "Terminal"], &rng)]
+
+    case .openURL:
+      ["url": pick(strings.filter { $0.contains(":") }, &rng)]
+
     case .shortcut:
       ["keys": pick(["cmd+t", "cmd+delete", "cmd+shift+q", "return", "tab", "cmd+", "option+cmd+escape"], &rng)]
-    case .type: ["text": pick(strings, &rng)]
-    case .media: ["control": pick(MediaKey.allCases.map(\.rawValue) + ["eject", "power"], &rng)]
-    case .pressButton: ["name": pick(["Send", "Delete", "Move to Trash", "Reply", ""], &rng)]
+
+    case .type:
+      ["text": pick(strings, &rng)]
+
+    case .media:
+      ["control": pick(MediaKey.allCases.map(\.rawValue) + ["eject", "power"], &rng)]
+
+    case .pressButton:
+      ["name": pick(["Send", "Delete", "Move to Trash", "Reply", ""], &rng)]
+
     case .menu:
       ["path": (0..<Int.random(in: 0...6, using: &rng)).map { _ in pick(["File", "Delete", "Edit", "Log Out"], &rng) }]
-    case .window: ["operation": pick(WindowOperation.allCases.map(\.rawValue) + ["spin"], &rng)]
-    default: [:]
+
+    case .window:
+      ["operation": pick(WindowOperation.allCases.map(\.rawValue) + ["spin"], &rng)]
+
+    default:
+      [:]
     }
   }
 
@@ -73,14 +103,20 @@ struct ReplyParserFuzzTests {
       var fields: [String: Any] = ["direction": pick(ScrollDirection.allCases.map(\.rawValue) + ["sideways"], &rng)]
       if Bool.random(using: &rng) { fields["element"] = element }
       return fields
-    case .setValue: return ["element": element, "value": Double.random(in: -10...200, using: &rng)]
-    default: return ["element": element]
+
+    case .setValue:
+      return ["element": element, "value": Double.random(in: -10...200, using: &rng)]
+
+    default:
+      return ["element": element]
     }
   }
 
   /// A step: a real action (or not), and a random handful of fields.
   static func step(_ rng: inout Seeded) -> [String: Any] {
-    if Int.random(in: 0..<4, using: &rng) > 0 { return plausibleStep(&rng) }
+    if Int.random(in: 0..<4, using: &rng) > 0 {
+      return plausibleStep(&rng)
+    }
     var step: [String: Any] = [:]
     if Int.random(in: 0..<10, using: &rng) > 0 {
       step["action"] =
@@ -100,15 +136,23 @@ struct ReplyParserFuzzTests {
     var text = String(bytes: data, encoding: .utf8) ?? ""
     // Damage some: cut short, a byte flipped, prose around it, a fence.
     switch Int.random(in: 0..<10, using: &rng) {
-    case 0 where !text.isEmpty: text = String(text.prefix(Int.random(in: 0..<text.count, using: &rng)))
+    case 0 where !text.isEmpty:
+      text = String(text.prefix(Int.random(in: 0..<text.count, using: &rng)))
+
     case 1 where !text.isEmpty:
       var chars = Array(text)
       chars[Int.random(in: 0..<chars.count, using: &rng)] =
         ["{", "}", "\"", ",", ":", "x"].randomElement(using: &rng) ?? "x"
       text = String(chars)
-    case 2: text = "Here is the plan:\n" + text
-    case 3: text = "```json\n" + text + "\n```"
-    default: break
+
+    case 2:
+      text = "Here is the plan:\n" + text
+
+    case 3:
+      text = "```json\n" + text + "\n```"
+
+    default:
+      break
     }
     return text
   }
@@ -120,18 +164,28 @@ struct ReplyParserFuzzTests {
     for step in steps {
       if let id = step.elementID { #expect(ids.contains(id), "unlisted \(id): \(reply)") }
       switch step {
-      case .shortcut(let chord): #expect(!DestructiveGuard.isDestructive(chord), "\(reply)")
+      case .shortcut(let chord):
+        #expect(!DestructiveGuard.isDestructive(chord), "\(reply)")
+
       case .openURL(let url):
         #expect(VoiceCommandStep.allowedSchemes.contains(url.scheme?.lowercased() ?? ""), "\(reply)")
-      case .type(let text): #expect(!text.isEmpty && text.count <= VoiceCommandStep.maxTypedCharacters, "\(reply)")
-      case .pressButton(let name): #expect(!DestructiveGuard.isDestructive(label: name), "\(reply)")
+
+      case .type(let text):
+        #expect(!text.isEmpty && text.count <= VoiceCommandStep.maxTypedCharacters, "\(reply)")
+
+      case .pressButton(let name):
+        #expect(!DestructiveGuard.isDestructive(label: name), "\(reply)")
+
       case .chooseMenuItem(let path):
         #expect((1...VoiceCommandStep.maxMenuDepth).contains(path.count), "\(reply)")
         #expect(!path.contains(where: DestructiveGuard.isDestructive(label:)), "\(reply)")
+
       case .pressElement(let id), .showMenu(let id):
         let label = listed.first { $0.id == id }?.label ?? ""
         #expect(!DestructiveGuard.isDestructive(label: label), "\(reply)")
-      default: break
+
+      default:
+        break
       }
     }
     #expect(VoiceCommandStep.repeatedBlock(in: steps).isEmpty, "\(reply)")
@@ -148,6 +202,7 @@ struct ReplyParserFuzzTests {
         parsed += 1
         Self.check(steps, reply: reply)
       } catch is VoiceCommandError {
+        // A refused reply is fine; only the kind of error is checked.
       } catch {
         Issue.record("not a VoiceCommandError: \(error) for \(reply)")
       }

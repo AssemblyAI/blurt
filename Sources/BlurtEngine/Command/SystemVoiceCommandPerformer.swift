@@ -10,18 +10,9 @@
   /// (`+Accessibility`). Nothing here runs script, and nothing needs a
   /// permission beyond the Accessibility trust the paste already has.
   public struct SystemVoiceCommandPerformer: VoiceCommandPerforming {
-    /// The elements the last `screenContext()` numbered, for the steps that
-    /// name one.
-    let snapshot = ElementSnapshot()
-    /// The Chromium browser whose page tree Blurt turned on, to turn off.
-    let enhancedInterface = EnhancedInterface()
-
     /// How long an opened app gets to come frontmost before the next step,
     /// which is aimed at it, goes ahead anyway.
     static let launchBudget: Duration = .seconds(5)
-    /// The beat between steps (`VoiceCommandPerforming.settle`): ⌘K's palette
-    /// has to be open before its search is typed.
-    public var settle: Duration { .milliseconds(300) }
 
     /// Where `openApp` looks for an app that isn't running, one level deep.
     static let applicationFolders: [URL] = {
@@ -32,83 +23,17 @@
         + [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)]
     }()
 
-    public init() {}
+    /// The elements the last `screenContext()` numbered, for the steps that
+    /// name one.
+    let snapshot = ElementSnapshot()
+    /// The Chromium browser whose page tree Blurt turned on, to turn off.
+    let enhancedInterface = EnhancedInterface()
+    /// The beat between steps (`VoiceCommandPerforming.settle`): ⌘K's palette
+    /// has to be open before its search is typed.
+    public var settle: Duration { .milliseconds(300) }
 
-    public func screenContext() async -> ScreenContext {
-      let front = await MainActor.run {
-        NSWorkspace.shared.frontmostApplication.map {
-          (name: $0.localizedName, pid: $0.processIdentifier, id: $0.bundleIdentifier, bundle: $0.bundleURL)
-        }
-      }
-      guard let front else { return ScreenContext(appName: nil) }
-      return await Self.readScreen(
-        appName: front.name, pid: front.pid,
-        isChromium: front.id.map(ScreenSnapshot.chromiumBrowsers.contains) ?? false,
-        isElectron: FocusCapture.isElectronBundle(front.bundle), into: snapshot)
-    }
-
-    public func commandStarting() async {
-      let front = await MainActor.run {
-        NSWorkspace.shared.frontmostApplication.map { (pid: $0.processIdentifier, id: $0.bundleIdentifier) }
-      }
-      guard let front else { return }
-      Self.beginEnhancedInterface(pid: front.pid, bundleID: front.id, in: enhancedInterface)
-    }
-
-    public func commandEnded() async {
-      Self.endEnhancedInterface(in: enhancedInterface)
-    }
-
-    public func perform(_ step: VoiceCommandStep) async throws -> String? {
-      switch step {
-      case .openApp, .quitApp, .hideApp: return try await performAppStep(step)
-      case .openURL(let url): return try await Self.openLink(url)
-      case .shortcut(let chord):
-        let code = await Self.keyCode(for: chord)
-        // Posted as the paste's ⌘V is (`KeyInjector.post`): the annotated
-        // session tap, after the trigger's own, so it never reads as a combo.
-        guard KeyInjector.post(Self.events(for: chord, keyCode: code)) else {
-          throw VoiceCommandError.couldNotPerform("press that shortcut")
-        }
-        // The key it landed on, on this layout: what a wrong-key report needs.
-        return "key code \(code)"
-      case .media(let key):
-        guard await Self.post(key) else { throw VoiceCommandError.couldNotPerform("press that key") }
-        return nil
-      case .type:
-        // Pasted through the session's injector, never here
-        // (`DictationSession.typeText`), so a paste can't skip its clipboard
-        // save and restore.
-        throw VoiceCommandError.couldNotPerform("type outside a paste")
-      case .pressButton, .chooseMenuItem, .pressElement, .focusElement, .setValue, .increment, .decrement,
-        .showMenu, .select, .scroll, .window:
-        return try await performScreenStep(step)
-      }
-    }
-
-    private func performAppStep(_ step: VoiceCommandStep) async throws -> String? {
-      switch step {
-      case .openApp(let name): return try await Self.open(name)
-      case .quitApp(let name): try await Self.running(name).terminate()
-      case .hideApp(let name): try await Self.running(name).hide()
-      default: break
-      }
-      return nil
-    }
-
-    private func performScreenStep(_ step: VoiceCommandStep) async throws -> String? {
-      switch step {
-      case .pressButton(let name): return try await Self.pressButton(name)
-      case .chooseMenuItem(let path): return try await Self.chooseMenuItem(path)
-      case .pressElement(let id): return try await Self.act(on: id, in: snapshot, focus: false)
-      case .focusElement(let id): return try await Self.act(on: id, in: snapshot, focus: true)
-      case .setValue, .increment, .decrement, .showMenu, .select: return try await Self.adjust(step, in: snapshot)
-      case .scroll(let direction, let element):
-        return try await Self.scroll(direction, element: element, in: snapshot)
-      case .window(let operation): return try await Self.arrangeWindow(operation)
-      default: break
-      }
-      return nil
+    public init() {
+      // Nothing to set up: both trackers start empty.
     }
 
     /// A link, in the browser in front when one is — "go to wikipedia.org"
@@ -191,15 +116,19 @@
       // loop, MIT). A just-launched app answers once its AX side is up, hence
       // the retry rather than one call.
       let raised = await KeyInjector.poll(
-        for: launchBudget, every: .milliseconds(100), clock: ContinuousClock(),
-        until: {
-          await MainActor.run {
-            if isVerifiedFrontmost(app) { return true }
-            app.activate()
-            raise(app.processIdentifier)
-            return false
+        for: launchBudget,
+        every: .milliseconds(100),
+        clock: ContinuousClock()
+      ) {
+        await MainActor.run {
+          if isVerifiedFrontmost(app) {
+            return true
           }
-        })
+          app.activate()
+          raise(app.processIdentifier)
+          return false
+        }
+      }
       // Frontmost but never owning the top window — its window on another
       // Space, or a window server slow to reorder — is in front enough: the
       // keystrokes go to it. Only an app that never came forward fails.
@@ -214,7 +143,9 @@
     /// called just that (`AppLink`). Its own name, as `openApp` takes it.
     static func installedApp(named name: String) -> String? {
       let key = NameMatch.normalized(name)
-      guard !key.isEmpty else { return nil }
+      guard !key.isEmpty else {
+        return nil
+      }
       let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
         .compactMap(\.localizedName)
       let installed = applicationFolders.flatMap { folder in
@@ -235,7 +166,9 @@
           .filter { $0.pathExtension == "app" }
       }
       let names = bundles.map { $0.deletingPathExtension().lastPathComponent }
-      guard let match = NameMatch.best(for: name, among: names) else { return nil }
+      guard let match = NameMatch.best(for: name, among: names) else {
+        return nil
+      }
       return bundles.first { $0.deletingPathExtension().lastPathComponent == match }
     }
 
@@ -248,13 +181,135 @@
         let state = keyDown ? 0xA : 0xB
         guard
           let event = NSEvent.otherEvent(
-            with: .systemDefined, location: .zero, modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(state << 8)),
-            timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
-            data1: (key.systemKeyType << 16) | (state << 8), data2: -1)?.cgEvent
-        else { return false }
+            with: .systemDefined,
+            location: .zero,
+            modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(state << 8)),
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: 8,
+            data1: (key.systemKeyType << 16) | (state << 8),
+            data2: -1
+          )?.cgEvent
+        else {
+          return false
+        }
         event.post(tap: .cghidEventTap)
       }
       return true
+    }
+
+    public func screenContext() async -> ScreenContext {
+      let front = await MainActor.run {
+        NSWorkspace.shared.frontmostApplication.map { app in
+          (name: app.localizedName, pid: app.processIdentifier, id: app.bundleIdentifier, bundle: app.bundleURL)
+        }
+      }
+      guard let front else {
+        return ScreenContext(appName: nil)
+      }
+      return await Self.readScreen(
+        appName: front.name,
+        pid: front.pid,
+        isChromium: front.id.map(ScreenSnapshot.chromiumBrowsers.contains) ?? false,
+        isElectron: FocusCapture.isElectronBundle(front.bundle),
+        into: snapshot
+      )
+    }
+
+    public func commandStarting() async {
+      let front = await MainActor.run {
+        NSWorkspace.shared.frontmostApplication.map { (pid: $0.processIdentifier, id: $0.bundleIdentifier) }
+      }
+      guard let front else {
+        return
+      }
+      Self.beginEnhancedInterface(pid: front.pid, bundleID: front.id, in: enhancedInterface)
+    }
+
+    @concurrent
+    public func commandEnded() async {
+      Self.endEnhancedInterface(in: enhancedInterface)
+    }
+
+    public func perform(_ step: VoiceCommandStep) async throws -> String? {
+      switch step {
+      case .openApp, .quitApp, .hideApp:
+        return try await performAppStep(step)
+
+      case .openURL(let url):
+        return try await Self.openLink(url)
+
+      case .shortcut(let chord):
+        let code = await Self.keyCode(for: chord)
+        // Posted as the paste's ⌘V is (`KeyInjector.post`): the annotated
+        // session tap, after the trigger's own, so it never reads as a combo.
+        guard KeyInjector.post(Self.events(for: chord, keyCode: code)) else {
+          throw VoiceCommandError.couldNotPerform("press that shortcut")
+        }
+        // The key it landed on, on this layout: what a wrong-key report needs.
+        return "key code \(code)"
+
+      case .media(let key):
+        guard await Self.post(key) else { throw VoiceCommandError.couldNotPerform("press that key") }
+        return nil
+
+      case .type:
+        // Pasted through the session's injector, never here
+        // (`DictationSession.typeText`), so a paste can't skip its clipboard
+        // save and restore.
+        throw VoiceCommandError.couldNotPerform("type outside a paste")
+
+      case .pressButton, .chooseMenuItem, .pressElement, .focusElement, .setValue, .increment, .decrement,
+        .showMenu, .select, .scroll, .window:
+        return try await performScreenStep(step)
+      }
+    }
+
+    private func performAppStep(_ step: VoiceCommandStep) async throws -> String? {
+      switch step {
+      case .openApp(let name):
+        return try await Self.open(name)
+
+      case .quitApp(let name):
+        try await Self.running(name).terminate()
+
+      case .hideApp(let name):
+        try await Self.running(name).hide()
+
+      default:
+        break
+      }
+      return nil
+    }
+
+    private func performScreenStep(_ step: VoiceCommandStep) async throws -> String? {
+      switch step {
+      case .pressButton(let name):
+        return try await Self.pressButton(name)
+
+      case .chooseMenuItem(let path):
+        return try await Self.chooseMenuItem(path)
+
+      case .pressElement(let id):
+        return try await Self.act(on: id, in: snapshot, focus: false)
+
+      case .focusElement(let id):
+        return try await Self.act(on: id, in: snapshot, focus: true)
+
+      case .setValue, .increment, .decrement, .showMenu, .select:
+        return try await Self.adjust(step, in: snapshot)
+
+      case let .scroll(direction, element):
+        return try await Self.scroll(direction, element: element, in: snapshot)
+
+      case .window(let operation):
+        return try await Self.arrangeWindow(operation)
+
+      default:
+        break
+      }
+      return nil
     }
   }
 #endif

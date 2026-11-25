@@ -23,6 +23,50 @@ public import os
 /// test in the repo to configure something that is, by definition, fixed for the
 /// lifetime of a process.
 public struct HostIdentity: Sendable, Equatable {
+  /// Blurt's own identity, and the value an unconfigured host inherits — so the
+  /// engine behaves exactly as it did when these were constants. It is the single
+  /// definition of each of those strings; `BlurtApp.swift` configures *this* value
+  /// rather than restating them, and `HostIdentityTests` pins the two that
+  /// `scripts/reset-lib.sh` also hard-codes.
+  public static let blurt = Self(
+    productName: "Blurt",
+    subsystem: "dev.alex.blurt",
+    keychainService: "blurt",
+    defaultsPrefix: "Blurt",
+    logDirectoryName: "Blurt"
+  )
+
+  /// The identity a **debug build** of Blurt runs under — "Blurt Dev", which
+  /// macOS already treats as a separate app (its own bundle id, TCC rows and
+  /// defaults domain). Only `keychainService` and `dataDirectoryName` differ
+  /// from `.blurt`: the Keychain and the Library folder are the two stores the
+  /// bundle id doesn't separate (see those properties).
+  ///
+  /// The log subsystem is deliberately *not* changed: one subsystem across both
+  /// builds is what keeps the documented `log show` predicates valid whichever
+  /// one is running (see `subsystem`). Nor is `defaultsPrefix` — defaults are
+  /// per-app already, and changing the prefix would abandon every dev install's
+  /// settings for nothing.
+  ///
+  /// `scripts/reset-lib.sh` hard-codes this service (bash can't read this
+  /// constant); `ResetScriptContractTests` holds the script to it.
+  ///
+  /// The Library directory differs for the same reason as the Keychain: Blurt
+  /// isn't sandboxed, so `~/Library/Application Support/Blurt` was one folder
+  /// both builds wrote their transcripts to (see `dataDirectoryName`).
+  public static let blurtDev = blurt.withSharedStores(keychainService: "blurt-dev", dataDirectoryName: "Blurt Dev")
+
+  /// The identity every engine component reads. `.blurt` until a host calls
+  /// `configure(_:)`.
+  public static var current: Self { storage.withLock { $0 } }
+
+  /// `Mutex` rather than a `nonisolated(unsafe) var`, for the reason
+  /// `MemoizedKeyStore` and `APIKeyGateway` use one: this is read from every
+  /// isolation domain in the engine (the `DictationSession` actor, the log's
+  /// serial queue, `@MainActor` views) and a torn read of a struct this size is
+  /// not hypothetical.
+  private static let storage = Mutex<Self>(.blurt)
+
   /// The product name as it appears in user-facing copy ("Blurt") — distinct
   /// from `subsystem`, which is the reverse-DNS identity. `UserAgent` is its
   /// only reader today.
@@ -109,57 +153,6 @@ public struct HostIdentity: Sendable, Equatable {
     self.styleProfileLimit = max(1, styleProfileLimit)
   }
 
-  /// Blurt's own identity, and the value an unconfigured host inherits — so the
-  /// engine behaves exactly as it did when these were constants. It is the single
-  /// definition of each of those strings; `App.swift` configures *this* value
-  /// rather than restating them, and `HostIdentityTests` pins the two that
-  /// `scripts/reset-lib.sh` also hard-codes.
-  public static let blurt = HostIdentity(
-    productName: "Blurt",
-    subsystem: "dev.alex.blurt",
-    keychainService: "blurt",
-    defaultsPrefix: "Blurt",
-    logDirectoryName: "Blurt")
-
-  /// The identity a **debug build** of Blurt runs under — "Blurt Dev", which
-  /// macOS already treats as a separate app (its own bundle id, TCC rows and
-  /// defaults domain). Only `keychainService` and `dataDirectoryName` differ
-  /// from `.blurt`: the Keychain and the Library folder are the two stores the
-  /// bundle id doesn't separate (see those properties).
-  ///
-  /// The log subsystem is deliberately *not* changed: one subsystem across both
-  /// builds is what keeps the documented `log show` predicates valid whichever
-  /// one is running (see `subsystem`). Nor is `defaultsPrefix` — defaults are
-  /// per-app already, and changing the prefix would abandon every dev install's
-  /// settings for nothing.
-  ///
-  /// `scripts/reset-lib.sh` hard-codes this service (bash can't read this
-  /// constant); `ResetScriptContractTests` holds the script to it.
-  ///
-  /// The Library directory differs for the same reason as the Keychain: Blurt
-  /// isn't sandboxed, so `~/Library/Application Support/Blurt` was one folder
-  /// both builds wrote their transcripts to (see `dataDirectoryName`).
-  public static let blurtDev = blurt.withSharedStores(keychainService: "blurt-dev", dataDirectoryName: "Blurt Dev")
-
-  /// This identity with its own copy of the two stores the bundle id doesn't
-  /// separate. Private: the two values Blurt ships are the two above, and a
-  /// host that wants a third builds it with the initializer rather than
-  /// deriving one from Blurt's.
-  private func withSharedStores(keychainService: String, dataDirectoryName: String) -> HostIdentity {
-    HostIdentity(
-      productName: productName,
-      subsystem: subsystem,
-      keychainService: keychainService,
-      defaultsPrefix: defaultsPrefix,
-      logDirectoryName: logDirectoryName,
-      dataDirectoryName: dataDirectoryName,
-      styleProfileLimit: styleProfileLimit)
-  }
-
-  /// The identity every engine component reads. `.blurt` until a host calls
-  /// `configure(_:)`.
-  public static var current: HostIdentity { storage.withLock { $0 } }
-
   /// Adopt `identity` for the rest of the process. **Call this once, at your
   /// composition root, before constructing any engine type** (Blurt does it in
   /// `BlurtApp.init`).
@@ -171,16 +164,25 @@ public struct HostIdentity: Sendable, Equatable {
   /// trapping on a second call would make the engine unusable from a test that
   /// wants to exercise two identities, and refusing the second call silently
   /// would be worse than the misconfiguration it was guarding against.
-  public static func configure(_ identity: HostIdentity) {
+  public static func configure(_ identity: Self) {
     storage.withLock { $0 = identity }
   }
 
-  /// `Mutex` rather than a `nonisolated(unsafe) var`, for the reason
-  /// `MemoizedKeyStore` and `APIKeyGateway` use one: this is read from every
-  /// isolation domain in the engine (the `DictationSession` actor, the log's
-  /// serial queue, `@MainActor` views) and a torn read of a struct this size is
-  /// not hypothetical.
-  private static let storage = Mutex<HostIdentity>(.blurt)
+  /// This identity with its own copy of the two stores the bundle id doesn't
+  /// separate. Private: the two values Blurt ships are the two above, and a
+  /// host that wants a third builds it with the initializer rather than
+  /// deriving one from Blurt's.
+  private func withSharedStores(keychainService: String, dataDirectoryName: String) -> Self {
+    Self(
+      productName: productName,
+      subsystem: subsystem,
+      keychainService: keychainService,
+      defaultsPrefix: defaultsPrefix,
+      logDirectoryName: logDirectoryName,
+      dataDirectoryName: dataDirectoryName,
+      styleProfileLimit: styleProfileLimit
+    )
+  }
 
   // MARK: - Derivations
   //

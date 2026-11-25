@@ -21,7 +21,11 @@ extension KeyboardLifecycleTests {
     SharedStore.autoDictate = false
     let posts = Posts()
     let observer = DarwinObserver(name: BlurtShared.Signal.keyboard) { posts.count.withLock { $0 += 1 } }
-    defer { withExtendedLifetime(observer) {} }
+    defer {
+      withExtendedLifetime(observer) {
+        // Nothing to run: this only keeps the observer alive to the end of the test.
+      }
+    }
     let rig = KeyboardRig()
     let model = rig.model
     model.appeared()
@@ -38,7 +42,9 @@ extension KeyboardLifecycleTests {
     #expect(
       !OwnerWatchdog.shouldRelease(
         inFlight: DictationRef(id: dictation, ownerProcessID: KeyboardProcess.id),
-        presence: SharedStore.keyboardPresence, now: Date()))
+        presence: SharedStore.keyboardPresence,
+        now: Date()
+      ))
     rig.answer(.stopped(dictation))
     #expect(model.leaving == nil)
     #expect(SharedStore.keyboardPresence?.onScreen == false)

@@ -54,7 +54,8 @@ enum UserAgent {
   static let current = value(
     product: HostIdentity.current.productName,
     version: bundleShortVersion(),
-    details: [osDetail(), channelDetail()].compactMap { $0 })
+    details: [osDetail(), channelDetail()].compactMap(\.self)
+  )
 
   /// The pure half, so the formatting is testable without a bundle, an OS
   /// version, or a build configuration: `product` alone when there is no usable
@@ -75,7 +76,9 @@ enum UserAgent {
     let token = product.replacingOccurrences(of: " ", with: "-")
     let name = version.trimmedNonEmpty().map { "\(token)/\($0)" } ?? token
     let comment = details.compactMap { $0.trimmedNonEmpty() }
-    guard !comment.isEmpty else { return name }
+    guard !comment.isEmpty else {
+      return name
+    }
     return "\(name) (\(comment.joined(separator: "; ")))"
   }
 
@@ -136,16 +139,6 @@ enum UserAgent {
 }
 
 extension URLRequest {
-  /// Stamp `UserAgent.current` on this request. One call at each of the three
-  /// places the engine talks to AssemblyAI (the dictation POST, its warm-up
-  /// GET, and the key validator), rather than a `URLSession` configured with
-  /// `httpAdditionalHeaders` — the transport is an injected `HTTPTransport`
-  /// (`URLSession.shared` in production, a fake in tests), so there is no
-  /// session this layer owns to hang a default header off.
-  mutating func setUserAgent() {
-    setValue(UserAgent.current, forHTTPHeaderField: UserAgent.headerField)
-  }
-
   /// A JSON `POST` of `body` to an AssemblyAI route: the raw API key in
   /// `Authorization`, as every AssemblyAI request Blurt makes, the user agent,
   /// and stably ordered keys. Read-aloud's two clients (`ReadAloudLLM`,
@@ -162,5 +155,15 @@ extension URLRequest {
     encoder.outputFormatting = .sortedKeys
     request.httpBody = try encoder.encode(body)
     return request
+  }
+
+  /// Stamp `UserAgent.current` on this request. One call at each of the three
+  /// places the engine talks to AssemblyAI (the dictation POST, its warm-up
+  /// GET, and the key validator), rather than a `URLSession` configured with
+  /// `httpAdditionalHeaders` — the transport is an injected `HTTPTransport`
+  /// (`URLSession.shared` in production, a fake in tests), so there is no
+  /// session this layer owns to hang a default header off.
+  mutating func setUserAgent() {
+    setValue(UserAgent.current, forHTTPHeaderField: UserAgent.headerField)
   }
 }

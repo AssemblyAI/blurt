@@ -12,43 +12,67 @@ struct VoiceNoticeTests {
   private static let launch = UUID()
   /// The app listening, a beat ago.
   private static let ready = ListeningState(
-    launchID: launch, sequence: 1, window: .open, micLive: true, writtenAt: now.addingTimeInterval(-1))
+    launchID: launch, sequence: 1, window: .open, micLive: true, writtenAt: now.addingTimeInterval(-1)
+  )
 
   private var now: Date { Self.now }
+
+  private var tapToOpen: VoiceNotice.Line { expected("Tap to open Blurt", .hop(.sessionOff)) }
 
   private func record(
     window: ListeningState.Window, micLive: Bool = false, reason: FailureReason? = nil, age: TimeInterval = 1
   ) -> ListeningState {
     ListeningState(
-      launchID: Self.launch, sequence: 2, window: window, micLive: micLive, reason: reason,
-      writtenAt: now.addingTimeInterval(-age))
+      launchID: Self.launch,
+      sequence: 2,
+      window: window,
+      micLive: micLive,
+      reason: reason,
+      writtenAt: now.addingTimeInterval(-age)
+    )
   }
 
   private func phase(
-    _ state: PhaseSnapshot.State, message: String? = nil, reason: FailureReason? = nil, age: TimeInterval = 0,
+    _ state: PhaseSnapshot.State,
+    message: String? = nil,
+    reason: FailureReason? = nil,
+    age: TimeInterval = 0,
     recordingFor: TimeInterval? = nil
   ) -> PhaseSnapshot {
     PhaseSnapshot(
-      state: state, message: message, level: 0, at: now.addingTimeInterval(-age), reason: reason,
-      recordingSince: recordingFor.map { now.addingTimeInterval(-$0) })
+      state: state,
+      message: message,
+      level: 0,
+      at: now.addingTimeInterval(-age),
+      reason: reason,
+      recordingSince: recordingFor.map { now.addingTimeInterval(-$0) }
+    )
   }
 
   private func line(
-    fullAccess: Bool = true, state: ListeningState? = VoiceNoticeTests.ready, snapshot: PhaseSnapshot = .idle,
-    heldError: PhaseSnapshot? = nil, handshake: VoiceNotice.Handshake = .idle,
+    fullAccess: Bool = true,
+    state: ListeningState? = Self.ready,
+    snapshot: PhaseSnapshot = .idle,
+    heldError: PhaseSnapshot? = nil,
+    handshake: VoiceNotice.Handshake = .idle,
     autoRelease: TimeInterval = SyncSTTLimits.autoReleaseSeconds
   ) -> VoiceNotice.Line? {
     VoiceNotice.line(
       for: VoiceNotice.Input(
-        hasFullAccess: fullAccess, state: state, snapshot: snapshot, heldError: heldError, handshake: handshake,
-        now: now, autoReleaseSeconds: autoRelease))
+        hasFullAccess: fullAccess,
+        state: state,
+        snapshot: snapshot,
+        handshake: handshake,
+        now: now,
+        heldError: heldError,
+        autoReleaseSeconds: autoRelease
+      )
+    )
   }
 
   private func expected(_ text: String, _ tap: VoiceNotice.Tap) -> VoiceNotice.Line {
     VoiceNotice.Line(text: text, tapOpens: tap)
   }
-
-  private var tapToOpen: VoiceNotice.Line { expected("Tap to open Blurt", .hop(.sessionOff)) }
 
   @Test("no Full Access: the note is the key, whatever else is true")
   func fullAccess() {
@@ -56,7 +80,7 @@ struct VoiceNoticeTests {
     #expect(line(fullAccess: false) == note)
     #expect(line(fullAccess: false, state: nil, snapshot: phase(.copied)) == note)
     #expect(line(fullAccess: false, snapshot: phase(.error, reason: .micDenied), handshake: .unready(.noKey)) == note)
-    #expect(line(fullAccess: false, snapshot: phase(.recording, recordingFor: 1190)) == note)
+    #expect(line(fullAccess: false, snapshot: phase(.recording, recordingFor: 1_190)) == note)
   }
 
   @Test("no record, a closed record, or a lapsed lease: tap to open Blurt")
@@ -193,7 +217,7 @@ struct VoiceNoticeTests {
   @Test("the countdown: from 30 s before the auto-release, up to the second, never below zero")
   func countdown() {
     let release = SyncSTTLimits.autoReleaseSeconds
-    #expect(release == 1195)
+    #expect(release == 1_195)
     #expect(line(snapshot: phase(.recording, recordingFor: release - 30.5)) == nil)
     #expect(line(snapshot: phase(.recording, recordingFor: release - 30)) == expected("30 s left", .press))
     #expect(line(snapshot: phase(.recording, recordingFor: release - 29.5)) == expected("30 s left", .press))

@@ -10,7 +10,7 @@
 # Two processes, one App Group. iOS lets no keyboard use the microphone, so the
 # app records and talks to AssemblyAI while the keyboard is a remote control that
 # inserts the result; they share `group.com.assemblyai.blurt.iphone` (see
-# BlurtiOSCore/SharedState.swift). Every id is AssemblyAI-owned
+# BlurtiOSCore/BlurtShared.swift). Every id is AssemblyAI-owned
 # (`com.assemblyai.blurt.iphone…`); the team comes from $BLURT_TEAM, never this
 # file. The Mac app keeps its own `dev.alex.blurt` ids: changing them would
 # orphan its Sparkle updates and its granted Accessibility permission.

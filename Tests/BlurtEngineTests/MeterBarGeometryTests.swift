@@ -203,7 +203,8 @@ struct MeterBarGeometryTests {
     #expect(
       abs(
         MeterBarGeometry.breathingOpacity(time: period / 2, period: period, minOpacity: floor)
-          - floor) < 0.0001)
+          - floor
+      ) < 0.0001)
     #expect(
       abs(MeterBarGeometry.breathingOpacity(time: period, period: period, minOpacity: floor) - 1)
         < 0.0001)

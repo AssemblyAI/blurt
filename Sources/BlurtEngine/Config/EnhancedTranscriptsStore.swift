@@ -24,10 +24,6 @@ public struct EnhancedTranscriptsStore {
 
   private let defaults: UserDefaults
 
-  init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-  }
-
   /// Unset means **on** — the cleanup rewrite is the product's default
   /// behavior, so only an explicit opt-out disables it. That inverts the
   /// usual `bool(forKey:)` shape (which reads a missing key as false), hence
@@ -38,5 +34,9 @@ public struct EnhancedTranscriptsStore {
   /// production caller. Seed the slot to change the switch.
   var isEnabled: Bool {
     defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue
+  }
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
   }
 }

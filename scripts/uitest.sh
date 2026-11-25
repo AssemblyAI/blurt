@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run the XCUITest integration suite (BlurtUITests) against a Debug build of the
 # Blurt app launched in UI-test mode (the `-BlurtUITest` harness in
-# UITestSupport.swift). macOS-only; needs Xcode. See App/Blurt/BlurtUITests/.
+# the UITest*.swift files). macOS-only; needs Xcode. See App/Blurt/BlurtUITests/.
 #
 # check.sh runs this same suite as part of the required gate; this script is the
 # standalone entry point (faster to iterate on, no engine/lint steps first).

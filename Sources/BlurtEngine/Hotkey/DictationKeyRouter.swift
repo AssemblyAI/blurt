@@ -46,10 +46,14 @@ public struct DictationKeyRouter: Sendable {
     /// trigger is held.
     case escapeDown(rawFlags: UInt64)
 
+    /// Any of ⌘, ⌥, ⌃ and ⇧: what makes an Escape a shortcut.
+    static let modifierMask =
+      TriggerKey.commandFlag | TriggerKey.optionFlag | TriggerKey.controlFlag | TriggerKey.shiftFlag
+
     /// A `flagsChanged` delivery from its keycode and the event's raw
     /// `CGEventFlags`: down when the flags hold *that* key's device bit — so
     /// every trigger key reads correctly, not only the bound one.
-    public static func fromFlags(keyCode: Int, rawFlags: UInt64) -> Event {
+    public static func fromFlags(keyCode: Int, rawFlags: UInt64) -> Self {
       let isOn = TriggerKey(rawValue: keyCode).map { rawFlags & $0.deviceModifierMask != 0 } ?? false
       return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: isOn)
     }
@@ -60,19 +64,21 @@ public struct DictationKeyRouter: Sendable {
     /// repeats are ordinary keys, so holding it down cancels once. The rest is
     /// read lazily: this runs for every key typed anywhere on the system.
     public static func fromKeyDown(
-      keyCode: Int, isAutorepeat: @autoclosure () -> Bool, escapeCancels: @autoclosure () -> Bool,
+      keyCode: Int,
+      isAutorepeat: @autoclosure () -> Bool,
+      escapeCancels: @autoclosure () -> Bool,
       rawFlags: @autoclosure () -> UInt64
-    ) -> Event {
+    ) -> Self {
       guard keyCode == DictationKeyRouter.escapeKeyCode, !isAutorepeat(), escapeCancels() else {
         return .keyDown(keyCode: keyCode)
       }
       return .escapeDown(rawFlags: rawFlags())
     }
-
-    /// Any of ⌘, ⌥, ⌃ and ⇧: what makes an Escape a shortcut.
-    static let modifierMask =
-      TriggerKey.commandFlag | TriggerKey.optionFlag | TriggerKey.controlFlag | TriggerKey.shiftFlag
   }
+
+  /// Escape's macOS virtual keycode — the cancel key, not a bindable trigger, so
+  /// it's a router constant rather than a `TriggerKey` case.
+  public static let escapeKeyCode = 53
 
   /// Each watched trigger's virtual keycode (`TriggerKey.keyCode`) and the
   /// activation mode its presses resolve under.
@@ -82,10 +88,6 @@ public struct DictationKeyRouter: Sendable {
   /// dictation — or nil while the gate is idle and no trigger is held. The host
   /// reads it on `.start` to know which key fired.
   public private(set) var activeKeyCode: Int?
-
-  /// Escape's macOS virtual keycode — the cancel key, not a bindable trigger, so
-  /// it's a router constant rather than a `TriggerKey` case.
-  public static let escapeKeyCode = 53
 
   private var gate: DictationKeyGate
   /// The active modifier's current physical state, so repeated `flagsChanged`
@@ -97,6 +99,9 @@ public struct DictationKeyRouter: Sendable {
   /// until it is let go: read as a fresh edge, the re-report would start a
   /// dictation right after the one the reset ended.
   private var heldThroughReset: Int?
+
+  /// The trigger physically down: the active one, or one a reset left held.
+  private var heldTrigger: Int? { modifierIsDown ? activeKeyCode : heldThroughReset }
 
   /// Each key with its own mode (keycode → activation).
   public init(activations: [Int: TriggerActivation], holdThreshold: Duration = .seconds(1)) {
@@ -114,16 +119,21 @@ public struct DictationKeyRouter: Sendable {
     _ event: Event, at now: Duration, inFlight: () -> Bool = { false }
   ) -> DictationKeyGate.Action {
     switch event {
-    case .flagsChanged(let keyCode, let triggerFlagIsOn):
+    case let .flagsChanged(keyCode, triggerFlagIsOn):
       return flagsChanged(keyCode, isOn: triggerFlagIsOn, at: now)
+
     case .keyDown(let keyCode):
-      return activations[keyCode] != nil ? .none : gate.otherKeyDown()
+      return activations[keyCode] != nil ? .ignore : gate.otherKeyDown()
+
     case .pointerDown:
       return gate.otherKeyDown()
+
     case .escapeDown(let rawFlags):
       // Only with something live or in flight: the tap is listen-only and sees
       // every Escape typed anywhere. A shortcut is an ordinary key.
-      guard isBareEscape(rawFlags), !gate.isIdle || inFlight() else { return gate.otherKeyDown() }
+      guard isBareEscape(rawFlags), !gate.isIdle || inFlight() else {
+        return gate.otherKeyDown()
+      }
       reset()
       return .discard
     }
@@ -136,9 +146,11 @@ public struct DictationKeyRouter: Sendable {
   {
     if keyCode == heldThroughReset {
       if !triggerFlagIsOn { heldThroughReset = nil }
-      return .none
+      return .ignore
     }
-    guard activations[keyCode] != nil, (activeKeyCode ?? keyCode) == keyCode else { return .none }
+    guard activations[keyCode] != nil, (activeKeyCode ?? keyCode) == keyCode else {
+      return .ignore
+    }
     if triggerFlagIsOn, !modifierIsDown {
       modifierIsDown = true
       activeKeyCode = keyCode
@@ -156,7 +168,7 @@ public struct DictationKeyRouter: Sendable {
       if gate.isIdle { activeKeyCode = nil }
       return action
     }
-    return .none
+    return .ignore
   }
 
   /// Whether an Escape's flags hold no ⌘, ⌥, ⌃ or ⇧ beyond the held trigger's
@@ -173,9 +185,6 @@ public struct DictationKeyRouter: Sendable {
     return shortcut == 0
   }
 
-  /// The trigger physically down: the active one, or one a reset left held.
-  private var heldTrigger: Int? { modifierIsDown ? activeKeyCode : heldThroughReset }
-
   /// Rebinds the triggers — which keys, and each one's mode, the two halves of
   /// the binding Settings can change — and resets only when the change touches
   /// what the gate is tracking: the active key unbound (its up-event can no
@@ -186,12 +195,18 @@ public struct DictationKeyRouter: Sendable {
   @discardableResult
   public mutating func rebind(activations: [Int: TriggerActivation]) -> Bool {
     self.activations = activations
-    guard let activeKeyCode else { return false }
+    guard let activeKeyCode else {
+      return false
+    }
     // An unbound active key resets even with the gate idle (a combo cancelled
     // its press, the key still down): its up-event can no longer match, so it
     // would hold `activeKeyCode` and lock every other key out.
-    guard let activation = activations[activeKeyCode] else { return reset() }
-    guard !gate.isIdle, activation != gate.activation else { return false }
+    guard let activation = activations[activeKeyCode] else {
+      return reset()
+    }
+    guard !gate.isIdle, activation != gate.activation else {
+      return false
+    }
     return reset()
   }
 
@@ -219,7 +234,9 @@ public struct DictationKeyRouter: Sendable {
   @discardableResult
   public mutating func recoverFromDroppedEvents(heldFlags: UInt64) -> Bool {
     let activeKey = activeKeyCode.flatMap(TriggerKey.init(rawValue:))
-    guard activeKey.map({ heldFlags & $0.deviceModifierMask == 0 }) ?? true else { return false }
+    guard activeKey.map({ heldFlags & $0.deviceModifierMask == 0 }) ?? true else {
+      return false
+    }
     let discardedRecording = reset()
     // The release that would clear a held-through key may be among the dropped
     // events too, so the flags decide whether it is still down.

@@ -115,7 +115,7 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
     `macos-26` runs them on every PR and is the authority on them. To run them on
     a Mac anyway: `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or invoke the two
     scripts directly. Expect to lose the machine for a few minutes if you do.
-12. `swiftlint analyze` (unused imports — needs the app build's compiler log) and
+12. `swiftlint analyze` (unused imports and declarations — needs the app build's compiler log) and
     `periphery scan --strict` (unused declarations — runs its own xcodebuild).
     The only two that can't move earlier.
 

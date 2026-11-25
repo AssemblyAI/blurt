@@ -10,15 +10,6 @@ package struct BrandTabBar<Tab: Hashable & Identifiable>: View {
   /// An SF Symbol; the selected tab draws its `.fill` variant.
   let symbol: (Tab) -> String
 
-  package init(
-    _ tabs: [Tab], selection: Binding<Tab>, label: @escaping (Tab) -> String, symbol: @escaping (Tab) -> String
-  ) {
-    self.tabs = tabs
-    _selection = selection
-    self.label = label
-    self.symbol = symbol
-  }
-
   package var body: some View {
     HStack(spacing: 0) {
       ForEach(tabs) { tab in
@@ -48,5 +39,14 @@ package struct BrandTabBar<Tab: Hashable & Identifiable>: View {
       Rectangle().fill(BlurtBrand.cardBorder).frame(height: DesignTokens.Metrics.cardBorder)
     }
     .animation(.easeInOut(duration: DesignTokens.Motion.colour), value: selection)
+  }
+
+  package init(
+    _ tabs: [Tab], selection: Binding<Tab>, label: @escaping (Tab) -> String, symbol: @escaping (Tab) -> String
+  ) {
+    self.tabs = tabs
+    _selection = selection
+    self.label = label
+    self.symbol = symbol
   }
 }

@@ -14,7 +14,8 @@ struct HomeView: View {
   var coordinator: DictationCoordinator
   /// Opens Settings, which `MainView` presents over either tab.
   let showSettings: () -> Void
-  @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.scenePhase)
+  private var scenePhase
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
 
@@ -22,9 +23,14 @@ struct HomeView: View {
   /// decides on — and the failure the coordinator is holding for a moment.
   private var status: HomeStatus {
     HomeStatus(
-      state: coordinator.window.state, windowMinutes: SharedStore.windowMinutes, error: coordinator.error,
-      micDenied: coordinator.microphoneDenied, hasKey: coordinator.apiKey.hasAPIKey, micGranted: microphoneGranted,
-      keyboardSeen: keyboardSeen)
+      state: coordinator.window.state,
+      windowMinutes: SharedStore.windowMinutes,
+      error: coordinator.error,
+      micDenied: coordinator.microphoneDenied,
+      hasKey: coordinator.apiKey.hasAPIKey,
+      micGranted: microphoneGranted,
+      keyboardSeen: keyboardSeen
+    )
   }
 
   var body: some View {

@@ -13,11 +13,15 @@ struct DictationSessionUnknownSecurityTests {
   /// A password field, so a read that *did* land would refuse it outright —
   /// which is what makes "it never landed" the case under test.
   private static let secureField = FocusedFieldContext(
-    priorText: nil, selectedText: nil, windowTitle: "1Password", fieldLabel: "Password",
-    isSecure: true)
+    priorText: nil,
+    selectedText: nil,
+    windowTitle: "1Password",
+    fieldLabel: "Password",
+    isSecure: true
+  )
 
   @Test("a dictation released before the read lands is kept in Recent but never replayed")
-  func hungReadIsNotReplayed() async throws {
+  func hungReadIsNotReplayed() async {
     // The other half of `lateSecureCaptureStillSuppressesHistory`: there the read lands before
     // the decision, here it never does. Not knowing whether the target is a
     // password field must not read as knowing it isn't — a nil `capturedContext`
@@ -29,7 +33,8 @@ struct DictationSessionUnknownSecurityTests {
     let log = RecordedLog()
     let (seams, hung) = hungFieldSeams(field: Self.secureField, log: log)
     let session = makeSession(
-      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams
+    )
 
     await session.press()
     await session.release()
@@ -49,7 +54,7 @@ struct DictationSessionUnknownSecurityTests {
   }
 
   @Test("a field Accessibility can't reach is kept in Recent but never replayed")
-  func unreachableFieldIsNotReplayed() async throws {
+  func unreachableFieldIsNotReplayed() async {
     // `FocusCapture` reports `.unreachable` when no focused element answers — an
     // Electron app, whose login form is as invisible as its chat box. The flag
     // must survive the empty collapse, and the dictation must stay in Recent

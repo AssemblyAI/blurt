@@ -9,8 +9,15 @@ import SwiftUI
 /// on the brand's page, its sections under mono eyebrows. Presented from
 /// either tab's gear.
 struct SettingsView: View {
+  private static var version: String {
+    let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+    return "\(short) (\(build))"
+  }
+
   var coordinator: DictationCoordinator
-  @Environment(\.dismiss) private var dismiss
+  @Environment(\.dismiss)
+  private var dismiss
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @State private var airPodsMic = SharedStore.airPodsMic
@@ -20,9 +27,12 @@ struct SettingsView: View {
   @State private var showsSetupSteps = false
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
-  @Environment(\.scenePhase) private var scenePhase
-  @AppStorage(TypingSpeed.defaultsKey) private var typingSpeed: Double = 0
-  @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
+  @Environment(\.scenePhase)
+  private var scenePhase
+  @AppStorage(TypingSpeed.defaultsKey)
+  private var typingSpeed: Double = 0
+  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
+  private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
 
   var body: some View {
@@ -67,7 +77,8 @@ struct SettingsView: View {
       if isSetUp {
         HStack {
           Text("Blurt is set up")
-          Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent)
+          // Decoration: the text beside it already says so.
+          Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent).accessibilityHidden(true)
           Spacer()
           Button(showsSetupSteps ? "Hide steps" : "Show steps") { showsSetupSteps.toggle() }
             .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
@@ -77,7 +88,9 @@ struct SettingsView: View {
       }
       if !isSetUp || showsSetupSteps {
         SetupSteps(
-          hasKey: coordinator.apiKey.hasAPIKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen,
+          hasKey: coordinator.apiKey.hasAPIKey,
+          microphoneGranted: microphoneGranted,
+          keyboardSeen: keyboardSeen,
           refresh: refreshSetup
         ) {
           Button("Add an API key") { showsKeyEntry = true }.buttonStyle(BrandButtonStyle())
@@ -87,12 +100,6 @@ struct SettingsView: View {
     } header: {
       Eyebrow("Setup")
     }
-  }
-
-  private func refreshSetup() {
-    microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-    keyboardSeen = SharedStore.keyboardEverSeen
-    coordinator.apiKey.refreshStatus()
   }
 
   /// The keyboard is Apple's, so there is nothing of its look to choose; the
@@ -106,7 +113,8 @@ struct SettingsView: View {
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
-          + "The keyboard picks up the change the next time it appears.")
+          + "The keyboard picks up the change the next time it appears."
+      )
     }
   }
 
@@ -131,7 +139,8 @@ struct SettingsView: View {
       Text(
         "How long a session stays on with nobody dictating, counted from the last word, so the keyboard can start "
           + "without opening Blurt. With AirPods, the phone's own mic is used and music stays stereo; "
-          + "Use AirPods mic takes theirs instead, from the next session.")
+          + "Use AirPods mic takes theirs instead, from the next session."
+      )
     }
   }
 
@@ -190,9 +199,9 @@ struct SettingsView: View {
     }
   }
 
-  private static var version: String {
-    let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-    return "\(short) (\(build))"
+  private func refreshSetup() {
+    microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+    keyboardSeen = SharedStore.keyboardEverSeen
+    coordinator.apiKey.refreshStatus()
   }
 }

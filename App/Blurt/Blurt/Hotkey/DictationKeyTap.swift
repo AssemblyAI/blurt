@@ -75,6 +75,20 @@ final class DictationKeyTap {
   /// read never overlaps a write.
   nonisolated(unsafe) private var tap: CFMachPort?
 
+  /// Whether the `CGEventTap` has been created — false until `ensureRunning()`
+  /// first succeeds. `AppCoordinator.retryKeyTapInstallIfNeeded` polls this so a
+  /// failed install (see `ensureRunning`) is retried instead of staying dead
+  /// until relaunch.
+  var isInstalled: Bool { tap != nil }
+
+  /// The trigger key that owns the router's gate, if any.
+  private var activeKey: TriggerKey? { router.activeKeyCode.flatMap(TriggerKey.init(rawValue:)) }
+
+  #if UITEST_HOOKS
+    /// Between `simulatePressForTesting()` and its release: clicks don't cancel.
+    private var isSimulatingPress = false
+  #endif
+
   init(
     onStart: @escaping @MainActor (TriggerKey) -> Void,
     onStop: @escaping @MainActor () -> Void,
@@ -100,24 +114,10 @@ final class DictationKeyTap {
     self.router = DictationKeyRouter(activations: Self.boundActivations())
   }
 
-  deinit {
-    // The callback holds `self` unretained (`Unmanaged.passUnretained` in
-    // `userInfo`), so the tap must not outlive this object: disable it and
-    // invalidate the mach port (which also tears down its run-loop source)
-    // before the pointer dangles. AppCoordinator keeps the tap app-lifetime
-    // today, so this is a guard against a future re-composition, not a path
-    // that runs in production.
-    if let tap {
-      CGEvent.tapEnable(tap: tap, enable: false)
-      CFMachPortInvalidate(tap)
-    }
+  /// Every key that does something (dictate, read aloud, ask), with its tap/hold mode.
+  private static func boundActivations() -> [Int: TriggerActivation] {
+    Dictionary(uniqueKeysWithValues: TriggerKeyBindings().activations.map { ($0.key.keyCode, $0.value) })
   }
-
-  /// Whether the `CGEventTap` has been created — false until `ensureRunning()`
-  /// first succeeds. `AppCoordinator.retryKeyTapInstallIfNeeded` polls this so a
-  /// failed install (see `ensureRunning`) is retried instead of staying dead
-  /// until relaunch.
-  var isInstalled: Bool { tap != nil }
 
   /// Idempotent. Creates and enables the tap if needed and syncs the binding.
   /// Returns false when the tap can't be created yet (process not Accessibility
@@ -218,8 +218,9 @@ final class DictationKeyTap {
 
   /// Callback entry point (always on the main thread — the tap's source lives on
   /// the main run loop). Swallows nothing: the tap is listen-only, so events are
-  /// delivered regardless of what happens here.
-  fileprivate func handle(type: CGEventType, event: CGEvent) {
+  /// delivered regardless of what happens here. Internal rather than private
+  /// only because the file-scope C callback below has to reach it.
+  func handle(type: CGEventType, event: CGEvent) {
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
       // Events may have been dropped while the tap was down. Whether the gate's
@@ -233,7 +234,9 @@ final class DictationKeyTap {
       return
     }
 
-    guard let routed = routerEvent(type: type, event: event) else { return }
+    guard let routed = routerEvent(type: type, event: event) else {
+      return
+    }
     let now = reference.duration(to: ContinuousClock.now)
     dispatch(router.handle(routed, at: now, inFlight: isBusy))
   }
@@ -245,18 +248,26 @@ final class DictationKeyTap {
     switch type {
     case .flagsChanged:
       return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
+
     case .keyDown:
       // Escape cancels only with its experimental switch on, read at the keystroke.
       return .fromKeyDown(
-        keyCode: keyCode, isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
-        escapeCancels: EscapeCancelStore().isEnabled, rawFlags: event.flags.rawValue)
+        keyCode: keyCode,
+        isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+        escapeCancels: EscapeCancelStore().isEnabled,
+        rawFlags: event.flags.rawValue
+      )
+
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       #if UITEST_HOOKS
         // A simulated press is "held" while the test clicks the harness's
         // release button; that click isn't a modifier-click.
-        if isSimulatingPress { return nil }
+        if isSimulatingPress {
+          return nil
+        }
       #endif
       return .pointerDown
+
     default:
       return nil
     }
@@ -266,28 +277,30 @@ final class DictationKeyTap {
     switch action {
     // `.start` only follows a trigger's down edge, which made it the active key.
     case .start:
-      guard let activeKey else { return assertionFailure(".start with no active trigger key") }
+      guard let activeKey else {
+        assertionFailure(".start with no active trigger key")
+        return
+      }
       onStart(activeKey)
-    case .stop: onStop()
-    case .cancel: onCancel()
-    case .discard: onEscape()
-    case .latch: onLatch()
-    case .none: break
+
+    case .stop:
+      onStop()
+
+    case .cancel:
+      onCancel()
+
+    case .discard:
+      onEscape()
+
+    case .latch:
+      onLatch()
+
+    case .ignore:
+      break
     }
   }
 
-  /// The trigger key that owns the router's gate, if any.
-  private var activeKey: TriggerKey? { router.activeKeyCode.flatMap(TriggerKey.init(rawValue:)) }
-
-  /// Every key that does something (dictate, read aloud, ask), with its tap/hold mode.
-  private static func boundActivations() -> [Int: TriggerActivation] {
-    Dictionary(uniqueKeysWithValues: TriggerKeyBindings().activations.map { ($0.key.keyCode, $0.value) })
-  }
-
   #if UITEST_HOOKS
-    /// Between `simulatePressForTesting()` and its release: clicks don't cancel.
-    private var isSimulatingPress = false
-
     /// Test seam: drive the real gate + callback dispatch for a synthetic
     /// lone-modifier press of `key` (the bound key unless given), bypassing the
     /// `CGEventTap` (whose creation needs Accessibility trust an automated run
@@ -313,9 +326,24 @@ final class DictationKeyTap {
       let keyCode = (key ?? TriggerKeyStore().triggerKey).keyCode
       dispatch(
         router.handle(
-          .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false), at: asTap ? .milliseconds(100) : .seconds(2)))
+          .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false), at: asTap ? .milliseconds(100) : .seconds(2)
+        )
+      )
     }
   #endif
+
+  deinit {
+    // The callback holds `self` unretained (`Unmanaged.passUnretained` in
+    // `userInfo`), so the tap must not outlive this object: disable it and
+    // invalidate the mach port (which also tears down its run-loop source)
+    // before the pointer dangles. AppCoordinator keeps the tap app-lifetime
+    // today, so this is a guard against a future re-composition, not a path
+    // that runs in production.
+    if let tap {
+      CGEvent.tapEnable(tap: tap, enable: false)
+      CFMachPortInvalidate(tap)
+    }
+  }
 }
 
 /// Top-level (non-capturing) C callback. The tap object is passed unretained via
@@ -325,13 +353,15 @@ final class DictationKeyTap {
 /// `nonisolated` opts out of the module's MainActor default: an isolated
 /// function can't convert to the `CGEventTapCallBack` C function pointer — the
 /// main-thread guarantee is instead asserted inside via `assumeIsolated`.
-private nonisolated func dictationTapCallback(
+nonisolated private func dictationTapCallback(
   _: CGEventTapProxy,
   type: CGEventType,
   event: CGEvent,
   userInfo: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-  guard let userInfo else { return Unmanaged.passUnretained(event) }
+  guard let userInfo else {
+    return Unmanaged.passUnretained(event)
+  }
   // Resolve the unretained pointer out here: DictationKeyTap is MainActor and
   // therefore Sendable, so the reference crosses into the closure cleanly.
   let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
@@ -341,9 +371,9 @@ private nonisolated func dictationTapCallback(
   // closure runs synchronously right here, so handing it the non-Sendable event
   // is safe — spelled `nonisolated(unsafe)` because region-isolation analysis
   // can't see that the call never leaves this thread.
-  nonisolated(unsafe) let event = event
+  nonisolated(unsafe) let unsafeEvent = event
   MainActor.assumeIsolated {
-    monitor.handle(type: type, event: event)
+    monitor.handle(type: type, event: unsafeEvent)
   }
   return Unmanaged.passUnretained(event)
 }

@@ -39,7 +39,8 @@ struct BlurtKeyboardView: View {
           // The hold that moves the cursor comes sooner than KeyboardKit's
           // half second (`motion/space-hold`).
           params.view.keyboardGestureConfiguration(
-            GestureButtonConfiguration(longPressDelay: DesignTokens.Motion.spaceHold))
+            GestureButtonConfiguration(longPressDelay: DesignTokens.Motion.spaceHold)
+          )
         } else {
           params.view
         }
@@ -56,12 +57,15 @@ struct BlurtKeyboardView: View {
     // the mic in the 123 key's style, the system key Apple's own in-row mic
     // sits on.
     .keyboardButtonStyle { params in
-      var style =
-        params.action == .blurtMic
-        ? Keyboard.ButtonStyleBuilderParams(
+      var style: Keyboard.ButtonStyle
+      if params.action == .blurtMic {
+        let numeric = Keyboard.ButtonStyleBuilderParams(
           action: .keyboardType(.numeric), context: params.context, isPressed: params.isPressed
-        ).standardStyle()
-        : params.standardStyle()
+        )
+        style = numeric.standardStyle()
+      } else {
+        style = params.standardStyle()
+      }
       style.cornerRadius = DesignTokens.Metrics.keyRadius
       return style
     }

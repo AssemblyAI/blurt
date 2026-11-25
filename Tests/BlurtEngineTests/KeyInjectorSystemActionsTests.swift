@@ -19,6 +19,21 @@
   /// GUI session.
   @Suite("KeyInjector system actions", .timeLimit(.minutes(1)))
   struct KeyInjectorSystemActionsTests {
+    /// Runs the frontmost wait on a `TestClock`, its check turning true from
+    /// check number `trueFrom` (never, if nil), and advances the clock through
+    /// `sleeps` of its polls the way `MicLivenessTests` drives its wait: each
+    /// advance waits for the sleep it means to wake, matched on its deadline, so
+    /// a loop sleeping some other interval hangs here (the suite's time limit
+    /// catches it) rather than passing.
+    private struct PollRun {
+      let result: Bool
+      let checks: Int
+      let elapsed: Duration
+    }
+
+    private static let checksPerBudget = Int(
+      KeyInjector.frontmostWaitBudget / KeyInjector.frontmostPollInterval
+    )
 
     // MARK: - Cmd-V event construction
 
@@ -134,32 +149,19 @@
       #expect(await KeyInjector.waitUntilFrontmost(.current) == false)
     }
 
-    private static let checksPerBudget = Int(
-      KeyInjector.frontmostWaitBudget / KeyInjector.frontmostPollInterval)
-
-    /// Runs the frontmost wait on a `TestClock`, its check turning true from
-    /// check number `trueFrom` (never, if nil), and advances the clock through
-    /// `sleeps` of its polls the way `MicLivenessTests` drives its wait: each
-    /// advance waits for the sleep it means to wake, matched on its deadline, so
-    /// a loop sleeping some other interval hangs here (the suite's time limit
-    /// catches it) rather than passing.
-    private struct PollRun {
-      let result: Bool
-      let checks: Int
-      let elapsed: Duration
-    }
-
     private func runPoll(trueFrom: Int?, sleeps: Int) async -> PollRun {
       let clock = TestClock()
       let checks = Mutex(0)
       async let result = KeyInjector.poll(
-        for: KeyInjector.frontmostWaitBudget, every: KeyInjector.frontmostPollInterval, clock: clock,
-        until: {
-          checks.withLock { count in
-            count += 1
-            return trueFrom.map { count >= $0 } ?? false
-          }
-        })
+        for: KeyInjector.frontmostWaitBudget,
+        every: KeyInjector.frontmostPollInterval,
+        clock: clock
+      ) {
+        checks.withLock { count in
+          count += 1
+          return trueFrom.map { count >= $0 } ?? false
+        }
+      }
       for _ in 0..<sleeps {
         await clock.waitUntilSleeping(for: KeyInjector.frontmostPollInterval)
         clock.advance(by: KeyInjector.frontmostPollInterval)

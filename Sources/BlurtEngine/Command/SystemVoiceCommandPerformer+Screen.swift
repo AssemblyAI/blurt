@@ -6,6 +6,9 @@
   extension SystemVoiceCommandPerformer {
     static let enhancedUserInterface = "AXEnhancedUserInterface"
 
+    /// How long a press gets to show before it's taken as ignored.
+    static let pressSettle: Duration = .milliseconds(250)
+
     /// Turns on a Chromium browser's page tree for the command about to be
     /// spoken, so its ~2 s build runs while the user talks. Cleared at the
     /// command's end (`endEnhancedInterface`), or after
@@ -13,14 +16,18 @@
     /// the flag also slows window managers' moves and resizes, so it stays on
     /// no longer than a command needs. Left alone when it was already on.
     static func beginEnhancedInterface(pid: pid_t, bundleID: String?, in owner: EnhancedInterface) {
-      guard let bundleID, ScreenSnapshot.chromiumBrowsers.contains(bundleID) else { return }
+      guard let bundleID, ScreenSnapshot.chromiumBrowsers.contains(bundleID) else {
+        return
+      }
       let app = AXRead.app(pid)
-      guard owner.owns(pid) || AXRead.bool(app, enhancedUserInterface) != true else { return }
+      guard owner.owns(pid) || AXRead.bool(app, enhancedUserInterface) != true else {
+        return
+      }
       AXUIElementSetAttributeValue(app, enhancedUserInterface as CFString, kCFBooleanTrue)
       let generation = owner.claim(pid)
       Task {
         try? await Task.sleep(for: ScreenSnapshot.enhancedInterfaceLinger)
-        if let pid = owner.release(generation: generation) { clearEnhancedInterface(pid) }
+        if let released = owner.release(generation: generation) { clearEnhancedInterface(released) }
       }
     }
 
@@ -30,7 +37,8 @@
 
     private static func clearEnhancedInterface(_ pid: pid_t) {
       AXUIElementSetAttributeValue(
-        AXRead.app(pid), enhancedUserInterface as CFString, kCFBooleanFalse)
+        AXRead.app(pid), enhancedUserInterface as CFString, kCFBooleanFalse
+      )
     }
 
     /// The frontmost app's focused window as the planner sees it, numbering
@@ -59,18 +67,11 @@
         snapshot.replace(pid: pid, elements: [:])
         return ScreenContext(appName: appName)
       }
-      var window = AXRead.Node(element)
-      var webArea = largest(role: "AXWebArea", in: window)
-      // A Chromium browser whose page tree is still being built has no web
-      // area yet: the user spoke faster than its ~2 s build. Wait for it, on
-      // a fresh read of the window each time — the tree is changing.
-      if buildsLate {
-        for delay in ScreenSnapshot.webAreaWaits where webArea == nil {
-          guard await pause(delay) else { return ScreenContext(appName: appName) }
-          window = AXRead.Node(element)
-          webArea = largest(role: "AXWebArea", in: window)
-        }
+      guard let found = await windowAndWebArea(element, buildsLate: buildsLate) else {
+        return ScreenContext(appName: appName)
       }
+      let window = found.window
+      let webArea = found.webArea
       var pageIncomplete = false
       func walkPage(_ area: AXRead.Node) -> [ScreenSnapshot.Entry<AXRead.Node>] {
         pageIncomplete = false
@@ -82,18 +83,51 @@
       // one, and waiting costs a second.
       if let area = webArea?.element, buildsLate {
         for delay in ScreenSnapshot.webRetryDelays where page.count < ScreenSnapshot.sparseWebArea {
-          guard await pause(delay) else { return ScreenContext(appName: appName) }
+          guard await pause(delay) else {
+            return ScreenContext(appName: appName)
+          }
           page = walkPage(AXRead.Node(area))
         }
       }
       // The page's share and the window's, shared as `ScreenRead.listing` says.
       let listing = ScreenRead.listing(
-        window: window, webArea: webArea, page: (page, pageIncomplete), same: { CFEqual($0.element, $1.element) },
-        shouldStop: budget())
-      guard !Task.isCancelled else { return ScreenContext(appName: appName) }
+        window: window,
+        webArea: webArea,
+        page: (page, pageIncomplete),
+        same: { CFEqual($0.element, $1.element) },
+        shouldStop: budget()
+      )
+      guard !Task.isCancelled else {
+        return ScreenContext(appName: appName)
+      }
       return ScreenContext(
-        appName: appName, windowTitle: window.string(kAXTitleAttribute),
-        elements: number(listing.entries, pid: pid, into: snapshot), incomplete: listing.incomplete)
+        appName: appName,
+        windowTitle: window.string(kAXTitleAttribute),
+        elements: number(listing.entries, pid: pid, into: snapshot),
+        incomplete: listing.incomplete
+      )
+    }
+
+    /// The window's node and its largest web area. A Chromium browser whose
+    /// page tree is still being built has no web area yet: the user spoke
+    /// faster than its ~2 s build. So when `buildsLate`, wait for it, on a
+    /// fresh read of the window each time — the tree is changing. Nil when the
+    /// read is cancelled during a wait.
+    private static func windowAndWebArea(
+      _ element: AXUIElement, buildsLate: Bool
+    ) async -> (window: AXRead.Node, webArea: AXRead.Node?)? {
+      var window = AXRead.Node(element)
+      var webArea = largest(role: "AXWebArea", in: window)
+      if buildsLate {
+        for delay in ScreenSnapshot.webAreaWaits where webArea == nil {
+          guard await pause(delay) else {
+            return nil
+          }
+          window = AXRead.Node(element)
+          webArea = largest(role: "AXWebArea", in: window)
+        }
+      }
+      return (window, webArea)
     }
 
     /// Sleeps `delay`, answering false — at once — when the read is cancelled:
@@ -113,8 +147,7 @@
     /// by node, and Music answers at ~15 ms a call.
     static func largest(role: String, in root: AXRead.Node) -> AXRead.Node? {
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.webAreaSearchBudget)
-      return ScreenRead.largest(
-        role: role, in: root, shouldStop: { ContinuousClock.now >= deadline || Task.isCancelled })
+      return ScreenRead.largest(role: role, in: root) { ContinuousClock.now >= deadline || Task.isCancelled }
     }
 
     /// Stops a walk at `ScreenSnapshot.readBudget`, or when the read is cancelled.
@@ -161,8 +194,10 @@
       let node = AXRead.Node(handle.element)
       try refuseIfDestructive(node)
       return try await checked(
-        "AXPress", node: node, pid: pid,
-        press: { AXUIElementPerformAction(handle.element, kAXPressAction as CFString) == .success })
+        "AXPress",
+        node: node,
+        pid: pid
+      ) { AXUIElementPerformAction(handle.element, kAXPressAction as CFString) == .success }
     }
 
     /// `ElementActions.press` with this app's reads: the fingerprint only
@@ -180,15 +215,21 @@
         return fingerprint(of: pressed ? AXRead.Node(node.element) : node, pid: pid)
       }
       return try await ElementActions.press(
-        action, fingerprint: verify ? read : nil, press: press,
-        settle: { try await Task.sleep(for: pressSettle) }, click: { try await click(node, pid: pid) })
+        action,
+        fingerprint: verify ? read : nil,
+        press: press,
+        settle: { try await Task.sleep(for: pressSettle) },
+        click: { try await click(node, pid: pid) }
+      )
     }
 
     /// Whether an action's success needs checking for: Chromium browsers and
     /// Electron apps, whose web content can answer success and do nothing.
     static func checksPress(_ pid: pid_t?) async -> Bool {
       await MainActor.run {
-        guard let app = pid.flatMap(NSRunningApplication.init(processIdentifier:)) else { return false }
+        guard let app = pid.flatMap(NSRunningApplication.init(processIdentifier:)) else {
+          return false
+        }
         return app.bundleIdentifier.map(ScreenSnapshot.chromiumBrowsers.contains) == true
           || FocusCapture.isElectronBundle(app.bundleURL)
       }
@@ -221,13 +262,12 @@
     @discardableResult
     static func require(_ node: AXRead.Node, roleIn roles: Set<String>, for step: String, what: String) throws -> String
     {
-      guard let role = node.role else { return "" }
+      guard let role = node.role else {
+        return ""
+      }
       guard roles.contains(role) else { throw VoiceCommandError.couldNotPerform("\(step) that: it isn't \(what)") }
       return role
     }
-
-    /// How long a press gets to show before it's taken as ignored.
-    static let pressSettle: Duration = .milliseconds(250)
 
     /// What a press that worked would most likely change, read the same way
     /// before and after it.
@@ -239,8 +279,10 @@
         focusedElement: focused.map { Int(bitPattern: CFHash($0)) },
         windowTitle: window.flatMap { AXRead.string($0, kAXTitleAttribute) },
         value: AXRead.string(node.element, kAXValueAttribute),
-        onScreen: node.frame != nil, focusOnTarget: focused.map { isWithin($0, node.element) } ?? false,
-        expanded: AXRead.bool(node.element, "AXExpanded"))
+        onScreen: node.frame != nil,
+        focusOnTarget: focused.map { isWithin($0, node.element) } ?? false,
+        expanded: AXRead.bool(node.element, "AXExpanded")
+      )
     }
 
     /// Whether a window owned by `owner` is `pid`'s own: its own, or an
@@ -257,8 +299,12 @@
     private static func isWithin(_ element: AXUIElement, _ target: AXUIElement) -> Bool {
       var current: AXUIElement? = element
       for _ in 0..<4 {
-        guard let level = current else { return false }
-        if CFEqual(level, target) { return true }
+        guard let level = current else {
+          return false
+        }
+        if CFEqual(level, target) {
+          return true
+        }
         current = AXRead.element(level, kAXParentAttribute)
       }
       return false
@@ -285,7 +331,8 @@
         },
         isFocused: { isFocused(handle.element, pid: pid) },
         click: { try await click(node, pid: pid) },
-        selectAll: { selectAll(handle.element) })
+        selectAll: { selectAll(handle.element) }
+      )
     }
 
     private static func isFocused(_ element: AXUIElement, pid: pid_t?) -> Bool {
@@ -309,7 +356,9 @@
       var range = CFRange(location: 0, length: count)
       guard let value = unsafe AXValueCreate(.cfRange, &range),
         AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, value) == .success
-      else { return "selection refused, cursor kept" }
+      else {
+        return "selection refused, cursor kept"
+      }
       return "selected \(count) characters"
     }
 

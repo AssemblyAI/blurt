@@ -35,8 +35,10 @@ final class DictationPerformanceTests: XCTestCase {
     }
     // Stubbed this is well under a millisecond; 500 ms is a gross-regression trip.
     XCTAssertLessThan(
-      median, .milliseconds(500),
-      "transcribe→inject hot path regressed: median \(median) over budget")
+      median,
+      .milliseconds(500),
+      "transcribe→inject hot path regressed: median \(median) over budget"
+    )
   }
 
   /// The press → `.recording` startup path (focus capture + mic start), stubbed.
@@ -47,7 +49,9 @@ final class DictationPerformanceTests: XCTestCase {
       await session.cancel()  // tear down so the mic/recording doesn't linger
     }
     XCTAssertLessThan(
-      median, .milliseconds(500),
-      "press startup path regressed: median \(median) over budget")
+      median,
+      .milliseconds(500),
+      "press startup path regressed: median \(median) over budget"
+    )
   }
 }

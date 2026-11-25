@@ -23,9 +23,11 @@ struct LiveRecordingTests {
     unsafe mic.withUnsafeMutableBytes { micBytes in
       unsafe system.withUnsafeMutableBytes { systemBytes in
         unsafe list[0] = unsafe AudioBuffer(
-          mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress)
+          mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress
+        )
         unsafe list[1] = unsafe AudioBuffer(
-          mNumberChannels: 2, mDataByteSize: UInt32(systemBytes.count), mData: systemBytes.baseAddress)
+          mNumberChannels: 2, mDataByteSize: UInt32(systemBytes.count), mData: systemBytes.baseAddress
+        )
         let out = UnsafeMutablePointer<Float>.allocate(capacity: 8)
         defer { unsafe out.deallocate() }
         let frames = unsafe MixWriter.mix(list, into: out, capacity: 8)
@@ -63,9 +65,11 @@ struct LiveRecordingTests {
       unsafe mic.withUnsafeMutableBytes { micBytes in
         unsafe tap.withUnsafeMutableBytes { tapBytes in
           unsafe list[0] = unsafe AudioBuffer(
-            mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress)
+            mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress
+          )
           unsafe list[1] = unsafe AudioBuffer(
-            mNumberChannels: 2, mDataByteSize: UInt32(tapBytes.count), mData: tapBytes.baseAddress)
+            mNumberChannels: 2, mDataByteSize: UInt32(tapBytes.count), mData: tapBytes.baseAddress
+          )
           unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
         }
       }
@@ -104,7 +108,8 @@ struct LiveRecordingTests {
     defer { unsafe free(list.unsafeMutablePointer) }
     unsafe samples.withUnsafeMutableBytes { bytes in
       unsafe list[0] = unsafe AudioBuffer(
-        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+        mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress
+      )
       body(list)
     }
   }
@@ -143,10 +148,13 @@ struct LiveRecordingTests {
       RealtimeTranscriber.Event.self,
       from: Data(
         #"{"type":"Turn","turn_order":3,"transcript":"Ship it","end_of_turn":true,"speaker_label":"B","words":[]}"#
-          .utf8))
+          .utf8
+      )
+    )
     #expect(turn.turn == RealtimeTurn(order: 3, transcript: "Ship it", isFinal: true, speaker: "B"))
     let begin = try JSONDecoder().decode(
-      RealtimeTranscriber.Event.self, from: Data(#"{"type":"Begin","id":"x","expires_at":1}"#.utf8))
+      RealtimeTranscriber.Event.self, from: Data(#"{"type":"Begin","id":"x","expires_at":1}"#.utf8)
+    )
     #expect(begin.type == "Begin")
     #expect(begin.turn == nil)
   }

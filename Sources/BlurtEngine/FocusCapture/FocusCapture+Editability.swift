@@ -17,6 +17,39 @@
       "AXTextField", "AXTextArea", "AXComboBox", secureFieldRole, "AXSearchField",
     ]
 
+    /// Bundle-identifier prefixes of known web browsers. Prefix-matched so channel
+    /// variants classify with their stable siblings (`com.google.Chrome.beta`,
+    /// `com.apple.SafariTechnologyPreview`).
+    private static let browserBundleIDPrefixes: [String] = [
+      "com.apple.Safari",  // Safari + Safari Technology Preview
+      "com.google.Chrome",  // Chrome + Beta/Dev/Canary
+      "org.chromium.Chromium",
+      "com.microsoft.edgemac",  // Edge + Beta/Dev/Canary
+      "com.brave.Browser",  // Brave + Beta/Nightly
+      "com.operasoftware.Opera",
+      "com.vivaldi.Vivaldi",
+      "company.thebrowser.Browser",  // Arc
+      "org.mozilla.firefox",
+      "com.duckduckgo.macos.browser",
+      "com.kagi.kagimacOS",  // Orion
+    ]
+
+    /// Bundle-identifier prefixes of native editors that draw their own text view
+    /// and expose no text element to Accessibility at all: with the caret in a
+    /// buffer, the focused element is the bare `AXWindow` — no value, no selection
+    /// range — or the system-wide query fails outright (`kAXErrorCannotComplete`).
+    /// Measured on Sublime Text 4 (build 4215), Sublime Merge (build 2132, the
+    /// commit-message box) and Zed 1.23.2; ⌘V lands in all three. Prefix-matched
+    /// so channel variants classify with their stable siblings. Named rather than
+    /// inferred from those AX answers: a native window with no focused control, or
+    /// a busy app whose query times out, answers the same way, and pasting there
+    /// beeps and then restores the clipboard over the user's words.
+    private static let customDrawnEditorBundleIDPrefixes: [String] = [
+      "com.sublimetext.",  // Sublime Text 3 + 4
+      "com.sublimemerge",
+      "dev.zed.Zed",  // Zed + Preview/Nightly
+    ]
+
     /// Pure decision: do these signals, read off a focused element, mean it accepts
     /// pasted text? The injector calls this just before a synthesized ⌘V — if it
     /// returns false the paste is skipped (so macOS doesn't beep into a non-editable
@@ -42,7 +75,9 @@
     static func isEditableTarget(
       role: String?, valueSettable: Bool, hasInsertionPoint: Bool, inWebArea: Bool = false
     ) -> Bool {
-      if let role, editableRoles.contains(role) { return true }
+      if let role, editableRoles.contains(role) {
+        return true
+      }
       return valueSettable || hasInsertionPoint || (inWebArea && role != "AXLink")
     }
 
@@ -50,8 +85,12 @@
     nonisolated static func isInWebArea(_ element: AXUIElement) -> Bool {
       var current: AXUIElement? = element
       for _ in 0..<12 {
-        guard let level = current else { return false }
-        if stringValue(level, kAXRoleAttribute) == "AXWebArea" { return true }
+        guard let level = current else {
+          return false
+        }
+        if stringValue(level, kAXRoleAttribute) == "AXWebArea" {
+          return true
+        }
         current = elementValue(level, kAXParentAttribute)
       }
       return false
@@ -77,35 +116,25 @@
     /// `Codex Framework.framework`), so the `ElectronAsarIntegrity` Info.plist key
     /// Electron's packager writes is checked as a fallback.
     static func isElectronBundle(_ bundleURL: URL?) -> Bool {
-      guard let bundleURL else { return false }
+      guard let bundleURL else {
+        return false
+      }
       let electronFramework = bundleURL.appendingPathComponent(
-        "Contents/Frameworks/Electron Framework.framework")
-      if FileManager.default.fileExists(atPath: electronFramework.path) { return true }
+        "Contents/Frameworks/Electron Framework.framework"
+      )
+      if FileManager.default.fileExists(atPath: electronFramework.path) {
+        return true
+      }
       return Bundle(url: bundleURL)?.object(forInfoDictionaryKey: "ElectronAsarIntegrity") != nil
     }
-
-    /// Bundle-identifier prefixes of known web browsers. Prefix-matched so channel
-    /// variants classify with their stable siblings (`com.google.Chrome.beta`,
-    /// `com.apple.SafariTechnologyPreview`).
-    private static let browserBundleIDPrefixes: [String] = [
-      "com.apple.Safari",  // Safari + Safari Technology Preview
-      "com.google.Chrome",  // Chrome + Beta/Dev/Canary
-      "org.chromium.Chromium",
-      "com.microsoft.edgemac",  // Edge + Beta/Dev/Canary
-      "com.brave.Browser",  // Brave + Beta/Nightly
-      "com.operasoftware.Opera",
-      "com.vivaldi.Vivaldi",
-      "company.thebrowser.Browser",  // Arc
-      "org.mozilla.firefox",
-      "com.duckduckgo.macos.browser",
-      "com.kagi.kagimacOS",  // Orion
-    ]
 
     /// Pure decision behind `isBrowserApp`: does this bundle identifier belong to a
     /// known browser? Split from the `NSRunningApplication` wrapper so the
     /// classification is unit-testable without live running apps.
     static func isBrowserBundleID(_ bundleID: String?) -> Bool {
-      guard let bundleID else { return false }
+      guard let bundleID else {
+        return false
+      }
       return browserBundleIDPrefixes.contains { bundleID.hasPrefix($0) }
     }
 
@@ -119,22 +148,6 @@
       isBrowserBundleID(app?.bundleIdentifier)
     }
 
-    /// Bundle-identifier prefixes of native editors that draw their own text view
-    /// and expose no text element to Accessibility at all: with the caret in a
-    /// buffer, the focused element is the bare `AXWindow` — no value, no selection
-    /// range — or the system-wide query fails outright (`kAXErrorCannotComplete`).
-    /// Measured on Sublime Text 4 (build 4215), Sublime Merge (build 2132, the
-    /// commit-message box) and Zed 1.23.2; ⌘V lands in all three. Prefix-matched
-    /// so channel variants classify with their stable siblings. Named rather than
-    /// inferred from those AX answers: a native window with no focused control, or
-    /// a busy app whose query times out, answers the same way, and pasting there
-    /// beeps and then restores the clipboard over the user's words.
-    private static let customDrawnEditorBundleIDPrefixes: [String] = [
-      "com.sublimetext.",  // Sublime Text 3 + 4
-      "com.sublimemerge",
-      "dev.zed.Zed",  // Zed + Preview/Nightly
-    ]
-
     /// Whether a bundle id is a known custom-drawn editor (Sublime Text, Sublime
     /// Merge, Zed). Neither a browser nor Electron, yet just as invisible to
     /// Accessibility — so without this it would read as "nothing editable
@@ -142,7 +155,9 @@
     /// the buffer. A pure check, split out for the same reason as
     /// `isBrowserBundleID`.
     static func isCustomDrawnEditorBundleID(_ bundleID: String?) -> Bool {
-      guard let bundleID else { return false }
+      guard let bundleID else {
+        return false
+      }
       return customDrawnEditorBundleIDPrefixes.contains { bundleID.hasPrefix($0) }
     }
 
@@ -172,7 +187,9 @@
     /// attempts the paste — the injector's own trust check then handles the
     /// missing-permission case.
     nonisolated static func hasEditableFocusedElement() -> Bool {
-      guard let facts = focusFacts() else { return true }
+      guard let facts = focusFacts() else {
+        return true
+      }
       // AX trusted but nothing focused — a native app with nothing editable
       // (Finder, the desktop, a button-only window) — reads false: ⌘V there
       // only beeps. AX-opaque apps (Electron editors, browsers before
@@ -191,8 +208,12 @@
     /// answer, and the subrole (no part of the decision) not at all. The
     /// fixture recorder (`forRecording`) asks for every fact.
     nonisolated static func focusFacts(forRecording: Bool = false) -> PasteFacts? {
-      guard AXIsProcessTrusted() else { return nil }
-      guard let element = systemFocusedElement() else { return PasteFacts(focused: false) }
+      guard AXIsProcessTrusted() else {
+        return nil
+      }
+      guard let element = systemFocusedElement() else {
+        return PasteFacts(focused: false)
+      }
       // Same checked reader `captureFieldContext` uses for this attribute, so the
       // editability path and the secure-field path can't disagree about what a
       // misbehaving app's role reads as.
@@ -212,9 +233,13 @@
         && rangeRef.flatMap(axRange) != nil
       let settled = isEditableTarget(role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
       return PasteFacts(
-        focused: true, role: role, subrole: forRecording ? stringValue(element, kAXSubroleAttribute) : nil,
-        valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint,
-        inWebArea: (forRecording || !settled) && isInWebArea(element))
+        focused: true,
+        role: role,
+        subrole: forRecording ? stringValue(element, kAXSubroleAttribute) : nil,
+        valueSettable: valueSettable,
+        hasInsertionPoint: hasInsertionPoint,
+        inWebArea: (forRecording || !settled) && isInWebArea(element)
+      )
     }
   }
 #endif

@@ -28,19 +28,30 @@ struct MicKey: View {
 
   static func symbol(for state: VoiceState) -> String {
     switch state.glyph {
-    case .clipboard: return "doc.on.clipboard"
-    case .exclamation: return "exclamationmark"
-    case nil: return state.isRecording ? "waveform" : "mic.fill"
+    case .clipboard:
+      return "doc.on.clipboard"
+
+    case .exclamation:
+      return "exclamationmark"
+
+    case nil:
+      return state.isRecording ? "waveform" : "mic.fill"
     }
   }
 
   /// The key's own legend colour, unless the state has a colour of its own.
   static func tint(for state: VoiceState, scheme: ColorScheme) -> Color {
     switch state.ring {
-    case .solid(.error): return BlurtTint.notice(scheme)
-    case .solid(.ok): return BlurtTint.signal(scheme)
+    case .solid(.error):
+      return BlurtTint.notice(scheme)
+
+    case .solid(.ok):
+      return BlurtTint.signal(scheme)
+
     case .still, .sweeping:
-      if state.isRecording { return BlurtTint.signal(scheme) }
+      if state.isRecording {
+        return BlurtTint.signal(scheme)
+      }
       return Color.keyboardDarkButtonForeground(for: scheme)
     }
   }

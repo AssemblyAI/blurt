@@ -77,13 +77,15 @@ enum BlurtBrand {
       .init(color: .white, location: 1),
     ],
     startPoint: .bottom,
-    endPoint: .top)
+    endPoint: .top
+  )
 
   /// The ring drawn around the orb while the pill is waiting: brand green into
   /// white, corner to corner. Spun by `BrandOrb`, which is what turns a static
   /// two-stop gradient into a progress cue.
   nonisolated static let orbRingGradient = LinearGradient(
-    colors: [green, .white], startPoint: .topLeading, endPoint: .bottomTrailing)
+    colors: [green, .white], startPoint: .topLeading, endPoint: .bottomTrailing
+  )
 }
 
 extension BlurtBrand {

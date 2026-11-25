@@ -30,6 +30,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// reopen a window once the user has closed them all.
   @ObservationIgnored var openWindowByID: (@MainActor (String) -> Void)?
 
+  /// True once the launch-time activation has run.
+  @ObservationIgnored private var didActivateAtLaunch = false
+
+  /// Audio or video files opened in Blurt — dropped on the Dock icon, or from
+  /// Finder's Open With — waiting for the models, which a launch to open them
+  /// creates only in `applicationDidFinishLaunching`.
+  @ObservationIgnored private var pendingFileURLs: [URL] = []
+
   /// Brings the main window forward (showing the wizard or the ready screen).
   func openMainWindow() { openWindowByID?(MainWindow.id) }
 
@@ -52,9 +60,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     openMainWindow()
   }
 
-  /// True once the launch-time activation has run.
-  @ObservationIgnored private var didActivateAtLaunch = false
-
   /// Pulls Blurt frontmost for its initial window presentation. Called from
   /// the main window's `onAppear` rather than `applicationDidFinishLaunching`:
   /// at launch-finish the SwiftUI `Window` scene's NSWindow isn't on screen yet,
@@ -72,16 +77,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// launch path that doesn't grant those rights. Targets the one `canBecomeMain`
   /// window — the main scene — rather than the non-activating overlay panel.
   func activateAtLaunchIfNeeded() {
-    guard !didActivateAtLaunch else { return }
+    guard !didActivateAtLaunch else {
+      return
+    }
     didActivateAtLaunch = true
     NSApp.activate()
-    if let main = NSApp.windows.first(where: { $0.canBecomeMain }) {
+    if let main = NSApp.windows.first(where: \.canBecomeMain) {
       main.makeKeyAndOrderFront(nil)
       main.orderFrontRegardless()
     }
   }
 
-  func applicationDidFinishLaunching(_ notification: Notification) {
+  func applicationDidFinishLaunching(_: Notification) {
     // No permission prompts fire at launch. Accessibility (and Microphone) are
     // requested only when the user taps the matching button in the setup
     // screen's permission rows — see `PermissionsStepView`.
@@ -107,9 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // normal launch is untouched — running the UI tests locally does reset
         // these, by design.
         PersistedSettings.resetAll()
-        let apiKey = APIKeyModel(
-          keyStore: InMemoryAPIKeyStore(),
-          validateKey: { UITestKeyValidation.result(for: $0) })
+        let apiKey = APIKeyModel(keyStore: InMemoryAPIKeyStore()) { key in
+          UITestKeyValidation.result(for: key)
+        }
         coord = AppCoordinator(
           onSetupBlocked: onSetupBlocked,
           components: .uiTest(),
@@ -123,12 +130,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             speaker: UITestReadAloudSpeaker(),
             readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection },
             // Rewrite, compose and command keys offline too: no gateway, nothing acted on.
-            rewriter: UITestRewriter(), composer: UITestComposer(), planner: UITestPlanner(),
-            performer: UITestPerformer()),
+            rewriter: UITestRewriter(),
+            composer: UITestComposer(),
+            planner: UITestPlanner(),
+            performer: UITestPerformer()
+          ),
           // A fresh history per run — never the user's saved transcripts —
           // seeded with known entries when the suite asks, and the canned
           // transport behind transcription and the LLM.
-          transcripts: .uiTest(store: UITestMode.historyStore()))
+          transcripts: .uiTest(store: UITestMode.historyStore())
+        )
         if UITestMode.isTranscribeSampleRequested {
           coord.transcripts.transcribe(UITestHistorySeed.sampleFile())
         }
@@ -220,17 +231,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let persist = SigningIdentityMigration.run(
       lastIdentity: defaults.string(forKey: key),
       currentIdentity: SigningIdentity.current(),
-      isTrusted: AXIsProcessTrusted(),
+      isTrusted: AXIsProcessTrusted()
+    ) {
       // The *running* bundle id, not `HostIdentity.current.subsystem`: debug builds ship
       // under `dev.alex.blurt.dev` (see `project.yml`), and resetting the constant
       // would clear the released Blurt's grant from a dev build — the one app
       // whose permissions this process has no business touching. The constant is
       // the fallback for the unreachable case of a bundle with no id at all.
-      reset: {
-        PermissionsReset.reset(
-          .accessibility, bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem)
-      }
-    )
+      PermissionsReset.reset(
+        .accessibility, bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem
+      )
+    }
     if let persist { defaults.set(persist, forKey: key) }
   }
 
@@ -257,7 +268,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     return WizardController(
       coordinator: coord,
       onNeedsForeground: onNeedsForeground,
-      checkPermissions: checkPermissions)
+      checkPermissions: checkPermissions
+    )
   }
 
   #if UITEST_HOOKS
@@ -281,12 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
   #endif
 
-  /// Audio or video files opened in Blurt — dropped on the Dock icon, or from
-  /// Finder's Open With — waiting for the models, which a launch to open them
-  /// creates only in `applicationDidFinishLaunching`.
-  @ObservationIgnored private var pendingFileURLs: [URL] = []
-
-  func application(_ application: NSApplication, open urls: [URL]) {
+  func application(_: NSApplication, open urls: [URL]) {
     pendingFileURLs += urls
     openPendingFiles()
   }
@@ -295,7 +302,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// first audio or video one — once the models exist, and only once setup is
   /// done; until then the window comes up on setup and the files are let go.
   private func openPendingFiles() {
-    guard !pendingFileURLs.isEmpty, let coordinator, let wizardController else { return }
+    guard !pendingFileURLs.isEmpty, let coordinator, let wizardController else {
+      return
+    }
     surfaceMainWindow()
     if wizardController.isReady { coordinator.transcripts.openFiles(pendingFileURLs) }
     pendingFileURLs = []
@@ -304,11 +313,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// Quitting — ⌘Q, logging out, a Sparkle relaunch — exits without running
   /// `deinit` or resuming any task, so a recording in progress and the
   /// debounced history save are finished here, before the process ends.
-  func applicationWillTerminate(_ notification: Notification) {
+  func applicationWillTerminate(_: Notification) {
     coordinator?.transcripts.prepareForExit()
   }
 
-  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+  func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
     // Blurt keeps running with the overlay pill after its window is closed;
     // the window reopens via ⌘, / the Dock.
     false
@@ -324,7 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// doesn't make the app frontmost, so without it the window opens *behind*
   /// whatever the user was in. SwiftUI also doesn't reliably reopen a closed
   /// `Window` scene on its own, so we open it explicitly when none is visible.
-  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+  func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     NSApp.activate()
     if !flag { openMainWindow() }
     return true

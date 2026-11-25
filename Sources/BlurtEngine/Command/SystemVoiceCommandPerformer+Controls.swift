@@ -8,7 +8,9 @@
   extension SystemVoiceCommandPerformer {
     static func adjust(_ step: VoiceCommandStep, in snapshot: ElementSnapshot) async throws -> String? {
       let pid = await frontmostPID()
-      guard let id = step.elementID else { return nil }
+      guard let id = step.elementID else {
+        return nil
+      }
       let handle = try snapshot.element(id, pid: pid)
       let node = AXRead.Node(handle.element)
       switch step {
@@ -16,10 +18,12 @@
         // A value a control holds, never text a field holds.
         try require(node, roleIn: ScreenSnapshot.adjustableRoles, for: "change", what: "a slider or a stepper")
         try change(node, by: step)
+
       case .showMenu:
         guard try performAction(kAXShowMenuAction, on: node) == .success else {
           throw VoiceCommandError.couldNotPerform("open that menu")
         }
+
       case .select:
         // Something listed that isn't a row (a clickable group, a cell's
         // text): what "select it" means there is a click, so it's pressed.
@@ -31,11 +35,16 @@
         // the Finder sidebar's, in any app: selecting twice does no harm.
         try refuseIfDestructive(node)
         return try await checked(
-          "AXSelected", node: node, pid: pid, always: true,
-          press: {
-            AXUIElementSetAttributeValue(node.element, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
-          })
-      default: break
+          "AXSelected",
+          node: node,
+          pid: pid,
+          always: true
+        ) {
+          AXUIElementSetAttributeValue(node.element, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
+        }
+
+      default:
+        break
       }
       return nil
     }
@@ -44,7 +53,7 @@
     private static func change(_ node: AXRead.Node, by step: VoiceCommandStep) throws {
       if case .setValue(_, let value) = step {
         guard let number = Double(value),
-          AXUIElementSetAttributeValue(node.element, kAXValueAttribute as CFString, NSNumber(value: number)) == .success
+          AXUIElementSetAttributeValue(node.element, kAXValueAttribute as CFString, number as CFNumber) == .success
         else { throw VoiceCommandError.couldNotPerform("set that to \(value)") }
         return
       }
@@ -78,15 +87,20 @@
       }
       // An end: the scroll bar's own value, as dragging its thumb all the way.
       if let end = direction.scrollBarValue, let bar = AXRead.element(area, kAXVerticalScrollBarAttribute),
-        AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, NSNumber(value: end)) == .success
+        AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, end as CFNumber) == .success
       {
         return "scroll bar"
       }
       let lines = direction.wheelLines
       guard let frame = AXRead.frame(area),
         let event = CGEvent(
-          scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: lines.vertical,
-          wheel2: lines.horizontal, wheel3: 0)
+          scrollWheelEvent2Source: nil,
+          units: .line,
+          wheelCount: 2,
+          wheel1: lines.vertical,
+          wheel2: lines.horizontal,
+          wheel3: 0
+        )
       else { throw VoiceCommandError.couldNotPerform("scroll") }
       // A wheel event scrolls what's under the pointer: only if that's this app's window.
       let centre = CGPoint(x: frame.midX, y: frame.midY)
@@ -103,8 +117,12 @@
       let deadline = ContinuousClock.now.advanced(by: ScreenSnapshot.readBudget)
       var current: AXRead.Node? = node
       for _ in 0..<40 where ContinuousClock.now < deadline {
-        guard let level = current else { return nil }
-        if level.role == kAXScrollAreaRole { return level.element }
+        guard let level = current else {
+          return nil
+        }
+        if level.role == kAXScrollAreaRole {
+          return level.element
+        }
         current = level.element(kAXParentAttribute).map { AXRead.Node($0) }
       }
       return nil

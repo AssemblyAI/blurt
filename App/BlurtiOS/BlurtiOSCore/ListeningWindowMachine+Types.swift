@@ -22,11 +22,20 @@ extension ListeningWindowMachine {
     /// How the closed record says it.
     package var reason: FailureReason {
       switch self {
-      case .expiry, .stop: .sessionOff
-      case .interrupted: .interrupted
-      case .died, .openFailed: .micBusy
-      case .mediaReset: .mediaReset
-      case .reopen: .opening
+      case .expiry, .stop:
+        .sessionOff
+
+      case .interrupted:
+        .interrupted
+
+      case .died, .openFailed:
+        .micBusy
+
+      case .mediaReset:
+        .mediaReset
+
+      case .reopen:
+        .opening
       }
     }
   }
@@ -43,18 +52,30 @@ extension ListeningWindowMachine {
 
     package var generation: Generation? {
       switch self {
-      case .closed: nil
-      case .opening(let gen), .open(let gen, _, _), .interrupted(let gen, _, _), .closing(let gen, _): gen
+      case .closed:
+        nil
+
+      case .opening(let gen), .open(let gen, _, _), .interrupted(let gen, _, _), .closing(let gen, _):
+        gen
       }
     }
 
     package var window: ListeningState.Window {
       switch self {
-      case .closed: .closed
-      case .opening: .opening
-      case .open: .open
-      case .interrupted: .interrupted
-      case .closing: .closing
+      case .closed:
+        .closed
+
+      case .opening:
+        .opening
+
+      case .open:
+        .open
+
+      case .interrupted:
+        .interrupted
+
+      case .closing:
+        .closing
       }
     }
 
@@ -71,11 +92,20 @@ extension ListeningWindowMachine {
     /// Why a press would not record, as the record says it; nil while open.
     package var reason: FailureReason? {
       switch self {
-      case .closed: .sessionOff
-      case .opening: .opening
-      case .open: nil
-      case .interrupted(_, let reason, _): reason
-      case .closing(_, let cause): cause.reason
+      case .closed:
+        .sessionOff
+
+      case .opening:
+        .opening
+
+      case .open:
+        nil
+
+      case .interrupted(_, let reason, _):
+        reason
+
+      case .closing(_, let cause):
+        cause.reason
       }
     }
   }
@@ -111,7 +141,9 @@ extension ListeningWindowMachine {
 
     package var generation: Generation? {
       switch self {
-      case .openRequested, .foregrounded, .closeRequested, .windowMinutesChanged: nil
+      case .openRequested, .foregrounded, .closeRequested, .windowMinutesChanged:
+        nil
+
       case .opened(let gen), .openFailed(let gen, _), .utteranceStarted(let gen), .utteranceEnded(let gen),
         .interruptionBegan(let gen, _), .interruptionEnded(let gen, _), .resumed(let gen), .resumeFailed(let gen, _),
         .sourceDied(let gen, _), .mediaReset(let gen), .expired(let gen), .closed(let gen), .idleChanged(let gen, _):

@@ -8,14 +8,17 @@ import SwiftUI
 /// by hand during a meeting ends with it either way.
 struct MeetingAutoRecordSection: View {
   var model: TranscriptsModel
-  @AppStorage(MeetingAutoRecordStore.defaultsKey) private var isOn = false
+  @AppStorage(MeetingAutoRecordStore.defaultsKey)
+  private var isOn = false
 
   var body: some View {
     Section {
       Toggle(isOn: $isOn) {
         SettingLabel(
-          title: "Auto-record meetings", systemImage: "video",
-          subtitle: "Records your mic and Mac audio.")
+          title: "Auto-record meetings",
+          systemImage: "video",
+          subtitle: "Records your mic and Mac audio."
+        )
       }
       .accessibilityIdentifier(UITestIdentifiers.autoRecordToggle)
       .onChange(of: isOn) { _, isOn in model.setAutoRecordMeetings(isOn) }
@@ -28,7 +31,8 @@ struct MeetingAutoRecordSection: View {
       // outside, so any page with two-way audio that long counts (#345).
       Text(
         "Recording starts when a meeting app uses the microphone, or a browser uses it and plays sound "
-          + "for 30 seconds. The menu bar shows it while it records.")
+          + "for 30 seconds. The menu bar shows it while it records."
+      )
     }
   }
 }

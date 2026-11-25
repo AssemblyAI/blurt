@@ -8,7 +8,6 @@ import Testing
 /// process-global state.
 @Suite("KeychainStore", .serialized)
 struct KeychainStoreTests {
-
   /// A throwaway store unique to each test run, cleaned up by `set(nil)`.
   private func makeStore() -> KeychainStore {
     KeychainStore(service: "dev.alex.blurt.tests", account: "test-\(UUID().uuidString)")

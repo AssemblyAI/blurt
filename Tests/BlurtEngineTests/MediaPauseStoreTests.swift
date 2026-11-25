@@ -68,8 +68,8 @@ struct MediaPauseStoreTests {
   @Test("the automation-consent status maps to what the pause and Settings act on")
   func consentStatusMapping() {
     #expect(AutomationConsent(status: 0) == .granted)
-    #expect(AutomationConsent(status: -1743) == .denied)
-    #expect(AutomationConsent(status: -1744) == .notAsked)
+    #expect(AutomationConsent(status: -1_743) == .denied)
+    #expect(AutomationConsent(status: -1_744) == .notAsked)
     #expect(AutomationConsent(status: -600) == .notRunning)
     #expect(AutomationConsent(status: -50) == .unknown(-50))
   }

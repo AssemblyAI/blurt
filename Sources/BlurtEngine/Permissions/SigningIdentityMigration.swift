@@ -21,6 +21,17 @@
 /// Pure and fully injectable: the caller supplies the persisted identity, the
 /// current identity, the live trust state, and the reset side effect.
 public enum SigningIdentityMigration {
+  public enum Decision: Equatable {
+    /// Unsigned build, or the identity is unchanged since last launch.
+    case noAction
+    /// Identity changed but the app is already trusted — nothing stale to clear;
+    /// just record the new identity so we don't re-evaluate next launch.
+    case record(String)
+    /// Identity changed and the app is not trusted — a grant pinned to the old
+    /// signature may be blocking us. Reset it, then record on success.
+    case resetThenRecord(String)
+  }
+
   /// `UserDefaults` key holding the signing identity recorded by the last
   /// migration pass — the `lastIdentity` input to `run`. Owned here, next to the
   /// decision it feeds, rather than as a literal at the shell call site.
@@ -41,17 +52,6 @@ public enum SigningIdentityMigration {
   /// nothing a reset can take away.
   public static let lastSigningIdentityDefaultsKey = "accessibility.lastSigningTeam"
 
-  public enum Decision: Equatable {
-    /// Unsigned build, or the identity is unchanged since last launch.
-    case noAction
-    /// Identity changed but the app is already trusted — nothing stale to clear;
-    /// just record the new identity so we don't re-evaluate next launch.
-    case record(String)
-    /// Identity changed and the app is not trusted — a grant pinned to the old
-    /// signature may be blocking us. Reset it, then record on success.
-    case resetThenRecord(String)
-  }
-
   /// `lastIdentity == nil` is deliberately treated as "changed": every build that
   /// predates this marker is missing it, so a missing value means a possible
   /// upgrade, never a known-fresh install. (A genuine fresh install yields
@@ -59,8 +59,12 @@ public enum SigningIdentityMigration {
   public static func decide(
     lastIdentity: String?, currentIdentity: String?, isTrusted: Bool
   ) -> Decision {
-    guard let currentIdentity else { return .noAction }
-    guard lastIdentity != currentIdentity else { return .noAction }
+    guard let currentIdentity else {
+      return .noAction
+    }
+    guard lastIdentity != currentIdentity else {
+      return .noAction
+    }
     return isTrusted ? .record(currentIdentity) : .resetThenRecord(currentIdentity)
   }
 
@@ -72,11 +76,17 @@ public enum SigningIdentityMigration {
     lastIdentity: String?, currentIdentity: String?, isTrusted: Bool, reset: () -> Bool
   ) -> String? {
     let decision = decide(
-      lastIdentity: lastIdentity, currentIdentity: currentIdentity, isTrusted: isTrusted)
+      lastIdentity: lastIdentity, currentIdentity: currentIdentity, isTrusted: isTrusted
+    )
     switch decision {
-    case .noAction: return nil
-    case .record(let identity): return identity
-    case .resetThenRecord(let identity): return reset() ? identity : nil
+    case .noAction:
+      return nil
+
+    case .record(let identity):
+      return identity
+
+    case .resetThenRecord(let identity):
+      return reset() ? identity : nil
     }
   }
 }

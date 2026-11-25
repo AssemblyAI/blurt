@@ -15,16 +15,26 @@ package nonisolated final class DarwinObserver: Sendable {
     self.handler = handler
     let observer = Unmanaged.passUnretained(self).toOpaque()
     CFNotificationCenterAddObserver(
-      CFNotificationCenterGetDarwinNotifyCenter(), observer,
+      CFNotificationCenterGetDarwinNotifyCenter(),
+      observer,
       { _, observer, _, _, _ in
-        guard let observer else { return }
+        guard let observer else {
+          return
+        }
         Unmanaged<DarwinObserver>.fromOpaque(observer).takeUnretainedValue().handler()
-      }, name as CFString, nil, .deliverImmediately)
+      },
+      name as CFString,
+      nil,
+      .deliverImmediately
+    )
   }
 
   deinit {
     CFNotificationCenterRemoveObserver(
-      CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(),
-      CFNotificationName(name as CFString), nil)
+      CFNotificationCenterGetDarwinNotifyCenter(),
+      Unmanaged.passUnretained(self).toOpaque(),
+      CFNotificationName(name as CFString),
+      nil
+    )
   }
 }

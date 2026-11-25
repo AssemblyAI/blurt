@@ -16,12 +16,18 @@ public struct FrameAligner: Sendable {
   public static let bytesPerFrame = 2
 
   /// The byte held back from the last chunk, waiting for its pair.
-  private var carry: Data = Data()
+  private var carry = Data()
   /// Whether any chunk so far was off the grid: worth one log line, since it
   /// names an input device that isn't honouring the capture's format.
   public private(set) var sawMisalignedChunk = false
 
-  public init() {}
+  /// Whether a byte is still held back when the recording ends: half a sample,
+  /// which is dropped rather than sent.
+  public var hasDanglingByte: Bool { !carry.isEmpty }
+
+  public init() {
+    // Nothing to set up: an aligner starts with no byte held back.
+  }
 
   /// `chunk` with the held-back byte in front of it, trimmed to whole samples;
   /// what doesn't fit is held back for the next one.
@@ -32,8 +38,4 @@ public struct FrameAligner: Sendable {
     carry = joined.suffix(from: joined.startIndex + whole)
     return joined.prefix(whole)
   }
-
-  /// Whether a byte is still held back when the recording ends: half a sample,
-  /// which is dropped rather than sent.
-  public var hasDanglingByte: Bool { !carry.isEmpty }
 }

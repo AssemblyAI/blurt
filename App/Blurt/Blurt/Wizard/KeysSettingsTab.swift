@@ -21,23 +21,6 @@ import SwiftUI
 /// so an encoding change would keep `swift test` green while this view kept
 /// writing the old form.
 struct KeysSettingsTab: View {
-  let coordinator: AppCoordinator
-
-  @ObservedKeyBindings private var bindings
-  @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
-  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
-  private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
-
-  /// Each key's glyph: its row icon on the Sounds tab.
-  static func symbol(for key: TriggerKey) -> String {
-    switch key {
-    case .rightCommand, .leftCommand: "command"
-    case .rightOption, .leftOption: "option"
-    case .leftControl: "control"
-    case .function: "globe"
-    }
-  }
-
   /// One action row: what it does, and whether it rides the enhanced rewrite
   /// (a custom style, which is disabled with it off). Its icon is its
   /// action's, as on the main window.
@@ -48,15 +31,78 @@ struct KeysSettingsTab: View {
     var id: String { title }
   }
 
+  let coordinator: AppCoordinator
+
+  @ObservedKeyBindings private var bindings
+  @AppStorage(StyleProfileStore.defaultsKey)
+  private var profilesRaw = ""
+  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
+  private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+
+  var body: some View {
+    let current = bindings
+    let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
+    SettingsPane {
+      Section {
+        ForEach(rows(profiles: profiles)) { row in
+          keyRow(row, bindings: current, profiles: profiles)
+        }
+      }
+      Section {
+        PickerSettingRow(
+          title: "Activation",
+          systemImage: "hand.tap",
+          accessibilityID: UITestIdentifiers.activationPicker,
+          subtitle: current.activation.hint(for: .dictate),
+          selection: activation
+        ) {
+          ForEach(TriggerActivation.allCases, id: \.self) { mode in
+            Text(mode.label).tag(mode)
+          }
+        }
+      }
+    }
+  }
+
+  /// The tap/hold pop-up every key shares.
+  private var activation: Binding<TriggerActivation> {
+    Binding(
+      get: { bindings.activation },
+      set: { newValue in
+        TriggerActivationStore().setActivation(newValue)
+        coordinator.dictationBindingChanged()
+      }
+    )
+  }
+
+  /// Each key's glyph: its row icon on the Sounds tab.
+  static func symbol(for key: TriggerKey) -> String {
+    switch key {
+    case .rightCommand, .leftCommand:
+      "command"
+
+    case .rightOption, .leftOption:
+      "option"
+
+    case .leftControl:
+      "control"
+
+    case .function:
+      "globe"
+    }
+  }
+
   private func rows(profiles: [StyleProfile]) -> [ActionRow] {
     [
       ActionRow(choice: .dictate, title: "Dictate"),
       ActionRow(
-        choice: .dictate(style: StyleProfileStore.defaultStyleID), title: "Dictate: No custom style",
-        isStyled: true),
+        choice: .dictate(style: StyleProfileStore.defaultStyleID),
+        title: "Dictate: No custom style",
+        isStyled: true
+      ),
     ]
-      + profiles.map {
-        ActionRow(choice: .dictate(style: $0.id.uuidString), title: "Dictate: \($0.name)", isStyled: true)
+      + profiles.map { profile in
+        ActionRow(choice: .dictate(style: profile.id.uuidString), title: "Dictate: \(profile.name)", isStyled: true)
       }
       + [
         ActionRow(choice: .readAloud, title: KeyActionName.readAloud),
@@ -67,35 +113,14 @@ struct KeysSettingsTab: View {
       ]
   }
 
-  var body: some View {
-    let bindings = bindings
-    let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
-    SettingsPane {
-      Section {
-        ForEach(rows(profiles: profiles)) { row in
-          keyRow(row, bindings: bindings, profiles: profiles)
-        }
-      }
-      Section {
-        PickerSettingRow(
-          title: "Activation", systemImage: "hand.tap",
-          accessibilityID: UITestIdentifiers.activationPicker,
-          subtitle: bindings.activation.hint(for: .dictate), selection: activation
-        ) {
-          ForEach(TriggerActivation.allCases, id: \.self) { mode in
-            Text(mode.label).tag(mode)
-          }
-        }
-      }
-    }
-  }
-
   private func keyRow(_ row: ActionRow, bindings: TriggerKeyBindings, profiles: [StyleProfile]) -> some View {
     let holder = TriggerKey.allCases.first { bindings.choice(for: $0, profiles: profiles) == row.choice }
     return PickerSettingRow(
-      title: row.title, systemImage: row.choice.action.systemImage,
+      title: row.title,
+      systemImage: row.choice.action.systemImage,
       accessibilityID: UITestIdentifiers.actionKeyPicker(row.title),
-      pickerLabel: "Key for \(row.title)", selection: key(for: row.choice, holder: holder)
+      pickerLabel: "Key for \(row.title)",
+      selection: key(for: row.choice, holder: holder)
     ) {
       Text("None").tag(TriggerKey?.none)
       Divider()
@@ -113,16 +138,7 @@ struct KeysSettingsTab: View {
       set: { newValue in
         TriggerKeyStyleStore().assign(newValue, to: choice)
         coordinator.dictationBindingChanged()
-      })
-  }
-
-  /// The tap/hold pop-up every key shares.
-  private var activation: Binding<TriggerActivation> {
-    Binding(
-      get: { bindings.activation },
-      set: { newValue in
-        TriggerActivationStore().setActivation(newValue)
-        coordinator.dictationBindingChanged()
-      })
+      }
+    )
   }
 }

@@ -83,8 +83,13 @@ package nonisolated enum VoiceNotice {
     package let autoReleaseSeconds: TimeInterval
 
     package init(
-      hasFullAccess: Bool, state: ListeningState?, snapshot: PhaseSnapshot, heldError: PhaseSnapshot? = nil,
-      handshake: Handshake, now: Date, autoReleaseSeconds: TimeInterval = SyncSTTLimits.autoReleaseSeconds
+      hasFullAccess: Bool,
+      state: ListeningState?,
+      snapshot: PhaseSnapshot,
+      handshake: Handshake,
+      now: Date,
+      heldError: PhaseSnapshot? = nil,
+      autoReleaseSeconds: TimeInterval = SyncSTTLimits.autoReleaseSeconds
     ) {
       self.hasFullAccess = hasFullAccess
       self.state = state
@@ -126,11 +131,17 @@ package nonisolated enum VoiceNotice {
   package static func line(for input: Input) -> Line? {
     // Without Full Access there is no App Group to read, so nothing else
     // below can be true: the note is the key.
-    guard input.hasFullAccess else { return Line(text: Copy.fullAccess, tapOpens: .setup) }
+    guard input.hasFullAccess else {
+      return Line(text: Copy.fullAccess, tapOpens: .setup)
+    }
     // A notice or a live phase is about this moment and beats the standing
     // readiness line; the view's dwell settles it back to idle afterwards.
-    if let notice = noticeLine(for: input) { return notice }
-    guard let reason = readiness(for: input) else { return nil }
+    if let notice = noticeLine(for: input) {
+      return notice
+    }
+    guard let reason = readiness(for: input) else {
+      return nil
+    }
     return Line(text: reason.line, tapOpens: tap(for: reason))
   }
 
@@ -138,11 +149,18 @@ package nonisolated enum VoiceNotice {
   /// handshake has a press in flight, which is its own business to resolve.
   private static func readiness(for input: Input) -> FailureReason? {
     switch input.handshake {
-    case .pressing, .owned, .foreign, .stopping: return nil
-    case .unready(let reason): return reason
-    case .idle: break
+    case .pressing, .owned, .foreign, .stopping:
+      return nil
+
+    case .unready(let reason):
+      return reason
+
+    case .idle:
+      break
     }
-    guard let state = input.state else { return .sessionOff }
+    guard let state = input.state else {
+      return .sessionOff
+    }
     return state.notReady(now: input.now)
   }
 
@@ -160,24 +178,38 @@ package nonisolated enum VoiceNotice {
     let snapshot = snapshot(for: input)
     switch snapshot.state {
     case .error:
-      if let reason = snapshot.reason { return Line(text: reason.line, tapOpens: tap(for: reason)) }
+      if let reason = snapshot.reason {
+        return Line(text: reason.line, tapOpens: tap(for: reason))
+      }
       // The engine's own words, when the failure has no name; the glyph
       // alone says it when it has no words either.
-      guard let message = snapshot.message else { return nil }
+      guard let message = snapshot.message else {
+        return nil
+      }
       let tap = readiness(for: input).map(tap(for:)) ?? .press
       return Line(text: message, tapOpens: tap)
+
     case .copied:
       return Line(text: Copy.copied, tapOpens: .press)
+
     case .processing:
-      guard input.now.timeIntervalSince(snapshot.at) > transcribingPatience else { return nil }
+      guard input.now.timeIntervalSince(snapshot.at) > transcribingPatience else {
+        return nil
+      }
       return Line(text: Copy.stillTranscribing, tapOpens: .buzz)
+
     case .recording:
-      guard let since = snapshot.recordingSince else { return nil }
+      guard let since = snapshot.recordingSince else {
+        return nil
+      }
       let remaining = input.autoReleaseSeconds - input.now.timeIntervalSince(since)
-      guard remaining <= countdownWindow else { return nil }
+      guard remaining <= countdownWindow else {
+        return nil
+      }
       // A countdown says "1 s left" until the moment it is over, never a
       // negative number once the engine has stopped on its own.
       return Line(text: Copy.secondsLeft(Int(max(remaining, 0).rounded(.up))), tapOpens: .press)
+
     case .idle, .connecting, .pasted:
       return nil
     }
@@ -187,7 +219,9 @@ package nonisolated enum VoiceNotice {
   /// failed request, which the next press simply retries.
   package static func tap(for reason: FailureReason) -> Tap {
     switch reason {
-    case .network: .press
+    case .network:
+      .press
+
     case .sessionOff, .needsForeground, .opening, .interrupted, .micBusy, .micSilent, .mediaReset, .noKey,
       .noConsent, .micDenied, .unanswered, .suspended:
       .hop(reason)
@@ -199,16 +233,35 @@ nonisolated extension FailureReason {
   /// The one sentence the keyboard shows for this reason (`VoiceNotice`).
   package var line: String {
     switch self {
-    case .sessionOff, .unanswered, .suspended: VoiceNotice.Copy.tapToOpen
-    case .needsForeground, .opening: VoiceNotice.Copy.openToStart
-    case .interrupted: VoiceNotice.Copy.interrupted
-    case .micBusy: VoiceNotice.Copy.micBusy
-    case .micSilent: VoiceNotice.Copy.micSilent
-    case .mediaReset: VoiceNotice.Copy.mediaReset
-    case .noKey: VoiceNotice.Copy.noKey
-    case .noConsent: VoiceNotice.Copy.noConsent
-    case .micDenied: VoiceNotice.Copy.micDenied
-    case .network: VoiceNotice.Copy.network
+    case .sessionOff, .unanswered, .suspended:
+      VoiceNotice.Copy.tapToOpen
+
+    case .needsForeground, .opening:
+      VoiceNotice.Copy.openToStart
+
+    case .interrupted:
+      VoiceNotice.Copy.interrupted
+
+    case .micBusy:
+      VoiceNotice.Copy.micBusy
+
+    case .micSilent:
+      VoiceNotice.Copy.micSilent
+
+    case .mediaReset:
+      VoiceNotice.Copy.mediaReset
+
+    case .noKey:
+      VoiceNotice.Copy.noKey
+
+    case .noConsent:
+      VoiceNotice.Copy.noConsent
+
+    case .micDenied:
+      VoiceNotice.Copy.micDenied
+
+    case .network:
+      VoiceNotice.Copy.network
     }
   }
 }

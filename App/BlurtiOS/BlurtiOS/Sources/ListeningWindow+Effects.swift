@@ -17,26 +17,52 @@ extension ListeningWindow {
   /// The work — the source, the session, the dictation — awaited; the rest at once.
   private func perform(_ effect: Machine.Effect) async {
     switch effect {
-    case .activateSession: activateSession()
-    case .openSource(let generation): await openSource(generation)
-    case .tryResume(let generation, let mayStart): await tryResume(generation, mayStart: mayStart)
-    case .endUtterance(let keepWords): await onEndingUtterance?(keepWords)
-    case .closeSource(let generation): await closeSource(generation)
-    case .deactivateSession(let skipIfInterrupted): deactivateSession(skipIfInterrupted: skipIfInterrupted)
-    case .scheduleExpiry, .cancelExpiry, .beginBackgroundTask, .endBackgroundTask, .publish, .log: keep(effect)
+    case .activateSession:
+      activateSession()
+
+    case .openSource(let generation):
+      await openSource(generation)
+
+    case let .tryResume(generation, mayStart):
+      await tryResume(generation, mayStart: mayStart)
+
+    case .endUtterance(let keepWords):
+      await onEndingUtterance?(keepWords)
+
+    case .closeSource(let generation):
+      await closeSource(generation)
+
+    case .deactivateSession(let skipIfInterrupted):
+      deactivateSession(skipIfInterrupted: skipIfInterrupted)
+
+    case .scheduleExpiry, .cancelExpiry, .beginBackgroundTask, .endBackgroundTask, .publish, .log:
+      keep(effect)
     }
   }
 
   /// The timers, the background task, the record and the log: no work to wait on.
   private func keep(_ effect: Machine.Effect) {
     switch effect {
-    case .scheduleExpiry(let date, let generation): scheduleExpiry(date, generation)
-    case .cancelExpiry: cancelExpiry()
-    case .beginBackgroundTask: backgroundTasks.begin(Self.interruptionTask)
-    case .endBackgroundTask: backgroundTasks.end(Self.interruptionTask)
-    case .publish(let record): publish(record)
-    case .log(let line): Self.log.notice("\(line, privacy: .public)")
-    case .activateSession, .openSource, .tryResume, .endUtterance, .closeSource, .deactivateSession: break
+    case let .scheduleExpiry(date, generation):
+      scheduleExpiry(date, generation)
+
+    case .cancelExpiry:
+      cancelExpiry()
+
+    case .beginBackgroundTask:
+      backgroundTasks.begin(Self.interruptionTask)
+
+    case .endBackgroundTask:
+      backgroundTasks.end(Self.interruptionTask)
+
+    case .publish(let record):
+      publish(record)
+
+    case .log(let line):
+      Self.log.notice("\(line, privacy: .public)")
+
+    case .activateSession, .openSource, .tryResume, .endUtterance, .closeSource, .deactivateSession:
+      break
     }
   }
 
@@ -151,7 +177,9 @@ extension ListeningWindow {
     let clock = clock
     expiry = Task { [weak self] in
       try? await clock.sleep(for: .seconds(delay))
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled else {
+        return
+      }
       self?.feed(.expired(generation))
     }
   }
@@ -172,7 +200,9 @@ extension ListeningWindow {
     heartbeat = Task { [weak self] in
       while !Task.isCancelled {
         try? await clock.sleep(for: .seconds(SharedStore.appHeartbeatInterval))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+          return
+        }
         self?.beat()
       }
     }

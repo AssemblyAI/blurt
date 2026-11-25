@@ -1,9 +1,14 @@
-#if os(macOS)
+#if os(macOS)  // swiftlint:disable:this file_name
   import AppKit
   import CoreGraphics
 
   // A shortcut step's keys: the chord resolved on the user's own keyboard
   // layout, then posted as the paste's ⌘V is.
+  //
+  // Named apart from `SystemVoiceCommandPerformer*` on purpose (hence the
+  // `file_name` exemption on the first line): check.sh's coverage gate
+  // excludes that prefix as the untestable system shell, and these key
+  // chords are policy that the tests do cover.
   extension SystemVoiceCommandPerformer {
     /// The virtual key code that presses `chord` on the user's layout. A
     /// character key is looked up on the current ASCII-capable layout (what
@@ -13,7 +18,9 @@
     /// key is the same everywhere.
     @MainActor
     static func keyCode(for chord: KeyChord) -> UInt16 {
-      guard case .character(let character) = chord.key else { return chord.ansiKeyCode }
+      guard case .character(let character) = chord.key else {
+        return chord.ansiKeyCode
+      }
       return KeyboardLayout.current(commandHeld: chord.modifiers.contains(.command))[character]
         ?? chord.ansiKeyCode
     }

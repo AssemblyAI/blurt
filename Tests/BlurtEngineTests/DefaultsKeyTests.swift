@@ -43,8 +43,12 @@ struct DefaultsKeyTests {
     // engine writes `AcmeVoiceSoundPack`, not into Blurt's slot. The raw value is
     // the unprefixed half, so nothing here says "Blurt".
     let acme = HostIdentity(
-      productName: "Acme Voice", subsystem: "com.acme.voice", keychainService: "acme-voice",
-      defaultsPrefix: "AcmeVoice", logDirectoryName: "Acme Voice")
+      productName: "Acme Voice",
+      subsystem: "com.acme.voice",
+      keychainService: "acme-voice",
+      defaultsPrefix: "AcmeVoice",
+      logDirectoryName: "Acme Voice"
+    )
     #expect(DefaultsKey.soundPack.key(in: acme) == "AcmeVoiceSoundPack")
     #expect(DefaultsKey.soundPack.key(in: .blurt) == "BlurtSoundPack")
   }

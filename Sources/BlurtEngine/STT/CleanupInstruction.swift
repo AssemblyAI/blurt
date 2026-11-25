@@ -86,40 +86,6 @@
 ///
 /// Exercised by `Tests/BlurtEngineTests/CleanupInstructionTests.swift`.
 enum CleanupInstruction {
-  /// The instruction a request sends: `text`, with the active style profile's
-  /// instructions appended when there are any (see `StyleProfileStore`, whose
-  /// *active* profile is the only one that ever reaches here). A nil or blank
-  /// `custom` returns `text` unchanged, so an empty setting sends exactly what
-  /// shipped. With a style, the base leads as `styledText` — `text` with its
-  /// preservation rule qualified — then the preamble, then the style, trimmed to
-  /// `StyleProfileStore.characterLimit` UTF-8 bytes: the style editor enforces the
-  /// same limit, so the trim here is the belt to that brace, for a value that
-  /// reached the defaults slot some other way.
-  ///
-  /// `mode` picks the base: `smartText` for Smart, `text` for Fast — each tuned on, and
-  /// measured against, the model that mode runs (see `smartText`).
-  static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
-    guard let custom = custom.trimmedNonEmpty() else { return base(for: mode) }
-    return styled(for: mode) + customStylePreamble
-      + custom.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
-  }
-
-  /// The unstyled instruction for `mode`.
-  static func base(for mode: RewriteMode) -> String {
-    switch mode {
-    case .fast: return text
-    case .smart: return smartText
-    }
-  }
-
-  /// The styled base for `mode`: `base(for:)` with its preservation rule qualified.
-  static func styled(for mode: RewriteMode) -> String {
-    switch mode {
-    case .fast: return styledText
-    case .smart: return smartStyledText
-    }
-  }
-
   /// The sentence in `text` that pins punctuation and capitalization. Left
   /// as-is it beats a style like "no capitals, no commas" even with the
   /// preamble's precedence clause: the model keeps the standard punctuation the
@@ -201,4 +167,46 @@ enum CleanupInstruction {
   static let greetingsRule =
     #" Never delete greetings, salutations, or sign-offs ("Hey", "Hi", "Hey Marcus", "Thanks"), "#
     + #"or framing phrases that carry meaning ("just letting you know", "following up", "I think")."#
+
+  /// The instruction a request sends: `text`, with the active style profile's
+  /// instructions appended when there are any (see `StyleProfileStore`, whose
+  /// *active* profile is the only one that ever reaches here). A nil or blank
+  /// `custom` returns `text` unchanged, so an empty setting sends exactly what
+  /// shipped. With a style, the base leads as `styledText` — `text` with its
+  /// preservation rule qualified — then the preamble, then the style, trimmed to
+  /// `StyleProfileStore.characterLimit` UTF-8 bytes: the style editor enforces the
+  /// same limit, so the trim here is the belt to that brace, for a value that
+  /// reached the defaults slot some other way.
+  ///
+  /// `mode` picks the base: `smartText` for Smart, `text` for Fast — each tuned on, and
+  /// measured against, the model that mode runs (see `smartText`).
+  static func sendable(appending custom: String?, mode: RewriteMode = .fast) -> String {
+    guard let style = custom.trimmedNonEmpty() else {
+      return base(for: mode)
+    }
+    return styled(for: mode) + customStylePreamble
+      + style.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
+  }
+
+  /// The unstyled instruction for `mode`.
+  static func base(for mode: RewriteMode) -> String {
+    switch mode {
+    case .fast:
+      return text
+
+    case .smart:
+      return smartText
+    }
+  }
+
+  /// The styled base for `mode`: `base(for:)` with its preservation rule qualified.
+  static func styled(for mode: RewriteMode) -> String {
+    switch mode {
+    case .fast:
+      return styledText
+
+    case .smart:
+      return smartStyledText
+    }
+  }
 }

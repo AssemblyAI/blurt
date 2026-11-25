@@ -20,7 +20,7 @@ observable UI rather than mocking views.
   `idle`, including two back-to-back runs to prove the pipeline re-arms.
 - **Control Your Mac, Rewrite Selection and Compose From Instructions** — `CommandPipelineUITests`: a command key held
   through the real key tap, recorded and transcribed by the session, planned and carried out by the
-  router with the stub planner and performer (`UITestCommandDoubles.swift` — no gateway, nothing
+  router with the stub planner and performer (`UITestPlanner.swift`, `UITestPerformer.swift` — no gateway, nothing
   acted on), and the pill: Working for as long as the command runs, then Done; a typed step pasted
   through the session; a complaint noted, never planned; overheard speech refused; a command it can't
   do failing with the key still working after; a rewrite pasted over the canned selection; and a
@@ -33,7 +33,7 @@ observable UI rather than mocking views.
 These tests don't need a microphone, the network, Accessibility permission, or
 the real Keychain. Launching with `-BlurtUITest` (set by
 `BlurtUITestCase.setUpWithError`) activates the harness in
-`App/Blurt/Blurt/UITestSupport.swift` (`#if UITEST_HOOKS`), which:
+`App/Blurt/Blurt/UITestMode.swift` and the `UITest*` files beside it (`#if UITEST_HOOKS`), which:
 
 - injects offline stub collaborators (`UITestMic`, `UITestTranscriber`,
   `UITestInjector`) and an `InMemoryAPIKeyStore` via the `DictationComponents` /

@@ -33,6 +33,7 @@ struct KeyboardModelFuzzTests {
   /// A tiny deterministic generator (SplitMix64), so a run is repeatable.
   struct Random {
     var state: UInt64
+
     mutating func next() -> UInt64 {
       state &+= 0x9E37_79B9_7F4A_7C15
       var z = state
@@ -41,7 +42,7 @@ struct KeyboardModelFuzzTests {
       return z ^ (z >> 31)
     }
     mutating func pick<T>(_ items: [T]) -> T { items[Int(next() % UInt64(items.count))] }
-    mutating func coin() -> Bool { next() % 2 == 0 }
+    mutating func coin() -> Bool { next().isMultiple(of: 2) }
   }
 
   @Test(
@@ -49,12 +50,12 @@ struct KeyboardModelFuzzTests {
   func fuzz(seed: UInt64) {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    var random = Random(state: seed &* 7919)
+    var random = Random(state: seed &* 7_919)
     let rig = KeyboardRig()
     let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
     model.appeared()
     var trace: [Event] = []
-    for step in 0..<2000 {
+    for step in 0..<2_000 {
       let event = random.pick(Event.allCases)
       trace.append(event)
       let context = "seed \(seed) step \(step) after \(event); last 12: \(trace.suffix(12))"
@@ -74,6 +75,7 @@ struct KeyboardModelFuzzTests {
           // Never two of our starting commands in flight: a press goes out
           // only with no press of ours unanswered and no stop out.
           #expect(before.pressID == nil && before.stopID == nil, "a press over a press or stop out — \(context)")
+
         case .release, .cancel:
           // Never a release or cancel without the dictation's id once it is known.
           if let known = before.dictationID {
@@ -145,6 +147,7 @@ struct KeyboardModelFuzzTests {
     switch model.handshake.state {
     case .pressing, .owned, .foreign, .stopping:
       break
+
     case .idle, .unready:
       if !model.isReady { #expect(model.statusLine != nil, "not ready with no line — \(context)") }
     }
@@ -223,7 +226,10 @@ struct KeyboardModelFuzzTests {
   /// with `suspended`, or with the held notice's own reason, since the words
   /// and the tap never disagree — and the gate comes up.
   private func appDies(
-    _ rig: KeyboardRig, _ hops: KeyboardRig.Hops, controller: UIInputViewController?, round: Int,
+    _ rig: KeyboardRig,
+    _ hops: KeyboardRig.Hops,
+    controller: UIInputViewController?,
+    round: Int,
     _ random: inout Random
   ) {
     let model = rig.model

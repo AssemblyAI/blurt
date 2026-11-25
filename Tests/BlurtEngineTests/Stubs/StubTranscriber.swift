@@ -7,6 +7,7 @@ actor StubTranscriber: TranscriberProtocol {
     case transcript(String)
     case throwError(any Error & Sendable)
   }
+
   private var mode: Mode
 
   /// The context handed to each `transcribe` call, in order — what the session
@@ -19,7 +20,7 @@ actor StubTranscriber: TranscriberProtocol {
   init(mode: Mode) { self.mode = mode }
 
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
+    frames: AsyncStream<Data>, sampleRate _: Int, context: TranscriptionContext?
   ) async throws -> String {
     // Context first, then the feed: that is the production order now — the
     // config part leads the body, so the session must have settled the context
@@ -29,6 +30,7 @@ actor StubTranscriber: TranscriberProtocol {
     switch mode {
     case .transcript(let transcript):
       return transcript
+
     case .throwError(let err):
       throw err
     }

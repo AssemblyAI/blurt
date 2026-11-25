@@ -10,11 +10,11 @@ import Testing
 /// of the capture's multi-second AX-timeout worst case.
 @Suite("DictationSession context wait", .timeLimit(.minutes(1)))
 struct ContextWaitTests {
-
   @Test("a context that resolved during speech is returned without waiting")
   func finishedReadReturnsImmediately() async {
     let (stream, feed) = AsyncStream.makeStream(
-      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1)
+    )
     let context = TranscriptionContext(appName: "Mail", priorText: "Hi team,")
     feed.yield(context)
     feed.finish()
@@ -22,19 +22,22 @@ struct ContextWaitTests {
     // The clock is never advanced: a buffered result must come back without the
     // race ever sleeping out its budget (a wall-clock sleep would hang here).
     let got = await PressContext.firstValue(
-      of: stream, within: .milliseconds(500), clock: TestClock())
+      of: stream, within: .milliseconds(500), clock: TestClock()
+    )
     #expect(got == context)
   }
 
   @Test("an empty context read yields nil promptly, not a timeout wait")
   func emptyReadReturnsNilImmediately() async {
     let (stream, feed) = AsyncStream.makeStream(
-      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1)
+    )
     feed.yield(nil)
     feed.finish()
 
     let got = await PressContext.firstValue(
-      of: stream, within: .milliseconds(500), clock: TestClock())
+      of: stream, within: .milliseconds(500), clock: TestClock()
+    )
     #expect(got == nil)
   }
 
@@ -43,11 +46,13 @@ struct ContextWaitTests {
     // The feed never yields and is kept alive past the assertion — modeling an
     // AX read wedged inside an unresponsive frontmost app.
     let (stream, feed) = AsyncStream.makeStream(
-      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1)
+    )
     let clock = TestClock()
 
     async let got = PressContext.firstValue(
-      of: stream, within: .milliseconds(500), clock: clock)
+      of: stream, within: .milliseconds(500), clock: clock
+    )
     // Let the timeout racer park on the virtual clock before advancing past its
     // deadline — waiting on the clock's own state, not on a yield budget that
     // drains this task while saying nothing about the racer.

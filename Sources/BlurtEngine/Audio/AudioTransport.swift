@@ -22,6 +22,10 @@
 /// placeholder until the iOS capture path classifies `AVAudioSession` ports
 /// (`.bluetoothHFP` is the AirPods case that matters) the same way.
 enum AudioTransport {
+  /// See `tailLinger(forTransportType:)`. Exposed so a test can name it rather
+  /// than restate the number.
+  static let bluetoothTailLinger = Duration.milliseconds(220)
+
   /// Whether the transport is a Bluetooth one. Both types count: AirPods and
   /// other wireless headsets report the classic `bluetooth` transport, LE Audio
   /// devices report `bluetoothLE`, and the link characteristic both callers care
@@ -33,7 +37,9 @@ enum AudioTransport {
   /// regression than losing the tail on a device we couldn't classify.
   static func isBluetooth(_ transportType: UInt32?) -> Bool {
     #if os(macOS)
-      guard let transportType else { return false }
+      guard let transportType else {
+        return false
+      }
       return transportType == kAudioDeviceTransportTypeBluetooth
         || transportType == kAudioDeviceTransportTypeBluetoothLE
     #else
@@ -59,7 +65,9 @@ enum AudioTransport {
   /// exotic input, never a truncated one.
   static func isLocal(_ transportType: UInt32?) -> Bool {
     #if os(macOS)
-      guard let transportType else { return false }
+      guard let transportType else {
+        return false
+      }
       switch transportType {
       case kAudioDeviceTransportTypeBuiltIn,
         kAudioDeviceTransportTypeUSB,
@@ -69,6 +77,7 @@ enum AudioTransport {
         kAudioDeviceTransportTypeDisplayPort,
         kAudioDeviceTransportTypeHDMI:
         return true
+
       default:
         return false
       }
@@ -94,8 +103,4 @@ enum AudioTransport {
   static func tailLinger(forTransportType transportType: UInt32?) -> Duration {
     isBluetooth(transportType) ? bluetoothTailLinger : .zero
   }
-
-  /// See `tailLinger(forTransportType:)`. Exposed so a test can name it rather
-  /// than restate the number.
-  static let bluetoothTailLinger = Duration.milliseconds(220)
 }

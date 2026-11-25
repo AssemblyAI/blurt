@@ -24,18 +24,6 @@ struct SessionContractNumbersTests {
     var description: String { "\(rule): \(needle)" }
   }
 
-  private static func seconds(_ value: TimeInterval) -> String {
-    value.rounded() == value ? "\(Int(value)) s" : "\(value) s"
-  }
-
-  private static func milliseconds(_ value: Duration) -> String { "\(Int(value / .milliseconds(1))) ms" }
-
-  private static func points(_ value: CGFloat) -> String {
-    value.rounded() == value ? "\(Int(value)) pt" : "\(value) pt"
-  }
-
-  private static func row(_ rule: String, _ needle: String) -> Row { Row(rule: rule, needle: needle) }
-
   /// The table, as the code would write it.
   static let rows: [Row] =
     [
@@ -55,15 +43,18 @@ struct SessionContractNumbersTests {
       row("stop ack", "`BlurtShared.stopDeadline` \(seconds(BlurtShared.stopDeadline))"),
       row(
         "mic hold",
-        "`PressHandshake.defaultHoldThreshold` \(milliseconds(.seconds(PressHandshake.defaultHoldThreshold)))"),
+        "`PressHandshake.defaultHoldThreshold` \(milliseconds(.seconds(PressHandshake.defaultHoldThreshold)))"
+      ),
       row("command retry", "`KeyboardModel.commandRetryDelay` \(milliseconds(KeyboardModel.commandRetryDelay))"),
       row("hop URLs", "`BlurtShared.fullAccessNeed`"),
       row("hop return", "`BlurtShared.hopReturnCap` \(seconds(BlurtShared.hopReturnCap))"),
       row("result freshness", "`KeyboardModel.resultFreshnessWindow` \(seconds(KeyboardModel.resultFreshnessWindow))"),
       row(
-        "result delivery", "`KeyboardRelayInjector.deliveryTimeout` \(seconds(KeyboardRelayInjector.deliveryTimeout))"),
+        "result delivery", "`KeyboardRelayInjector.deliveryTimeout` \(seconds(KeyboardRelayInjector.deliveryTimeout))"
+      ),
       row(
-        "result delivery", "`KeyboardRelayInjector.deliveryPoll` \(milliseconds(KeyboardRelayInjector.deliveryPoll))"),
+        "result delivery", "`KeyboardRelayInjector.deliveryPoll` \(milliseconds(KeyboardRelayInjector.deliveryPoll))"
+      ),
       row("result re-signal", "`KeyboardRelayInjector.resignalAfter` \(seconds(KeyboardRelayInjector.resignalAfter))"),
       row("command freshness", "`BlurtShared.commandFreshnessWindow` \(seconds(BlurtShared.commandFreshnessWindow))"),
       row("phase staleness", "`PhaseSnapshot.noticeStaleAfter` \(seconds(PhaseSnapshot.noticeStaleAfter))"),
@@ -82,17 +73,19 @@ struct SessionContractNumbersTests {
       row("silence watchdog", "`UtteranceFeed.silenceSeconds` \(seconds(TimeInterval(UtteranceFeed.silenceSeconds)))"),
       row(
         "silence watchdog",
-        "`UtteranceFeed.startGraceSeconds` \(seconds(TimeInterval(UtteranceFeed.startGraceSeconds)))"),
+        "`UtteranceFeed.startGraceSeconds` \(seconds(TimeInterval(UtteranceFeed.startGraceSeconds)))"
+      ),
       row("home error", "`HomeStatus.errorDwell` \(seconds(HomeStatus.errorDwell))"),
       row("lexicon refresh", "`KeyboardModel.lexiconRefreshInterval` \(seconds(KeyboardModel.lexiconRefreshInterval))"),
-      row("term packs", "`TermPack.fileCap` \(TermPack.fileCap / 1024) KB"),
+      row("term packs", "`TermPack.fileCap` \(TermPack.fileCap / 1_024) KB"),
       row("term packs", "`KeyTerms.termCap` \(KeyTerms.termCap) terms"),
       row("term packs", "`TermPack.lengthCap` \(TermPack.lengthCap) characters"),
       row("idle keeper", "`PictureInPictureKeeper.frameWidth` \(PictureInPictureKeeper.frameWidth)"),
       row("idle keeper", "`frameHeight` \(PictureInPictureKeeper.frameHeight)"),
       row(
         "idle keeper",
-        "`sourceSize` \(Int(PictureInPictureKeeper.sourceSize.width)) × \(PictureInPictureKeeper.sourceSize.height) pt"),
+        "`sourceSize` \(Int(PictureInPictureKeeper.sourceSize.width)) × \(PictureInPictureKeeper.sourceSize.height) pt"
+      ),
       row("log subsystem", "`BlurtShared.logSubsystem` `\(BlurtShared.logSubsystem)`"),
     ] + FailureReason.allCases.map { row("hop URLs", "`\($0.rawValue)`") }
     + [
@@ -102,9 +95,23 @@ struct SessionContractNumbersTests {
       VoiceNotice.Copy.stillTranscribing, VoiceNotice.Copy.copied,
     ].map { row("status line", "\"\($0)\"") }
 
+  private static func seconds(_ value: TimeInterval) -> String {
+    value.rounded() == value ? "\(Int(value)) s" : "\(value) s"
+  }
+
+  private static func milliseconds(_ value: Duration) -> String { "\(Int(value / .milliseconds(1))) ms" }
+
+  private static func points(_ value: CGFloat) -> String {
+    value.rounded() == value ? "\(Int(value)) pt" : "\(value) pt"
+  }
+
+  private static func row(_ rule: String, _ needle: String) -> Row { Row(rule: rule, needle: needle) }
+
   /// `App/BlurtiOS/DESIGN.md`, beside this test's own folder in the source tree.
   private static func design() throws -> String {
-    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let url = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
       .appendingPathComponent("DESIGN.md")
     return try String(contentsOf: url, encoding: .utf8)
   }
@@ -150,7 +157,7 @@ struct SessionContractNumbersTests {
   func windowLifetime() {
     #expect(ListeningWindowMachine.untilStopped == 0)
     #expect(ListeningWindowMachine.secondsPerMinute == 60)
-    #expect(SyncSTTLimits.maxAudioSeconds == 1200)
+    #expect(SyncSTTLimits.maxAudioSeconds == 1_200)
   }
 
   @Test("command freshness and result freshness")
@@ -169,8 +176,8 @@ struct SessionContractNumbersTests {
   @Test("phase staleness: the longest dwell plus a second; the cap plus ten")
   func staleness() {
     #expect(PhaseSnapshot.noticeStaleAfter == 3)
-    #expect(PhaseSnapshot.inFlightStaleAfter == 1210)
-    #expect(SyncSTTLimits.autoReleaseSeconds == 1195)
+    #expect(PhaseSnapshot.inFlightStaleAfter == 1_210)
+    #expect(SyncSTTLimits.autoReleaseSeconds == 1_195)
   }
 
   @Test("notice dwell: pasted a little longer than the Mac's, copied and error longer still")
@@ -206,19 +213,19 @@ struct SessionContractNumbersTests {
 
   @Test("lexicon refresh: the phone's word list is re-read once an hour")
   func lexiconRefresh() {
-    #expect(KeyboardModel.lexiconRefreshInterval == 3600)
+    #expect(KeyboardModel.lexiconRefreshInterval == 3_600)
   }
 
   @Test("term packs: the file, the list and a term")
   func termPacks() {
-    #expect(TermPack.fileCap == 64 * 1024)
+    #expect(TermPack.fileCap == 64 * 1_024)
     #expect(KeyTerms.termCap == 100)
     #expect(TermPack.lengthCap == 80)
   }
 
   @Test("idle keeper: the frame and the layer Typeless proved on a phone")
   func keeper() {
-    #expect(PictureInPictureKeeper.frameWidth == 4683)
+    #expect(PictureInPictureKeeper.frameWidth == 4_683)
     #expect(PictureInPictureKeeper.frameHeight == 1)
     #expect(PictureInPictureKeeper.sourceSize == CGSize(width: 369, height: 0.079))
   }
@@ -271,10 +278,10 @@ struct SessionContractNumbersTests {
   func documented() throws {
     let design = try Self.design()
     let table = try #require(design.range(of: "## The two processes, and every number"))
-    let rows = design[table.lowerBound...]
+    let tableText = design[table.lowerBound...]
     #expect(Self.rows.count > 60)
     for row in Self.rows {
-      #expect(rows.contains(row.needle), "the \(row.rule) row of The two processes lost “\(row.needle)”")
+      #expect(tableText.contains(row.needle), "the \(row.rule) row of The two processes lost “\(row.needle)”")
     }
   }
 }
