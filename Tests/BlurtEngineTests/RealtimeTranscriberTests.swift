@@ -17,6 +17,20 @@ struct RealtimeTranscriberTests {
     let turns: AsyncThrowingStream<RealtimeTurn, any Error>
   }
 
+  /// The fake server's scripted reply to any audio: a partial, then its final.
+  private static let helloTurns = [
+    RealtimeTurn(order: 0, transcript: "hello", isFinal: false, speaker: "A"),
+    RealtimeTurn(order: 0, transcript: "Hello.", isFinal: true, speaker: "A"),
+  ]
+
+  /// A transcriber pointed at `server` with 100 ms of audio queued before any
+  /// socket is open.
+  private static func queued(on server: FakeRealtimeServer) async -> RealtimeTranscriber {
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
+    await transcriber.send(Data(count: 3_200))  // before start: no socket yet
+    return transcriber
+  }
+
   private func connect() async throws -> Connection {
     let server = try await FakeRealtimeServer.start()
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
@@ -47,19 +61,14 @@ struct RealtimeTranscriberTests {
     // The 1,000-byte tail is padded up to the documented 50 ms floor.
     #expect(server.chunkSizes == [32_000, RealtimeTranscriber.minimumChunkBytes])
     #expect(server.terminated)
-    #expect(
-      received == [
-        RealtimeTurn(order: 0, transcript: "hello", isFinal: false, speaker: "A"),
-        RealtimeTurn(order: 0, transcript: "Hello.", isFinal: true, speaker: "A"),
-      ])
+    #expect(received == Self.helloTurns)
   }
 
   @Test("audio sent before the socket opens waits, and is sent once it does")
   func audioBeforeStart() async throws {
     let server = try await FakeRealtimeServer.start()
     defer { server.stop() }
-    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
-    await transcriber.send(Data(count: 3_200))  // before start: no socket yet
+    let transcriber = await Self.queued(on: server)
     await transcriber.start()
     let turns = transcriber.turns
     await transcriber.send(Data(count: 3_200))
@@ -75,19 +84,14 @@ struct RealtimeTranscriberTests {
   func finishBeforeStart() async throws {
     let server = try await FakeRealtimeServer.start()
     defer { server.stop() }
-    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
-    await transcriber.send(Data(count: 3_200))  // before start: no socket yet
+    let transcriber = await Self.queued(on: server)
     await transcriber.finish()
     await transcriber.start()  // too late: the session is over, and this opens nothing
     var received: [RealtimeTurn] = []
     for try await turn in transcriber.turns { received.append(turn) }
     #expect(server.chunkSizes == [3_200])
     #expect(server.terminated)
-    #expect(
-      received == [
-        RealtimeTurn(order: 0, transcript: "hello", isFinal: false, speaker: "A"),
-        RealtimeTurn(order: 0, transcript: "Hello.", isFinal: true, speaker: "A"),
-      ])
+    #expect(received == Self.helloTurns)
   }
 
   @Test("a backlog longer than 1000 ms is sliced on finish, not sent whole")
