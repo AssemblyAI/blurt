@@ -291,6 +291,11 @@
       do {
         try await activateTargetApp(target)
       } catch {
+        // A cancel that landed during the frontmost wait reads as "never came
+        // frontmost" (`poll` returns false on a cancelled sleep), so it arrives
+        // here as `.targetAppLost`. It is a cancel, not a lost app: abort without
+        // touching the clipboard, the same as the gate below (#334).
+        try Task.checkCancellation()
         // The target app quit or refused activation between capture and paste.
         // Transcription already succeeded, so leave the words on the clipboard —
         // the pipeline degrades this to the quiet "copied" notice instead of a
