@@ -1786,3 +1786,32 @@ def test_a_smart_search_can_hold_smart_s_instruction_as_its_bar():
     assert args.baseline == "smart-winner"
     assert cli.resolve_candidates(args) == ["smart-winner"]
     assert cli.parse_args([]).baseline == candidates.BASELINE == "prior-winner"
+
+
+# --------------------------------------------------------------------------
+# Voice Arena baseline: the CSV and the per-host cache tag
+# --------------------------------------------------------------------------
+
+
+def test_baseline_csv_names_each_column_once(tmp_path):
+    import csv  # noqa: PLC0415
+
+    import voicearena_baseline as baseline  # noqa: PLC0415
+
+    scored = {"id": "a", "draft_edits": 0, "stt_edits": 1, "bucket": "rewrite fixed it"}
+    unscored = {"id": "b", "draft_edits": None, "stt_edits": None}
+    for table in ([scored, unscored], [unscored, scored]):
+        out = tmp_path / "out.csv"
+        baseline.write_csv(str(out), table)
+        with open(out, encoding="utf-8", newline="") as handle:
+            header = next(csv.reader(handle))
+        assert header == ["id", "draft_edits", "stt_edits", "bucket"]
+
+
+def test_baseline_host_tag_tells_hosts_apart_and_takes_a_dotless_one():
+    import voicearena_baseline as baseline  # noqa: PLC0415
+
+    # The tag the staging cache files already carry.
+    assert baseline._host_tag("dictation.staging.assemblyai.com") == "staging"
+    assert baseline._host_tag("localhost:8080") == "localhost-8080"
+    assert baseline._host_tag("a.assemblyai.com") != baseline._host_tag("b.assemblyai.com")

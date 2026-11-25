@@ -121,6 +121,23 @@ struct ProtocolTests {
     try await insert.value
   }
 
+  @Test("a dictation cancelled while its result waits for the keyboard takes the result back")
+  func relayCancelledTakesResultBack() async throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.keyboardSeenAt = Date()
+    SharedStore.keyboardInstance = "kb-1"
+    let injector = KeyboardRelayInjector()
+    let delivery = Task { try await injector.insert("never mind", after: nil, windowTitle: nil) }
+    for _ in 0..<100 where SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "never mind")
+    delivery.cancel()
+    await #expect(throws: CancellationError.self) { try await delivery.value }
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+  }
+
   @Test("a result taken by the keyboard counts as delivered")
   func relayDelivered() async throws {
     let suite = ScratchSuite()

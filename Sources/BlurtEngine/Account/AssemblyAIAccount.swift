@@ -127,6 +127,11 @@ public final class AssemblyAIAccount {
     case .none: read = .signedOut
     case .unavailable: return
     }
+    // The key sits in the same Keychain, so a session item that reads again
+    // means the key likely does too. Without this, a Mac locked at launch
+    // shows "Signed in as …" once it unlocks while `hasAPIKey` stays false,
+    // and the wizard keeps the user in onboarding with no hotkey.
+    apiKey.refreshStatus()
     // `@Observable` notifies on every write, unchanged or not.
     if read != status { status = read }
   }
@@ -180,12 +185,20 @@ public final class AssemblyAIAccount {
   }
 
   /// Writes a new sign-in's session and key, or neither: when the Keychain
-  /// refuses the key, the session item goes back to what it held before.
+  /// refuses the key, the session item goes back to what it held before. An
+  /// item that can't be read is refused outright: its contents couldn't be put
+  /// back, and a rollback to "nothing" would delete a session that may still
+  /// be the only way to renew or revoke an earlier grant.
   private func storeSignIn(_ session: SignInSession, key: String) -> Bool {
-    let previous = store.load
+    let previous: SignInSession?
+    switch store.load {
+    case .session(let stored): previous = stored
+    case .none: previous = nil
+    case .unavailable: return false
+    }
     guard store.save(session) else { return false }
     guard apiKey.save(key) else {
-      store.save(previous.session)
+      store.save(previous)
       return false
     }
     // Only a sign-in that landed is a new generation: a rolled-back one left

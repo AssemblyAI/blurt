@@ -14,21 +14,11 @@ struct FileTranscriptionTests {
     (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
   }
 
-  /// A fresh directory holding one small file to "upload".
-  private func audioFile() throws -> URL {
-    let directory = FileManager.default.temporaryDirectory
-      .appending(path: "FileTranscriptionTests-\(UUID().uuidString)", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let url = directory.appending(path: "call.m4a")
-    try Data("audio bytes".utf8).write(to: url)
-    return url
-  }
-
   // MARK: - Async API
 
   @Test("uploads the raw file, submits it with speaker labels, polls until completed")
   func asyncFlow() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Mutex(0)
     let submitted = Mutex(Data())
@@ -73,7 +63,7 @@ struct FileTranscriptionTests {
 
   @Test("a failed status check is retried; the transcription carries on")
   func pollRetry() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Mutex(0)
     let transport = FakeHTTPTransport { request in
@@ -98,7 +88,7 @@ struct FileTranscriptionTests {
 
   @Test("a transcript that ends in error throws its message")
   func asyncError() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { request in
       request.url?.path == "/v2/upload"
@@ -113,7 +103,7 @@ struct FileTranscriptionTests {
 
   @Test("an HTTP failure carries the API's error sentence")
   func asyncHTTPError() async throws {
-    let url = try audioFile()
+    let url = try scratchAudioFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { _ in (401, self.json(["error": "Invalid API key"])) }
     await #expect(throws: AsyncTranscriptionError.http(status: 401, message: "Invalid API key")) {
