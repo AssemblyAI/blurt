@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Blurt's brand colors, taken from the app design (the "Blurt hub" / "Blurt
-/// setup" comps, 2026-08-31). Two greens, because one green can't serve both
+/// Blurt's brand colors, from the design's one source,
+/// `App/BlurtiOS/Design/tokens.json`, through the generated `DesignTokens` the
+/// iPhone draws with too (`project.yml` compiles it into this target): add or
+/// change a colour there, not here. Two greens, because one green can't serve both
 /// kinds of chrome the app puts on screen:
 ///
 /// - `green` (`#01762F`) is the wordmark green, for **light** surfaces. It's
@@ -28,16 +30,16 @@ import SwiftUI
 /// value, so it stops at the edge of the view tree, while the Settings
 /// window's toolbar selection, focus rings, and text selection are AppKit
 /// resolving `NSColor.controlAccentColor`, which reads only the app's
-/// asset-catalog accent. The hexes are duplicated in the catalog because JSON
-/// can't reference Swift; keep the two in step.
+/// asset-catalog accent. `scripts/design-sync.sh` writes that catalog colour
+/// from the same two tokens, so it can't drift from these.
 enum BlurtBrand {
   /// `#01762F` — the wordmark green, on light chrome. A *fixed* shade: use
   /// `accent` unless the surface is fixed too (see the type's note).
-  nonisolated static let green = Color(red: 1 / 255, green: 118 / 255, blue: 47 / 255)
+  nonisolated static let green = DesignTokens.Brand.green700
 
   /// `#67AD82` — the brand hue lifted for dark chrome (the overlay pill, and
   /// the wordmark on the app icon's near-black gradient).
-  nonisolated static let greenOnDark = Color(red: 103 / 255, green: 173 / 255, blue: 130 / 255)
+  nonisolated static let greenOnDark = DesignTokens.Brand.green400
 
   /// The appearance-adaptive accent — `green` under Aqua, `greenOnDark` under
   /// Dark Aqua — resolved from the asset catalog rather than rebuilt here, so
@@ -52,11 +54,11 @@ enum BlurtBrand {
   /// Fixed rather than appearance-adaptive: the pill floats over whatever app
   /// the user is dictating into, so it can't take its cue from the app's own
   /// appearance the way a window can.
-  nonisolated static let ink = Color(red: 29 / 255, green: 27 / 255, blue: 22 / 255)
+  nonisolated static let ink = DesignTokens.Brand.ink
 
   /// `#E67F36` — the pill's error text. The design keeps the body ink in every
   /// state and lets this carry the alarm, rather than flashing a red capsule.
-  nonisolated static let errorOrange = Color(red: 230 / 255, green: 127 / 255, blue: 54 / 255)
+  nonisolated static let errorOrange = DesignTokens.Brand.orange
 
   /// The brand orb's fill: the full palette swept bottom-to-top, pale lavender
   /// through both greens, into the blue-violet and back out to white. Stops and
@@ -67,14 +69,14 @@ enum BlurtBrand {
   /// the offsets readable against the file they came from.
   nonisolated static let orbGradient = LinearGradient(
     stops: [
-      .init(color: Color(red: 215 / 255, green: 211 / 255, blue: 244 / 255), location: 0),
-      .init(color: Color(red: 176 / 255, green: 167 / 255, blue: 233 / 255), location: 0.0673),
+      .init(color: DesignTokens.Brand.violetLavender, location: 0),
+      .init(color: DesignTokens.Brand.violetPeriwinkle, location: 0.0673),
       .init(color: greenOnDark, location: 0.1442),
       .init(color: green, location: 0.3029),
-      .init(color: Color(red: 57 / 255, green: 35 / 255, blue: 199 / 255), location: 0.5962),
-      .init(color: Color(red: 136 / 255, green: 123 / 255, blue: 221 / 255), location: 0.75),
-      .init(color: Color(red: 215 / 255, green: 211 / 255, blue: 244 / 255), location: 0.8942),
-      .init(color: .white, location: 1),
+      .init(color: DesignTokens.Brand.cobolt, location: 0.5962),
+      .init(color: DesignTokens.Brand.violetIris, location: 0.75),
+      .init(color: DesignTokens.Brand.violetLavender, location: 0.8942),
+      .init(color: DesignTokens.Brand.white, location: 1),
     ],
     startPoint: .bottom,
     endPoint: .top
@@ -84,7 +86,7 @@ enum BlurtBrand {
   /// white, corner to corner. Spun by `BrandOrb`, which is what turns a static
   /// two-stop gradient into a progress cue.
   nonisolated static let orbRingGradient = LinearGradient(
-    colors: [green, .white], startPoint: .topLeading, endPoint: .bottomTrailing
+    colors: [green, DesignTokens.Brand.white], startPoint: .topLeading, endPoint: .bottomTrailing
   )
 }
 

@@ -145,7 +145,8 @@ App/BlurtiOS/                the iPhone app and its keyboard (README.md there is
   BlurtDesign/               the component library both targets link: the generated DesignTokens,
                              type roles, brand colours (one accent token), card, page, brandForm,
                              Eyebrow, BrandButtonStyle, Wordmark, FilmGrain. Static, SwiftUI only,
-                             `package` access; iPhone only for now (the Mac keeps Branding/)
+                             `package` access; iPhone only, but for DesignTokens.swift, which the
+                             Mac compiles too: its Branding/ reads the brand palette from it
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, check-portability.sh, check-invariants.sh,
                              bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh,

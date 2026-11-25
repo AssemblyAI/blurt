@@ -554,3 +554,13 @@ package enum DesignTokens {
   ]
 }
 // swiftlint:enable type_body_length
+
+extension Color {
+  /// `Color(hex: 0x1D1B16)`, the literal every colour token is written in.
+  /// `nonisolated` so the generated statics, which are nonisolated too, can call it.
+  package nonisolated init(hex: UInt32) {
+    self.init(
+      red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255
+    )
+  }
+}
