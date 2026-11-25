@@ -38,6 +38,22 @@ XCODEBUILD_ARGS=(-project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme B
   "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES)
 xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" 2>&1 | "${PRETTY[@]}"
 ios_wait_booted "$UDID"
+# One launch of the app before the suite. A simulator that has just finished
+# booting is still busy for a while, and the app's first launch on it pays for
+# registering it; the first audit (testConsent, alphabetically) bore both and
+# missed its 10 s wait for the consent sheet when CI moved this suite onto a
+# fresh runner. Before that it ran after ios-test, whose host-app launches had
+# already warmed the simulator — this restores that, without the tests.
+APP="$IOS_DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
+if [ -d "$APP" ]; then
+  BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+  xcrun simctl install "$UDID" "$APP"
+  xcrun simctl launch "$UDID" "$BUNDLE_ID" >/dev/null
+  sleep 10
+  xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+else
+  echo "note: no $APP to warm the simulator with; running the audits cold" >&2
+fi
 # Serial: every test relaunches the one app on the one simulator. Any extra
 # arguments (-only-testing:…) select tests, so they go to the run.
 xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -resultBundlePath "$RESULTS" \

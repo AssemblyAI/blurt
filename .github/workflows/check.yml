@@ -418,6 +418,18 @@ jobs:
         working-directory: blurt
         run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh uitest
 
+      # The audits' result bundle when the job fails or times out, as ui-tests
+      # keeps the Mac suite's: the log shows each failure's first line only,
+      # and the bundle has the rest — every issue an audit raised, and the
+      # screenshot of each screen it audited.
+      - name: Upload the audits' results
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BlurtiOSUITests-xcresult
+          path: ${{ runner.temp }}/BlurtiOS/BlurtiOSUITests-*.xcresult
+          if-no-files-found: ignore
+
   # The iPhone code's static gates: `swiftlint analyze` (every analyzer rule)
   # over a from-scratch build of the app and its tests — ios-check.sh's
   # `analyze` step builds them itself when run without `test`, no simulator
