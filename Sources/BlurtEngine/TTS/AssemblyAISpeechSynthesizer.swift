@@ -141,7 +141,7 @@ struct AssemblyAISpeechSynthesizer: Sendable {
       }
     } catch let error as URLError where error.code == .timedOut {
       throw SpeechSynthesisError.timedOut
-    } catch where error.isAbandonment {
+    } catch  where error.isAbandonment {
       // A stopped read cancels its request, which URLSession reports as an
       // error. It's a cancellation, and must read as one: the router beeps on
       // a failure, never on a stop. Only when this task was cancelled, though

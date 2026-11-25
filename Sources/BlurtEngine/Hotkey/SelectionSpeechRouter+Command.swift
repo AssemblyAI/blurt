@@ -54,7 +54,7 @@ import os
           "command with \(context.elements.count) elements planned \(steps.map(\.action.rawValue).joined(separator: ", "), privacy: .public): \(command, privacy: .private) in \(context.appName ?? "no app", privacy: .private) as \(String(describing: steps), privacy: .private)"
         )
         outcome = try await perform(steps, in: context, performer: performer, session: session, recording: ran)
-      } catch where !error.isAbandonment {
+      } catch  where !error.isAbandonment {
         // A cancellation-shaped error on a task nobody cancelled (a request
         // the system dropped) is a failure like any other, and says so.
         // The kind in public, the words private: a command's errors carry
