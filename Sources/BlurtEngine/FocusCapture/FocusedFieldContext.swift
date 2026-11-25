@@ -52,9 +52,7 @@ public struct FocusedFieldContext: Sendable {
   /// never replayed in a later request (`RecentDictations.Entry.replayable`).
   ///
   /// One three-way verdict rather than two flags, so "secure and unknown" can't
-  /// be stated. Defaults to `.ordinary` so a test fixture describes an ordinary
-  /// field without restating it; the production capture always passes its real
-  /// verdict.
+  /// be stated.
   public var security: TargetSecurity
 
   public init(
@@ -62,7 +60,7 @@ public struct FocusedFieldContext: Sendable {
     selectedText: String?,
     windowTitle: String?,
     fieldLabel: String?,
-    security: TargetSecurity = .ordinary
+    security: TargetSecurity
   ) {
     self.priorText = priorText
     self.selectedText = selectedText

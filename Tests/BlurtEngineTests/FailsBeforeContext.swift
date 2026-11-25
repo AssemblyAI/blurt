@@ -20,4 +20,8 @@ struct FailsBeforeContext: TranscriberProtocol {
     }
     throw AssemblyAIError.http(status: 401, message: "Invalid API key")
   }
+
+  func warmUp() {
+    // No connection to pre-open: the double never reaches a network.
+  }
 }

@@ -251,6 +251,10 @@
       releaseWhenIdle()
     }
 
+    func warmUp() {
+      // Nothing to pre-pay: the window's `open()` brings the queue up.
+    }
+
     private func releaseWhenIdle() {
       if parking.load(ordering: .acquiring) || !isOpen { stopQueue() }
     }

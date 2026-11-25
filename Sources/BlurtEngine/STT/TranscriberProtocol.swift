@@ -55,15 +55,7 @@ public protocol TranscriberProtocol: Sendable {
   /// doesn't pay connection setup (DNS/TCP/TLS) on the latency-sensitive hot
   /// path. Called at record-start, where the handshake overlaps with the user
   /// speaking. Must not throw or block the caller — a failure just means the
-  /// real request pays setup as before. Declared here (not only in the default
-  /// extension) so it dispatches dynamically through `any TranscriberProtocol`.
+  /// real request pays setup as before. A transcriber with nothing to pre-open
+  /// does nothing.
   func warmUp() async
-}
-
-extension TranscriberProtocol {
-  /// No-op default: a transcriber with nothing to pre-open (e.g. test stubs)
-  /// inherits this and `DictationSession` can call `warmUp()` unconditionally.
-  public func warmUp() {
-    // Nothing to pre-open: see the doc comment above.
-  }
 }

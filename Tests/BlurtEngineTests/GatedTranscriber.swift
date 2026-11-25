@@ -30,6 +30,10 @@ actor GatedTranscriber: TranscriberProtocol {
     return text
   }
 
+  func warmUp() {
+    // No connection to pre-open: the stub never reaches a network.
+  }
+
   func waitUntilStarted() async { await gate.waitUntilEntered() }
   func allowToFinish() { gate.allowToFinish() }
 }

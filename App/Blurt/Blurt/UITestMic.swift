@@ -26,6 +26,14 @@
     func stop() -> Int {
       Self.cannedPCM.count
     }
+    /// No meter: the overlay's meter isn't asserted.
+    var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
+    func cancelCapture() {
+      // Nothing to release: the stub captures nothing.
+    }
+    func warmUp() {
+      // Nothing to pre-pay: the stub opens no device.
+    }
   }
 
 #endif

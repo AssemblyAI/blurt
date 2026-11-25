@@ -13,6 +13,9 @@
     func insert(_ text: String, after _: String?, windowTitle _: String?, security _: TargetSecurity) async {
       await MainActor.run { UITestState.shared.recordPaste(text) }
     }
+    func insertAtFocus(_ text: String) async {
+      await insert(text, after: nil, windowTitle: nil, security: .ordinary)
+    }
   }
 
 #endif

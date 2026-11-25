@@ -27,6 +27,9 @@ final class StubPerformer: VoiceCommandPerforming {
     self.failingAt = failingAt
   }
 
+  /// No beat between steps: the stub acts synchronously.
+  var settle: Duration { .zero }
+
   func commandStarting() { lifecycle.withLock { $0.append("starting") } }
   func commandEnded() { lifecycle.withLock { $0.append("ended") } }
 

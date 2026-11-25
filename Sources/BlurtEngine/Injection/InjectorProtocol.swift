@@ -23,11 +23,3 @@ public protocol InjectorProtocol: Sendable {
   /// another app forward. No separator, as `replaceSelection`'s paste has none.
   func insertAtFocus(_ text: String) async throws
 }
-
-extension InjectorProtocol {
-  /// A host with no notion of a target app (the iPhone keyboard) has no other
-  /// focus to insert at.
-  public func insertAtFocus(_ text: String) async throws {
-    try await insert(text, after: nil, windowTitle: nil, security: .ordinary)
-  }
-}

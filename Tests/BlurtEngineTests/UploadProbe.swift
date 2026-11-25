@@ -56,6 +56,10 @@ final class UploadProbe: TranscriberProtocol, Sendable {
     return transcript
   }
 
+  func warmUp() {
+    // No connection to pre-open: the probe never reaches a network.
+  }
+
   func waitUntilEntered() async { await entered.wait() }
   func waitUntilHolding() async { await holding?.waitUntilEntered() }
   func allowToFinish() { holding?.allowToFinish() }

@@ -16,7 +16,7 @@
     func restoresClipboard() async throws {
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in true }, clipboard: clip)
-      try await injector.insert("dictated text")
+      try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
       // The restore is deferred to the background settle task; await it before
       // asserting the user's clipboard came back.
       await injector.pendingSettle?.value
@@ -33,7 +33,7 @@
         pasteSettleDuration: .seconds(1), postPaste: { _ in true }, clipboard: clip
       )
 
-      try await injector.insert("dictated text")
+      try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
 
       // insert() has returned, but the restore is deferred: the pasted text is
       // still on the clipboard and a settle task is in flight. This is what lets
@@ -54,7 +54,7 @@
         pasteSettleDuration: .milliseconds(200), postPaste: { _ in true }, clipboard: clip
       )
 
-      try await injector.insert("dictated text")
+      try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
       // `insert` is back with the transcript still on the clipboard. Another
       // clipboard user (`SelectionCopy`) asking for a turn now must not get one
       // until the restore has put the user's contents back — or it snapshots
@@ -68,7 +68,9 @@
     func failedPasteReleasesLock() async {
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in false }, clipboard: clip)
-      await #expect(throws: BlurtError.targetAppLost) { try await injector.insert("dictated text") }
+      await #expect(throws: BlurtError.targetAppLost) {
+        try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
+      }
       let turn = await clip.lock.acquire()
       turn.end()
     }
@@ -86,7 +88,7 @@
         clipboard: FakeClipboard(string: nil)
       )
       await injector.setTarget(try liveTargetFocus())
-      try await injector.insert("dictated text")  // must not throw
+      try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)  // must not throw
       #expect(activated.value)
     }
 
@@ -103,7 +105,7 @@
       await injector.setTarget(try liveTargetFocus())
 
       await #expect(throws: BlurtError.targetAppLost) {
-        try await injector.insert("text")
+        try await injector.insert("text", after: nil, windowTitle: nil, security: .ordinary)
       }
       // No ⌘V was posted into whatever now has focus, but the transcript survives
       // on the clipboard so the failure degrades to a "copied" notice.
@@ -118,7 +120,7 @@
         pasteSettleDuration: .zero,
         postPaste: posted.recordingPaste
       )
-      try await injector.insert("")
+      try await injector.insert("", after: nil, windowTitle: nil, security: .ordinary)
       #expect(posted.value == false)
     }
 
@@ -127,7 +129,7 @@
       let clip = FakeClipboard(string: "user-clipboard")
       let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in false }, clipboard: clip)
       await #expect(throws: BlurtError.targetAppLost) {
-        try await injector.insert("text")
+        try await injector.insert("text", after: nil, windowTitle: nil, security: .ordinary)
       }
       // The paste never happened, so the transcript is deliberately left on the
       // clipboard (not restored away) — the user's words beat the stale snapshot.
@@ -149,7 +151,7 @@
       )
 
       await #expect(throws: BlurtError.accessibilityPermissionMissing) {
-        try await injector.insert("text")
+        try await injector.insert("text", after: nil, windowTitle: nil, security: .ordinary)
       }
       // No paste posted, and the user's clipboard is left exactly as it was.
       #expect(posted.value == false)
@@ -168,7 +170,7 @@
       )
 
       await #expect(throws: BlurtError.noEditableTarget) {
-        try await injector.insert("dictated text")
+        try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
       }
       // No ⌘V was posted (so macOS never beeps), and the transcript is left on the
       // clipboard for a manual paste rather than being restored away.
@@ -189,7 +191,7 @@
       )
 
       // Must not throw noEditableTarget: the Electron exception keeps the paste.
-      try await injector.insert("dictated text")
+      try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
       await injector.pendingSettle?.value
 
       // The ⌘V was posted (words pasted, not copy-only), and the user's clipboard
@@ -231,7 +233,7 @@
       )
       // No capture, so no target: the paste lands where focus is, and that app
       // is the one asked whether it hides its fields.
-      try await injector.insert("hello")
+      try await injector.insert("hello", after: nil, windowTitle: nil, security: .ordinary)
       await injector.pendingSettle?.value
       #expect(posted.value == true)
     }
@@ -244,8 +246,8 @@
       // Docs tab. Prior text is nil because both surfaces are Accessibility-opaque.
       await injector.setTarget(try liveTargetFocus())
 
-      try await injector.insert("First.", after: nil, windowTitle: "notes.txt — Editor")
-      try await injector.insert("Second.", after: nil, windowTitle: "notes.txt — Editor")
+      try await injector.insert("First.", after: nil, windowTitle: "notes.txt — Editor", security: .ordinary)
+      try await injector.insert("Second.", after: nil, windowTitle: "notes.txt — Editor", security: .ordinary)
 
       // First paste lands as-is; the second is separated from it even though AX
       // gave us no prior text — the injector remembers what it just pasted into
@@ -269,8 +271,8 @@
       let (injector, pasted) = makeRecordingInjector { 0 }
       await injector.setTarget(try liveTargetFocus())
 
-      try await injector.insert("First.", after: nil, windowTitle: "Doc - Google Docs")
-      try await injector.insert("Second.", after: nil, windowTitle: "Doc - Google Docs")
+      try await injector.insert("First.", after: nil, windowTitle: "Doc - Google Docs", security: .ordinary)
+      try await injector.insert("Second.", after: nil, windowTitle: "Doc - Google Docs", security: .ordinary)
 
       #expect(pasted.values == ["First.", "Second."])
     }
@@ -296,9 +298,9 @@
         clipboard: clip
       )
 
-      let first = Task { try await injector.insert("first") }
+      let first = Task { try await injector.insert("first", after: nil, windowTitle: nil, security: .ordinary) }
       await firstParked.wait()
-      try await injector.insert("second")
+      try await injector.insert("second", after: nil, windowTitle: nil, security: .ordinary)
       try await first.value
       // Await the second insert's deferred settle (insert returns before it runs).
       await injector.pendingSettle?.value
@@ -323,7 +325,7 @@
         clipboard: clip
       )
 
-      let task = Task { try await injector.insert("dictated") }
+      let task = Task { try await injector.insert("dictated", after: nil, windowTitle: nil, security: .ordinary) }
       await pasted.wait()
       clip.externalWrite("copied-mid-paste")
       try await task.value
@@ -348,7 +350,7 @@
       let gate = AsyncGate()
       let task = Task {
         await gate.wait()
-        try await injector.insert("text")
+        try await injector.insert("text", after: nil, windowTitle: nil, security: .ordinary)
       }
       task.cancel()
       gate.open()

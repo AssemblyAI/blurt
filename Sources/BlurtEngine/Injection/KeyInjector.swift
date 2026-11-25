@@ -215,7 +215,7 @@
     }
 
     public func insert(
-      _ text: String, after priorText: String? = nil, windowTitle: String? = nil, security: TargetSecurity = .ordinary
+      _ text: String, after priorText: String?, windowTitle: String?, security: TargetSecurity
     ) async throws {
       try await enqueue(text, after: priorText, windowTitle: windowTitle, pinned: true, security: security)
     }

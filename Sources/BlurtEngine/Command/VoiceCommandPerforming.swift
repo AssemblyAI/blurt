@@ -21,18 +21,3 @@ public protocol VoiceCommandPerforming: Sendable {
   /// `commandStarting` changed.
   func commandEnded() async
 }
-
-extension VoiceCommandPerforming {
-  /// No beat by default: a performer that acts synchronously needs none.
-  public var settle: Duration { .zero }
-
-  /// Nothing to prepare by default.
-  public func commandStarting() {
-    // A performer with no screen to warm up has nothing to do here.
-  }
-
-  /// Nothing to undo by default.
-  public func commandEnded() {
-    // `commandStarting` changed nothing, so there's nothing to put back.
-  }
-}

@@ -11,4 +11,8 @@ nonisolated struct StubTranscriber: TranscriberProtocol {
     }
     return text
   }
+
+  func warmUp() {
+    // No connection to pre-open: the stub never reaches a network.
+  }
 }

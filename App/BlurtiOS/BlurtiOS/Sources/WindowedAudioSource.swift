@@ -355,6 +355,10 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
     parkWhenIdle()
   }
 
+  func warmUp() {
+    // Nothing to pre-pay: the window's `open()` brings the session up.
+  }
+
   private func parkWhenIdle() {
     guard parking.load(ordering: .acquiring) else {
       return

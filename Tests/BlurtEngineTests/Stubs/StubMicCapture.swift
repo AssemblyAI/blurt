@@ -44,14 +44,18 @@ actor StubMicCapture: MicCaptureProtocol {
     framesContinuation?.finish()
     framesContinuation = nil
   }
-  /// Overrides the protocol's stop-and-discard default only to *count* the call,
-  /// then delegates to `stop()` so `stopCalls` and `stopError` keep meaning what
-  /// they did before the cancel path had its own entry point — the suites that
-  /// assert a cancel stopped the mic (and that a failing stop is logged) are
-  /// unchanged. `MicCaptureProtocolDefaultsTests` covers the bare default.
+  /// Counts the call, then delegates to `stop()` so `stopCalls` and `stopError`
+  /// mean "the mic was stopped" however the teardown was reached — the suites
+  /// that assert a cancel stopped the mic (and that a failing stop is logged)
+  /// read them.
   func cancelCapture() throws {
     cancelCaptureCalls += 1
     _ = try stop()
+  }
+  /// No meter: the session suites never read one.
+  nonisolated var levels: AsyncStream<Float> { .finished }
+  func warmUp() {
+    // Nothing to pre-pay: the stub opens no device.
   }
   func setPCM(_ pcm: Data) { pcmToReturn = pcm }
   func setStartError(_ error: (any Error & Sendable)?) { startError = error }

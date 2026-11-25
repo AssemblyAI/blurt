@@ -80,4 +80,11 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   func cancelCapture() {
     // Nothing to release: the fake captures nothing.
   }
+
+  /// No meter: the fake captures nothing to measure.
+  var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
+
+  func warmUp() {
+    // Nothing to pre-pay: the fake opens no device.
+  }
 }

@@ -31,6 +31,18 @@ actor GatedStopMic: MicCaptureProtocol {
     return StubPCM.aboveMinimum.count
   }
 
+  /// No meter: the races under test never read one.
+  nonisolated var levels: AsyncStream<Float> { .finished }
+
+  /// Stop and discard: the stub's only teardown is `stop()`.
+  func cancelCapture() async throws {
+    _ = try await stop()
+  }
+
+  func warmUp() {
+    // Nothing to pre-pay: the stub opens no device.
+  }
+
   func waitUntilStopEntered() async { await gate.waitUntilEntered() }
   func allowStopToFinish() { gate.allowToFinish() }
 }

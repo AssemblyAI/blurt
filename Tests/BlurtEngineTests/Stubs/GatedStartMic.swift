@@ -54,4 +54,11 @@ actor GatedStartMic: MicCaptureProtocol {
     cancelCaptureCalls += 1
     _ = stop()
   }
+
+  /// No meter: the bring-up races under test never read one.
+  nonisolated var levels: AsyncStream<Float> { .finished }
+
+  func warmUp() {
+    // Nothing to pre-pay: the stub opens no device.
+  }
 }
