@@ -22,7 +22,8 @@ struct PipelinePressContextTests {
     priorText: "Dear Sam,",
     selectedText: nil,
     windowTitle: "Draft",
-    fieldLabel: nil
+    fieldLabel: nil,
+    security: .ordinary
   )
 
   /// A settled read for a different field, standing in for a later press's.
