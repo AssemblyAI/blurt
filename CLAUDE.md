@@ -44,6 +44,18 @@ however shellcheck is run, so linting one script alone is as clean as `check.sh`
 them — no SC1091 for a library that isn't on the command line. (`shfmt` still covers only
 `scripts/*.sh`.)
 
+## Hookify rules (`.claude/hookify.*.local.md`)
+
+Warn-only rules for the [hookify](https://github.com/anthropics/claude-plugins-official) plugin,
+each from a mistake that cost real time. They need hookify installed and do nothing without it. They
+keep hookify's `.local.md` suffix — the only name it loads — and `.gitignore` opts them back in.
+
+| Rule                          | Fires on                                                  | Why                                                                                                       |
+| ----------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `warn-zsh-unsplit-vars`       | `for x in $VAR;` / `git checkout … $VAR`                  | zsh doesn't word-split `$VAR`: a resolve committed conflict markers, and a cleanup loop deleted nothing   |
+| `warn-swift-edited-via-shell` | `sed -i` / python `write_text` / `>` into a `.swift` file | the swift-format and swiftlint hooks fire only on Edit/Write, so the file goes unformatted to CI          |
+| `warn-blind-ours-theirs`      | `git checkout --ours` / `--theirs`                        | keeping one side whole can drop another PR's change to the same file — check what else landed on it first |
+
 ## Skills (`.claude/skills/`)
 
 - **`check`** — how to decide whether the repo is green, including the macOS-only guard and the
