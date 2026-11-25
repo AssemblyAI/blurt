@@ -306,8 +306,7 @@
       // The app whose opacity is judged below: the target, or — when there is
       // none (a paste at focus, or a capture whose app is gone) — the one in
       // front, since a nil would read as "not opaque" and copy instead. Looked
-      // up ahead of the gate below, so its main-actor hop can't let a cancel
-      // slip past it.
+      // up ahead of the gate below, so its main-actor hop can't let a cancel slip past it.
       let judged = if let target { target } else { await frontmostApp() }
       // The ⌘V's key on the user's layout, also ahead of the gate for the same
       // reason: it is a main-actor read too.
