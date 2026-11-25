@@ -116,6 +116,7 @@ package nonisolated enum VoiceNotice {
     package static let network = "No connection — tap to try again"
     package static let stillTranscribing = "Still transcribing…"
     package static let copied = "Copied to the clipboard"
+    package static let termsFull = "Key terms full — remove some in Blurt"
 
     /// The countdown to the auto-release: "30 s left".
     package static func secondsLeft(_ seconds: Int) -> String { "\(seconds) s left" }

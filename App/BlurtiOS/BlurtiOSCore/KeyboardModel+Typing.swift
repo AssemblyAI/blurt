@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtEngine
 import Foundation
 import UIKit
@@ -13,6 +14,20 @@ extension KeyboardModel {
 
   /// How long the + (or the chip) shows its check after a term was saved.
   package static let termNoticeDwell: TimeInterval = 1.2
+  /// How long "Key terms full" holds the status line: a sentence to read,
+  /// not a check to glance at.
+  package static let termsFullDwell: TimeInterval = 2.5
+
+  /// Whether `term` would be a new key term with the list already holding
+  /// `KeyTerms.termCap`: a request sends only the first that many, the user's
+  /// own first, so one added past them would show its check and never be sent.
+  /// A list already over the cap (an import may take it there) is left as it
+  /// is; only adding to it is refused.
+  package static func termListIsFull(adding term: String) -> Bool {
+    let terms = SharedStore.keyTerms
+    return terms.count >= KeyTerms.termCap
+      && !terms.contains { $0.caseInsensitiveCompare(term) == .orderedSame }
+  }
 
   /// A selection as a key term: trimmed, on one line, short enough to be a
   /// name or a phrase. Nil when it is none of those, or nothing is selected.
@@ -106,6 +121,10 @@ extension KeyboardModel {
       dismissSelection()
       return
     }
+    guard !Self.termListIsFull(adding: term) else {
+      noteTermListFull()
+      return
+    }
     SharedStore.addKeyTerm(term)
     selectedTermIsKnown = true
     noteTermSaved(thenDismissChip: true)
@@ -163,6 +182,12 @@ extension KeyboardModel {
       cancelAddingTerm()
       return
     }
+    // The field stays open with what was typed: the user can cancel, or make
+    // room in Blurt and come back to it.
+    guard !Self.termListIsFull(adding: draft) else {
+      noteTermListFull()
+      return
+    }
     SharedStore.addKeyTerm(draft)
     // Out of the mode before touching the text, so the field's own change
     // notification can't read the replacement as typing to claim.
@@ -195,6 +220,7 @@ extension KeyboardModel {
   private func noteTermSaved(thenDismissChip: Bool) {
     if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     termSavedAt = Date()
+    termListFullAt = nil
     termNotice?.cancel()
     let saved = selectedTerm
     let clock = clock
@@ -209,6 +235,23 @@ extension KeyboardModel {
       {
         dismissSelection()
       }
+    }
+  }
+
+  /// An error haptic, and the status line says the list is full for a moment
+  /// (`statusLine`). Nothing is saved and the chip stays, still a +.
+  private func noteTermListFull() {
+    if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.error) }
+    termSavedAt = nil
+    termListFullAt = Date()
+    termNotice?.cancel()
+    let clock = clock
+    termNotice = Task { [weak self] in
+      try? await clock.sleep(for: .seconds(Self.termsFullDwell))
+      guard !Task.isCancelled, let self else {
+        return
+      }
+      termListFullAt = nil
     }
   }
 

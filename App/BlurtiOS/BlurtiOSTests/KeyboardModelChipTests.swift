@@ -52,19 +52,46 @@ struct KeyboardModelChipTests {
   }
 
   /// A request carries the first `KeyTerms.termCap` terms, the user's own
-  /// first: a chip tap that adds a 101st shows its ✓ for a word no dictation
-  /// will ever send.
-  @Test("a word the chip saves with the list already at the cap is one a dictation sends")
+  /// first: a chip tap that added a 101st showed its ✓ for a word no dictation
+  /// would ever send. At the cap the chip refuses, and the line says why.
+  @Test("with the list at the cap the chip adds nothing and the status line says the list is full")
   func chipAtTheCap() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    SharedStore.keyTerms = (0..<KeyTerms.termCap).map { "term\($0)" }
-    let (model, _) = typingModel(before: "we met ", selected: "Zed")
+    let full = (0..<KeyTerms.termCap).map { "term\($0)" }
+    SharedStore.keyTerms = full
+    let (model, proxy) = typingModel(before: "we met ", selected: "Zed")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Zed")
     model.addSelectedTerm()
-    #expect(KeyTerms.fitted(SharedStore.keyTerms).contains("Zed"))
+    #expect(SharedStore.keyTerms == full)
+    #expect(!model.selectedTermIsKnown)
+    #expect(model.termSavedAt == nil)
+    #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
+    // A word the full list already has is still known, not refused.
+    proxy.selected = nil
+    model.contextChanged()
+    proxy.selected = "term7"
+    model.contextChanged()
+    #expect(model.selectedTermIsKnown)
+  }
+
+  @Test("with the list at the cap a typed term is refused and the field keeps what was typed")
+  func typedTermAtTheCap() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let full = (0..<KeyTerms.termCap).map { "term\($0)" }
+    SharedStore.keyTerms = full
+    let (model, _) = typingModel(before: "he said ")
+    model.hasFullAccess = true
+    model.beginAddingTerm()
+    model.termDraft = "Zed"
+    model.saveTerm()
+    #expect(SharedStore.keyTerms == full)
+    #expect(model.termDraft == "Zed")
+    #expect(model.termSavedAt == nil)
+    #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
   }
 
   @Test("the + coming back after a term was added from the chip keeps the highlight's word out of the chip")
