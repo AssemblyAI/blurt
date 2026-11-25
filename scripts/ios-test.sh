@@ -5,6 +5,7 @@
 #   BLURT_IOS_SANITIZER=thread scripts/ios-test.sh   # tests under ThreadSanitizer
 #   BLURT_IOS_SANITIZER=address scripts/ios-test.sh  # tests under AddressSanitizer
 #   BLURT_SIM_DEVICE="iPhone 17" scripts/ios-test.sh
+#   BLURT_IOS_BUILD_ONLY=1 scripts/ios-test.sh       # build the tests, keep the log, run nothing
 #
 # Hosted by the app, signed ad hoc, on the named simulator or whichever iPhone
 # this Mac (or CI runner) has. The engine's own tests are `swift test`
@@ -54,26 +55,42 @@ esac
 DERIVED="$IOS_DERIVED${SANITIZER:+-$SANITIZER}"
 
 ios_require_device ios-test
-echo "testing on $NAME${SANITIZER:+ under the $SANITIZER sanitizer}"
-ios_wait_booted "$UDID"
+if [ "${BLURT_IOS_BUILD_ONLY:-0}" = "1" ]; then
+  echo "building the tests for $NAME (BLURT_IOS_BUILD_ONLY=1: no simulator, no run)"
+else
+  echo "testing on $NAME${SANITIZER:+ under the $SANITIZER sanitizer}"
+  # Booting in the background: the build below needs no running simulator, and
+  # a fresh one's first boot takes minutes. Waited for after the build.
+  ios_boot_async "$UDID"
+fi
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
 ios_resolve_packages "$DERIVED"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS="$DERIVED/BlurtiOSTests-$STAMP.xcresult"
-# The whole xcodebuild log, kept rather than `-quiet`ed away: ios-check.sh feeds
+# The whole build log, kept rather than `-quiet`ed away: ios-check.sh feeds
 # its compiler invocations to `swiftlint analyze`. The terminal gets it through
 # xcbeautify, as check.sh's app build does; the log path is printed at the end.
 BUILD_LOG="${BLURT_IOS_BUILD_LOG:-$DERIVED/BlurtiOSTests-$STAMP.log}"
 mkdir -p "$(dirname "$BUILD_LOG")"
 pretty_xcodebuild
+# Built and run as two steps, the same flags for both, so the simulator boots
+# under the build rather than ahead of it. BLURT_IOS_BUILD_ONLY=1 stops after
+# the build: ios-check.sh's `analyze` step on CI, which needs the build log and
+# no simulator.
+XCODEBUILD_ARGS=(-project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS
+  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED"
+  "${IOS_SIM_SIGNING[@]}" "${TEST_FLAGS[@]}")
+xcodebuild build-for-testing "${XCODEBUILD_ARGS[@]}" 2>&1 | tee "$BUILD_LOG" | "${PRETTY[@]}"
+if [ "${BLURT_IOS_BUILD_ONLY:-0}" = "1" ]; then
+  echo "build log: $BUILD_LOG"
+  exit 0
+fi
+ios_wait_booted "$UDID"
 # Serial for the reason project.yml's scheme gives (the tests share one global
 # App Group override); said here too so no test plan or default can undo it.
-xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
-  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
-  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" "${TEST_FLAGS[@]}" \
-  -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 \
-  | tee "$BUILD_LOG" | "${PRETTY[@]}"
+xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -resultBundlePath "$RESULTS" \
+  -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}"
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)

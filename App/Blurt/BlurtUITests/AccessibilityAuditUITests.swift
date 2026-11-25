@@ -48,8 +48,9 @@ final class AccessibilityAuditUITests: BlurtUITestCase {
     assertNoAccessibilityIssues(found)
   }
 
-  /// The sheets and the alert the Settings panes open: the API key, a new
-  /// style, a new text shortcut, and Reset's confirmation.
+  /// The sheets and the alert the Settings panes open: the API key (and its
+  /// inline error for a rejected key), a new style, a new text shortcut, and
+  /// Reset's confirmation.
   func testSettingsSheets() throws {
     var found: [String] = []
     let general = openSettingsWindow()
@@ -57,6 +58,16 @@ final class AccessibilityAuditUITests: BlurtUITestCase {
     let keySheet = general.sheets.firstMatch
     XCTAssertTrue(keySheet.waitForExistence(timeout: 5), "The API key sheet should open")
     try audit("Settings › General › API key sheet", into: &found)
+    // A rejected key: the sheet stays open and explains itself inline.
+    let field = keySheet.secureTextFields[UITestIdentifiers.apiKeyField]
+    field.click()
+    field.typeText(UITestIdentifiers.invalidAPIKey)
+    keySheet.buttons[UITestIdentifiers.apiKeySave].click()
+    XCTAssertTrue(
+      keySheet.staticTexts[UITestIdentifiers.apiKeyError].waitForExistence(timeout: 10),
+      "A rejected key should show the inline error in the sheet"
+    )
+    try audit("Settings › General › API key sheet, key rejected", into: &found)
     keySheet.buttons[UITestIdentifiers.apiKeyCancel].click()
     XCTAssertTrue(keySheet.waitForNonExistence(timeout: 5))
 

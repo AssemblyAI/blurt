@@ -201,8 +201,20 @@ final class AccessibilityAuditTests: XCTestCase {
 
   /// Runs `body` at the default text size, then at the largest, and fails
   /// once with every finding from both.
+  ///
+  /// `BLURT_AUDIT_TEXT_SIZE` (`default` or `largest`, through ios-uitest.sh)
+  /// keeps a run to one of the two, for iterating on one size by hand; CI
+  /// audits both, splitting the suite across runners by test instead. Any
+  /// other value fails rather than auditing nothing.
   private func atEachTextSize(_ body: () throws -> Void) throws {
-    for size in [([], "default text"), (Self.largestTextSize, "largest text")] {
+    let selected = ProcessInfo.processInfo.environment["BLURT_AUDIT_TEXT_SIZE"] ?? ""
+    let sizes = [([String](), "default text"), (Self.largestTextSize, "largest text")]
+      .filter { selected.isEmpty || $0.1.hasPrefix(selected + " ") }
+    guard !sizes.isEmpty else {
+      XCTFail("BLURT_AUDIT_TEXT_SIZE must be default or largest, not '\(selected)'")
+      return
+    }
+    for size in sizes {
       textSize = size
       try body()
       app.terminate()
