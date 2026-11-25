@@ -11,11 +11,25 @@ struct LiveRecordingView: View {
   private var reduceMotion
   @State private var isConfirmingDiscard = false
 
+  /// The dot breathes while recording, unless motion is reduced — or under UI
+  /// testing, where it was the one endless animation in the window: XCUITest
+  /// waits for the app to settle before each query and click, and steps on
+  /// the live page failed while it ran ("Discarding asks first", a timed-out
+  /// query) and passed the same way once Pause had stilled it.
+  private var pulses: Bool {
+    #if UITEST_HOOKS
+      if UITestMode.isActive {
+        return false
+      }
+    #endif
+    return !reduceMotion && !model.isPaused
+  }
+
   var body: some View {
     HStack(spacing: 8) {
       Image(systemName: model.isPaused ? "pause.circle.fill" : "record.circle.fill")
         .foregroundStyle(model.isPaused ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
-        .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion && !model.isPaused)
+        .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: pulses)
         .accessibilityHidden(true)
       // The system's own running clock: it redraws itself, holds still while
       // paused, and shows hours once there are any.
