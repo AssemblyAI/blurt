@@ -368,7 +368,12 @@ transcript, then posts ⌘V (`CGEvent` to the `.cgAnnotatedSessionEventTap`, not
 returns once the paste is posted; the wait for the target to read the clipboard
 (`pasteSettleDuration`, default 400 ms) and the restore of the prior contents run on a chained
 follow-up task (`pendingSettle`), which also serializes back-to-back inserts so a second paste can't
-snapshot the first one's clipboard.
+snapshot the first one's clipboard. The whole paste, settle and restore included, is also one turn on
+the pasteboard's `PasteboardLock`, shared with the read-aloud press's ⌘C fallback (`SelectionCopy`),
+so a copy can't snapshot a settling paste's transcript as the user's clipboard, nor a paste's restore
+land under a copy's poll (issue #341). ⌘V and ⌘C are posted on the key that types "v" / "c" with ⌘
+held on the user's ASCII-capable layout (`KeyboardLayout`), falling back to the US key: macOS matches
+a ⌘ shortcut by character, so the US V key is ⌘K on Dvorak and the US C key is ⌘V on Turkish-F.
 
 The restore is deliberately conservative: `SystemClipboard.snapshot()` returns `nil` when the
 pasteboard can't be read at all (distinct from it being _empty_), and `restore` builds the
