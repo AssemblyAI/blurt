@@ -41,6 +41,7 @@ final class FakeIdle: IdleMode {
     closing += 1
     ledger.note("idle.closing")
     source = nil
+    // wall-clock-ok: a delay the test asks for, modelling a slow close; zero by default
     if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
     closed += 1
     ledger.note("idle.closed")

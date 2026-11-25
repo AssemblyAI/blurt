@@ -33,11 +33,14 @@
     private static func poll(
       upTo timeout: Duration, _ condition: @Sendable () -> Bool
     ) async -> Bool {
+      // wall-clock-ok: drives real hardware or a real app, which run on real time
       let deadline = ContinuousClock().now.advanced(by: timeout)
+      // wall-clock-ok: drives real hardware or a real app, which run on real time
       while ContinuousClock().now < deadline {
         if condition() {
           return true
         }
+        // wall-clock-ok: drives real hardware or a real app, which run on real time
         try? await Task.sleep(for: .milliseconds(20))
       }
       return condition()

@@ -10,16 +10,19 @@ import Testing
 @Suite("Memory leaks")
 struct MemoryLeakTests {
   /// Builds and fully exercises an instance via `build`, then fails if it is
-  /// still alive after `build`'s strong reference is released. Polls briefly so
-  /// an in-flight task that's winding down isn't mistaken for a leak.
+  /// still alive after `build`'s strong reference is released. Polls so an
+  /// in-flight task that's winding down isn't mistaken for a leak — for up to
+  /// waitUntil's hang-sized 30 s, not 1 s: a deallocating instance returns at
+  /// once, and a loaded runner can stall the winding-down task for seconds.
   private func expectNoLeak<T: AnyObject>(_ name: String, _ build: () async -> T) async {
     weak var weakRef: T?
     do {
       let instance = await build()
       weakRef = instance
     }
-    for _ in 0..<200 where weakRef != nil {
-      try? await Task.sleep(for: .milliseconds(5))
+    let deadline = ContinuousClock.now + .seconds(30)
+    while weakRef != nil, ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(5))  // wall-clock-ok: the poll itself, bounded only against a hang
     }
     #expect(weakRef == nil, "\(name) was not deallocated — likely a retain cycle")
   }

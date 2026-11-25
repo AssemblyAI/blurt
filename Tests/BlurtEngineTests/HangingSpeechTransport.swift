@@ -15,6 +15,7 @@ final class HangingSpeechTransport: SpeechTransport, Sendable {
   func stream(_: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, any Error>) {
     state.withLock { $0 = true }
     while true {
+      // wall-clock-ok: a fake that waits until the test releases or cancels it
       try await Task.sleep(for: .milliseconds(5))
     }
   }

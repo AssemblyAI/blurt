@@ -122,8 +122,10 @@ final class AccessibilityAuditTests: XCTestCase {
       launchHome()
       let session = app.switches.firstMatch
       scrollTo(session)
-      session.tap()
-      XCTAssertTrue(app.buttons["Not now"].waitForExistence(timeout: 10), "Turning a session on should ask consent")
+      XCTAssertTrue(
+        Self.tap(session, until: app.buttons["Not now"], timeout: 10),
+        "Turning a session on should ask consent (\(Self.missedTapReport(session, in: app)))"
+      )
       try auditScrolling("consent sheet")
     }
   }
@@ -199,8 +201,20 @@ final class AccessibilityAuditTests: XCTestCase {
 
   /// Runs `body` at the default text size, then at the largest, and fails
   /// once with every finding from both.
+  ///
+  /// `BLURT_AUDIT_TEXT_SIZE` (`default` or `largest`, through ios-uitest.sh)
+  /// keeps a run to one of the two, for iterating on one size by hand; CI
+  /// audits both, splitting the suite across runners by test instead. Any
+  /// other value fails rather than auditing nothing.
   private func atEachTextSize(_ body: () throws -> Void) throws {
-    for size in [([], "default text"), (Self.largestTextSize, "largest text")] {
+    let selected = ProcessInfo.processInfo.environment["BLURT_AUDIT_TEXT_SIZE"] ?? ""
+    let sizes = [([String](), "default text"), (Self.largestTextSize, "largest text")]
+      .filter { selected.isEmpty || $0.1.hasPrefix(selected + " ") }
+    guard !sizes.isEmpty else {
+      XCTFail("BLURT_AUDIT_TEXT_SIZE must be default or largest, not '\(selected)'")
+      return
+    }
+    for size in sizes {
       textSize = size
       try body()
       app.terminate()
@@ -263,7 +277,7 @@ final class AccessibilityAuditTests: XCTestCase {
     // on a slow runner left `testConsent`'s switch off and no consent sheet.
     var frame = element.frame
     for _ in 0..<20 {
-      Thread.sleep(forTimeInterval: 0.2)
+      Thread.sleep(forTimeInterval: 0.2)  // wall-clock-ok: a UI test: the app under test runs on real time
       let now = element.frame
       if now == frame { break }
       frame = now
@@ -298,7 +312,7 @@ final class AccessibilityAuditTests: XCTestCase {
     // wrong (`audit`).
     var last = Self.textsOnScreen(of: app)
     for _ in 0..<20 {
-      Thread.sleep(forTimeInterval: 0.3)
+      Thread.sleep(forTimeInterval: 0.3)  // wall-clock-ok: a UI test: the app under test runs on real time
       let current = Self.textsOnScreen(of: app)
       if current == last {
         return current
@@ -338,7 +352,7 @@ final class AccessibilityAuditTests: XCTestCase {
     // mid-layout — the bottom rows of Settings' last page, on CI only — does
     // not repeat.
     if !issues.isEmpty {
-      Thread.sleep(forTimeInterval: 1)
+      Thread.sleep(forTimeInterval: 1)  // wall-clock-ok: a UI test: the app under test runs on real time
       let again = Set(try pass())
       issues = issues.filter(again.contains)
     }

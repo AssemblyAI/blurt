@@ -29,6 +29,8 @@
       "Bash(bash scripts/check-invariants.sh*)",
       "Bash(bash scripts/check-portability.sh*)",
       "Bash(bash scripts/check-release-notes.sh)",
+      "Bash(bash scripts/check-swift-size.sh*)",
+      "Bash(bash scripts/check-test-clock.sh*)",
       "Bash(bash scripts/design-sync.sh --check)",
       "Bash(bash scripts/mutate.sh --list)",
       "Bash(zizmor *)",
@@ -40,6 +42,8 @@
       "Bash(scripts/ios-check.sh*)",
       "Bash(scripts/ios-typecheck.sh*)",
       "Bash(scripts/ios-uitest.sh*)",
+      "Bash(scripts/swiftlint-analyze.sh*)",
+      "Bash(scripts/mac-static.sh*)",
       "Bash(prettier *)",
       "Bash(actionlint)",
       "Bash(actionlint *)",
@@ -84,6 +88,10 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/swiftlint.sh"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/swift-budgets.sh"
           }
         ]
       }

@@ -100,7 +100,7 @@ struct SelectionSpeechRouterRewriteTests {
     // The dictation key: it dictates, and the rewrite is gone at once.
     rig.router.press(key: .rightCommand)
     #expect(rig.events.pills == [.rewriting, nil])
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(100))  // wall-clock-ok: absence check: a slow runner can only make it pass
     rig.phases.cancel()
     #expect(rig.events.pills == [.rewriting, nil])
     #expect(rig.events.resets == resetsBefore)

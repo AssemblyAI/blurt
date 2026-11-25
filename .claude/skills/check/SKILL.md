@@ -92,7 +92,12 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
    cleanup pass, `LSUIElement`, a keystroke-typing injector, the production
    Keychain in tests. Each rule is pinned to its table row and its
    `project-guardrails` bullet, so editing the prose without revisiting the rule
-   fails here rather than leaving a gate that enforces a reversed decision. Both
+   fails here rather than leaving a gate that enforces a reversed decision. Then
+   SwiftLint's size budgets counted without SwiftLint
+   (`scripts/check-swift-size.sh`: `file_length` 400, `type_body_length` ~250,
+   with notes for files near either), the test-clock rule
+   (`scripts/check-test-clock.sh`: every fixed sleep or real clock in a test
+   carries a `// wall-clock-ok: <reason>`), and the Mac pbxproj's repo-root folder named `blurt`. All
    `--portable` too
 3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
    failures) — both source-only
@@ -143,7 +148,7 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
 off CI, when an iPhone simulator on this Xcode's iOS runtime exists — `scripts/ios-check.sh`: the
 tests with `BlurtiOSCore`'s coverage gate, `swiftlint analyze`, the probe build and periphery over
 the iPhone project. Without that runtime it is skipped with a note (the closing `ok` line says so)
-and CI's `ios-build` job, which runs the same script, is the authority; `check.sh` then runs
+and CI's `ios-build`, `ios-audits` and `ios-static` jobs, which run the same script's steps, are the authority; `check.sh` then runs
 `scripts/ios-typecheck.sh` instead, which typechecks the iPhone targets against the Mac Catalyst
 frameworks — the stand-in for a Mac with only the Command Line Tools. Locally, `scripts/ios-test.sh` runs `BlurtiOSTests` on a
 simulator when Xcode is installed and enforces `BlurtiOSCore`'s line-coverage floor (`MIN_IOS_COVERAGE`, 88%;

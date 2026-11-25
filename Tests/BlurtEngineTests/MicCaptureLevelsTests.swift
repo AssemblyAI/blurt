@@ -34,6 +34,7 @@ struct MicCaptureLevelsTests {
 
     // The meter is what this asserts, not the frame feed.
     _ = try await mic.start()
+    // wall-clock-ok: drives real hardware or a real app, which run on real time
     try await Task.sleep(for: .milliseconds(500))
     _ = await mic.stop()
     collector.cancel()

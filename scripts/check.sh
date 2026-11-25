@@ -486,9 +486,46 @@ check_invariants() {
 }
 run_check "settled decisions (AGENTS.md invariants)" check_invariants
 
+# SwiftLint's file_length and type_body_length, counted without SwiftLint: the
+# most common reason a PR needed another CI run (#358, #363, #364, #368, #378,
+# #380), and a line count needs no toolchain, so --portable too. It also notes
+# files near a limit, where a parallel PR growing the same file tips the merge.
+check_swift_size() {
+  bash scripts/check-swift-size.sh --self-test >/dev/null || return 1
+  bash scripts/check-swift-size.sh
+}
+run_check "swift size budgets (file_length, type_body_length)" check_swift_size
+
+# Tests that wait on real time: the flakes behind #353, #357, #370, #379, #380,
+# #396, #399–#401, which mostly failed other PRs. Every fixed sleep or real clock
+# in a test carries a `// wall-clock-ok: <reason>`; an unmarked one fails. Pure text.
+run_check "wall-clock waits in tests say why" bash scripts/check-test-clock.sh
+
+# The Mac project's repo-root folder reference must be named `blurt`. xcodegen
+# names it after the checkout directory, so a project regenerated in a worktree
+# (blurt-wt-foo/) commits that name, and CI's drift check reads it as stale (#392).
+# The drift check itself needs xcodegen; this one line doesn't.
+check_pbxproj_root_name() {
+  local ref
+  ref="$(grep -E 'lastKnownFileType = folder; name = [^;]*; path = \.\./\.\.;' \
+    App/Blurt/Blurt.xcodeproj/project.pbxproj || true)"
+  if [ -z "$ref" ]; then
+    echo "error: no repo-root folder reference (path = ../..) in the Mac pbxproj; update this check" >&2
+    return 1
+  fi
+  if ! grep -q 'name = blurt;' <<<"$ref"; then
+    echo "error: the Mac pbxproj names its repo-root folder after a worktree, not 'blurt':" >&2
+    printf '  %s\n' "$ref" >&2
+    echo "       regenerate it from a checkout named blurt (or fix the name by hand) and commit" >&2
+    return 1
+  fi
+  echo "the pbxproj's repo-root folder is named blurt"
+}
+run_check "pbxproj repo-root folder name" check_pbxproj_root_name
+
 # The design's one source (App/BlurtiOS/Design/tokens.json) and everything
-# generated from it — BlurtDesign/DesignTokens.swift, DESIGN.md's token tables, the
-# app's three colour sets — must agree, and the keyboard's views must carry no
+# generated from it — BlurtDesign/DesignTokens.swift (the Mac app compiles it too),
+# DESIGN.md's token tables, both apps' colour sets — must agree, and the keyboard's views must carry no
 # design literal that belongs in the tokens. scripts/design-sync.sh --check
 # regenerates into .build/ and diffs, the same shape as the xcodegen drift
 # check further down. It runs scripts/design-tokens.swift as a `swift` script,
@@ -725,13 +762,6 @@ elif [ "$LINT_ONLY" -eq 1 ]; then
   echo "==> lint-only mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
 else
-  if command -v xcbeautify >/dev/null 2>&1; then
-    PRETTY=(xcbeautify --quiet)
-  else
-    PRETTY=(cat)
-    echo "note: xcbeautify not installed; using raw output (brew install xcbeautify)"
-  fi
-
   echo "==> swift test (BlurtEngine)"
   cd "$REPO_ROOT"
   # -warnings-as-errors: a warning fails the build, so deprecations / unused code
@@ -869,27 +899,11 @@ else
     echo "note: xcodegen not installed; skipping project regeneration"
   fi
 
-  echo "==> xcodebuild build (Blurt)"
-  # Skip codesigning for the health-check build: the Developer ID cert only
-  # lives on the maintainer's machine. The postBuildScripts "Install to
-  # /Applications" step also bails out when CODE_SIGNING_ALLOWED=NO.
-  # Warnings-as-errors for the app target is set in project.yml
-  # (SWIFT_TREAT_WARNINGS_AS_ERRORS), scoped there to avoid colliding with the
-  # -suppress-warnings Xcode applies to SPM dependency packages.
-  # The raw build log is tee'd to $APP_BUILD_LOG so `swiftlint analyze` (below) can
-  # read the compiler invocations for its analyzer rules. This build compiles both
-  # the app and the engine package, so the log covers both.
-  # Removed by the exit trap installed at the top, which owns every exit path.
+  # The app build, by scripts/mac-static.sh (its `build` step, which says how
+  # and why it is signed as it is). Its raw log is kept in $APP_BUILD_LOG for
+  # `swiftlint analyze` below; the exit trap installed at the top removes it.
   APP_BUILD_LOG="$(mktemp -t blurt-build)"
-  xcodebuild \
-    -project Blurt.xcodeproj \
-    -scheme Blurt \
-    -configuration Debug \
-    -destination "platform=macOS,arch=$(uname -m)" \
-    CODE_SIGN_IDENTITY="-" \
-    CODE_SIGNING_REQUIRED=NO \
-    CODE_SIGNING_ALLOWED=NO \
-    build 2>&1 | tee "$APP_BUILD_LOG" | "${PRETTY[@]}"
+  BLURT_MAC_BUILD_LOG="$APP_BUILD_LOG" "$REPO_ROOT/scripts/mac-static.sh" build
 
   # Whole-app integration steps — CI-only by default. Both drive the *real* app,
   # and they don't just need a GUI session, they take one over: the XCUITest
@@ -957,30 +971,29 @@ fi
 # the build, but not each other. Each takes minutes — periphery runs its own
 # xcodebuild — so having a swiftlint-analyze finding hide every periphery finding
 # is the most expensive version of the one-red-run-at-a-time problem in this file.
-if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1 ]; then
-  # The app build above cds into App/Blurt; come back before reading the log.
-  cd "$REPO_ROOT"
-  # Analyzer rules need the compiler invocations, so feed them the build log
-  # captured above. Runs every analyzer rule .swiftlint.yml lists — unused imports
-  # (the one dead-code gap periphery doesn't cover), captured variables, untyped
-  # array inits; unused declarations are periphery's. False positives on AVFoundation/OSLog imports
-  # are suppressed via always_keep_imports in .swiftlint.yml.
-  run_check "swiftlint analyze" \
-    swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
+# Both are scripts/mac-static.sh steps, which say what each runs and why.
+#
+# BLURT_STATIC_CHECKS=0 skips them, and exists for check.yml alone, the way
+# BLURT_INTEGRATION_TESTS=0 does: its `macos` job sets it because the
+# `mac-static` job runs the build and both checks on a runner of its own, in
+# parallel (on this one they were ~10 of its ~21 minutes), and the required
+# `check` job fails unless that job passed. Honoured on CI only, so it can't
+# quietly thin a local run.
+STATIC_ELSEWHERE=0
+if is_ci && [ "${BLURT_STATIC_CHECKS:-}" = "0" ]; then
+  STATIC_ELSEWHERE=1
 fi
-
 if [ "$PORTABLE" -eq 0 ] && [ "$LINT_ONLY" -eq 0 ]; then
-  if tool_ready periphery 'brew install periphery'; then
-    # --strict promotes any unused-code finding to a non-zero exit.
-    # Periphery does its own xcodebuild + index — separate from the build above
-    # because reusing DerivedData reliably across machines is fragile.
-    #
-    # `--clean-build`, as ios-check.sh's iPhone scan has: periphery keeps its
-    # DerivedData between runs, and an index unit for a file that no longer
-    # compiles to the same output is never replaced. After a file is renamed or
-    # split, a scan reads the old file's declarations with none of today's
-    # references and reports live code as unused. CI starts clean anyway.
-    run_check "periphery" periphery scan --strict --quiet --clean-build
+  if [ "$STATIC_ELSEWHERE" -eq 1 ]; then
+    echo "==> skipping swiftlint analyze and periphery: BLURT_STATIC_CHECKS=0, so"
+    echo "    check.yml's mac-static job runs them (and the required check fails without it)"
+  else
+    if [ "$SWIFTLINT_READY" -eq 1 ]; then
+      run_check "swiftlint analyze" env BLURT_MAC_BUILD_LOG="$APP_BUILD_LOG" "$REPO_ROOT/scripts/mac-static.sh" analyze
+    fi
+    if tool_ready periphery 'brew install periphery'; then
+      run_check "periphery" "$REPO_ROOT/scripts/mac-static.sh" periphery
+    fi
   fi
 fi
 
@@ -1004,7 +1017,11 @@ if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
   elif [ "$LINT_ONLY" -eq 1 ]; then
     echo "==> ok (read-only checks only — Swift build/tests, swiftlint analyze and periphery NOT run)"
   elif [ "${CI_INTEGRATION_ELSEWHERE:-0}" -eq 1 ]; then
-    echo "==> ok (UI suite + leak scan run in check.yml's ui-tests job)"
+    if [ "$STATIC_ELSEWHERE" -eq 1 ]; then
+      echo "==> ok (UI suite + leak scan run in check.yml's ui-tests job; analyze + periphery in mac-static)"
+    else
+      echo "==> ok (UI suite + leak scan run in check.yml's ui-tests job)"
+    fi
   elif [ "${INTEGRATION:-0}" -eq 0 ]; then
     # Say it at the end too, where the reader is deciding whether this run means
     # "green": everything else passed, but the UI suite and leak scan did not run.

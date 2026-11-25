@@ -145,7 +145,8 @@ App/BlurtiOS/                the iPhone app and its keyboard (README.md there is
   BlurtDesign/               the component library both targets link: the generated DesignTokens,
                              type roles, brand colours (one accent token), card, page, brandForm,
                              Eyebrow, BrandButtonStyle, Wordmark, FilmGrain. Static, SwiftUI only,
-                             `package` access; iPhone only for now (the Mac keeps Branding/)
+                             `package` access; iPhone only, but for DesignTokens.swift, which the
+                             Mac compiles too: its Branding/ reads the brand palette from it
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, check-portability.sh, check-invariants.sh,
                              bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh,
@@ -154,8 +155,13 @@ scripts/                     check.sh, check-portability.sh, check-invariants.sh
                              ios-test.sh (the iPhone unit tests, BlurtiOSTests, on a simulator,
                              with BlurtiOSCore's line-coverage gate; BLURT_IOS_SANITIZER=thread|address
                              runs them under a sanitizer instead),
-                             ios-check.sh (the iPhone's check.sh: ios-test, then swiftlint analyze
-                             and periphery over App/BlurtiOS — CI's ios-build and a local check.sh),
+                             ios-check.sh (the iPhone's check.sh: ios-test, the audits, swiftlint
+                             analyze and periphery over App/BlurtiOS — a local check.sh runs every
+                             step; CI splits them across ios-build, ios-audits and ios-static),
+                             swiftlint-analyze.sh (`swiftlint analyze` split across processes —
+                             SwiftLint analyzes one file at a time; check.sh and ios-check.sh call it),
+                             mac-static.sh (the Mac app build, then swiftlint analyze and periphery
+                             over it — check.sh's steps; CI runs the last two in its mac-static job),
                              ios-device.sh (a real iPhone, no Xcode window: preflight, install,
                              launch, kill, pull the logs, read the system log — the device gate)
                              hand-run maintainer tools — no automated caller, invoked by a
@@ -266,19 +272,21 @@ tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer
     into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
     minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
     opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
-    `scripts/leaks.sh` directly. On CI they run in `check.yml`'s own `ui-tests` job, in parallel
-    with the rest: its `macos` job runs `check.sh` with `BLURT_INTEGRATION_TESTS=0`, the one
+    `scripts/leaks.sh` directly. On CI they run in `check.yml`'s own `ui-tests` job (two runners,
+    split by test class; `scripts/uitest.sh` takes the selection), in parallel with the rest: its `macos` job runs `check.sh` with `BLURT_INTEGRATION_TESTS=0`, the one
     opt-out, and the required `check` job fails unless `ui-tests` passed. Set it nowhere else —
     outside that pairing it is a green-looking bypass of the suite.
 
 12. **`swiftlint analyze`** (unused imports and declarations — reads the compiler log the app build captured) and
     **`periphery scan --strict`** (unused declarations — runs its own xcodebuild + index). The only
-    two checks that can't move earlier.
+    two checks that can't move earlier. Both are `scripts/mac-static.sh` steps; on CI the
+    `mac-static` job runs them beside `macos`, which skips them (`BLURT_STATIC_CHECKS=0`, CI only).
 13. **`scripts/ios-check.sh`** — the same gates for `App/BlurtiOS`: `BlurtiOSTests` with
     `BlurtiOSCore`'s coverage gate, then `swiftlint analyze` over that build's log and periphery
     over the iPhone project. Locally only, and only when an iPhone simulator on this Xcode's iOS
     runtime exists (`xcodebuild -downloadPlatform iOS`); otherwise skipped with a note in the
-    closing `ok` line. On CI the `ios-build` job runs it instead.
+    closing `ok` line. On CI the `ios-build`, `ios-audits` and `ios-static` jobs run its steps
+    between them, in parallel.
 
 The phone is outside `check.sh`: a change under the iPhone's capture, window, coordinator or App
 Group contract files is verified on a real iPhone with `scripts/ios-device.sh` — `preflight`,
@@ -295,12 +303,14 @@ job **is** gated, because
 `check.sh` cannot cover it: **`ios-build`** compiles the engine for the iOS simulator
 (`xcodebuild -scheme BlurtEngine -destination 'generic/platform=iOS Simulator'`), which is the only
 place a macOS-only symbol that escaped its `#if os(macOS)` fence gets caught — `swift test` builds
-for the host, and every other job runs on a Mac. It then runs **`scripts/ios-check.sh`**, which holds
+for the host, and every other job runs on a Mac. With its siblings **`ios-audits`** and
+**`ios-static`** it then runs **`scripts/ios-check.sh`**'s steps in parallel, which hold
 the iPhone code to the bar the engine and the Mac shell meet in `check.sh`: `BlurtiOSTests` with
 warnings as errors and a **line-coverage gate** on `BlurtiOSCore`, the iPhone code's logic
-(≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the engine's 88%; raise it as coverage grows), then
-**`swiftlint analyze`** over that from-scratch build's log and **periphery** over the iPhone
-project; `check.sh`'s swift-format, `swiftlint lint` and invariants already read every Swift file
+(≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the engine's 88%; raise it as coverage grows), in
+`ios-build`; the accessibility audits at both text sizes in `ios-audits` (two runners, split by
+test); **`swiftlint analyze`** over a from-scratch
+build's log and **periphery** over the iPhone project in `ios-static`; `check.sh`'s swift-format, `swiftlint lint` and invariants already read every Swift file
 there. In the sibling
 **`ios-sanitizers`** job, one runner per sanitizer — **ThreadSanitizer** and **AddressSanitizer**
 passes run the same tests. `codeql.yml`'s Swift analysis builds the iPhone app as well as the Mac
@@ -448,7 +458,15 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
   It skips the entire Swift side, and its closing line says so. **Run it before every push, Swift
   changes included**: jscpd, the invariants and the shell, workflow and Markdown linters all catch
-  real CI failures from here.
+  real CI failures from here. So do three Swift checks that need no toolchain:
+  `scripts/check-swift-size.sh` counts SwiftLint's `file_length` (400) and `type_body_length`
+  (~250) budgets and notes files within 20 lines of either, where a parallel PR can tip the merge
+  over; `scripts/check-test-clock.sh` fails a fixed sleep or real clock in a test that doesn't
+  say why (step a `TestClock` or wait for the event; `// wall-clock-ok: <reason>` where real time
+  is the point); and the Mac pbxproj's repo-root folder must be named `blurt`, not a worktree's name.
+- **Splitting a file**: give each new file only the imports it uses — `swiftlint analyze`'s
+  `unused_import` (CI only) flagged 86 copied headers in #392 — and import a type from the module
+  that declares it (`CGFloat` from CoreFoundation, `DispatchQueue` from Dispatch).
 - **What only CI can tell you**: `swiftlint lint` (its Linux build is a GitHub release download the
   default network policy blocks, so the `SessionStart` hook can't install it), periphery (a property
   that is assigned but never read is the usual catch), `scripts/design-sync.sh --check` (after
@@ -676,7 +694,10 @@ line execute?" but "is it _asserted_?" — a surviving mutant is a behaviour cha
 to. Its default target list is the files already at or near 100% coverage, which is exactly where the
 coverage number has nothing left to say. It stays out of `check.sh` deliberately: a run is minutes,
 and survivors need judgement (an _equivalent_ mutant cannot change behaviour, so no test can catch
-it), and a required gate that reports unactionable failures is one people learn to skip.
+it), and a required gate that reports unactionable failures is one people learn to skip. To run the whole set without tying
+up a Mac, start the `mutate` workflow (`.github/workflows/mutate.yml`) from the Actions tab: it splits
+the mutants across eight macOS runners (`--shard K/N`), and its `report` job lists every survivor and
+goes red while any remain. It never runs on pull requests.
 
 **Swift Testing traps that CI has caught more than once.** Nothing here can be typechecked without a
 macOS toolchain, so when you're writing tests from a Linux / web sandbox these are the ones that cost

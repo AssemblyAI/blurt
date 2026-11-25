@@ -42,15 +42,16 @@
       try child.run()
       let fixture = Self(process: child, statePath: state)
       do {
-        // A first launch of a freshly built binary can take seconds — the
-        // system checks it before it runs — far past a step's two.
-        _ = try await fixture.state(within: .seconds(20)) { _ in true }
+        // A first launch of a freshly built binary can take seconds (the
+        // system checks it before it runs); `state(until:)`'s bound covers it.
+        _ = try await fixture.state { _ in true }
         // A process spawned from the test can't take the front by itself,
         // and only a registered app may hand it over: the test process
         // becomes one (an accessory: no Dock icon), then activates it.
         await MacDriver.becomeAccessory()
         _ = await MainActor.run { NSRunningApplication(processIdentifier: child.processIdentifier)?.activate() }
         for _ in 0..<50 where await fixture.isFrontmost() == false {
+          // wall-clock-ok: drives real hardware or a real app, which run on real time
           try await Task.sleep(for: .milliseconds(100))
         }
         try await fixture.requireFrontmost()
@@ -58,6 +59,7 @@
         // performer finds menu items there: "Fixture › Make Noise" was not
         // found on a CI run whose launch was otherwise fine.
         for _ in 0..<50 where fixture.hasFixtureMenu() == false {
+          // wall-clock-ok: a real app's menu bar, which fills in on real time
           try await Task.sleep(for: .milliseconds(100))
         }
         try #require(fixture.hasFixtureMenu(), "the fixture's menu bar never listed its Fixture menu")
@@ -92,14 +94,15 @@
       try JSONDecoder().decode(State.self, from: Data(contentsOf: statePath))
     }
 
-    /// The fixture's state once `condition` holds, or its last state once
-    /// `within` has passed — two seconds, unless the caller needs longer.
-    func state(within: Duration = .seconds(2), until condition: (State) -> Bool) async throws -> State {
-      let deadline = ContinuousClock.now.advanced(by: within)
+    /// The fixture's state once `condition` holds, or its last state after 30 s.
+    /// Every caller expects the condition to hold, so the bound only catches a hang.
+    func state(until condition: (State) -> Bool) async throws -> State {
+      let deadline = ContinuousClock.now.advanced(by: .seconds(30))
       while ContinuousClock.now < deadline {
         if let state = try? state(), condition(state) {
           return state
         }
+        // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
         try await Task.sleep(for: .milliseconds(25))
       }
       return try state()

@@ -308,6 +308,7 @@
 		92041B42C67CE21AF82B6863 /* KeyCap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C4CFC6271703797187A269 /* KeyCap.swift */; };
 		9266EA4F50B9D46E9181FBAF /* rom1a-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */; };
 		92DFEC2C8E639E4658C7E8C0 /* rom1a-10-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 45D65D0519A0D2FC47EF7DAD /* rom1a-10-start.m4a */; };
+		93445DEE07DE46AA213CCF52 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1578EBE9A78E08251783F4 /* DesignTokens.swift */; };
 		936E20D5FF993C8FCF0E5575 /* juno-44-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6B85C5A7CB0E82C4777D2430 /* juno-44-stop.m4a */; };
 		94310CB091ED06353CCDFDBE /* StylesInertNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4652C64681211AF33848980F /* StylesInertNotice.swift */; };
 		9437C292A6D7FE533338073D /* OverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E79CB809D285C0C27E8D43D /* OverlayView.swift */; };
@@ -941,6 +942,7 @@
 		AD303A24D4133CE3F1F1DE23 /* juno-22-start.m4a */ = {isa = PBXFileReference; path = "juno-22-start.m4a"; sourceTree = "<group>"; };
 		AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */ = {isa = PBXFileReference; path = "juno-70-start.m4a"; sourceTree = "<group>"; };
 		AE6928CEB0A1A92241762DB6 /* KeysSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeysSettingsTab.swift; sourceTree = "<group>"; };
+		AF1578EBE9A78E08251783F4 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		AFCA36ECEFBA3D7C7B1AB1B7 /* rom1a-31-start.m4a */ = {isa = PBXFileReference; path = "rom1a-31-start.m4a"; sourceTree = "<group>"; };
 		B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-20-stop.m4a"; sourceTree = "<group>"; };
 		B1CBD49CFC9AD1BF802F4625 /* UpdaterModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterModel.swift; sourceTree = "<group>"; };
@@ -1112,6 +1114,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0E5B4508FD26060B87FE9268 /* BlurtDesign */ = {
+			isa = PBXGroup;
+			children = (
+				AF1578EBE9A78E08251783F4 /* DesignTokens.swift */,
+			);
+			name = BlurtDesign;
+			path = ../BlurtiOS/BlurtDesign;
+			sourceTree = "<group>";
+		};
 		10E2E11380C974390308C1D2 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -1174,6 +1185,7 @@
 			isa = PBXGroup;
 			children = (
 				1560402FBA5911463036085F /* Blurt */,
+				0E5B4508FD26060B87FE9268 /* BlurtDesign */,
 				73649A7C02EB13B17D81A412 /* BlurtUITests */,
 				E0FCB536C7F1A0AD06EE625D /* brand */,
 				CE00AEC94B430DEF79A46820 /* Config */,
@@ -2367,6 +2379,7 @@
 				52AD8651815751DB561CC434 /* ClipPlayer.swift in Sources */,
 				3800CA7815CD1FDC503747D4 /* CuePair.swift in Sources */,
 				A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */,
+				93445DEE07DE46AA213CCF52 /* DesignTokens.swift in Sources */,
 				6DAD3EE547A9EBA68390C5EE /* DictationComponents+UITest.swift in Sources */,
 				902D2F22DC37104F35527BCC /* DictationComponents.swift in Sources */,
 				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
@@ -2660,6 +2673,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
 				SDKROOT = macosx;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_PACKAGE_NAME = Blurt;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Release;
@@ -2776,6 +2790,7 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UITEST_HOOKS";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_PACKAGE_NAME = Blurt;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Debug;
@@ -2797,6 +2812,7 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_PACKAGE_NAME = Blurt;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = "Debug-Local";

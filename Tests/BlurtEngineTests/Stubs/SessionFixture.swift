@@ -26,7 +26,7 @@ func makeSession(
     transcriber: transcriber,
     injector: injector,
     maxRecordingSeconds: maxRecordingSeconds,
-    clock: ContinuousClock(),
+    clock: ContinuousClock(),  // wall-clock-ok: the production clock, for tests that aren't about its timers
     // Pinned rather than left to read the process's real `UserDefaults`, so a
     // developer's own Settings list can't change what a test sends.
     keyTermsProvider: { keyTerms },
@@ -92,6 +92,7 @@ func makeSession(
   mic: any MicCaptureProtocol = StubMicCapture(),
   injector: any InjectorProtocol = StubInjector(),
   maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
+  // wall-clock-ok: the production clock, for tests that aren't about its timers
   clock: any Clock<Duration> = ContinuousClock(),
   keyTerms: [String] = [],
   keyTermsProvider: (@Sendable () -> [String])? = nil,
@@ -114,11 +115,13 @@ func makeSession(
   )
 }
 
-/// Waits (up to 5 s) for the fixture's mic to start: a hand-back press has
-/// opened it, so a release now ends a recording rather than racing the press.
+/// Waits for the fixture's mic to start: a hand-back press has opened it, so a
+/// release now ends a recording rather than racing the press. Up to 30 s, as
+/// `waitUntil`: the bound only catches a hang, and a stalled runner outlasts 5 s.
 func waitForMicStart(_ fixture: SessionFixture) async throws {
-  let deadline = ContinuousClock.now + .seconds(5)
+  let deadline = ContinuousClock.now + .seconds(30)
   while await fixture.mic.startCalls == 0, ContinuousClock.now < deadline {
+    // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
     try await Task.sleep(for: .milliseconds(5))
   }
 }

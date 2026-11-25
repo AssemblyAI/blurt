@@ -106,6 +106,7 @@ struct ChunkedRequestBodyTests {
       request.httpBodyStream?.open()
       request.httpBodyStream?.close()
       // Give the writer a moment to notice and fail before the status lands.
+      // wall-clock-ok: lets the writer fail first; a slow runner only skips the race
       try await Task.sleep(for: .milliseconds(30))
       let url = try #require(request.url)
       let unauthorized = try #require(

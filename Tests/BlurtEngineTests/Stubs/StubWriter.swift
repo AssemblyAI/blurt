@@ -23,6 +23,7 @@ final class StubWriter<Call: Equatable & Sendable>: Sendable {
 
   private func write(_ call: Call) async throws -> String {
     recorded.withLock { $0.append(call) }
+    // wall-clock-ok: a fake that waits until the test releases or cancels it
     if hangs { try await Task.sleep(for: .seconds(60)) }
     if let error { throw error }
     return reply
