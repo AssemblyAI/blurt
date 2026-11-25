@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// AssemblyAI's realtime streaming API (v3) over a WebSocket: PCM in, turns
 /// out — partial while a turn is being spoken, then final.

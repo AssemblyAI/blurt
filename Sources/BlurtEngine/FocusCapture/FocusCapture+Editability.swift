@@ -199,7 +199,7 @@
       let role = stringValue(element, kAXRoleAttribute)
       var settable = DarwinBoolean(false)
       let valueSettable =
-        AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success
+        unsafe AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success
         && settable.boolValue
       // A readable selected-text *range* means the element has an insertion point —
       // the hallmark of a text input even when its value isn't reported settable.
@@ -208,7 +208,7 @@
       // signal is one of the two that can green-light a ⌘V on an unknown role.
       var rangeRef: CFTypeRef?
       let hasInsertionPoint =
-        AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
+        unsafe AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
         && rangeRef.flatMap(axRange) != nil
       let settled = isEditableTarget(role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
       return PasteFacts(

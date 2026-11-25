@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Keeps macOS's own `fn`/🌐 action out of the way while `fn` is the dictation
 /// trigger.

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// AssemblyAI's async transcription API: upload a file, submit it, poll until
 /// it completes. No length cap of its own worth stating — unlike the dictation

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// The one tap/hold mode every trigger key is pressed under, as set on the
 /// Keys tab. Read through `TriggerKeyBindings`, which decodes it with

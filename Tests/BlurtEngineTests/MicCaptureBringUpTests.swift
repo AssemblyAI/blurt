@@ -61,7 +61,7 @@ struct MicCaptureBringUpTests {
     // Where the cancel actually landed, straight from the press: an abandoned
     // bring-up throws `CancellationError` from one of the three
     // `checkStillWanted` points instead of installing its recorder.
-    var pressFailure: Error?
+    var pressFailure: (any Error)?
     do {
       // The feed `start()` now hands back is irrelevant here — this test is
       // about how the bring-up *ended*, not what it captured.

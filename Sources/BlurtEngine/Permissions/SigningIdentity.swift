@@ -54,9 +54,9 @@
     /// `Security` handshake fails.
     static func staticCodeForSelf() -> SecStaticCode? {
       var code: SecCode?
-      guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else { return nil }
+      guard unsafe SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else { return nil }
       var staticCode: SecStaticCode?
-      guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode
+      guard unsafe SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode
       else { return nil }
       return staticCode
     }
@@ -65,7 +65,7 @@
     private static func teamIdentifier(of code: SecStaticCode) -> String? {
       var info: CFDictionary?
       let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
-      guard SecCodeCopySigningInformation(code, flags, &info) == errSecSuccess,
+      guard unsafe SecCodeCopySigningInformation(code, flags, &info) == errSecSuccess,
         let dict = info as? [String: Any]
       else { return nil }
       return dict[kSecCodeInfoTeamIdentifier as String] as? String
@@ -84,11 +84,11 @@
     /// signature varies by how the suite was launched.
     static func designatedRequirement(of code: SecStaticCode) -> String? {
       var requirement: SecRequirement?
-      guard SecCodeCopyDesignatedRequirement(code, SecCSFlags(), &requirement) == errSecSuccess,
+      guard unsafe SecCodeCopyDesignatedRequirement(code, SecCSFlags(), &requirement) == errSecSuccess,
         let requirement
       else { return nil }
       var text: CFString?
-      guard SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess, let text
+      guard unsafe SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess, let text
       else { return nil }
       return text as String
     }

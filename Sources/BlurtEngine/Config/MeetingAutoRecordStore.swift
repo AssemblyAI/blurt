@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// The main window's "Auto-record meetings" switch: when on, a recording
 /// starts as a meeting does and stops after it ends (`MeetingAutoRecord`).

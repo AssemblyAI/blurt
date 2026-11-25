@@ -29,7 +29,9 @@
   ///
   /// `@unchecked Sendable` because the listener registrations below are confined
   /// to `queue` rather than protected by a lock — see their declarations.
-  public final class AudioRouteMonitor: @unchecked Sendable {
+  /// `@safe` for the same reason: that `nonisolated(unsafe)` storage is never
+  /// reachable from outside, so a caller has nothing to acknowledge.
+  @safe public final class AudioRouteMonitor: @unchecked Sendable {
     private static let logger = HostIdentity.current.logger("AudioRoute")
 
     /// Fires once per observed route change. `.bufferingNewest(1)` because this is
@@ -90,14 +92,14 @@
     /// not an execution context.)
     deinit {
       continuation.finish()
-      if let systemListener {
+      if let systemListener = unsafe systemListener {
         var address = AudioRoute.globalAddress(kAudioHardwarePropertyDefaultOutputDevice)
-        _ = AudioObjectRemovePropertyListenerBlock(
+        _ = unsafe AudioObjectRemovePropertyListenerBlock(
           AudioRoute.systemObject, &address, queue, systemListener)
       }
-      if let deviceListener {
+      if let deviceListener = unsafe deviceListener {
         var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
-        _ = AudioObjectRemovePropertyListenerBlock(
+        _ = unsafe AudioObjectRemovePropertyListenerBlock(
           deviceListener.id, &address, queue, deviceListener.block)
       }
     }
@@ -118,12 +120,12 @@
         self.retargetFormatListener()
         self.continuation.yield()
       }
-      let status = AudioObjectAddPropertyListenerBlock(AudioRoute.systemObject, &address, queue, block)
+      let status = unsafe AudioObjectAddPropertyListenerBlock(AudioRoute.systemObject, &address, queue, block)
       guard status == noErr else {
         Self.logger.error("default-output listener failed: \(status)")
         return
       }
-      systemListener = block
+      unsafe systemListener = unsafe block
     }
 
     /// Points the format listener at the current default output device, removing
@@ -132,23 +134,23 @@
     /// the registration.
     private func retargetFormatListener() {
       let device = AudioRoute.defaultOutputDeviceID()
-      if let existing = deviceListener {
-        guard existing.id != device else { return }
+      if let existing = unsafe deviceListener {
+        guard unsafe existing.id != device else { return }
         var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
-        _ = AudioObjectRemovePropertyListenerBlock(existing.id, &address, queue, existing.block)
-        deviceListener = nil
+        _ = unsafe AudioObjectRemovePropertyListenerBlock(existing.id, &address, queue, existing.block)
+        unsafe deviceListener = nil
       }
       guard let device else { return }
       let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
         self?.continuation.yield()
       }
       var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
-      let status = AudioObjectAddPropertyListenerBlock(device, &address, queue, block)
+      let status = unsafe AudioObjectAddPropertyListenerBlock(device, &address, queue, block)
       guard status == noErr else {
         Self.logger.error("output-format listener failed: \(status)")
         return
       }
-      deviceListener = (id: device, block: block)
+      unsafe deviceListener = unsafe (id: device, block: block)
     }
   }
 #endif

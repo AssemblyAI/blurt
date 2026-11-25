@@ -216,7 +216,7 @@ private final class BlockingReader: @unchecked Sendable {
     var received = Data()
     var buffer = [UInt8](repeating: 0, count: 64)
     while true {
-      let count = stream.read(&buffer, maxLength: buffer.count)
+      let count = unsafe stream.read(&buffer, maxLength: buffer.count)
       if count <= 0 { break }
       received.append(contentsOf: buffer[0..<count])
     }

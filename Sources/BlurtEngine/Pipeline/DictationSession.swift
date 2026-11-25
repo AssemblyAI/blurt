@@ -33,9 +33,9 @@ public actor DictationSession {
   /// one at a time by the task spawned in `init`.
   nonisolated let commandFeed: AsyncStream<Command>.Continuation
 
-  let mic: MicCaptureProtocol
-  let transcriber: TranscriberProtocol
-  let injector: InjectorProtocol
+  let mic: any MicCaptureProtocol
+  let transcriber: any TranscriberProtocol
+  let injector: any InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time, so each
   /// utterance's request boosts those spellings — as its own `keyterms_prompt` field
   /// (`KeyTerms`), not as part of the conversation context. A closure, so edits in
@@ -170,9 +170,9 @@ public actor DictationSession {
   /// supplies its own (`hostFocusCapture`: the iOS app, whose keyboard knows the text before
   /// the cursor). Delegates to the seam-carrying initializer below, which can't be public.
   public init(
-    mic: MicCaptureProtocol,
-    transcriber: TranscriberProtocol,
-    injector: InjectorProtocol,
+    mic: any MicCaptureProtocol,
+    transcriber: any TranscriberProtocol,
+    injector: any InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
@@ -198,9 +198,9 @@ public actor DictationSession {
   /// `keyTermsProvider` is optional-and-resolved-here because a public default
   /// argument can't reference the store's internal members.
   init(
-    mic: MicCaptureProtocol,
-    transcriber: TranscriberProtocol,
-    injector: InjectorProtocol,
+    mic: any MicCaptureProtocol,
+    transcriber: any TranscriberProtocol,
+    injector: any InjectorProtocol,
     maxRecordingSeconds: Double,
     clock: any Clock<Duration>,
     keyTermsProvider: (@Sendable () -> [String])?,

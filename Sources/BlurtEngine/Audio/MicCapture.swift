@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import os
 
 /// Captures mic audio as the 16 kHz / mono / 16-bit PCM the dictation API wants

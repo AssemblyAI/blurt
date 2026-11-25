@@ -87,7 +87,7 @@
       guard let pid = target?.processIdentifier else { return }
       let element = AXUIElementCreateApplication(pid)
       var value: CFTypeRef?
-      _ = AXUIElementCopyAttributeValue(
+      _ = unsafe AXUIElementCopyAttributeValue(
         element, kAXFocusedUIElementAttribute as CFString, &value)
     }
 

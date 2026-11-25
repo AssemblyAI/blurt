@@ -307,7 +307,7 @@
         return "no character count, nothing selected"
       }
       var range = CFRange(location: 0, length: count)
-      guard let value = AXValueCreate(.cfRange, &range),
+      guard let value = unsafe AXValueCreate(.cfRange, &range),
         AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, value) == .success
       else { return "selection refused, cursor kept" }
       return "selected \(count) characters"

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import Synchronization
 
 /// The dictation host a signed-in key belongs to, or nil to use the default

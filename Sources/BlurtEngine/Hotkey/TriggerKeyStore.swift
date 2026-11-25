@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Persists the chosen dictation `TriggerKey` as its keycode in `UserDefaults`.
 /// Defaults to right ⌘ when unset or when the stored code isn't one of the

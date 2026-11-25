@@ -36,15 +36,27 @@ COMMON=(
   -swift-version 6 -parse-as-library
 )
 
+# Package.swift's `strictSettings`, as swiftc flags: the iOS-only branches of
+# the engine answer to the same checks as the macOS ones `swift build` sees.
+# Keep the two lists in step.
+ENGINE_FLAGS=(
+  -enable-upcoming-feature ExistentialAny
+  -enable-upcoming-feature MemberImportVisibility
+  -enable-upcoming-feature InternalImportsByDefault
+  -enable-upcoming-feature InferIsolatedConformances
+  -enable-upcoming-feature ImmutableWeakCaptures
+  -strict-memory-safety -warnings-as-errors -require-explicit-sendable
+)
+
 # The AssemblyAI SDK first: the engine imports it.
 echo "AssemblyAI → $TARGET"
 find "$REPO_ROOT/Sources/AssemblyAI" -name '*.swift' -print0 \
-  | xargs -0 xcrun swiftc "${COMMON[@]}" -module-name AssemblyAI \
+  | xargs -0 xcrun swiftc "${COMMON[@]}" "${ENGINE_FLAGS[@]}" -module-name AssemblyAI \
     -emit-module -emit-module-path "$WORK/AssemblyAI.swiftmodule"
 
 echo "BlurtEngine → $TARGET"
 find "$REPO_ROOT/Sources/BlurtEngine" -name '*.swift' -print0 \
-  | xargs -0 xcrun swiftc "${COMMON[@]}" -I "$WORK" -module-name BlurtEngine \
+  | xargs -0 xcrun swiftc "${COMMON[@]}" "${ENGINE_FLAGS[@]}" -I "$WORK" -module-name BlurtEngine \
     -emit-module -emit-module-path "$WORK/BlurtEngine.swiftmodule"
 
 IOS="$REPO_ROOT/App/BlurtiOS"

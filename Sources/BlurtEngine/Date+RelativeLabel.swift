@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 extension Date {
   /// How long after a moment `relativeLabel` keeps saying "just now", in

@@ -135,7 +135,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// reads in one place.) A property added above and forgotten here never
   /// reaches the wire — which is what the config assertions in the tests
   /// catch.
-  public func encode(to encoder: Encoder) throws {
+  public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(sampleRate, forKey: .sampleRate)
     try container.encode(channels, forKey: .channels)
@@ -239,7 +239,7 @@ public struct ErrorResponse: Decodable, Sendable {
     case errorCode = "error_code"
   }
 
-  public init(from decoder: Decoder) throws {
+  public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     // `try? decode` already yields `String?` for a key that is missing, null,
     // or the wrong type — `decodeIfPresent` would return `String??` here and

@@ -25,7 +25,7 @@
     @Test("axRange decodes an AXValue-wrapped CFRange")
     func rangeDecoded() throws {
       var range = CFRange(location: 4, length: 2)
-      let wrapped = try #require(AXValueCreate(.cfRange, &range))
+      let wrapped = try unsafe #require(AXValueCreate(.cfRange, &range))
       let decoded = try #require(FocusCapture.axRange(wrapped))
       #expect(decoded.location == 4)
       #expect(decoded.length == 2)
@@ -39,7 +39,7 @@
     @Test("axRange rejects an AXValue holding a non-range payload")
     func rangeWrongPayloadRejected() throws {
       var point = CGPoint(x: 1, y: 2)
-      let wrapped = try #require(AXValueCreate(.cgPoint, &point))
+      let wrapped = try unsafe #require(AXValueCreate(.cgPoint, &point))
       #expect(FocusCapture.axRange(wrapped) == nil)
     }
   }

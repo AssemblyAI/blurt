@@ -1,5 +1,5 @@
-import AssemblyAI
-import Foundation
+public import AssemblyAI
+public import Foundation
 
 extension OAuthConfiguration {
   /// The Info.plist keys a build sets to turn sign-in on. They come from build

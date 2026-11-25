@@ -48,12 +48,13 @@
 
     private static func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
       var settable: DarwinBoolean = false
-      return AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
+      return unsafe AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success
+        && settable.boolValue
     }
 
     private static func setFrameOrigin(_ window: AXUIElement, _ origin: CGPoint) throws {
       var origin = origin
-      guard let value = AXValueCreate(.cgPoint, &origin) else {
+      guard let value = unsafe AXValueCreate(.cgPoint, &origin) else {
         throw VoiceCommandError.couldNotPerform("move the window")
       }
       try set(window, kAXPositionAttribute, value)
@@ -61,7 +62,7 @@
 
     private static func setFrameSize(_ window: AXUIElement, _ size: CGSize) throws {
       var size = size
-      guard let value = AXValueCreate(.cgSize, &size) else {
+      guard let value = unsafe AXValueCreate(.cgSize, &size) else {
         throw VoiceCommandError.couldNotPerform("resize the window")
       }
       try set(window, kAXSizeAttribute, value)
