@@ -483,8 +483,8 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   (dependencies, sound catalog, site, shell portability), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, jscpd, ruff (lint + format check), mypy and pytest (with its
   95% coverage gate) over the evals, and
-  `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
-  builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
+  `release.test.sh`, plus `swiftlint lint --strict` (the web `SessionStart` hook installs
+  SwiftLint) and `swift-format` if a Linux build happens to be on `PATH`. It fully verifies docs, site, scripts, eval, and workflow changes.
   It skips the entire Swift side, and its closing line says so. **Run it before every push, Swift
   changes included**: jscpd, the invariants and the shell, workflow and Markdown linters all catch
   real CI failures from here. So do three Swift checks that need no toolchain:
@@ -514,11 +514,11 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
 - **Splitting a file**: give each new file only the imports it uses — `swiftlint analyze`'s
   `unused_import` (CI only) flagged 86 copied headers in #392 — and import a type from the module
   that declares it (`CGFloat` from CoreFoundation, `DispatchQueue` from Dispatch).
-- **What only CI can tell you**: `swiftlint lint` (its Linux build is a GitHub release download the
-  default network policy blocks, so the `SessionStart` hook can't install it), periphery (a property
+- **What only CI can tell you**: periphery (a property
   that is assigned but never read is the usual catch), `scripts/design-sync.sh --check` (after
   touching `App/BlurtiOS/Design/tokens.json` or a keyboard view), swift-format, the build and every
-  test. Read the rules in `.swiftlint.yml` before writing Swift you can't lint, and expect `lint` to
+  test — and `swiftlint lint` if the `SessionStart` hook couldn't install it (its preflight line
+  says so). Read the rules in `.swiftlint.yml` before writing Swift you can't lint, and expect `lint` to
   answer these in minutes rather than `check` in forty.
 - **Push once per batch of fixes**: every push cancels the `check.yml` run in progress and restarts
   its ~37 minutes. When a run goes red, fix every failure it names (and apply the

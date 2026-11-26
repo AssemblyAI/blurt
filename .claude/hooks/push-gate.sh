@@ -6,7 +6,8 @@
 # push", and the PRs that broke it are the ones that needed another ~37-minute CI
 # run for something it would have named in ~20 s: jscpd clones (#384, #392, #420,
 # #422), the size budgets after merging main into a branch (#363, #378 — a merge
-# fires no edit hook), and the lint-lite rules (#414, #422, #425). A rule an agent
+# fires no edit hook), the lint-lite rules (#414, #422, #425), and — once the
+# SessionStart hook has installed SwiftLint — `swiftlint lint --strict` (#434). A rule an agent
 # has to remember is skipped exactly when it is in a hurry; this makes it the push.
 #
 # Exit 2 blocks the Bash call and hands Claude the failing checks. To push anyway

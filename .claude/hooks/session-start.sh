@@ -13,11 +13,12 @@
 # degrade to a note rather than failing the hook: the portable check skips
 # absent tools the same way check.sh always has.
 #
-# SwiftLint and swift-format are NOT installed: their Linux builds ship as
-# GitHub release binaries, which the default web network policy blocks (only
-# npm / apt / the Go module proxy are reachable). Swift formatting and lint
-# therefore stay a CI concern on the web — the PostToolUse hooks no-op cleanly
-# when the tools are absent.
+# SwiftLint is installed from its GitHub release, pinned by version and
+# checksum, so `check.sh --portable` — and with it the push-gate hook — runs
+# `swiftlint lint --strict` before every push, the check CI's `lint` job failed
+# PRs on most often. swift-format is NOT installed: it comes with the Swift
+# toolchain, which the sandbox lacks, so Swift formatting stays a CI concern on the web (the format-patch job
+# publishes the fix); its PostToolUse hook no-ops cleanly when it is absent.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -97,9 +98,36 @@ if ! command -v zizmor >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
   command -v zizmor >/dev/null 2>&1 || note "zizmor install failed (pip)"
 fi
 
+# SwiftLint (GitHub release) — `check.sh --portable` runs `swiftlint lint
+# --strict` whenever it is on PATH, which makes the push gate catch the opt-in
+# rules (type_contents_order, unused_parameter, async_without_await, …) that
+# otherwise cost a ~37-minute CI run (#434). Pinned to the version CI's Homebrew
+# installs, and checked against the release's checksum before it is unpacked:
+# bump both together when CI's moves. The smoke test lints one file CI passes;
+# a binary that can't (a missing SourceKit library, say) is removed rather than
+# left to fail every push.
+swiftlint_version="0.65.1"
+swiftlint_sha256="caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d"
+if ! command -v swiftlint >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+  swiftlint_tmp="$(mktemp -d "${TMPDIR:-/tmp}/swiftlint.XXXXXX")"
+  swiftlint_url="https://github.com/realm/SwiftLint/releases/download/${swiftlint_version}/swiftlint_linux_amd64.zip"
+  if curl -fsSL -m 180 -o "$swiftlint_tmp/swiftlint.zip" "$swiftlint_url" \
+    && echo "$swiftlint_sha256  $swiftlint_tmp/swiftlint.zip" | shasum -a 256 -c --status - \
+    && unzip -q -o "$swiftlint_tmp/swiftlint.zip" swiftlint -d "$swiftlint_tmp" \
+    && install -m 0755 "$swiftlint_tmp/swiftlint" /usr/local/bin/swiftlint; then
+    if ! (cd "$repo_root" && swiftlint lint --strict --quiet -- Sources/BlurtEngine/BlurtError.swift) >/dev/null 2>&1; then
+      rm -f /usr/local/bin/swiftlint
+      note "swiftlint ${swiftlint_version} installed but failed its smoke test; removed (CI still lints)"
+    fi
+  else
+    note "swiftlint ${swiftlint_version} install failed (download, checksum or unzip)"
+  fi
+  rm -rf "$swiftlint_tmp"
+fi
+
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt; do
+for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt swiftlint; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 [ -x "$jscpd_dir/node_modules/.bin/jscpd" ] || missing="$missing jscpd"
