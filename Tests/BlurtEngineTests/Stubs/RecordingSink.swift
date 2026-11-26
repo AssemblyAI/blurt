@@ -24,6 +24,8 @@ final class RecordingSink: PCMSink {
   var drained: Bool { record.withLock(\.drained) }
   var stopped: Bool { record.withLock(\.stopped) }
   var roomChecks: Int { record.withLock(\.roomChecks) }
+  /// Silent: the meter isn't what these tests read.
+  var currentLevel: Float { 0 }
   var bufferedSeconds: Double {
     get {
       record.withLock { record in
@@ -33,6 +35,8 @@ final class RecordingSink: PCMSink {
     }
     set { record.withLock { $0.buffered = newValue } }
   }
+  /// Everything counts as heard the moment it's enqueued: a clip is never trimmed.
+  var unplayedAudioSeconds: Double { 0 }
   var bufferedAfterEnqueue: Double? {
     get { record.withLock(\.bufferedAfterEnqueue) }
     set { record.withLock { $0.bufferedAfterEnqueue = newValue } }

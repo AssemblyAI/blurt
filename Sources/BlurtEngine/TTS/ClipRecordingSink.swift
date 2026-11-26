@@ -26,8 +26,8 @@
     }
 
     func enqueue(_ pcm: Data) {
-      stopped.withLock { stopped in
-        if !stopped { writer.append(pcm) }
+      stopped.withLock { isStopped in
+        if !isStopped { writer.append(pcm) }
         base.enqueue(pcm)
       }
     }
@@ -35,11 +35,11 @@
     func drain() async { await base.drain() }
 
     func stop() {
-      stopped.withLock { stopped in
-        guard !stopped else {
+      stopped.withLock { isStopped in
+        guard !isStopped else {
           return
         }
-        stopped = true
+        isStopped = true
         writer.seal(droppingLastSeconds: base.unplayedAudioSeconds)
       }
       base.stop()

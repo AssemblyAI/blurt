@@ -56,7 +56,7 @@ struct MicCaptureBringUpTests {
     try await Task.sleep(for: .milliseconds(30))
 
     let cancelCost = await ContinuousClock().measure {  // wall-clock-ok: measuring real time is the point
-      try? await mic.cancelCapture()
+      await mic.cancelCapture()
     }
 
     // Where the cancel actually landed, straight from the press: an abandoned

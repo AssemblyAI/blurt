@@ -19,7 +19,7 @@
       )
 
       await #expect(throws: BlurtError.noEditableTarget) {
-        try await injector.insert("dictated text")
+        try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .ordinary)
       }
       #expect(clip.isKeptForHandPaste)
       #expect(!clip.isConcealed)
@@ -35,7 +35,7 @@
         pasteSettleDuration: .zero, postPaste: { _ in true }, hasEditableTarget: { false }, clipboard: noTarget
       )
       await #expect(throws: BlurtError.noEditableTarget) {
-        try await unfocused.insert("hunter2", security: .secure)
+        try await unfocused.insert("hunter2", after: nil, windowTitle: nil, security: .secure)
       }
       #expect(noTarget.string == "hunter2")
       #expect(noTarget.isConcealed)
@@ -44,7 +44,7 @@
       let noKeystroke = FakeClipboard(string: "user-clipboard")
       let unposted = KeyInjector(pasteSettleDuration: .zero, postPaste: { _ in false }, clipboard: noKeystroke)
       await #expect(throws: BlurtError.targetAppLost) {
-        try await unposted.insert("hunter2", security: .secure)
+        try await unposted.insert("hunter2", after: nil, windowTitle: nil, security: .secure)
       }
       #expect(noKeystroke.string == "hunter2")
       #expect(noKeystroke.isConcealed)
@@ -63,7 +63,7 @@
         clipboard: clip
       )
 
-      try await injector.insert("hunter2", security: .secure)
+      try await injector.insert("hunter2", after: nil, windowTitle: nil, security: .secure)
       await injector.pendingSettle?.value
 
       #expect(seen.value)
@@ -89,7 +89,7 @@
       )
 
       await #expect(throws: BlurtError.noEditableTarget) {
-        try await injector.insert("dictated text", security: .unknown)
+        try await injector.insert("dictated text", after: nil, windowTitle: nil, security: .unknown)
       }
       #expect(clip.string == "dictated text")
       #expect(clip.isKeptForHandPaste)
@@ -115,7 +115,7 @@
         isAXOpaqueApp: { _ in true },
         clipboard: pasted
       )
-      try await pasting.insert("hunter2", security: security)
+      try await pasting.insert("hunter2", after: nil, windowTitle: nil, security: security)
       await pasting.pendingSettle?.value
       #expect(seen.value == concealed)
       #expect(pasted.string == "user-clipboard")
@@ -130,7 +130,7 @@
         clipboard: left
       )
       await #expect(throws: BlurtError.targetAppLost) {
-        try await unposted.insert("hunter2", security: security)
+        try await unposted.insert("hunter2", after: nil, windowTitle: nil, security: security)
       }
       #expect(left.string == "hunter2")
       #expect(left.isConcealed == concealed)
@@ -156,7 +156,7 @@
       await injector.setTarget(focus)
 
       await #expect(throws: BlurtError.targetAppLost) {
-        try await injector.insert("hunter2", security: .unknown)
+        try await injector.insert("hunter2", after: nil, windowTitle: nil, security: .unknown)
       }
       #expect(judged.value == focus.pid)
       #expect(clip.string == "hunter2")

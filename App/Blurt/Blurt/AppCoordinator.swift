@@ -21,8 +21,7 @@ final class AppCoordinator {
   let session: DictationSession
   /// The mic seam, kept beyond session construction for its two side features —
   /// the loudness `levels` feed that drives the overlay meter and the `warmUp()`
-  /// pre-open — both carried by `MicCaptureProtocol` itself (with no-op
-  /// defaults), so stubs need supply neither.
+  /// pre-open — both carried by `MicCaptureProtocol` itself.
   @ObservationIgnored private let mic: any MicCaptureProtocol
   /// The API-key surface (storage seam, validate-then-save flow, and the
   /// observable `hasAPIKey` flag), extracted so the coordinator stays focused on

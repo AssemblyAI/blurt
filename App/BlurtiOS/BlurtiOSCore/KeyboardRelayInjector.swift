@@ -69,14 +69,11 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     // Nothing to aim: the keyboard that asked is the target, read from `presser` at insert time.
   }
 
-  /// `security` defaults to `.ordinary`, as `KeyInjector.insert`'s does, so a
-  /// direct caller (a test) describes an ordinary field without restating it;
-  /// the session always passes its real verdict through `InjectorProtocol`.
   /// Only `.secure` conceals here: the keyboard reads the field it is attached
   /// to and says whether it holds a password (`isPasswordField`), and iOS has
   /// no AX-opaque app whose fields could hide one, as the Mac does.
   package func insert(
-    _ text: String, after _: String?, windowTitle _: String?, security: TargetSecurity = .ordinary
+    _ text: String, after _: String?, windowTitle _: String?, security: TargetSecurity
   ) async throws {
     let secure = security.conceals(inAXOpaqueApp: false)
     // The words go to the keyboard that asked for them. If the user has
@@ -107,6 +104,12 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     SharedStore.remove(forKey: BlurtShared.Key.result)
     Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(current, privacy: .public)")
     try await copyOut(text, secure: secure)
+  }
+
+  /// The keyboard has no other focus to insert at: a voice command's typed
+  /// step goes where a dictation's words would.
+  package func insertAtFocus(_ text: String) async throws {
+    try await insert(text, after: nil, windowTitle: nil, security: .ordinary)
   }
 
   /// Polls the store until the keyboard has taken result `id` out of it

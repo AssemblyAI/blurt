@@ -2,9 +2,8 @@
 
   extension DictationComponents {
     /// The all-stub pipeline used under UI testing: no mic, no network, no
-    /// Accessibility paste. `UITestMic` inherits `MicCaptureProtocol`'s default
-    /// empty `levels` stream (the overlay meter isn't asserted), no-op
-    /// `warmUp()`, and stop-and-discard `cancelCapture()`.
+    /// Accessibility paste. `UITestMic`'s `levels` stream is empty (the overlay
+    /// meter isn't asserted).
     static func uiTest() -> DictationComponents {
       DictationComponents(
         mic: UITestMic(),

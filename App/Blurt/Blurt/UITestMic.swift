@@ -15,6 +15,9 @@
   nonisolated struct UITestMic: MicCaptureProtocol {
     private static let cannedPCM = Data(count: RecordingLimits.minPCMBytes * 2)
 
+    /// No meter: the overlay's meter isn't asserted.
+    var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
+
     /// Hands the chunked upload the same blob `stop()` reports, as one frame, so
     /// the streamed request carries what the release path counts.
     func start() -> AsyncStream<Data> {
@@ -25,6 +28,12 @@
     }
     func stop() -> Int {
       Self.cannedPCM.count
+    }
+    func cancelCapture() {
+      // Nothing to release: the stub captures nothing.
+    }
+    func warmUp() {
+      // Nothing to pre-pay: the stub opens no device.
     }
   }
 

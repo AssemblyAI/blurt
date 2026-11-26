@@ -295,7 +295,7 @@ extension DictationSession {
   /// `.noTarget` or `.failed` (`pasteOutcome`) — without setting it: the
   /// session is at rest, and this is not a dictation. Throws only on cancellation.
   public func replaceSelection(with text: String) async throws -> PipelinePhase {
-    try await phase { try await injector.insert(text, after: nil, windowTitle: nil, security: .ordinary) }
+    try await pasteResult { try await injector.insert(text, after: nil, windowTitle: nil, security: .ordinary) }
   }
 
   /// Pastes `text` wherever focus is now: a voice command's `type` step,
@@ -304,12 +304,12 @@ extension DictationSession {
   /// it is, so nothing here can race the next press pinning its own. Answers
   /// as `replaceSelection` does.
   public func typeText(_ text: String) async throws -> PipelinePhase {
-    try await phase { try await injector.insertAtFocus(text) }
+    try await pasteResult { try await injector.insertAtFocus(text) }
   }
 
   /// The phase `paste` ends in — `.pasted`, else what `pasteOutcome` makes of
   /// its error — for the two pastes outside a dictation. Throws only on cancellation.
-  private func phase(of paste: () async throws -> Void) async throws -> PipelinePhase {
+  private func pasteResult(of paste: () async throws -> Void) async throws -> PipelinePhase {
     do {
       try await paste()
       return .pasted

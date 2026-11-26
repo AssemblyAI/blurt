@@ -70,7 +70,7 @@
       let gate = AsyncGate()
       let task = Task {
         await gate.wait()
-        try await injector.insert("text")
+        try await injector.insert("text", after: nil, windowTitle: nil, security: .ordinary)
       }
       insertTask.value = task
       gate.open()
@@ -94,7 +94,7 @@
       await injector.setTarget(try liveTargetFocus())
 
       await #expect(throws: BlurtError.targetAppLost) {
-        try await injector.insert("Second.", after: "First.")
+        try await injector.insert("Second.", after: "First.", windowTitle: nil, security: .ordinary)
       }
       // What lands on the clipboard is the final text a paste would have typed —
       // separator included — so a manual ⌘V still joins the prior text correctly.
@@ -114,14 +114,14 @@
 
       // First insert: nothing editable focused → copy fallback throws.
       await #expect(throws: BlurtError.noEditableTarget) {
-        try await injector.insert("first")
+        try await injector.insert("first", after: nil, windowTitle: nil, security: .ordinary)
       }
 
       // The throw path must have released the paste lock: a following insert
       // proceeds (rather than deadlocking behind a leaked lock, which the time
       // limit would surface) and completes a normal paste + deferred restore.
       editable.value = true
-      try await injector.insert("second")
+      try await injector.insert("second", after: nil, windowTitle: nil, security: .ordinary)
       await injector.pendingSettle?.value
       // The restore brings back the pre-paste contents — which the failed insert
       // deliberately left as its copied transcript.

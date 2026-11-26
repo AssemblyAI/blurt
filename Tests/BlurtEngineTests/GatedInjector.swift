@@ -37,6 +37,10 @@ actor GatedInjector: InjectorProtocol {
     onRecord()
   }
 
+  func insertAtFocus(_ text: String) async throws {
+    try await insert(text, after: nil, windowTitle: nil, security: .ordinary)
+  }
+
   func waitUntilInsertEntered() async { await gate.waitUntilEntered() }
   func allowInsertToFinish() { gate.allowToFinish() }
 }

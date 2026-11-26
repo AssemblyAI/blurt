@@ -16,6 +16,9 @@
     private struct NeverForwardPerformer: VoiceCommandPerforming {
       let clock: TestClock
 
+      /// No beat between steps: there is only ever the one.
+      var settle: Duration { .zero }
+
       func screenContext() -> ScreenContext { ScreenContext(appName: nil) }
 
       func perform(_: VoiceCommandStep) async throws -> String? {
@@ -23,6 +26,14 @@
           "Slack", clock: clock, look: { false }, frontmost: { false }
         )
         return nil
+      }
+
+      func commandStarting() {
+        // No screen to warm up: the performer never reads one.
+      }
+
+      func commandEnded() {
+        // `commandStarting` changed nothing, so there's nothing to put back.
       }
     }
 

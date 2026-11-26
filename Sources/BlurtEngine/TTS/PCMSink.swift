@@ -18,9 +18,3 @@ protocol PCMSink: Sendable {
   /// Silences at once. Idempotent.
   func stop()
 }
-
-extension PCMSink {
-  var currentLevel: Float { 0 }
-  var bufferedSeconds: Double { 0 }
-  var unplayedAudioSeconds: Double { 0 }
-}

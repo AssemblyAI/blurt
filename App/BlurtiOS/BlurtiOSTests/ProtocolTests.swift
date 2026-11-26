@@ -89,7 +89,7 @@ struct ProtocolTests {
     UIPasteboard.general.string = ""
     let clock = TestClock()
     let injector = KeyboardRelayInjector(clock: clock)
-    let insert = Task { try await injector.insert("late words", after: nil, windowTitle: nil) }
+    let insert = Task { try await injector.insert("late words", after: nil, windowTitle: nil, security: .ordinary) }
     // Every poll but the last finds the result still waiting; only the step
     // onto the timeout copies it out.
     let polls = Int(.seconds(KeyboardRelayInjector.deliveryTimeout) / KeyboardRelayInjector.deliveryPoll)
@@ -122,7 +122,7 @@ struct ProtocolTests {
       presser: { ResultAddress(keyboard: "kb-2", controllerID: "c-2") },
       clock: clock
     )
-    let insert = Task { try await same.insert("right app", after: nil, windowTitle: nil) }
+    let insert = Task { try await same.insert("right app", after: nil, windowTitle: nil, security: .ordinary) }
     let taken = await takeResult(stepping: clock)
     #expect(taken?.recipient == "kb-2" && taken?.controllerID == "c-2")
     try await insert.value
@@ -135,7 +135,7 @@ struct ProtocolTests {
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
     let injector = KeyboardRelayInjector()
-    let delivery = Task { try await injector.insert("never mind", after: nil, windowTitle: nil) }
+    let delivery = Task { try await injector.insert("never mind", after: nil, windowTitle: nil, security: .ordinary) }
     #expect(await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil })
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "never mind")
     delivery.cancel()
@@ -151,7 +151,7 @@ struct ProtocolTests {
     SharedStore.keyboardInstance = "kb-1"
     let clock = TestClock()
     let injector = KeyboardRelayInjector(clock: clock)
-    let insert = Task { try await injector.insert("on time", after: nil, windowTitle: nil) }
+    let insert = Task { try await injector.insert("on time", after: nil, windowTitle: nil, security: .ordinary) }
     let taken = await takeResult(stepping: clock)
     try await insert.value
     #expect(taken?.text == "on time")

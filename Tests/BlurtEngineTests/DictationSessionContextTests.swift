@@ -16,7 +16,8 @@ struct DictationSessionContextTests {
     priorText: "Hi Sam,",
     selectedText: "the old plan",
     windowTitle: "Re: Q3 pricing",
-    fieldLabel: "Body"
+    fieldLabel: "Body",
+    security: .ordinary
   )
 
   /// The secure-target fixture, shared by the two tests that assert a password

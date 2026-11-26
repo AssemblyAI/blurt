@@ -301,9 +301,9 @@ public actor MicCapture: MicCaptureProtocol {
   ///
   /// Not marked `throws`, because nothing on this path can fail — a
   /// non-throwing implementation satisfies the `throws` requirement fine. The
-  /// *requirement* keeps it, so that the protocol's stop-and-discard default
+  /// *requirement* keeps it, so that a conformer whose cancel is stop-and-discard
   /// (which can throw, via `stop()`) still conforms and `stopAndCancel`'s
-  /// developer-mode failure log keeps working for hosts that take it.
+  /// developer-mode failure log keeps working for it.
   public func cancelCapture() {
     guard let recorder = detachActiveRecorder() else {
       return

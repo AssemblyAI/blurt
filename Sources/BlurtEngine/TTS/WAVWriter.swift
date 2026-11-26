@@ -13,6 +13,9 @@
       var sealed = false
     }
 
+    /// The length of `header`: where the audio starts.
+    private static let headerBytes = 44
+
     let url: URL
     private let sampleRate: Int
     private let state: Mutex<State>
@@ -26,8 +29,6 @@
       state = Mutex(State(handle: try FileHandle(forWritingTo: url)))
       try state.withLock { _ = try $0.handle?.seekToEnd() }
     }
-
-    private static let headerBytes = 44
 
     /// The 44-byte canonical WAV header for 16-bit mono PCM.
     static func header(sampleRate: Int, dataBytes: Int) -> Data {

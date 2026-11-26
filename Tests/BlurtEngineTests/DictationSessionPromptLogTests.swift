@@ -18,6 +18,10 @@ struct DictationSessionPromptLogTests {
       try await base.transcribe(frames: frames, sampleRate: sampleRate, context: context)
     }
 
+    func warmUp() {
+      // No connection to pre-open: the stub never reaches a network.
+    }
+
     func contextPrompt(for context: TranscriptionContext?) -> String {
       "sent after: \(context?.priorText ?? "nothing")"
     }
@@ -26,7 +30,9 @@ struct DictationSessionPromptLogTests {
   @Test("the logged prompt is the one the transcriber reports for the press's context")
   func logsTheReportedPrompt() async {
     let log = RecordedLog()
-    let field = FocusedFieldContext(priorText: "Hi Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil)
+    let field = FocusedFieldContext(
+      priorText: "Hi Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil, security: .ordinary
+    )
     let session = makeSession(transcriber: Reporting(), seams: testSeams(field: field, log: log))
 
     await session.dictate()

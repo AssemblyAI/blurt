@@ -2,9 +2,9 @@ public import Foundation
 
 public protocol MicCaptureProtocol: Sendable {
   /// Loudness feed for a meter UI: `0…1`, emitted while recording. Declared on
-  /// the protocol (with an empty-stream default below) so hosts read the meter
-  /// through the same seam they inject — a stub without a meter satisfies it
-  /// for free instead of every composition threading a side-channel stream.
+  /// the protocol so hosts read the meter through the same seam they inject
+  /// instead of every composition threading a side-channel stream. A capture
+  /// with no meter returns an already-finished stream.
   var levels: AsyncStream<Float> { get }
 
   /// Begin capturing 16 kHz mono 16-bit PCM. Throws on permission/device failure.
@@ -48,35 +48,14 @@ public protocol MicCaptureProtocol: Sendable {
   /// want opposite things: `stop()` may legitimately spend time preserving the
   /// captured audio (`MicCapture` waits out a Bluetooth link's tail before
   /// ending the recording), whereas a cancel must take effect immediately and
-  /// has nothing to preserve. Declared here (not only in the default extension)
-  /// so it dispatches dynamically through `any MicCaptureProtocol`.
+  /// has nothing to preserve. A capture with no cancel-specific teardown
+  /// stops and discards what `stop()` returns.
   func cancelCapture() async throws
   /// Optionally pay whatever set-up cost the first `start()` would otherwise
   /// pay on the hot path. Must **not** open the input device — no capture, no
   /// mic indicator, nothing held between presses — and must not throw; a failure
   /// just means `start()` pays it. `MicCapture` documents what is and isn't
-  /// pre-payable here, which is less than it looks. Declared here (not only in
-  /// the default extension) so it dispatches dynamically through
-  /// `any MicCaptureProtocol`.
+  /// pre-payable here, which is less than it looks. A capture with nothing to
+  /// pre-pay does nothing.
   func warmUp() async
-}
-
-extension MicCaptureProtocol {
-  /// No-meter default: an immediately finished stream, so captures without a
-  /// meter (test stubs, headless hosts) conform without supplying one.
-  public var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
-
-  /// No-op default: a capture with nothing to pre-open inherits this, mirroring
-  /// `TranscriberProtocol.warmUp`.
-  public func warmUp() {
-    // Nothing to pre-open: see the doc comment above.
-  }
-
-  /// Stop-and-discard default, so a capture with no cancel-specific teardown
-  /// (every stub) conforms for free and still records the stop the way it always
-  /// did. Implementations override it when stopping cheaply differs from
-  /// stopping carefully — `MicCapture` does.
-  public func cancelCapture() async throws {
-    _ = try await stop()
-  }
 }

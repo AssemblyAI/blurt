@@ -32,6 +32,9 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   var held: Int { tally.withLock { $0.held } }
   var started: Int { tally.withLock { $0.started } }
 
+  /// No meter: the fake captures nothing to measure.
+  var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
+
   init(closeDelay: Duration = .zero, startDelay: Duration = .zero, ledger: Ledger = Ledger()) {
     self.closeDelay = closeDelay
     self.startDelay = startDelay
@@ -79,5 +82,9 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
 
   func cancelCapture() {
     // Nothing to release: the fake captures nothing.
+  }
+
+  func warmUp() {
+    // Nothing to pre-pay: the fake opens no device.
   }
 }
