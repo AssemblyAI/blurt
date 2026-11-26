@@ -36,7 +36,9 @@ struct FrameAligner: Sendable {
     if !isWhole { sawMisalignedChunk = true }
     // The usual case: nothing held back and a whole chunk, passed through
     // without a copy.
-    if carry.isEmpty, isWhole { return chunk }
+    if carry.isEmpty, isWhole {
+      return chunk
+    }
     let joined = carry + chunk
     let whole = joined.count - joined.count % Self.bytesPerFrame
     carry = joined.suffix(from: joined.startIndex + whole)

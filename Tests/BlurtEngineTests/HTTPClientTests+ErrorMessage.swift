@@ -59,8 +59,8 @@ extension HTTPClientTests {
     // config-validation message reaches the user as a sentence instead of as
     // the raw JSON body. It went unread until 2026-09-11.
     #expect(
-      DictationClient.errorMessage(
-        from: json(["error": "invalid config part: llm: Extra inputs are not permitted"])
+      ErrorResponse.message(
+        in: json(["error": "invalid config part: llm: Extra inputs are not permitted"])
       )
         == "invalid config part: llm: Extra inputs are not permitted")
     // `message` is in *neither* documented shape, so it is deliberately not
