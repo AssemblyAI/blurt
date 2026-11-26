@@ -48,7 +48,7 @@ struct DictationSessionTextShortcutTests {
   func priorTextRedacted() async {
     let fixture = makeSession(
       field: FocusedFieldContext(
-        priorText: "Mail me@example.com.", selectedText: nil, windowTitle: nil, fieldLabel: nil
+        priorText: "Mail me@example.com.", selectedText: nil, windowTitle: nil, fieldLabel: nil, security: .ordinary
       ),
       textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")]
     )

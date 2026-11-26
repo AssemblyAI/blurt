@@ -150,9 +150,9 @@ The overlay meter (`levels`) comes from the recorder's dBFS power on a ~20 Hz ti
 (`MicCapture.meterIntervalSeconds` — public because the pill caps its animation redraws to the same
 cadence and reads it from here rather than restating it), mapped to `0…1` by
 `linearLevel(fromPowerDB:)` and floored so room ambient reads as empty bars rather than a meter that
-never rests. `levels`, `warmUp()` and `cancelCapture()` are part of `MicCaptureProtocol` itself with
-empty-stream / no-op / stop-and-discard defaults, so stubs conform with just `start()`/`stop()` while
-hosts still read the meter through the seam they inject.
+never rests. `levels`, `warmUp()` and `cancelCapture()` are requirements of `MicCaptureProtocol`
+itself, with no defaults, so hosts read the meter through the seam they inject and every conformer
+spells out each one.
 
 ### `AssemblyAITranscriber` — `Sources/BlurtAssemblyAI/AssemblyAITranscriber.swift`
 

@@ -24,6 +24,8 @@ final class RecordingSink: PCMSink {
   var drained: Bool { record.withLock(\.drained) }
   var stopped: Bool { record.withLock(\.stopped) }
   var roomChecks: Int { record.withLock(\.roomChecks) }
+  /// Silent: the meter isn't what these tests read.
+  var currentLevel: Float { 0 }
   var bufferedSeconds: Double {
     get {
       record.withLock { record in

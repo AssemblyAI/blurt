@@ -22,6 +22,9 @@ struct KeyRejectionReporterTests {
     }
 
     func warmUp() { _ = warmUps.next() }
+
+    /// No prompt: the double sends nothing.
+    func contextPrompt(for _: TranscriptionContext?) -> String { "" }
   }
 
   private func run(_ outcome: Result<String, AssemblyAIError>) async -> (reported: Int, error: (any Error)?) {

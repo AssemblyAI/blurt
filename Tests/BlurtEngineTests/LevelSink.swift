@@ -9,6 +9,8 @@ import Testing
 /// something to hear before the read finishes.
 final class LevelSink: PCMSink {
   let currentLevel: Float
+  /// Nothing queued ahead: the speaker never waits for room.
+  var bufferedSeconds: Double { 0 }
   private let heard: @Sendable () -> Bool
 
   init(level: Float, playsUntil heard: @escaping @Sendable () -> Bool) {

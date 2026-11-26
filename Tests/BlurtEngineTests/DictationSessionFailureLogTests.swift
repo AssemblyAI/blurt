@@ -14,7 +14,7 @@ struct DictationSessionFailureLogTests {
     let fixture = makeSession(
       mode: .throwError(BlurtError.apiKeyMissing),
       field: FocusedFieldContext(
-        priorText: nil, selectedText: nil, windowTitle: "Vault", fieldLabel: "Password"
+        priorText: nil, selectedText: nil, windowTitle: "Vault", fieldLabel: "Password", security: .ordinary
       )
     )
 

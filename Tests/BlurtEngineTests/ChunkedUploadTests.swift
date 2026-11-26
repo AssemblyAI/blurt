@@ -139,7 +139,7 @@ struct ChunkedUploadTests {
       transcriber: FailsBeforeContext(),
       seams: testSeams(
         field: FocusedFieldContext(
-          priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil
+          priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil, security: .ordinary
         ),
         log: log
       )

@@ -167,14 +167,14 @@ All cases are `LocalizedError` with user-ready `errorDescription` strings, and `
 ```swift
 func start() async throws -> AsyncStream<Data>  // the live feed: S16LE mono 16 kHz, in order
 func stop() async throws -> Int         // bytes captured; the audio already went out on the feed
-func cancelCapture() async throws       // stop and discard; default: stop-and-drop
-var levels: AsyncStream<Float> { get }  // 0…1 meter; default: empty stream
-func warmUp() async                     // pay set-up early, never open the device; default: no-op
+func cancelCapture() async throws       // stop and discard
+var levels: AsyncStream<Float> { get }  // 0…1 meter; a finished stream if none
+func warmUp() async                     // pay set-up early, never open the device
 ```
 
-Only `start()`/`stop()` must be implemented — `cancelCapture()`, `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the capture stack through the same seam they inject.
+Every member is a requirement with no default, so hosts read the meter and warm the capture stack through the same seam they inject, and a conformer says what each one does — a stub or headless capture returns a finished `levels` stream, does nothing in `warmUp()`, and stops and discards in `cancelCapture()`.
 
-`cancelCapture()` is what the session calls when a dictation is cancelled, and it exists because the two teardowns want opposite things: `stop()` may legitimately spend time preserving the audio, while a cancel has nothing to preserve and must take effect at once. Override it only if stopping cheaply differs from stopping carefully in your capture.
+`cancelCapture()` is what the session calls when a dictation is cancelled, and it exists because the two teardowns want opposite things: `stop()` may legitimately spend time preserving the audio, while a cancel has nothing to preserve and must take effect at once. Where stopping cheaply doesn't differ from stopping carefully in your capture, it can call `stop()` and drop the count.
 
 `MicCapture` records through a per-session `AVCaptureSession` (`CaptureSessionRecorder`, used directly — the owner-directed move from `AVAudioRecorder`, 2026-08-25) whose data output converts to 16 kHz / mono / 16-bit LPCM on the fly — exactly the geometry the dictation API wants — accumulating the raw S16LE bytes in memory so `stop()` returns them as-is (no temp file, no float detour). A **fresh recorder per session** is built around the current resolution of the host's microphone selection at press time — the device pinned via `MicDeviceStore`, or the system default — which is why device switches (headset ↔ built-in) just work, with a per-press fallback to the default while a pinned device isn't connected. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
@@ -192,7 +192,7 @@ The other one fixes the tail: `stop()` keeps capturing for a further 220 ms when
 func transcribe(
   frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
 ) async throws -> String
-func warmUp() async   // optional; no-op default
+func warmUp() async   // pre-open the connection; a no-op if there's none
 ```
 
 A transcriber that ends a recording below `RecordingLimits.minPCMBytes` may throw `TranscriberError.audioTooShort`; the session treats it as nothing said. Every other error surfaces as `.sttFailed`, except a `BlurtError` (`.apiKeyMissing`), which surfaces as itself.
