@@ -54,7 +54,7 @@ package enum TextShortcutExpander {
     let keyed = shortcuts.compactMap { shortcut in
       pattern(for: shortcut.trigger).map { (shortcut, $0, TextShortcut.matchKey(for: shortcut.trigger).count) }
     }
-    let ordered = keyed.sorted { $0.2 > $1.2 }.map { ($0.0, $0.1) }
+    let ordered = keyed.sorted { $0.2 > $1.2 }
     guard !ordered.isEmpty else {
       return text
     }

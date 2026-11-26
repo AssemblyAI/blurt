@@ -161,11 +161,10 @@
     }
 
     private func createAggregate() throws {
-      // The microphone Settings picked, the same pin dictation records from,
-      // and — when none is pinned or the pinned one isn't connected — the
-      // system default input, the same fallback dictation takes
-      // (`AudioInputDevices.device(forPinnedUID:)`).
-      let pinned = MicDeviceStore().selection.pinnedUID
+      // The microphone Settings picked, resolved by the same policy dictation
+      // uses (`MicCapture.resolveInput`): a pin that isn't connected folds to
+      // the system default input, and is logged the same way.
+      let pinned = MicCapture.resolveInput(selection: MicDeviceStore().selection).pinnedUID
       guard let input = AudioInputDevices.device(forPinnedUID: pinned)?.uniqueID else {
         throw RecorderError.coreAudio("input device", kAudioHardwareUnspecifiedError)
       }
