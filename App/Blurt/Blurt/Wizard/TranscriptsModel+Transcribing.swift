@@ -7,8 +7,8 @@ extension TranscriptsModel {
   /// Uploads and transcribes `url`, saving the result and opening it.
   ///
   /// `entry` is a recording saved without a transcript (`keepUntranscribed`):
-  /// the transcript fills it in; finding nothing deletes it, file and all;
-  /// failing keeps it for Try Again — its audio may hold a whole meeting.
+  /// the transcript fills it in; finding nothing or failing keeps it for Try
+  /// Again — its audio may hold a whole meeting.
   ///
   /// Never over a recording: a file dropped while one runs is refused, or the
   /// recording would be left capturing with no sheet to stop it.
@@ -53,8 +53,11 @@ extension TranscriptsModel {
   ) {
     switch outcome {
     case .success(let result) where result.text.trimmedNonEmpty() == nil:
-      if let entry { delete(entry) }
-      state = .failed(fileName: fileName, message: "No speech was found in that file.")
+      // A recording's entry stays, untranscribed: quiet audio, or a language
+      // the service didn't detect, is no reason to delete the user's audio.
+      // Deleting it is theirs to do, from the Library.
+      let what = entry == nil ? "file" : "recording"
+      state = .failed(fileName: fileName, message: "No speech was found in that \(what).", retry: entry)
 
     case .success(let result):
       guard let entry else {

@@ -165,10 +165,14 @@ final class TranscriptsModel {
   }
 
   /// Asks the LLM for `entry`'s title and saves it on the entry. Best-effort:
-  /// until it comes — or if it fails — the entry keeps its file name.
+  /// until it comes — or if it fails — the entry keeps its file name. A title
+  /// for text the entry no longer holds (a recording's live transcript, since
+  /// replaced by the diarized one) never replaces one for its current text,
+  /// whichever request lands last; it is kept only while there is no other.
   func applyTitle(to entry: SavedTranscript) async {
     guard let title = try? await llm.title(for: entry.text),
-      let index = history.firstIndex(where: { $0.id == entry.id })
+      let index = history.firstIndex(where: { $0.id == entry.id }),
+      history[index].text == entry.text || history[index].generatedTitle == nil
     else {
       return
     }
