@@ -54,7 +54,7 @@
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var procID: AudioDeviceIOProcID?
     private var writer: MixWriter?
-    private let queue = DispatchQueue(label: "Blurt.SystemAudioRecorder")
+    private let queue = DispatchQueue(label: HostIdentity.current.queueLabel("SystemAudioRecorder"))
 
     /// An idle recorder: nothing is created until `start`.
     public init() {

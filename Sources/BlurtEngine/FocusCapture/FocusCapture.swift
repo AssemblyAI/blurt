@@ -144,15 +144,7 @@
       // read — including ones on *other* element refs a per-element timeout would
       // miss (the window element behind `windowTitle`, the editability probes).
       AXUIElementSetMessagingTimeout(system, axMessagingTimeoutSeconds)
-      var focusedRef: CFTypeRef?
-      guard
-        unsafe AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
-          == .success,
-        let focusedRef
-      else {
-        return nil
-      }
-      return axElement(focusedRef)
+      return elementValue(system, kAXFocusedUIElementAttribute)
     }
 
     // MARK: - Checked CF downcasts
@@ -202,7 +194,7 @@
     /// The element's selected text range — a zero-length range when there's just a
     /// caret — or `nil` when it exposes no readable selection. Its `location` is the
     /// insertion point.
-    nonisolated private static func selectedTextRange(of element: AXUIElement) -> CFRange? {
+    nonisolated static func selectedTextRange(of element: AXUIElement) -> CFRange? {
       var rangeRef: CFTypeRef?
       guard
         unsafe AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)

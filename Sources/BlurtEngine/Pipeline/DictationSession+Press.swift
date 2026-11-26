@@ -140,15 +140,9 @@ extension DictationSession {
         return
       }
       // `MicCapture.start()` already throws a `BlurtError` for its own failures
-      // (no input device, the liveness gate failing closed); wrapping that a
-      // second time read as "Audio capture failed: Audio capture failed: …" on
-      // the pill and in `errors.jsonl`. Only a conformer's untyped error needs
-      // the wrap — the same rule `awaitUpload` applies to the transcriber's.
-      if let blurtError = error as? BlurtError {
-        setPhase(.failed(blurtError))
-      } else {
-        setPhase(.failed(.audioCaptureFailed(underlying: error)))
-      }
+      // (no input device, the liveness gate failing closed); only a conformer's
+      // untyped error needs the wrap.
+      setPhase(.failed(.wrapping(error, as: BlurtError.audioCaptureFailed(underlying:))))
     }
   }
 

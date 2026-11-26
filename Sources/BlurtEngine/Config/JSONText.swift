@@ -15,6 +15,11 @@ enum JSONText {
     return String(data: data, encoding: .utf8)
   }
 
+  /// The `T` that JSON text `raw` decodes to, or nil when it doesn't.
+  static func decode<T: Decodable>(_ type: T.Type, from raw: String) -> T? {
+    try? JSONDecoder().decode(type, from: Data(raw.utf8))
+  }
+
   /// Writes `value` to `defaults` under `key` as JSON text; false, writing
   /// nothing, when it can't be encoded (`encode`).
   @discardableResult

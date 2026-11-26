@@ -133,7 +133,7 @@ struct ReadAloudLLM: GatewayClient, Sendable {
   }
 
   func rewriteForListening(_ text: String) async throws -> String {
-    let reply = try await complete(
+    let reply = try await gateway.send(
       Self.chat(system: Self.rewriteInstruction, user: text, maxTokens: Self.rewriteMaxTokens),
       timeout: Self.rewriteTimeout
     )
@@ -143,7 +143,7 @@ struct ReadAloudLLM: GatewayClient, Sendable {
   }
 
   func answer(_ request: String, about selection: String) async throws -> String {
-    try await complete(
+    try await gateway.send(
       Self.chat(
         system: Self.answerInstruction,
         user: Self.answerPrompt(request, about: String(selection.prefix(Self.answerSelectionCharacters))),
@@ -151,9 +151,5 @@ struct ReadAloudLLM: GatewayClient, Sendable {
       ),
       timeout: Self.answerTimeout
     ).text
-  }
-
-  private func complete(_ body: ChatRequest, timeout: TimeInterval) async throws -> ChatReply {
-    try await gateway.send(body, timeout: timeout)
   }
 }

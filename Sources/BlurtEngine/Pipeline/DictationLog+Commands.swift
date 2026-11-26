@@ -171,7 +171,7 @@ extension DictationLog {
       outcome: outcomeName(record.outcome),
       errorKind: record.failure?.kind,
       error: record.failure?.text,
-      milliseconds: Int(record.duration / .milliseconds(1))
+      milliseconds: Int(record.duration.milliseconds)
     )
   }
 
@@ -233,30 +233,32 @@ extension VoiceCommandStep {
   /// The line for a step that names no element: an app, a link, keys, text,
   /// a button by name, a menu path, the window.
   private var appLine: String? {
+    appArgument.map { "\(action.rawValue) \($0)" }
+  }
+
+  /// What `appLine` shows after the action's wire name.
+  private var appArgument: String? {
     switch self {
     case .openApp(let app), .quitApp(let app), .hideApp(let app):
-      "\(action.rawValue) \(app)"
+      app
 
     case .openURL(let url):
-      "open_url \(url.absoluteString)"
+      url.absoluteString
 
     case .shortcut(let chord):
-      "shortcut \(chord.spelled)"
+      chord.spelled
 
-    case .type(let text):
-      "type \"\(text)\""
+    case .type(let text), .pressButton(let text):
+      "\"\(text)\""
 
     case .media(let key):
-      "media \(key.rawValue)"
-
-    case .pressButton(let name):
-      "press_button \"\(name)\""
+      key.rawValue
 
     case .chooseMenuItem(let path):
-      "menu \(path.joined(separator: " › "))"
+      path.joined(separator: " › ")
 
     case .window(let operation):
-      "window \(operation.rawValue)"
+      operation.rawValue
 
     default:
       nil

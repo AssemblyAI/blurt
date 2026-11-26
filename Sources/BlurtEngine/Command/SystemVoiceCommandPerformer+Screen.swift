@@ -319,7 +319,7 @@
       let node = AXRead.Node(handle.element)
       // A search field shown as its button (Finder's): pressing it opens the
       // field, focused, which is what a focus on it is for.
-      if node.role == kAXButtonRole, AXRead.string(handle.element, kAXSubroleAttribute) == "AXSearchField" {
+      if node.role == kAXButtonRole, node.subrole == "AXSearchField" {
         return try await press(handle, pid: pid) + "; a search button, opened"
       }
       let role = try require(node, roleIn: ScreenSnapshot.textEntryRoles, for: "focus", what: "a text field")

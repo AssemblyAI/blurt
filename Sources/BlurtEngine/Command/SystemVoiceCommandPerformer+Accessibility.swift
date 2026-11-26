@@ -23,8 +23,6 @@
       capped(AXUIElementCreateApplication(pid))
     }
 
-    /// The app's focused window, else its main one: an app whose main window
-    /// isn't key still has one to act in.
     /// The focused window, else the main one, else the first the app lists:
     /// Calculator answered neither of the first two (2026-11-04).
     static func window(of app: AXUIElement) -> AXUIElement? {

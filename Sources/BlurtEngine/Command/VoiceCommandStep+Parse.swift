@@ -279,8 +279,7 @@ extension VoiceCommandStep {
   }
 
   private static func element(_ value: Int?) throws -> Int {
-    guard let value else { throw VoiceCommandError.malformedReply }
-    return value
+    try required(value, or: .malformedReply)
   }
 
   private static func menuPath(_ value: [String]) throws -> [String] {
