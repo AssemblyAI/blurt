@@ -20,14 +20,6 @@ public enum BlurtError: Error, Sendable {
 }
 
 extension BlurtError {
-  /// `error` itself when it is already a `BlurtError` — `.apiKeyMissing`, or
-  /// `MicCapture`'s own capture failures — else `error` wrapped by `wrap`. One
-  /// rule, so a typed error is never wrapped twice ("Audio capture failed:
-  /// Audio capture failed: …" on the pill and in `errors.jsonl`).
-  static func wrapping(_ error: any Error, as wrap: (any Error) -> Self) -> Self {
-    error as? Self ?? wrap(error)
-  }
-
   /// Stable, machine-greppable case label for the developer-mode error log
   /// (`DictationLog.appendError`). Distinct from `errorDescription`, which is
   /// human-facing copy that carries a localized underlying description — fine to
@@ -83,6 +75,14 @@ extension BlurtError {
     case .accessibilityPermissionMissing, .apiKeyMissing, .sttFailed, .audioCaptureFailed:
       false
     }
+  }
+
+  /// `error` itself when it is already a `BlurtError` — `.apiKeyMissing`, or
+  /// `MicCapture`'s own capture failures — else `error` wrapped by `wrap`. One
+  /// rule, so a typed error is never wrapped twice ("Audio capture failed:
+  /// Audio capture failed: …" on the pill and in `errors.jsonl`).
+  static func wrapping(_ error: any Error, as wrap: (any Error) -> Self) -> Self {
+    error as? Self ?? wrap(error)
   }
 }
 

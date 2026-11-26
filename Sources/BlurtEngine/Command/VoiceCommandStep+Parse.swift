@@ -67,8 +67,8 @@ extension VoiceCommandStep {
   /// plan does between every entry ("type John, tab, type Smith, tab, …"). Left
   /// out of the three-separate-runs rule; a run of them is still held to its
   /// own limit, and a repeated group still to `repeatedBlock`.
-  static let fieldNavigation: [VoiceCommandStep] = ["tab", "shift+tab", "return"].compactMap {
-    KeyChord($0).map(Self.shortcut)
+  static let fieldNavigation: [VoiceCommandStep] = ["tab", "shift+tab", "return"].compactMap { keys in
+    KeyChord(keys).map(Self.shortcut)
   }
 
   /// The actions after which the window the snapshot read is surely still

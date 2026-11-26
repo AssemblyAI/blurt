@@ -10,11 +10,11 @@ struct QueuedSink: PCMSink {
   var bufferedSeconds: Double { 0 }
   var unplayedAudioSeconds: Double { unplayed }
 
-  func enqueue(_ pcm: Data) {
+  func enqueue(_: Data) {
     // Plays nothing: only the queue's length matters here.
   }
 
-  func drain() async {
+  func drain() {
     // Nothing queued to wait for.
   }
 
