@@ -106,11 +106,9 @@ final class TranscriptsModel {
   @ObservationIgnored var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
   @ObservationIgnored private(set) var pendingSave: Task<Void, Never>?
   /// History writes, one at a time and in order, so an older list never lands last.
-  /// Internal, like `pendingSave` and `isLoaded`: `prepareForExit`'s `flushHistory` reads them.
+  /// It also holds writes back until the saved history is read in (`open`).
+  /// Internal, like `pendingSave`: `prepareForExit`'s `flushHistory` reads them.
   let writer: TranscriptWriter
-  /// Whether the saved history has been read in. Until it has, nothing is written: a save
-  /// then would replace the file with this session's entries. The load's merge saves them.
-  @ObservationIgnored private(set) var isLoaded = false
 
   /// The entry the sheet has open, if it's a saved one. Stored, and kept
   /// current by `history`'s `didSet`, so the sheet reads it without scanning
@@ -134,20 +132,17 @@ final class TranscriptsModel {
     self.recorder = recorder ?? SystemAudioRecorder()
     self.makeLiveSession = liveSession
     self.recordingsDirectory = recordingsDirectory
-    // The store is read once, below, and written only through `writer`.
+    // The store is read once, below, and written, only through `writer`.
     self.writer = TranscriptWriter(store: store)
     self.history = []
     // Read off the main actor: the history only grows, and launch shouldn't
     // wait on decoding it. Anything saved meanwhile stays on top.
-    Task { [weak self, store] in
-      let loaded = await Task.detached(priority: .userInitiated) { store.load() }.value
+    Task { [weak self, writer] in
+      let saved = await Task.detached(priority: .userInitiated) { writer.load() }.value
       guard let self else {
         return
       }
-      let savedMeanwhile = !history.isEmpty
-      history = TranscriptStore.merging(history, saved: loaded)
-      isLoaded = true
-      if savedMeanwhile { save() }
+      history = writer.open(history, saved: saved)
       await titleUntitled()
     }
   }
@@ -346,19 +341,17 @@ final class TranscriptsModel {
 
   /// Saves the history — coalesced, and written off the main actor: a burst
   /// of changes (a dictation, its title, a transform) costs one write, and the
-  /// write never holds up the UI. The last change within the delay wins.
+  /// write never holds up the UI. The history is read when the delay ends, so
+  /// the write is the latest list — the merged one, if the saved history was
+  /// read in meanwhile. Before that read, `writer` writes nothing.
   func save() {
     pendingSave?.cancel()
-    guard isLoaded else {
-      return
-    }
-    let snapshot = history
-    pendingSave = Task { [writer] in
+    pendingSave = Task { [weak self] in
       try? await Task.sleep(for: .milliseconds(300))
-      guard !Task.isCancelled else {
+      guard !Task.isCancelled, let self else {
         return
       }
-      writer.save(snapshot)
+      writer.save(history)
     }
   }
 }

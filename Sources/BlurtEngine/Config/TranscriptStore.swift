@@ -66,9 +66,9 @@ public struct TranscriptStore: Sendable {
   /// `current` with the `saved` entries it doesn't already have appended: the
   /// history only grows, and an entry made this session wins over a saved
   /// copy with its id. The one rule for both merges — launch reading the saved
-  /// history in under what is already on screen, and a quit before that read
-  /// finished (`TranscriptWriter.saveNow`).
-  public static func merging(_ current: [SavedTranscript], saved: [SavedTranscript]) -> [SavedTranscript] {
+  /// history in under what is already on screen (`TranscriptWriter.open`), and
+  /// a quit before that read finished (`TranscriptWriter.saveNow`).
+  static func merging(_ current: [SavedTranscript], saved: [SavedTranscript]) -> [SavedTranscript] {
     let present = Set(current.map(\.id))
     return current + saved.filter { !present.contains($0.id) }
   }

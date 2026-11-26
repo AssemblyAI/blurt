@@ -291,12 +291,11 @@ extension TranscriptsModel {
   }
 
   /// Writes the history now, in place of the pending debounced save, queued
-  /// behind any write already under way so this one lands last. If the saved
-  /// file hasn't been read in yet, it is read and merged first rather than
-  /// overwritten with only this session's entries.
+  /// behind any write already under way so this one lands last — merged with
+  /// the saved file if that hasn't been read in yet (`TranscriptWriter.saveNow`).
   private func flushHistory() {
     pendingSave?.cancel()
-    writer.saveNow(history, mergingSaved: !isLoaded)
+    writer.saveNow(history)
   }
 
   /// Stops capturing and ends the audio feed — every way a recording ends.
