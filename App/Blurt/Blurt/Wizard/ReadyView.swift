@@ -296,26 +296,14 @@ struct ReadyView: View {
     let choice = bindings.choice(for: key, profiles: profiles)
     let title: String =
       switch choice {
-      case .readAloud:
-        LibraryKind.readAloud.name
-
-      case .ask:
-        LibraryKind.ask.name
-
-      case .rewrite:
-        KeyActionName.rewrite
-
-      case .compose:
-        KeyActionName.compose
-
-      case .command:
-        KeyActionName.command
-
       case .dictate(TriggerKeyChoice.mainWindowStyle), .off:
         "Dictate"
 
       case .dictate(let style):
         "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)"
+
+      case .readAloud, .ask, .rewrite, .compose, .command:
+        choice.action.title
       }
     let symbol = choice.action.systemImage
     let hint = bindings.activation.hint(for: choice.action)

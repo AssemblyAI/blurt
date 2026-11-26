@@ -178,13 +178,13 @@ struct LibrarySection<Header: View>: View {
   @ViewBuilder private var emptyMessage: some View {
     if model.history.isEmpty {
       emptyPrompt
-    } else if days.isEmpty, let shownQuery {
+    } else if let shownQuery {
       EmptyListMessage(
         title: "No results for \u{201C}\(shownQuery)\u{201D}",
         systemImage: "magnifyingglass",
         hint: "Check the spelling or try a new search."
       )
-    } else if days.isEmpty {
+    } else {
       EmptyListMessage(title: filter.emptyTitle, systemImage: filter.systemImage, hint: filter.emptyHint)
     }
   }

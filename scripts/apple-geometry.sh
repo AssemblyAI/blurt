@@ -65,7 +65,7 @@ rm -rf "$WORK"
 mkdir -p "$WORK"
 
 echo "==> measuring the system keyboard on $NAME (iOS $OS, ${SCALE}x) for the $PROFILE profile"
-(cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+ios_generate_project
 RESULTS="$WORK/probe.xcresult"
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSProbe \
   -only-testing:BlurtiOSProbe/AppleKeyboardProbe \

@@ -1,4 +1,3 @@
-import AVFoundation
 import UIKit
 
 /// Blurt's page in the Settings app.

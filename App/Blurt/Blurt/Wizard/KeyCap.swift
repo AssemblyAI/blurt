@@ -25,6 +25,33 @@ struct KeyCap: View {
 }
 
 extension TriggerKeyAction {
+  /// The action's name — the Keys tab's pop-ups, the main window's key rows
+  /// and the Sounds tab's subtitles, so an action reads the same in each.
+  var title: String {
+    switch self {
+    case .off:
+      "Off"
+
+    case .dictate:
+      "Dictate"
+
+    case .readAloud:
+      KeyActionName.readAloud
+
+    case .ask:
+      KeyActionName.ask
+
+    case .rewrite:
+      KeyActionName.rewrite
+
+    case .compose:
+      KeyActionName.compose
+
+    case .command:
+      KeyActionName.command
+    }
+  }
+
   /// The action's row icon — the main window's key rows and the Keys tab's
   /// action rows, so an action looks the same in both.
   var systemImage: String {
