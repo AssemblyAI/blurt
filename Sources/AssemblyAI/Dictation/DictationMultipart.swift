@@ -3,8 +3,8 @@ import Foundation
 /// The dictation upload's multipart envelope: boundaries, part headers, the
 /// `audio.pcm` filename, CRLF placement.
 ///
-/// Its own type rather than an extension on `AssemblyAITranscriber`, because
-/// none of it depends on the transcriber — boundary and bytes in, bytes out. The
+/// Its own type rather than an extension on `DictationClient`, because
+/// none of it depends on the client — boundary and bytes in, bytes out. The
 /// transport is a *caller* of the envelope, which is also what keeps `framed`
 /// private: as an extension split across files it had to be widened to internal
 /// to stay reachable, exposing the module to a helper that is nobody's business.
@@ -16,7 +16,7 @@ import Foundation
 /// the framing is stated once.
 ///
 /// The order they go on the wire — config, audio header, frames, closing
-/// boundary — is `AssemblyAITranscriber.streamedBody`'s to explain, and it is
+/// boundary — is `DictationClient.streamedBody`'s to explain, and it is
 /// the streaming route's requirement rather than a choice.
 enum DictationMultipart {
   /// The `audio` part's framing — everything before the PCM bytes themselves,

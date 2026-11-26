@@ -1,3 +1,5 @@
+import Foundation
+
 /// A dictation API failure body. The reference documents exactly two shapes
 /// and says to read both: `{error, error_code}` for most failures (400, 401,
 /// 413, 429, 502, 503, 504) and `{status, title, detail}` for the ones relayed
@@ -51,5 +53,28 @@ struct ErrorResponse: Decodable, Sendable {
     }
     message = string(.error) ?? string(.detail)
     errorCode = string(.errorCode)
+  }
+}
+
+extension ErrorResponse {
+  /// Best human-readable explanation for a non-2xx response: `error`, then
+  /// `detail` (the two documented shapes, above), then the raw body text,
+  /// trimmed and capped. The dictation and `/v2` async clients both read
+  /// their failures through it.
+  ///
+  /// The raw-body arm is deliberately kept. It is not compatibility with an old
+  /// API shape — it is what turns a response the API never promised (a proxy's HTML
+  /// 502, a captive-portal page) into something diagnosable instead of a bare
+  /// status code. Returns nil only for an empty body.
+  static func message(in data: Data) -> String? {
+    if let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: data),
+      let message = parsed.message
+    {
+      return message
+    }
+    guard let raw = String(bytes: data, encoding: .utf8)?.trimmedNonEmpty() else {
+      return nil
+    }
+    return String(raw.prefix(500))
   }
 }

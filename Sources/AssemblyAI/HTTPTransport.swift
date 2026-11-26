@@ -1,7 +1,7 @@
 public import Foundation
 
-/// The `URLSession` calls the AssemblyAI clients make (`AssemblyAITranscriber`,
-/// `APIKeyValidator`), behind a seam so tests substitute a per-instance fake
+/// The `URLSession` calls the AssemblyAI clients make (`DictationClient`,
+/// `AsyncTranscriptionClient`, `APIKeyValidator` and the rest), behind a seam so tests substitute a per-instance fake
 /// instead of registering a process-global `URLProtocol`.
 public protocol HTTPTransport: Sendable {
   func data(for request: URLRequest) async throws -> (Data, URLResponse)
