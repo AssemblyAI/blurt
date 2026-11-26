@@ -326,6 +326,16 @@ def _field(row: dict, name: str, where: str) -> object:
     return row[name]
 
 
+def cache_root() -> pathlib.Path:
+    """The user's cache directory: `XDG_CACHE_HOME`, else `~/.cache`.
+
+    Every on-disk cache here lives under it — fetched rows, Voice Arena's audio and
+    transcripts — and so does the Hugging Face login token's default home, as the
+    `huggingface_hub` library resolves it.
+    """
+    return pathlib.Path(os.environ.get("XDG_CACHE_HOME") or pathlib.Path.home() / ".cache")
+
+
 def hf_token() -> str | None:
     """The Hugging Face token, however the user happens to have supplied it.
 
@@ -344,9 +354,7 @@ def hf_token() -> str | None:
         if token and token.strip():
             return token.strip()
 
-    home = os.environ.get("HF_HOME") or os.path.join(
-        os.path.expanduser("~"), ".cache", "huggingface"
-    )
+    home = os.environ.get("HF_HOME") or os.path.join(cache_root(), "huggingface")
     for path in (os.environ.get("HF_TOKEN_PATH"), os.path.join(home, "token")):
         if not path:
             continue
@@ -373,9 +381,8 @@ _RATE_LIMIT_BACKOFF = 4.0
 
 def _rows_cache_dir(source: Source) -> pathlib.Path:
     """Where a source's fetched pages persist, keyed by everything that selects them."""
-    root = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
     name = f"{source.dataset}/{source.config or 'default'}/{source.split}".replace("/", "__")
-    return pathlib.Path(root) / "blurt-evals" / "hf-rows" / name
+    return cache_root() / "blurt-evals" / "hf-rows" / name
 
 
 def _rows_via_api(source: Source, limit: int):

@@ -71,30 +71,22 @@ xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme Bl
   -only-testing:BlurtiOSProbe/AppleKeyboardProbe \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet
-xcrun xcresulttool export attachments --path "$RESULTS" --output-path "$WORK/attachments" >/dev/null
+ios_export_attachments "$RESULTS" "$WORK"
 
-# The attachments come out under generated names; the manifest maps them back.
+# ios_export_attachments put each attachment at WORK/<its name>.json or .png.
 # XCUITest reports touch cells, which tile a row with no gaps, so the caps
 # themselves — widths, gaps, height, radius, the surface's top edge and the
 # margins — are read off the light screenshot by design-diff.swift measure,
 # with the probes placed inside the caps from the cells.
-python3 - "$WORK/attachments" "$OUT" "$NAME" "$WORK" "$REPO_ROOT" "$SCALE" "$OS" "$RUNTIME" "$PROFILE" <<'PY'
-import json, os, shutil, subprocess, sys
+python3 - "$OUT" "$NAME" "$WORK" "$REPO_ROOT" "$SCALE" "$OS" "$RUNTIME" "$PROFILE" <<'PY'
+import json, os, subprocess, sys
 from datetime import date
-attachments, out, device, work, root, scale, os_version, runtime, profile = sys.argv[1:10]
+out, device, work, root, scale, os_version, runtime, profile = sys.argv[1:9]
 scale = int(scale)  # the capture's pixels per point: the device type's
-manifest = json.load(open(os.path.join(attachments, "manifest.json")))
-found = {}
-for test in manifest:
-    for a in test.get("attachments", []):
-        found[a["suggestedHumanReadableName"]] = os.path.join(attachments, a["exportedFileName"])
 faces, shots = {}, {}
 for face in ("light", "dark"):
-    name = next(k for k in found if k.startswith(f"apple-geometry-{face}"))
-    faces[face] = json.load(open(found[name]))
-    shot = next(k for k in found if k.startswith(f"apple-keyboard-{face}"))
+    faces[face] = json.load(open(os.path.join(work, f"apple-geometry-{face}.json")))
     shots[face] = os.path.join(work, f"apple-keyboard-{face}.png")
-    shutil.copy(found[shot], shots[face])
 
 light = faces["light"]
 keys, kb, win = light["keys"], light["keyboard"], light["window"]

@@ -20,23 +20,18 @@ extension BlurtUITestCase {
   ) -> XCUIElement {
     let button = settings.buttons[identifier]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
-    if !waitUntilHittable(button, timeout: 5), settings.title != UITestIdentifiers.mainWindowTitle {
+    let hittable = button.wait(for: \.isHittable, toEqual: true, timeout: 5)
+    if !hittable, settings.title != UITestIdentifiers.mainWindowTitle {
       app.typeKey(",", modifierFlags: .command)
     }
     XCTAssertTrue(
-      waitUntilHittable(button, timeout: 10),
+      button.wait(for: \.isHittable, toEqual: true, timeout: 10),
       "API key row button (\(identifier)) is covered (at \(button.frame)); windows: \(windowFrames())"
     )
     button.click()
     let sheet = settings.sheets.firstMatch
     XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The API key sheet should open")
     return sheet
-  }
-
-  /// Whether `element` becomes hittable within `timeout`.
-  private func waitUntilHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-    let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: element)
-    return XCTWaiter().wait(for: [hittable], timeout: timeout) == .completed
   }
 
   /// Every app window's title and frame, for a failure message.

@@ -48,6 +48,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
+import wave
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -93,8 +94,7 @@ def synthesize(text: str, directory: Path, voice: str | None = None) -> bytes:
         check=True,
         capture_output=True,
     )
-    # 44 bytes is the canonical WAV header afconvert emits for this format.
-    return wav.read_bytes()[44:]
+    return _pcm(wav)
 
 
 def _multipart(
@@ -246,7 +246,13 @@ def recorded(url: str, directory: Path) -> bytes:
         check=True,
         capture_output=True,
     )
-    return wav.read_bytes()[44:]
+    return _pcm(wav)
+
+
+def _pcm(wav: Path) -> bytes:
+    """A WAV file's sample frames, without its header (whatever chunks that holds)."""
+    with wave.open(str(wav), "rb") as reader:
+        return reader.readframes(reader.getnframes())
 
 
 def synthesize_all(utterances: list[Utterance]) -> list[tuple[Utterance, bytes]]:

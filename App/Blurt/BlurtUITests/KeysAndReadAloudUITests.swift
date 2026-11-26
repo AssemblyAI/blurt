@@ -30,6 +30,7 @@ final class KeysAndReadAloudUITests: BlurtUITestCase {
       pick(key, in: harness)
       harness.buttons[UITestIdentifiers.harnessSetOff].click()
       harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
+      // wall-clock-ok: an absence check — a key turned off must start nothing; a slow runner only makes it pass
       sleep(1)
       XCTAssertEqual(status(in: harness), UITestIdentifiers.statusIdle, "\(key), turned off, should start nothing")
       harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()

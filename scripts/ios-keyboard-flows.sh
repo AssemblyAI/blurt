@@ -73,20 +73,7 @@ for face in $FACES; do
     2>&1 | grep -E "^FLOW-|XCTAssertTrue failed|Blurt never came up|error:|TEST BUILD FAILED" | grep -v "XCTAssertTrue failed" | sed "s/^/    /"
   # xcodebuild's own verdict, read before any other command replaces it.
   if [ "${PIPESTATUS[0]}" -ne 0 ]; then FAILED_RUNS+=("$name"); fi
-  xcrun xcresulttool export attachments --path "$dir/flows.xcresult" --output-path "$dir/attachments" >/dev/null 2>&1
-  python3 - "$dir" <<'PY'
-import json, os, shutil, sys
-d = sys.argv[1]
-try:
-    manifest = json.load(open(os.path.join(d, "attachments", "manifest.json")))
-except FileNotFoundError:
-    sys.exit(0)
-for test in manifest:
-    for a in test.get("attachments", []):
-        name = a["suggestedHumanReadableName"]
-        if name.startswith("flow-"):
-            shutil.copy(os.path.join(d, "attachments", a["exportedFileName"]), os.path.join(d, name.split("_")[0] + ".png"))
-PY
+  ios_export_attachments "$dir/flows.xcresult" "$dir" 2>/dev/null
   # The sheet: the bottom of every step's screenshot — the field is at
   # the top, the keyboard at the bottom — captioned with the step.
   captions=()
