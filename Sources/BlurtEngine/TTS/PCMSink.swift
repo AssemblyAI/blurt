@@ -8,6 +8,9 @@ protocol PCMSink: Sendable {
   var currentLevel: Float { get }
   /// Seconds of audio queued ahead of what's playing, in listening time.
   var bufferedSeconds: Double { get }
+  /// The same queue in the audio's own time (no rate applied): how much of
+  /// what was enqueued hasn't been heard. 0 once stopped.
+  var unplayedAudioSeconds: Double { get }
 
   func enqueue(_ pcm: Data)
   /// Returns once everything enqueued has played, or `stop()` was called.
@@ -19,4 +22,5 @@ protocol PCMSink: Sendable {
 extension PCMSink {
   var currentLevel: Float { 0 }
   var bufferedSeconds: Double { 0 }
+  var unplayedAudioSeconds: Double { 0 }
 }

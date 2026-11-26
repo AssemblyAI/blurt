@@ -188,6 +188,15 @@ struct VoiceCommandParseTests {
     #expect(try steps([find, typed, esc, find, typed].joined(separator: ", ")).count == 5)
   }
 
+  @Test("Tab or Return between form fields, three times or more, is a plan, not a loop")
+  func fieldNavigationAmongEntries() throws {
+    let tab = #"{"action": "shortcut", "keys": "tab"}"#
+    let entries = ["John", "Smith", "john@x.com"].map { #"{"action": "type", "text": ""# + $0 + #""}"# }
+    #expect(try steps(entries.flatMap { [$0, tab] }.joined(separator: ", ")).count == 6)
+    let enter = #"{"action": "shortcut", "keys": "return"}"#
+    #expect(try steps(entries.flatMap { [$0, enter] }.joined(separator: ", ")).count == 6)
+  }
+
   @Test("a cell, listed as clickable, can be selected as well as pressed")
   func selectClickable() throws {
     let cell: [ScreenContext.Element] = [.init(id: 7, kind: "clickable", label: "Report.pdf")]

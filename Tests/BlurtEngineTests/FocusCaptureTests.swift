@@ -112,6 +112,22 @@ struct FocusCaptureTests {
       maxChars: 320,
       expected: nil
     ),
+    // A caret inside a character rounds down to its start; the text after the
+    // caret never counts as prior text.
+    PriorCase(
+      name: "a caret between a letter and its combining accent rounds down",
+      full: "cafe\u{301} later text",
+      caret: 4,
+      maxChars: 320,
+      expected: "caf"
+    ),
+    PriorCase(
+      name: "a caret inside a surrogate pair rounds down",
+      full: "hi 😀 there",
+      caret: 4,
+      maxChars: 320,
+      expected: "hi "
+    ),
   ]
 
   // MARK: selectLabel

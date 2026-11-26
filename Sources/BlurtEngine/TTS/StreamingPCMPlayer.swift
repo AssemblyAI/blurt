@@ -64,6 +64,10 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   /// reading has got.
   var bufferedSeconds: Double { (remaining() ?? 0) / rate }
 
+  /// Seconds of audio queued ahead of what's playing, in the audio's own time,
+  /// or 0 once stopped.
+  var unplayedAudioSeconds: Double { remaining() ?? 0 }
+
   /// The loudness of what's playing right now, 0...1, or 0 between words,
   /// before the first chunk, and once stopped. Reads the media clock, so it
   /// follows the audio coming out of the speakers, not the audio arriving.

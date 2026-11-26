@@ -171,8 +171,10 @@ extension FocusCapture {
   /// **UTF-16 offset** (the domain AX selected-text ranges use — see
   /// `caretLocation`), so it is resolved through the UTF-16 view rather than
   /// counted in `Character`s, which diverge as soon as the text holds emoji or
-  /// other surrogate pairs. A caret outside the string — or one that doesn't
-  /// land on a character boundary — falls back to the tail of the whole value.
+  /// other surrogate pairs. A caret that lands inside a character — between a
+  /// letter and its combining accent, or inside an emoji sequence — is rounded
+  /// down to that character's start: the text after the caret is never prior
+  /// text. A caret outside the string falls back to the tail of the whole value.
   /// Returns `nil` when the resulting slice is empty.
   static func priorSlice(full: String, caret: Int, maxChars: Int) -> String? {
     guard !full.isEmpty else {
@@ -180,11 +182,9 @@ extension FocusCapture {
     }
     let upto: Substring
     if caret >= 0, caret <= full.utf16.count,
-      let index = full.utf16.index(
-        full.utf16.startIndex, offsetBy: caret, limitedBy: full.utf16.endIndex
-      )?
-      .samePosition(in: full)
+      let offset = full.utf16.index(full.utf16.startIndex, offsetBy: caret, limitedBy: full.utf16.endIndex)
     {
+      let index = offset.samePosition(in: full) ?? full.indices.last { $0 < offset } ?? full.startIndex
       upto = full[..<index]
     } else {
       upto = full[...]

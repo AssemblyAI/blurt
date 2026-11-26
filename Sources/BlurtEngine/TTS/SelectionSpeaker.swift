@@ -96,9 +96,10 @@
     }
 
     /// `speak`, kept as a clip (`clips`) when there is somewhere to keep it:
-    /// the audio is copied as it plays, and the clip is reported however the
-    /// read ends — finished, stopped or failed part-way — as long as some of it
-    /// was heard. `request` is the question an answer replied to.
+    /// the audio is copied as it is queued and trimmed to what played when the
+    /// read is stopped (`ClipRecordingSink`), and the clip is reported however
+    /// the read ends — finished, stopped or failed part-way — as long as some
+    /// of it was heard. `request` is the question an answer replied to.
     private func speak(
       _ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?, request: String?
     ) async throws {
