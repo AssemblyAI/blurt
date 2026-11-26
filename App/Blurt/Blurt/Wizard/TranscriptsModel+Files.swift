@@ -1,8 +1,7 @@
-import BlurtEngine
 import Foundation
 import UniformTypeIdentifiers
 
-// The model's file naming and file-type rules, and the refusal of a file that
+// The model's file-type rules, and the refusal of a file that
 // breaks them, split from TranscriptsModel.swift for the file-length budget.
 extension TranscriptsModel {
   /// Whether a URL is worth trying: a file whose type is audio or video. The
@@ -13,12 +12,6 @@ extension TranscriptsModel {
       return false
     }
     return type.conforms(to: .audiovisualContent)
-  }
-
-  /// "Recording 2026-10-30 at 10.04.08.m4a" — the shape macOS names a
-  /// screenshot, so recordings sort by time and read like the system's own.
-  static func recordingName(at date: Date) -> String {
-    "Recording \(TranscriptStore.fileStamp(date)).m4a"
   }
 
   /// Transcribes the first audio or video file among `urls` — dropped on the

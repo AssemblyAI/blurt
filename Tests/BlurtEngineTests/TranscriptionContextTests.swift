@@ -1,6 +1,7 @@
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`

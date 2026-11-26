@@ -33,7 +33,7 @@ nonisolated final class PCMConverter {
     guard
       let format = AVAudioFormat(
         commonFormat: .pcmFormatInt16,
-        sampleRate: Double(SyncSTTLimits.sampleRate),
+        sampleRate: Double(RecordingLimits.sampleRate),
         channels: 1,
         interleaved: true
       )

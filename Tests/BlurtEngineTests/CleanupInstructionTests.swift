@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// Regression tests for the shipped cleanup instruction. There is no logic to

@@ -1,9 +1,12 @@
+import BlurtEngine
 import Foundation
 
 /// Why a microphone couldn't open or start. Each case is its own sentence,
 /// for the home screen; `CaptureFailure` turns each into the keyboard's
-/// `FailureReason`.
-nonisolated enum ListeningSourceFailure: Error, LocalizedError, Equatable {
+/// `FailureReason`. `CaptureFailureWording` tells the engine the sentence is
+/// written for the user, so a failed phase says it without the
+/// "Audio capture failed: …" prefix.
+nonisolated enum ListeningSourceFailure: LocalizedError, CaptureFailureWording, Equatable {
   /// A press arrived with no listening window open — the keyboard's job is to
   /// open the app first, so this is a plumbing fault, not a user error.
   case windowClosed

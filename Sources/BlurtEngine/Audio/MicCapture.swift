@@ -284,8 +284,8 @@ public actor MicCapture: MicCaptureProtocol {
     }
     let byteCount = recorder.stopAndReadByteCount()
 
-    let sampleCount = byteCount / SyncSTTLimits.bytesPerSample
-    let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: byteCount)
+    let sampleCount = byteCount / RecordingLimits.bytesPerSample
+    let durationMs = RecordingLimits.durationMs(ofPCMBytes: byteCount)
     let lingerMs = Int(linger.milliseconds.rounded())
     Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs) lingerMs=\(lingerMs)")
     return byteCount

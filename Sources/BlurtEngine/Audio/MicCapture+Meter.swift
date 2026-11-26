@@ -8,12 +8,11 @@ extension MicCapture {
   /// the overlay's voice bars read as empty at rest and only move for speech.
   static let meterFloorDB: Float = -50
 
-  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
   /// Convert the capture meter's dBFS power into the `0...1` the overlay
   /// expects, mapped linearly across `[meterFloorDB, 0]`. (A raw `pow(10, db/20)`
   /// amplitude leaves ambient noise well above zero, so the bars never rested
   /// at empty.)
-  public static func linearLevel(fromPowerDB db: Float) -> Float {
+  static func linearLevel(fromPowerDB db: Float) -> Float {
     guard db.isFinite, db > meterFloorDB else {
       return 0
     }

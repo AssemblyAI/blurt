@@ -1,6 +1,7 @@
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// `KeyTerms.fitted` is the last thing between the user's Settings list and
@@ -87,7 +88,7 @@ struct KeyTermsTests {
     // Two caps on two fields of one request. Borrowing the other field's figure
     // is how an over-cap value shipped once before, so pin them apart.
     #expect(KeyTerms.characterCap == 2_048)
-    #expect(KeyTerms.characterCap != STTPrompt.characterCap)
+    #expect(KeyTerms.characterCap != DictationPrompt.characterCap)
     // And the term cap is a count, not a size — pinned so the two caps on this
     // one field can't be conflated either.
     #expect(KeyTerms.termCap == 100)

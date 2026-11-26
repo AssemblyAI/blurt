@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// What the session does with the context it captures at press time, and what it

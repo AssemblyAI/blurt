@@ -29,7 +29,7 @@ struct StyleProfileEditorSheet: View {
   /// segment in the main window's switcher, and one with no instructions would
   /// be a segment that changes nothing about the dictation it selects.
   private var canSave: Bool {
-    name.trimmedNonEmpty() != nil && instructions.trimmedNonEmpty() != nil
+    StyleProfile.canSave(name: name, instructions: instructions)
   }
 
   var body: some View {
@@ -69,9 +69,8 @@ struct StyleProfileEditorSheet: View {
         // Capped because the name labels a segment of the main window's
         // switcher; counted in characters, which is what that width bounds.
         .onChange(of: name) {
-          if name.count > StyleProfileStore.nameLimit {
-            name = String(name.prefix(StyleProfileStore.nameLimit))
-          }
+          let clamped = StyleProfileStore.clampedName(name)
+          if clamped != name { name = clamped }
         }
     }
   }
@@ -98,9 +97,8 @@ struct StyleProfileEditorSheet: View {
       .onChange(of: instructions) {
         // Held to the per-profile limit the engine trims to as well, so what is
         // stored is what is sent.
-        if instructions.utf8.count > StyleProfileStore.characterLimit {
-          instructions = instructions.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
-        }
+        let clamped = StyleProfileStore.clampedInstructions(instructions)
+        if clamped != instructions { instructions = clamped }
       }
       // The room is finite (`StyleProfileStore.characterLimit`) — show it rather
       // than truncating silently at the limit. Counted in UTF-8 bytes, the unit
@@ -145,9 +143,8 @@ struct StyleProfileEditorSheet: View {
     _instructions = State(initialValue: profile.instructions)
   }
 
-  /// Writes the edit through the store, which owns the encoding and the caps.
-  /// Merged against the *stored* list rather than the observed copy, so a change
-  /// made in another settings window while this sheet was open isn't clobbered.
+  /// Writes the edit through the store, which owns the encoding, the caps and
+  /// the merge against the stored list (`StyleProfileStore.save(_:)`).
   private func save() {
     guard canSave else {
       return
@@ -155,14 +152,7 @@ struct StyleProfileEditorSheet: View {
     var edited = profile
     edited.name = name
     edited.instructions = instructions
-    let store = StyleProfileStore()
-    var updated = store.profiles
-    if let index = updated.firstIndex(where: { $0.id == edited.id }) {
-      updated[index] = edited
-    } else {
-      updated.append(edited)
-    }
-    store.profiles = updated
+    StyleProfileStore().save(edited)
     dismiss()
   }
 
@@ -171,8 +161,7 @@ struct StyleProfileEditorSheet: View {
   /// depends on it — deleting the active one just falls back to the first
   /// remaining profile (see `StyleProfileStore.active`).
   private func delete() {
-    let store = StyleProfileStore()
-    store.profiles = store.profiles.filter { $0.id != profile.id }
+    StyleProfileStore().remove(id: profile.id)
     dismiss()
   }
 }

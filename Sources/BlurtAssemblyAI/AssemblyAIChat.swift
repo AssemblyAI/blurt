@@ -13,10 +13,11 @@ struct AssemblyAIChat: ChatCompleting {
     self.client = GatewayChatClient(transport: transport, userAgent: UserAgent.current)
   }
 
-  /// The engine's request as the gateway's wire request, field for field.
+  /// The engine's request as the gateway's wire request, field for field, its
+  /// tier as the gateway model this package runs it on.
   static func wire(_ request: ChatRequest) -> GatewayChatRequest {
     GatewayChatRequest(
-      model: request.model,
+      model: request.tier.gatewayModel,
       messages: request.messages.map { GatewayChatRequest.Message(role: $0.role, content: $0.content) },
       maxTokens: request.maxTokens,
       temperature: request.temperature,
@@ -29,6 +30,6 @@ struct AssemblyAIChat: ChatCompleting {
       throw BlurtError.apiKeyMissing
     }
     let reply = try await client.complete(Self.wire(request), apiKey: apiKey, timeout: timeout)
-    return ChatReply(text: reply.text, truncated: reply.truncated)
+    return ChatReply(text: reply.text, truncated: reply.truncated, model: request.tier.gatewayModel)
   }
 }

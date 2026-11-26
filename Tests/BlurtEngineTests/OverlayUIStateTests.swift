@@ -8,6 +8,12 @@ import Testing
 /// shell that renders it has no test target).
 @Suite("PipelinePhase → OverlayUIState")
 struct OverlayUIStateTests {
+  /// A host's own capture source (the iPhone's listening window) words its
+  /// errors for the user; the phase says them as they are.
+  private struct HostCaptureFailure: CaptureFailureWording {
+    var errorDescription: String? { "A call or another app has the microphone." }
+  }
+
   /// The phase→pill projection, one row per `PipelinePhase` case with a fixed
   /// mapping. A table rather than a `@Test` apiece (the precedent
   /// `DictationKeyGateTests` sets): adding a phase case makes the missing row
@@ -102,6 +108,12 @@ struct OverlayUIStateTests {
     let error = NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Boom."])
     let phase = PipelinePhase.failed(.audioCaptureFailed(underlying: error))
     #expect(phase.overlayState == .error(message: "Audio capture failed: Boom."))
+  }
+
+  @Test
+  func userWordedCaptureErrorsDropThePrefix() {
+    let phase = PipelinePhase.failed(.audioCaptureFailed(underlying: HostCaptureFailure()))
+    #expect(phase.overlayState == .error(message: "A call or another app has the microphone."))
   }
 
   @Test

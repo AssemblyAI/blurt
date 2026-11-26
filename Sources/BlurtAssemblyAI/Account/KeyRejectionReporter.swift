@@ -34,4 +34,8 @@ public struct KeyRejectionReporter: TranscriberProtocol {
   public func warmUp() async {
     await base.warmUp()
   }
+
+  public func contextPrompt(for context: TranscriptionContext?) -> String {
+    base.contextPrompt(for: context)
+  }
 }

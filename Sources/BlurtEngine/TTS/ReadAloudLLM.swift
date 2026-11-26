@@ -23,11 +23,9 @@ import Foundation
 /// through, would otherwise read out an answer nobody asked for. An answer has
 /// no such fallback, since there is nothing else to say.
 struct ReadAloudLLM: GatewayClient, Sendable {
-  /// AssemblyAI's own hosted small model: the docs' quickstart model, the
-  /// cheapest tier on the gateway's `/v1/models` list (2026-10-02), and served
-  /// in the US and EU without sending the text to a third-party provider. Both
-  /// jobs are short and latency-bound: the user is waiting to hear something.
-  static let model = "qwen3.5-4b-32k-fast"
+  /// The provider's small, fast model: both jobs are short and latency-bound,
+  /// since the user is waiting to hear something.
+  static let tier = ChatModelTier.fast
 
   /// Room for the longest piece read-aloud rewrites at once
   /// (`ListeningChunks.maxCharacters`) to come back whole, even as code-heavy
@@ -39,7 +37,7 @@ struct ReadAloudLLM: GatewayClient, Sendable {
   static let answerMaxTokens = 1_024
   /// The most of a selection an answer is asked about: a long article's
   /// opening stretch. A read takes up to `SelectionSpeaker.maxCharacters`, far
-  /// past the model's 32k-token context once tokenized — code runs two or three
+  /// past the fast tier's 32k-token context once tokenized — code runs two or three
   /// characters a token — so the rest is left out rather than failing the ask.
   static let answerSelectionCharacters = 30_000
 
@@ -104,8 +102,8 @@ struct ReadAloudLLM: GatewayClient, Sendable {
     "<highlighted_text>\n\(selection)\n</highlighted_text>\n\n<spoken_request>\n\(request)\n</spoken_request>"
   }
 
-  static func chat(system: String, user: String, maxTokens: Int, model: String = model) -> ChatRequest {
-    chat(system: system, turns: [.init(role: "user", content: user)], maxTokens: maxTokens, model: model)
+  static func chat(system: String, user: String, maxTokens: Int, tier: ChatModelTier = tier) -> ChatRequest {
+    chat(system: system, turns: [.init(role: "user", content: user)], maxTokens: maxTokens, tier: tier)
   }
 
   /// A chat with more than one turn after the system prompt: a retry that
@@ -114,10 +112,10 @@ struct ReadAloudLLM: GatewayClient, Sendable {
     system: String,
     turns: [ChatRequest.Message],
     maxTokens: Int,
-    model: String = model
+    tier: ChatModelTier = tier
   ) -> ChatRequest {
     ChatRequest(
-      model: model,
+      tier: tier,
       messages: [.init(role: "system", content: system)] + turns,
       maxTokens: maxTokens,
       // Copying or answering, not composing: the same input should come back

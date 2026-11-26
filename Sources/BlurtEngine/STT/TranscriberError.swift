@@ -3,7 +3,7 @@ public import Foundation
 /// Failures every transcriber names the same way, so the pipeline can act on
 /// them without knowing the provider.
 public enum TranscriberError: Error, Equatable, LocalizedError {
-  /// The recording ended below `SyncSTTLimits.minPCMBytes`, so no request was
+  /// The recording ended below `RecordingLimits.minPCMBytes`, so no request was
   /// completed — a belt on top of `DictationSession.performRelease`'s own guard
   /// rather than the only thing between a stray tap and a request billed for
   /// transcribing nothing. `awaitUpload` maps it to the same quiet `.idle` that

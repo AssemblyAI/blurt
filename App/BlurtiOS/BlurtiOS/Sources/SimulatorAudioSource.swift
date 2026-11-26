@@ -159,7 +159,7 @@
           return
         }
         var format = AudioStreamBasicDescription(
-          mSampleRate: Double(SyncSTTLimits.sampleRate),
+          mSampleRate: Double(RecordingLimits.sampleRate),
           mFormatID: kAudioFormatLinearPCM,
           mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
           mBytesPerPacket: 2,

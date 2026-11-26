@@ -11,6 +11,11 @@ import Testing
 /// at a time instead of the whole article up front.
 @Suite("Long reads", .timeLimit(.minutes(1)))
 struct LongReadTests {
+  /// The voice's sentence cuts, as `AssemblyAISpeechSynthesizer` hands them in.
+  private static func sentences(_ text: String, _ maxCharacters: Int) -> [String] {
+    SpeechSegmenter.segments(of: text, maxCharacters: maxCharacters)
+  }
+
   /// An article of `paragraphs` paragraphs, each a dozen sentences long.
   private func article(paragraphs: Int) -> String {
     (1...paragraphs).map { index in
@@ -42,7 +47,7 @@ struct LongReadTests {
     let transport = FakeSpeechTransport()
     let sink = RecordingSink()
     let text = article(paragraphs: 4)
-    let pieces = ListeningChunks.chunks(of: text)
+    let pieces = ListeningChunks.chunks(of: text, sentences: Self.sentences)
     #expect(pieces.count > 2)
     // The first piece's audio leaves a minute waiting to be heard.
     sink.bufferedAfterEnqueue = 60
@@ -62,7 +67,7 @@ struct LongReadTests {
 
   @Test("the first piece is short, so reading starts after a paragraph, not the article")
   func shortFirstPiece() {
-    let pieces = ListeningChunks.chunks(of: article(paragraphs: 6))
+    let pieces = ListeningChunks.chunks(of: article(paragraphs: 6), sentences: Self.sentences)
     #expect(pieces[0].count <= ListeningChunks.firstMaxCharacters)
     #expect(pieces.dropFirst().allSatisfy { $0.count <= ListeningChunks.maxCharacters })
   }
@@ -70,7 +75,7 @@ struct LongReadTests {
   @Test("skip-jargon rewrites a long article a piece at a time, and reading starts after the first")
   func rewritesInPieces() async throws {
     let text = article(paragraphs: 6)
-    let pieces = ListeningChunks.chunks(of: text)
+    let pieces = ListeningChunks.chunks(of: text, sentences: Self.sentences)
     let gateway = GatedRewrites()
     let transport = FakeSpeechTransport()
     let sink = RecordingSink()
@@ -94,13 +99,15 @@ struct LongReadTests {
   func chunks() {
     let paragraph = String(repeating: "Some words in a sentence. ", count: 20)
     let text = Array(repeating: paragraph.trimmingCharacters(in: .whitespaces), count: 5).joined(separator: "\n\n")
-    let chunks = ListeningChunks.chunks(of: text, maxCharacters: 1_200, firstMaxCharacters: 1_200)
+    let chunks = ListeningChunks.chunks(
+      of: text, maxCharacters: 1_200, firstMaxCharacters: 1_200, sentences: Self.sentences
+    )
     #expect(chunks.count > 1)
     #expect(chunks.allSatisfy { $0.count <= 1_200 })
     #expect(
       chunks.joined(separator: " ").split(whereSeparator: \.isWhitespace)
         == text.split(whereSeparator: \.isWhitespace))
-    #expect(ListeningChunks.chunks(of: "Short.") == ["Short."])
-    #expect(ListeningChunks.chunks(of: "  \n\n ").isEmpty)
+    #expect(ListeningChunks.chunks(of: "Short.", sentences: Self.sentences) == ["Short."])
+    #expect(ListeningChunks.chunks(of: "  \n\n ", sentences: Self.sentences).isEmpty)
   }
 }

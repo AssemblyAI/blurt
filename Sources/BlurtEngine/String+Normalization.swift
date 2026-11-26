@@ -37,8 +37,8 @@ extension String {
 }
 
 extension StringProtocol {
-  /// How many whitespace-separated words the text holds — the one definition
-  /// of a word, for read-aloud's chunking and the Library's counts. A single
+  /// How many whitespace-separated words the text holds — the engine's one
+  /// definition of a word, for the Library's counts. A single
   /// pass over the scalars: no array of words, and no grapheme segmentation,
   /// on a transcript that can run to tens of thousands of words.
   var wordCount: Int {

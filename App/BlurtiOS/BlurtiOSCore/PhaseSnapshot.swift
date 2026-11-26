@@ -28,7 +28,7 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   package static let noticeStaleAfter: TimeInterval = noticeDwell + 1
   /// The engine's cap on one dictation, plus ten seconds for the transcript
   /// to come back.
-  package static let inFlightStaleAfter: TimeInterval = SyncSTTLimits.maxAudioSeconds + 10
+  package static let inFlightStaleAfter: TimeInterval = RecordingLimits.maxAudioSeconds + 10
 
   package let state: State
   package let message: String?

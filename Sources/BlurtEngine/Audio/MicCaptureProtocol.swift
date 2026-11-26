@@ -36,7 +36,7 @@ public protocol MicCaptureProtocol: Sendable {
   /// A count, not the audio: the recording is uploaded on the feed `start()`
   /// returned, as it is captured, so by the time capture stops there is nothing
   /// left to hand anyone. All the release path still needs is whether there was
-  /// enough of it to be worth transcribing (`SyncSTTLimits.minPCMBytes`).
+  /// enough of it to be worth transcribing (`RecordingLimits.minPCMBytes`).
   /// Returning the blob as well meant copying every byte a second time and
   /// holding a duplicate of the whole utterance until release.
   ///

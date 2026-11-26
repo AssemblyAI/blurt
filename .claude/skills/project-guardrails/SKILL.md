@@ -152,7 +152,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   `llm: null` (the only rewrite off switch — hence the response-side switch
   below), the `message` error field, and `warmUp()`'s GET at the bare host root
   (→ the documented `GET /warm`). Running _tighter_ than the docs is fine, and
-  `STTPrompt.characterCap` deliberately does. Measuring is still how a claim gets
+  `DictationPrompt.characterCap` deliberately does. Measuring is still how a claim gets
   settled — the docs have been wrong twice — but a measurement licenses
   distrusting a documented field, never sending an undocumented one.
 - **Don't put the enhanced-transcripts switch back on the request.** Every

@@ -7,9 +7,9 @@
 /// *from*, never pastes. Dictation cleanup stays the dictation API's
 /// server-side rewrite (AGENTS.md's settled decisions).
 struct MessageComposer: MessageComposing, GatewayClient {
-  /// The rewrite key's model (`SelectionRewriter.model`): writing, where the
+  /// The rewrite key's tier (`SelectionRewriter.tier`): writing, where the
   /// larger model earns its latency.
-  static let model = SelectionRewriter.model
+  static let tier = SelectionRewriter.tier
   /// Room for a long email or a page of notes. A reply that hits it is cut
   /// short and never pasted.
   static let maxTokens = 4_000
@@ -65,7 +65,7 @@ struct MessageComposer: MessageComposing, GatewayClient {
         system: Self.instruction,
         user: Self.prompt(instructions, for: app),
         maxTokens: Self.maxTokens,
-        model: Self.model
+        tier: Self.tier
       ),
       timeout: Self.timeout
     )

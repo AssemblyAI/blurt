@@ -172,9 +172,7 @@ final class CueSoundPlayer {
     let bindings = TriggerKeyBindings()
     let keys = TriggerKey.allCases.filter { key in
       let action = bindings.action(for: key)
-      let records = action != .readAloud
-      let speaks = action == .readAloud || action == .ask
-      return (reloads.dictation && records) || (reloads.readAloud && speaks)
+      return (reloads.dictation && action.records) || (reloads.readAloud && action.speaks)
     }
     guard !keys.isEmpty else {
       return

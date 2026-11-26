@@ -60,6 +60,9 @@ final class UploadProbe: TranscriberProtocol, Sendable {
     // No connection to pre-open: the probe never reaches a network.
   }
 
+  /// No prompt: the probe sends nothing.
+  func contextPrompt(for _: TranscriptionContext?) -> String { "" }
+
   func waitUntilEntered() async { await entered.wait() }
   func waitUntilHolding() async { await holding?.waitUntilEntered() }
   func allowToFinish() { holding?.allowToFinish() }

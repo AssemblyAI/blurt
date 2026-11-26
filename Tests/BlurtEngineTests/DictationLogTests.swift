@@ -94,7 +94,9 @@ struct DictationLogTests {
     let context = TranscriptionContext(
       appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "LeMUR"]
     )
-    DictationLog.write(transcript: "p", to: url, now: Date(), context: context, rewriteMode: .smart)
+    DictationLog.write(
+      transcript: "p", to: url, now: Date(), context: context, contextPrompt: "Hi Sam,", rewriteMode: .smart
+    )
 
     let entry = try #require(firstEntry(in: url))
     #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])

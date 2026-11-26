@@ -1,3 +1,4 @@
+import BlurtAssemblyAI
 import BlurtEngine
 import SwiftUI
 
@@ -16,7 +17,7 @@ struct ReadAloudSection: View {
   @AppStorage(ReadAloudStyleStore.speedDefaultsKey)
   private var speed = ReadAloudStyleStore.defaultSpeed
   @AppStorage(ReadAloudStyleStore.voiceDefaultsKey)
-  private var voiceID = ReadAloudStyleStore.defaultVoiceID
+  private var voiceID = ReadAloudVoice.assemblyAIDefaultID
   @AppStorage(ReadAloudStyleStore.skipsJargonDefaultsKey)
   private var skipsJargon = ReadAloudStyleStore.defaultSkipsJargon
 
@@ -33,12 +34,13 @@ struct ReadAloudSection: View {
     )
   }
 
-  /// Same idea for the voice: a stored id the catalog doesn't list shows as the
-  /// default voice, which is what the press will speak with. Picking one plays
-  /// a sample, as the cue-sound picker does.
+  /// Same idea for the voice: a stored id the provider doesn't list shows as
+  /// its default voice, which is what the press will speak with
+  /// (`ReadAloudVoice.assemblyAIVoice(id:)`, the resolution the synthesizer makes).
+  /// Picking one plays a sample, as the cue-sound picker does.
   private var voiceSelection: Binding<String> {
     Binding(
-      get: { ReadAloudStyleStore.knownVoiceID(voiceID) },
+      get: { ReadAloudVoice.assemblyAIVoice(id: voiceID).id },
       set: { newValue in
         voiceID = newValue
         coordinator.readAloudStyleChanged()
@@ -68,7 +70,7 @@ struct ReadAloudSection: View {
     ) {
       ForEach(ReadAloudVoice.Group.allCases, id: \.self) { group in
         Section(group.rawValue) {
-          ForEach(ReadAloudVoice.catalog.filter { $0.group == group }) { voice in
+          ForEach(ReadAloudVoice.assemblyAI.filter { $0.group == group }) { voice in
             Text(voice.label).tag(voice.id)
           }
         }

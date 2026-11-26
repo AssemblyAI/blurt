@@ -78,7 +78,7 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   }
 
   /// Enough for the session to transcribe, so a release runs the pipeline.
-  func stop() -> Int { SyncSTTLimits.minPCMBytes }
+  func stop() -> Int { RecordingLimits.minPCMBytes }
 
   func cancelCapture() {
     // Nothing to release: the fake captures nothing.

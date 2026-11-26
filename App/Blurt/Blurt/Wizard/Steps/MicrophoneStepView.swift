@@ -48,16 +48,14 @@ struct MicrophoneStepView: View {
   /// the picker can render the persisted choice instead of a blank control, and
   /// the user sees why dictation is currently using the system default.
   private var missingPin: MicDeviceSelection? {
-    guard devicesLoaded, !micDeviceUID.isEmpty,
-      !devices.contains(where: { $0.uid == micDeviceUID })
-    else {
+    guard devicesLoaded else {
       return nil
     }
-    return .pinned(uid: micDeviceUID)
+    return selection.wrappedValue.missingPin(amongConnected: devices.map(\.uid))
   }
 
   private var deviceDescription: String {
-    if micDeviceUID.isEmpty || missingPin != nil {
+    if selection.wrappedValue.effective(pinnedDevicePresent: missingPin == nil) == .systemDefault {
       return systemDefaultName.map { "Using \($0)." } ?? "Uses your system’s default microphone."
     }
     return "Used for voice recording."

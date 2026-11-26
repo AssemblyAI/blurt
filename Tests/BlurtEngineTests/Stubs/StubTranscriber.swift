@@ -39,4 +39,7 @@ actor StubTranscriber: TranscriberProtocol {
   func warmUp() {
     // No connection to pre-open: the stub never reaches a network.
   }
+
+  /// No prompt: the stub sends nothing.
+  nonisolated func contextPrompt(for _: TranscriptionContext?) -> String { "" }
 }

@@ -128,7 +128,7 @@ struct ReadAloudLLMTests {
     #expect(request.timeoutInterval == ReadAloudLLM.answerTimeout)
     let body = try #require(request.httpBody)
     let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
-    #expect(object["model"] as? String == ReadAloudLLM.model)
+    #expect(object["model"] as? String == ReadAloudLLM.tier.gatewayModel)
     #expect(object["max_tokens"] as? Int == ReadAloudLLM.answerMaxTokens)
     let messages = try #require(object["messages"] as? [[String: String]])
     #expect(

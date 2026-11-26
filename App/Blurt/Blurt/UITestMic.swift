@@ -10,10 +10,10 @@
   // through the main actor would serialize the pipeline behind the UI).
 
   /// Stub mic: captures nothing, returns a fixed blob comfortably above
-  /// `SyncSTTLimits.minPCMBytes` so the pipeline clears the too-short-audio
+  /// `RecordingLimits.minPCMBytes` so the pipeline clears the too-short-audio
   /// guard and proceeds to transcribe.
   nonisolated struct UITestMic: MicCaptureProtocol {
-    private static let cannedPCM = Data(count: SyncSTTLimits.minPCMBytes * 2)
+    private static let cannedPCM = Data(count: RecordingLimits.minPCMBytes * 2)
 
     /// No meter: the overlay's meter isn't asserted.
     var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }

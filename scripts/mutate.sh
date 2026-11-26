@@ -51,6 +51,7 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Config/APIKeyDisplay.swift"
   "Sources/AssemblyAI/APIKeyValidator.swift"
   "Sources/AssemblyAI/Dictation/KeyTerms.swift"
+  "Sources/AssemblyAI/Dictation/DictationPrompt.swift"
   "Sources/BlurtEngine/Pipeline/TextShortcut.swift"
   "Sources/BlurtEngine/FocusCapture/FocusCapture+Pure.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyGate.swift"
@@ -61,8 +62,8 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Pipeline/OverlayPlacement.swift"
   "Sources/BlurtEngine/Pipeline/PipelinePhase.swift"
   "Sources/BlurtEngine/Pipeline/RecordingCueGate.swift"
-  "Sources/BlurtEngine/STT/STTPrompt.swift"
-  "Sources/BlurtEngine/STT/SyncSTTLimits.swift"
+  "Sources/BlurtAssemblyAI/STTPrompt.swift"
+  "Sources/BlurtEngine/STT/RecordingLimits.swift"
   "Sources/BlurtEngine/String+Normalization.swift"
   # Control Your Mac's decisions: the reply parser and its checks, name
   # matching and the destructive guard, the screen read over any tree, the

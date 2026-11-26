@@ -36,7 +36,7 @@ extension DictationSessionTests {
   @Test("a too-short clip is dropped as a silent no-op, not sent to STT")
   func tooShortClipNoOps() async {
     let fixture = makeSession(mode: .transcript("should not be used"))
-    // Below SyncSTTLimits.minPCMBytes (3200 at 16 kHz) — an accidental brief
+    // Below RecordingLimits.minPCMBytes (3200 at 16 kHz) — an accidental brief
     // tap the endpoint would reject with a 400.
     await fixture.mic.setPCM(Data(count: 6))
 

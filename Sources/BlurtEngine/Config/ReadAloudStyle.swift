@@ -12,14 +12,16 @@ public struct ReadAloudStyle: Sendable, Equatable {
   /// Leave out what sounds like noise read aloud: code, file paths, links,
   /// email addresses, long numbers.
   public let skipsJargon: Bool
-  /// The TTS request's `voice_id`, one of `ReadAloudVoice.catalog`.
-  public let voiceID: String
+  /// The chosen voice's id (`ReadAloudVoice.id`), or nil for the provider's
+  /// default. Passed to the provider as stored; one it doesn't know speaks the
+  /// default (`SpeechSynthesizing.speech(for:voiceID:)`).
+  public let voiceID: String?
 
   /// The same voice and speed, reading the text as given: for text already
   /// written to be heard (an answer, a voice sample).
   public var verbatim: Self { Self(rate: rate, skipsJargon: false, voiceID: voiceID) }
 
-  public init(rate: Double, skipsJargon: Bool, voiceID: String = ReadAloudVoice.defaultID) {
+  public init(rate: Double, skipsJargon: Bool, voiceID: String? = nil) {
     self.rate = rate
     self.skipsJargon = skipsJargon
     self.voiceID = voiceID
