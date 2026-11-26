@@ -100,7 +100,9 @@ struct ReadClipTests {
         "Read this.", style: ReadAloudStyle(rate: 1, skipsJargon: false), onLevel: nil
       )
       #expect(clips.withLock { $0 } == 0)
-      #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).isEmpty)
+      // Outside `#expect`: a `try` inside a macro doesn't make the closure throwing.
+      let left = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+      #expect(left.isEmpty)
     }
   }
 

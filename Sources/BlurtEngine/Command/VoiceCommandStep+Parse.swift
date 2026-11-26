@@ -19,6 +19,7 @@ extension VoiceCommandStep {
   /// uses. The synthesized decoding, keyed by `Field`, so a property and its
   /// wire name are one list.
   private struct RawStep: Decodable {
+    // periphery:ignore - read by the synthesized init(from:), which periphery doesn't see.
     typealias CodingKeys = Field
 
     let action: String
