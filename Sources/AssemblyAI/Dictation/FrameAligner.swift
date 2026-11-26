@@ -32,7 +32,13 @@ struct FrameAligner: Sendable {
   /// `chunk` with the held-back byte in front of it, trimmed to whole samples;
   /// what doesn't fit is held back for the next one.
   mutating func align(_ chunk: Data) -> Data {
-    if !chunk.count.isMultiple(of: Self.bytesPerFrame) { sawMisalignedChunk = true }
+    let isWhole = chunk.count.isMultiple(of: Self.bytesPerFrame)
+    if !isWhole { sawMisalignedChunk = true }
+    // The usual case: nothing held back and a whole chunk, passed through
+    // without a copy.
+    if carry.isEmpty, isWhole {
+      return chunk
+    }
     let joined = carry + chunk
     let whole = joined.count - joined.count % Self.bytesPerFrame
     carry = joined.suffix(from: joined.startIndex + whole)

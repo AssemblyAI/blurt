@@ -110,16 +110,11 @@ public struct SpeechClient: Sendable {
         let reason = Self.failure(status: response.statusCode, body: try await Self.head(of: body))
         throw SpeechSynthesisError.server(reason)
       }
-      // At most the one byte of a sample the network split; whole chunks,
-      // the usual case, pass straight through without a copy.
-      var carry: UInt8?
+      // The network can split a sample across chunks; the aligner carries
+      // that byte over, and passes whole chunks, the usual case, uncopied.
+      var aligner = FrameAligner()
       for try await chunk in body {
-        var audio = chunk
-        if let byte = carry {
-          audio.insert(byte, at: audio.startIndex)
-          carry = nil
-        }
-        if audio.count % 2 == 1 { carry = audio.removeLast() }
+        let audio = aligner.align(chunk)
         if !audio.isEmpty { onAudio(audio) }
       }
     } catch let error as URLError where error.code == .timedOut {

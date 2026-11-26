@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 import os
 
 /// The SDK's own log, apart from any app's: transport faults, and the dictation
@@ -15,10 +15,7 @@ enum SDKLog {
 
 extension URL {
   /// A URL from a literal known to be valid; the SDK's own copy of BlurtEngine's
-  /// helper, so neither module reaches into the other. `@usableFromInline`
-  /// because public inits' default arguments use it (`APIKeyValidator`'s), and
-  /// a default argument is inlined into the caller's module.
-  @usableFromInline
+  /// helper, so neither module reaches into the other.
   init(literal: StaticString) {
     guard let url = URL(string: "\(literal)") else {
       preconditionFailure("Invalid URL literal: \(literal)")
@@ -29,7 +26,7 @@ extension URL {
 
 extension URLRequest {
   /// A JSON `POST` to `url`, authorized as `authorize(apiKey:userAgent:)` does:
-  /// the shape the TTS and LLM Gateway routes share. Keys are sorted so a body is the same bytes twice.
+  /// the shape the TTS, LLM Gateway and async transcript routes share. Keys are sorted so a body is the same bytes twice.
   static func jsonPost(
     to url: URL,
     apiKey: String,
