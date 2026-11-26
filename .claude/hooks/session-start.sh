@@ -1,10 +1,13 @@
 #!/bin/bash
 # SessionStart hook: prepare a Claude Code on the web (Linux) sandbox.
 #
-# Blurt is macOS-only, so the Swift toolchain can't run here — but the portable
+# Blurt is macOS-only, so it can't be built or tested here — but the portable
 # checks (prettier / xmllint / markdownlint / shellcheck / actionlint / zizmor /
-# shfmt / jscpd / release.test.sh) can. This hook installs the missing portable
-# linters so `scripts/check.sh --portable` works, then prints a one-line preflight
+# shfmt / jscpd / release.test.sh) can run, and so can every part of the Swift
+# toolchain that needs no Apple SDK: swift-format, SourceKit (for SwiftLint) and
+# the `swift` script design-sync runs. This hook installs all of them so
+# `scripts/check.sh --portable` (and the push gate that runs it) covers Swift
+# formatting, SwiftLint and the design tokens, then prints a one-line preflight
 # so the session starts knowing CI (macos-26) is the authority on green.
 #
 # Local (macOS) sessions are untouched: the hook exits immediately unless
@@ -13,12 +16,10 @@
 # degrade to a note rather than failing the hook: the portable check skips
 # absent tools the same way check.sh always has.
 #
-# SwiftLint is installed from its GitHub release, pinned by version and
-# checksum, so `check.sh --portable` — and with it the push-gate hook — runs
-# `swiftlint lint --strict` before every push, the check CI's `lint` job failed
-# PRs on most often. swift-format is NOT installed: it comes with the Swift
-# toolchain, which the sandbox lacks, so Swift formatting stays a CI concern on the web (the format-patch job
-# publishes the fix); its PostToolUse hook no-ops cleanly when it is absent.
+# The Swift toolchain (scripts/install-linux-swift.sh: Swift 6.2.4 from the
+# official image's layer, by digest) and SwiftLint (its GitHub release, by
+# version and checksum) are the slow installs — about 40 s on a cold container —
+# which is why settings.json gives this hook a longer timeout than the default.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -98,6 +99,15 @@ if ! command -v zizmor >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
   command -v zizmor >/dev/null 2>&1 || note "zizmor install failed (pip)"
 fi
 
+# The Swift toolchain — swift-format (check.sh lints with it, and the
+# swift-format PostToolUse hook formats each edit), SourceKit (SwiftLint's
+# SourceKit-backed rules load it) and `swift` itself (design-sync's token
+# script). Before SwiftLint, so its smoke test runs with SourceKit present.
+if ! command -v swift >/dev/null 2>&1; then
+  "$repo_root/scripts/install-linux-swift.sh" >/dev/null 2>&1 \
+    || note "Swift toolchain install failed (scripts/install-linux-swift.sh)"
+fi
+
 # SwiftLint (GitHub release) — `check.sh --portable` runs `swiftlint lint
 # --strict` whenever it is on PATH, which makes the push gate catch the opt-in
 # rules (type_contents_order, unused_parameter, async_without_await, …) that
@@ -127,17 +137,17 @@ fi
 
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt swiftlint; do
+for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt swift swift-format swiftlint; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 [ -x "$jscpd_dir/node_modules/.bin/jscpd" ] || missing="$missing jscpd"
 for tool in $python_tools; do
   [ -x "$python_bin/$tool" ] || missing="$missing $tool"
 done
-echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."
+echo "Blurt web sandbox: Linux Swift toolchain only — the build and tests run on CI (macos-26), the authority on green."
 if [ -n "$missing" ]; then
   echo "Portable linters missing:${missing}. 'scripts/check.sh --portable' will skip them with a note."
 else
-  echo "Portable linters ready. Run 'scripts/check.sh --portable' to verify docs/scripts/workflow changes."
+  echo "Portable linters ready, swift-format and SwiftLint included. 'scripts/check.sh --portable' (run by the push gate) checks everything but the build and tests."
 fi
 exit 0

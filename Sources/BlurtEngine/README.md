@@ -304,7 +304,7 @@ await session.press()
 await session.release()
 ```
 
-Run `swift test` for the engine suites (`--filter DictationSessionTests` for one suite). `scripts/check.sh` is the full health gate CI runs — tests with warnings-as-errors, a ≥88% engine coverage gate, TSan/ASan passes, and the linters. On a machine without a macOS toolchain, `scripts/check.sh --portable` verifies docs/scripts/site changes only; the Swift side needs a Mac or CI.
+Run `swift test` for the engine suites (`--filter DictationSessionTests` for one suite). `scripts/check.sh` is the full health gate CI runs — tests with warnings-as-errors, a ≥88% engine coverage gate, TSan/ASan passes, and the linters. On a machine without a macOS toolchain, `scripts/check.sh --portable` verifies docs/scripts/site changes, plus Swift formatting and SwiftLint when the Linux toolchain (`scripts/install-linux-swift.sh`) and SwiftLint are installed; the build and tests need a Mac or CI.
 
 ## Embedding outside Blurt
 
