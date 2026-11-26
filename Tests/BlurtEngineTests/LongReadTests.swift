@@ -72,6 +72,17 @@ struct LongReadTests {
     #expect(pieces.dropFirst().allSatisfy { $0.count <= ListeningChunks.maxCharacters })
   }
 
+  @Test("paragraphs split on a blank line whatever the line ending")
+  func paragraphsAnyLineEnding() {
+    let expected = ["Para one.\nStill one.", "Para two."]
+    #expect(ListeningChunks.paragraphs(of: "Para one.\nStill one.\n\nPara two.") == expected)
+    #expect(ListeningChunks.paragraphs(of: "Para one.\r\nStill one.\r\n\r\nPara two.\r\n") == expected)
+    #expect(ListeningChunks.paragraphs(of: "Para one.\rStill one.\r\rPara two.") == expected)
+    // Packed back together with a paragraph break, not a space.
+    let chunks = ListeningChunks.chunks(of: "Para one.\r\n\r\nPara two.", sentences: Self.sentences)
+    #expect(chunks == ["Para one.\n\nPara two."])
+  }
+
   @Test("skip-jargon rewrites a long article a piece at a time, and reading starts after the first")
   func rewritesInPieces() async throws {
     let text = article(paragraphs: 6)

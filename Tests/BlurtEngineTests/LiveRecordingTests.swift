@@ -31,10 +31,19 @@ struct LiveRecordingTests {
         )
         let out = UnsafeMutablePointer<Float>.allocate(capacity: 8)
         defer { unsafe out.deallocate() }
-        let frames = unsafe MixWriter.mix(list, into: out, capacity: 8)
+        let frames = unsafe MixWriter.mix(list, into: out, capacity: 8, tapBuffers: 1)
         unsafe #expect(Array(UnsafeBufferPointer(start: out, count: frames)) == [0.75, 1])
       }
     }
+  }
+
+  @Test("a source that spans several buffers is averaged across all of them, not summed")
+  func mixNonInterleavedSources() {
+    // A non-interleaved stereo mic (left, right buffers) and an interleaved stereo tap.
+    #expect(
+      mixed([(1, [0.5, 0.5]), (1, [0.5, 0.5]), (2, [0.25, 0.25, 0.25, 0.25])], tapBuffers: 1) == [0.75, 0.75])
+    // The tap non-interleaved too: its two buffers are one source.
+    #expect(mixed([(1, [0.5, 0.5]), (1, [0.25, 0.25]), (1, [0.25, 0.25])], tapBuffers: 2) == [0.75, 0.75])
   }
 
   @Test("the mix is capped at the buffer's capacity")
@@ -43,7 +52,7 @@ struct LiveRecordingTests {
     unsafe withMonoList(&mic) { list in
       let out = UnsafeMutablePointer<Float>.allocate(capacity: 2)
       defer { unsafe out.deallocate() }
-      unsafe #expect(MixWriter.mix(list, into: out, capacity: 2) == 2)
+      unsafe #expect(MixWriter.mix(list, into: out, capacity: 2, tapBuffers: 0) == 2)
     }
   }
 
@@ -54,7 +63,7 @@ struct LiveRecordingTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let url = directory.appending(path: "mix.m4a")
     let emitted = Mutex(0)
-    let writer = try MixWriter(url: url, inputRate: 48_000, maxFrames: 512) { pcm in
+    let writer = try MixWriter(url: url, inputRate: 48_000, maxFrames: 512, tapBuffers: 1) { pcm in
       emitted.withLock { $0 += pcm.count }
     }
     // A second of audio in 480-frame cycles: a mono mic and a stereo tap.
@@ -90,7 +99,9 @@ struct LiveRecordingTests {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let emitted = Mutex(0)
-    let writer = try MixWriter(url: directory.appending(path: "mix.m4a"), inputRate: 16_000, maxFrames: 256) { _ in
+    let writer = try MixWriter(
+      url: directory.appending(path: "mix.m4a"), inputRate: 16_000, maxFrames: 256, tapBuffers: 1
+    ) { _ in
       emitted.withLock { $0 += 1 }
     }
     writer.close()
@@ -99,6 +110,32 @@ struct LiveRecordingTests {
       unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
     }
     #expect(emitted.withLock { $0 } == 0)
+  }
+
+  /// `MixWriter.mix` over one buffer per `(channels, samples)` pair, in order.
+  private func mixed(_ sources: [(channels: UInt32, samples: [Float])], tapBuffers: Int) -> [Float] {
+    let list = AudioBufferList.allocate(maximumBuffers: sources.count)
+    // Every source's samples in one allocation, each buffer pointing at its own run.
+    let samples = sources.flatMap(\.samples)
+    let storage = UnsafeMutablePointer<Float>.allocate(capacity: samples.count)
+    unsafe storage.initialize(from: samples, count: samples.count)
+    let out = UnsafeMutablePointer<Float>.allocate(capacity: 8)
+    defer {
+      unsafe out.deallocate()
+      unsafe storage.deallocate()
+      unsafe free(list.unsafeMutablePointer)
+    }
+    var offset = 0
+    for (index, source) in sources.enumerated() {
+      unsafe list[index] = unsafe AudioBuffer(
+        mNumberChannels: source.channels,
+        mDataByteSize: UInt32(source.samples.count * MemoryLayout<Float>.size),
+        mData: storage + offset
+      )
+      offset += source.samples.count
+    }
+    let frames = unsafe MixWriter.mix(list, into: out, capacity: 8, tapBuffers: tapBuffers)
+    return unsafe Array(UnsafeBufferPointer(start: out, count: frames))
   }
 
   /// A one-buffer `AudioBufferList` over `samples`, a mono cycle, for `body` —

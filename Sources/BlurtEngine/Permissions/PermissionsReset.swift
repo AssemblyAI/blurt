@@ -16,7 +16,7 @@
   /// this process has no business touching.
   public enum PermissionsReset {
     /// The TCC services a Blurt install can hold a grant under — the set
-    /// `resetAll` sweeps, and the same four `scripts/reset-lib.sh` lists
+    /// `resetAll` sweeps, and the same five `scripts/reset-lib.sh` lists
     /// (bash can't read this enum, so the two are kept in step by hand).
     ///
     /// Raw values are `tccutil`'s own service names, which are not all the names
@@ -34,6 +34,10 @@
       /// Automation — the consent to control Spotify and Music, asked by the
       /// music pause (`MediaPauseController`).
       case appleEvents = "AppleEvents"
+      /// System Audio Recording — the process tap the Record button captures
+      /// the Mac's audio through (`SystemAudioRecorder`,
+      /// `NSAudioCaptureUsageDescription`). `tccutil` knows it as `AudioCapture`.
+      case systemAudioRecording = "AudioCapture"
     }
 
     private static let log = HostIdentity.current.logger("PermissionsReset")
@@ -44,7 +48,7 @@
     /// `PermissionsResetTests` pins this list against `allCases`, so a service
     /// added to the enum and forgotten here fails there rather than silently
     /// surviving every "full" reset.
-    static let sweep: [Service] = [.accessibility, .microphone, .inputMonitoring, .appleEvents]
+    static let sweep: [Service] = [.accessibility, .microphone, .inputMonitoring, .appleEvents, .systemAudioRecording]
 
     /// Clears `service` for `bundleID`. Returns whether `tccutil` exited 0 — a
     /// non-zero exit (or a launch failure) is reported rather than thrown, since
