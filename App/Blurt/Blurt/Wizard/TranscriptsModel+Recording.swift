@@ -170,19 +170,29 @@ extension TranscriptsModel {
 
   private func saveRecording(_ url: URL) {
     recording = nil
-    let text = live.text
-    guard text.trimmedNonEmpty() != nil else {
+    let entry = recordingEntry(at: url)
+    guard !entry.text.isEmpty else {
       // Nothing heard live — silence, or a live session that never got going.
       // The audio may still hold speech: try the async pass on it. Saved
       // first, so no way the pass ends — failed, or abandoned with Back —
       // leaves the file with nothing pointing at it.
       state = .idle
-      transcribe(url, kind: .recording, entry: keepUntranscribed(url))
+      transcribe(url, entry: keepUntranscribed(entry))
       return
     }
-    let entry = SavedTranscript(kind: .recording, date: .now, text: text, fileURL: url, plainText: live.plainText)
     add(entry)
     diarize(entry)
+  }
+
+  /// The recording at `url` as a Library entry, holding what the live
+  /// transcription heard — or no text at all (`needsTranscription`) when it
+  /// heard nothing. The one shape a stop, a failed socket and a quit all save.
+  private func recordingEntry(at url: URL) -> SavedTranscript {
+    let text = live.text
+    guard text.trimmedNonEmpty() != nil else {
+      return SavedTranscript(kind: .recording, date: .now, text: "", fileURL: url)
+    }
+    return SavedTranscript(kind: .recording, date: .now, text: text, fileURL: url, plainText: live.plainText)
   }
 
   /// The socket failed mid-recording: stop, and keep what was transcribed.
@@ -232,14 +242,13 @@ extension TranscriptsModel {
     guard history.contains(where: { $0.id == entry.id }), let url = entry.fileURL else {
       return
     }
-    transcribe(url, kind: entry.kind, entry: entry)
+    transcribe(url, entry: entry)
   }
 
-  /// Saves the recording at `url` with no transcript yet
-  /// (`needsTranscription`), so it is in the Library — playable, in Finder,
-  /// and transcribed when opened — however its transcription ends.
-  func keepUntranscribed(_ url: URL) -> SavedTranscript {
-    let entry = SavedTranscript(kind: .recording, date: .now, text: "", fileURL: url)
+  /// Saves a recording `entry` with no transcript yet (`needsTranscription`),
+  /// so it is in the Library — playable, in Finder, and transcribed when
+  /// opened — however its transcription ends.
+  private func keepUntranscribed(_ entry: SavedTranscript) -> SavedTranscript {
     history.insert(entry, at: 0)
     save()
     return entry
@@ -273,18 +282,7 @@ extension TranscriptsModel {
     recorder.stop()
     if let recording {
       self.recording = nil
-      let text = live.text
-      let heard = text.trimmedNonEmpty() != nil
-      history.insert(
-        SavedTranscript(
-          kind: .recording,
-          date: .now,
-          text: heard ? text : "",
-          fileURL: recording.url,
-          plainText: heard ? live.plainText : nil
-        ),
-        at: 0
-      )
+      history.insert(recordingEntry(at: recording.url), at: 0)
     }
     flushHistory()
   }

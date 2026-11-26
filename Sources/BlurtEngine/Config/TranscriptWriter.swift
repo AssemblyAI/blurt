@@ -22,11 +22,7 @@ public final class TranscriptWriter: Sendable {
   /// first adds the saved entries `entries` doesn't have: a history not yet
   /// read in would otherwise be replaced by only this session's entries.
   public func saveNow(_ entries: [SavedTranscript], mergingSaved: Bool) {
-    var entries = entries
-    if mergingSaved {
-      let added = Set(entries.map(\.id))
-      entries += store.load().filter { !added.contains($0.id) }
-    }
-    queue.sync { [store, entries] in try? store.save(entries) }
+    let written = mergingSaved ? TranscriptStore.merging(entries, saved: store.load()) : entries
+    queue.sync { [store] in try? store.save(written) }
   }
 }

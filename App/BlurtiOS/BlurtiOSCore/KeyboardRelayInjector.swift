@@ -78,7 +78,7 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   package func insert(
     _ text: String, after _: String?, windowTitle _: String?, security: TargetSecurity = .ordinary
   ) async throws {
-    let secure = security == .secure
+    let secure = security.conceals(inAXOpaqueApp: false)
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.

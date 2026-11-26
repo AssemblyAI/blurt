@@ -23,29 +23,22 @@ esac
 [ -f "$file" ] || exit 0
 
 root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
-rel="${file#"$root"/}"
 
-findings=""
-# Only the files SwiftLint lints (scripts/*.swift aren't).
-case "$rel" in
+# The size and clock checks narrow their arguments to their own scope —
+# SwiftLint's lint roots, the test tree — so a file outside one is simply not
+# checked there; the size check's headroom notes are left out, only its errors
+# and their detail lines. The lint-lite rules scan what they're given, so they
+# get only files SwiftLint lints (scripts/*.swift aren't).
+findings="$(bash "$root/scripts/check-swift-size.sh" "$file" 2>&1 | grep '^error\|^ ' || true)"
+case "${file#"$root"/}" in
   Sources/* | Tests/* | App/Blurt/Blurt/* | App/Blurt/BlurtUITests/* | App/BlurtiOS/*)
-    findings+="$(bash "$root/scripts/check-swift-size.sh" "$file" 2>&1 | grep '^error\|^ ' || true)"
     lite="$(bash "$root/scripts/check-swift-lint-lite.sh" "$file" 2>/dev/null || true)"
     findings+="${lite:+${findings:+$'\n'}$lite}"
     ;;
 esac
-case "$rel" in
-  Tests/* | App/Blurt/BlurtUITests/* | App/BlurtiOS/BlurtiOSTests/* | App/BlurtiOS/BlurtiOSUITests/*)
-    # Only this file's unmarked waits, then the advice that follows the list.
-    # Named, not the tracked-tree scan: a suite just written isn't tracked yet.
-    clock="$(bash "$root/scripts/check-test-clock.sh" "$rel" 2>&1 || true)"
-    mine="$(grep -F "  $rel:" <<<"$clock" || true)"
-    if [ -n "$mine" ]; then
-      findings+="${findings:+$'\n'}error: $rel waits on the wall clock without saying why:"$'\n'"$mine"
-      findings+=$'\n'"$(grep '^       ' <<<"$clock")"
-    fi
-    ;;
-esac
+if ! clock="$(bash "$root/scripts/check-test-clock.sh" "$file" 2>&1)"; then
+  findings+="${findings:+$'\n'}$clock"
+fi
 
 if [ -n "$findings" ]; then
   printf '%s\n' "$findings" >&2

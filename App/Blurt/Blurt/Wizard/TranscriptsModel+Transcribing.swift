@@ -12,7 +12,7 @@ extension TranscriptsModel {
   ///
   /// Never over a recording: a file dropped while one runs is refused, or the
   /// recording would be left capturing with no sheet to stop it.
-  func transcribe(_ url: URL, kind: SavedTranscript.Kind = .file, entry: SavedTranscript? = nil) {
+  func transcribe(_ url: URL, entry: SavedTranscript? = nil) {
     guard !isRecordingBusy else {
       return
     }
@@ -40,7 +40,7 @@ extension TranscriptsModel {
       guard !Task.isCancelled, let self else {
         return
       }
-      finish(outcome, fileName: fileName, url: url, kind: kind, entry: entry)
+      finish(outcome, fileName: fileName, url: url, entry: entry)
     }
   }
 
@@ -49,7 +49,6 @@ extension TranscriptsModel {
     _ outcome: Result<FileTranscription, any Error>,
     fileName: String,
     url: URL,
-    kind: SavedTranscript.Kind,
     entry: SavedTranscript?
   ) {
     switch outcome {
@@ -59,7 +58,7 @@ extension TranscriptsModel {
 
     case .success(let result):
       guard let entry else {
-        add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
+        add(SavedTranscript(kind: .file, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
         return
       }
       if !fillIn(entry, with: result) { state = .idle }

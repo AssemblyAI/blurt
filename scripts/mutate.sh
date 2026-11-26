@@ -133,8 +133,9 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     --strict)
-      # For CI (.github/workflows/mutate.yml): a survivor fails the run. Off by
-      # default because a local run is a to-do list, not a gate.
+      # A survivor fails the run, for a caller that wants a gate. Off by default
+      # because a run is a to-do list; CI (.github/workflows/mutate.yml) leaves
+      # it off too and judges the merged results in its `report` job instead.
       STRICT=1
       shift
       ;;

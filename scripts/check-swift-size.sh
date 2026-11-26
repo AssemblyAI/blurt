@@ -23,7 +23,8 @@
 #
 # Usage:
 #   check-swift-size.sh               every tracked Swift file SwiftLint lints
-#   check-swift-size.sh FILE...       just these (the PostToolUse hook's mode)
+#   check-swift-size.sh FILE...       just these, less any SwiftLint doesn't lint
+#                                     (the PostToolUse hook's mode)
 #   check-swift-size.sh --self-test   the counter against known inputs
 #
 # Exit 1 on any file or type over its limit; notes alone exit 0.
@@ -279,7 +280,18 @@ fi
 
 cd "$REPO_ROOT"
 if [ "$#" -gt 0 ]; then
-  files=("$@")
+  # Only the files SwiftLint lints (scripts/*.swift aren't), so a caller needn't
+  # restate the scope.
+  files=()
+  for f in "$@"; do
+    for dir in "${INCLUDED[@]}"; do
+      case "${f#"$REPO_ROOT"/}" in "$dir"/*.swift)
+        files+=("$f")
+        break
+        ;;
+      esac
+    done
+  done
 else
   files=()
   while IFS= read -r f; do files+=("$f"); done < <(git ls-files -- "${INCLUDED[@]/%//*.swift}")

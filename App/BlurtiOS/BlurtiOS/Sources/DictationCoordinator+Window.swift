@@ -172,7 +172,7 @@ extension DictationCoordinator {
       return
     }
     let keeperExpected = expectsKeeper ?? (window.pictureInPictureKeeper != nil)
-    if HopReturn.isReady(record, keeperExpected: keeperExpected, capPassed: false) {
+    if HopReturn.isReady(record, keeperExpected: keeperExpected) {
       returnToHost()
     } else if record.window == .open, returnCap == nil {
       returnCap = Task { [weak self] in

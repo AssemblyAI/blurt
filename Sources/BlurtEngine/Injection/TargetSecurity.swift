@@ -32,7 +32,7 @@ public enum TargetSecurity: Sendable, Equatable {
   /// readable as one, so "unknown" means no field was focused at all — the
   /// everyday dictate-to-clipboard copy, which stays an ordinary copy a
   /// clipboard manager may keep.
-  func conceals(inAXOpaqueApp opaque: Bool) -> Bool {
+  public func conceals(inAXOpaqueApp opaque: Bool) -> Bool {
     switch self {
     case .secure:
       true
