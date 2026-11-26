@@ -56,7 +56,8 @@ public struct DictationConfig: Encodable, Sendable {
   /// `text`, which is "always the verbatim transcript". So the config carries
   /// no off switch, and the *response* is where the enhanced-transcripts
   /// setting chooses between the two transcripts
-  /// (`AssemblyAITranscriber.transcript(from:enhanced:)`).
+  /// (`AssemblyAITranscriber.transcript(from:enhanced:instruction:)`, in
+  /// BlurtAssemblyAI).
   ///
   /// An explicit null `llm` does suppress the rewrite — measured 2026-09-10 and
   /// re-confirmed 2026-09-11 (200, with `llm_response` and `llm_error` both

@@ -11,8 +11,9 @@ public struct APIKeyValidator: Sendable {
   public enum Result: Sendable, Equatable {
     /// AssemblyAI accepted the key.
     case valid
-    /// AssemblyAI rejected the request as a client error (any 4xx except the
-    /// transient 408/429) — a bad, malformed, or unauthorized key.
+    /// AssemblyAI rejected the key: a 400, 401, 403 or 422 — a bad, malformed,
+    /// or unauthorized key. Other 4xx say nothing about the key and report
+    /// `.unreachable` (see `validate`).
     case invalid
     /// Couldn't reach AssemblyAI, or got a transient/server status (network
     /// failure, 408, 429, 5xx) — couldn't determine whether the key is good.
@@ -30,7 +31,7 @@ public struct APIKeyValidator: Sendable {
   ///   `Blurt/<version> (…)`), so a key this endpoint rejects can be traced to
   ///   the build that asked. Nil sends URLSession's default.
   public init(
-    baseURL: URL = URL(literal: "https://api.assemblyai.com"),
+    baseURL: URL = AsyncTranscriptionClient.defaultBaseURL,
     transport: any HTTPTransport = URLSession.shared,
     userAgent: String? = nil
   ) {
@@ -44,17 +45,8 @@ public struct APIKeyValidator: Sendable {
       return .invalid
     }
 
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("v2/transcript"),
-      // `true` would behave identically here: the URL above is already absolute, so
-      // there is no base to resolve it against. Equivalent mutant, not a test gap.
-      resolvingAgainstBaseURL: false  // mutate-ok: absolute URL, nothing to resolve
-    )
-    components?.queryItems = [URLQueryItem(name: "limit", value: "1")]
-    guard let url = components?.url else {
-      return .unreachable
-    }
-
+    let url = baseURL.appending(path: "v2/transcript")
+      .appending(queryItems: [URLQueryItem(name: "limit", value: "1")])
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
     // The caller's agent (Blurt sends the one its dictation requests carry), so

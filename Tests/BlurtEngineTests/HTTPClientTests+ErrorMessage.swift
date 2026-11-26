@@ -37,12 +37,12 @@ extension HTTPClientTests {
   @Test("HTTP error falls back to the raw body when the shape is unknown")
   func errorMessageFallsBackToRawBody() {
     let body = Data(#"{"unexpected":"shape"}"#.utf8)
-    #expect(DictationClient.errorMessage(from: body) == #"{"unexpected":"shape"}"#)
+    #expect(ErrorResponse.message(in: body) == #"{"unexpected":"shape"}"#)
   }
 
   @Test("HTTP error message is read from the `detail` field too")
   func errorMessageFromDetailField() {
-    #expect(DictationClient.errorMessage(from: json(["detail": "audio required"])) == "audio required")
+    #expect(ErrorResponse.message(in: json(["detail": "audio required"])) == "audio required")
   }
 
   @Test("HTTP error message field precedence is error > detail, and nothing else")
@@ -52,9 +52,9 @@ extension HTTPClientTests {
     // transcription service (invalid key, unsupported format). They shouldn't
     // co-occur, but pin the order so a reorder can't silently change which
     // reaches the user.
-    #expect(DictationClient.errorMessage(from: json(["error": "a"])) == "a")
-    #expect(DictationClient.errorMessage(from: json(["detail": "c"])) == "c")
-    #expect(DictationClient.errorMessage(from: json(["error": "a", "detail": "c"])) == "a")
+    #expect(ErrorResponse.message(in: json(["error": "a"])) == "a")
+    #expect(ErrorResponse.message(in: json(["detail": "c"])) == "c")
+    #expect(ErrorResponse.message(in: json(["error": "a", "detail": "c"])) == "a")
     // `error` is the field the *common* failures carry, 400 among them — so a
     // config-validation message reaches the user as a sentence instead of as
     // the raw JSON body. It went unread until 2026-09-11.
@@ -68,7 +68,7 @@ extension HTTPClientTests {
     // yielding the value. Same rule that keeps `llm: null` off the request:
     // only the documented contract, in both directions. (Asserting the
     // behavior, not the serialized bytes.)
-    let messageShaped = DictationClient.errorMessage(from: json(["message": "b"]))
+    let messageShaped = ErrorResponse.message(in: json(["message": "b"]))
     #expect(messageShaped != "b")
     #expect(messageShaped?.contains("message") == true)
   }
@@ -96,20 +96,20 @@ extension HTTPClientTests {
     // FastAPI-style validation errors carry `detail` as an array; that must not
     // decode as the message — the raw body is still more useful than nothing.
     let body = #"{"detail":[{"loc":["config"],"msg":"field required"}]}"#
-    #expect(DictationClient.errorMessage(from: Data(body.utf8)) == body)
+    #expect(ErrorResponse.message(in: Data(body.utf8)) == body)
   }
 
   @Test("a raw-body error message is capped at 500 characters")
   func errorMessageRawBodyCapped() {
     // An HTML error page must not flood the overlay/error description.
     let long = String(repeating: "x", count: 600)
-    #expect(DictationClient.errorMessage(from: Data(long.utf8))?.count == 500)
+    #expect(ErrorResponse.message(in: Data(long.utf8))?.count == 500)
   }
 
   @Test("HTTP error message is nil only for an empty body")
   func errorMessageNilForEmptyBody() {
-    #expect(DictationClient.errorMessage(from: Data()) == nil)
-    #expect(DictationClient.errorMessage(from: Data("   \n".utf8)) == nil)
+    #expect(ErrorResponse.message(in: Data()) == nil)
+    #expect(ErrorResponse.message(in: Data("   \n".utf8)) == nil)
   }
 
   @Test("AssemblyAIError descriptions are non-empty and include the status")

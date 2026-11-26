@@ -128,10 +128,13 @@ public struct AsyncTranscriptionClient: Sendable {
 
   /// `POST /v2/transcript` with the uploaded file and speaker labels on.
   func submit(audioURL: URL, apiKey: String) async throws -> AsyncTranscript {
-    var request = request(path: "v2/transcript", apiKey: apiKey)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONEncoder().encode(TranscriptRequest(audioURL: audioURL, speakerLabels: true))
+    let request = try URLRequest.jsonPost(
+      to: baseURL.appending(path: "v2/transcript"),
+      apiKey: apiKey,
+      userAgent: userAgent,
+      timeout: 60,
+      body: TranscriptRequest(audioURL: audioURL, speakerLabels: true)
+    )
     // Retried only when the API certainly created nothing: a submit that may
     // have landed (a timeout, a 5xx) is a second billed transcript if repeated.
     let data = try await retrying(when: Self.isUnsent) { try await send(request) }
@@ -183,8 +186,7 @@ public struct AsyncTranscriptionClient: Sendable {
       throw AsyncTranscriptionError.http(status: 0, message: nil)
     }
     guard (200..<300).contains(status) else {
-      let message = (try? JSONDecoder().decode(ErrorResponse.self, from: data))?.message
-      throw AsyncTranscriptionError.http(status: status, message: message)
+      throw AsyncTranscriptionError.http(status: status, message: ErrorResponse.message(in: data))
     }
     return data
   }

@@ -41,8 +41,7 @@ final class ChunkedRequestBody: @unchecked Sendable {
   /// uplink, and it is already the low end and the tightest spread (276-286 ms).
   /// Nothing to win by retuning it; what it protects against is a *saturated*
   /// uplink, which that sweep cannot manufacture and so did not test.
-  /// One second of 16 kHz mono 16-bit PCM, the dictation API's audio format.
-  private static let bufferSize = 16_000 * 2
+  private static let bufferSize = DictationLimits.sampleRate * FrameAligner.bytesPerFrame
 
   /// Backpressure re-check interval: starts here and doubles up to
   /// `maxSpaceRetry` while the pipe stays full, resetting after every write that
@@ -100,17 +99,11 @@ final class ChunkedRequestBody: @unchecked Sendable {
     // is still being written. Without it an abandoned dictation would leave the
     // writer feeding a request nobody is waiting for.
     defer { writer.cancel() }
-    let responseData: Data
-    let response: URLResponse
+    let outcome: Result<(Data, URLResponse), any Error>
     do {
-      (responseData, response) = try await fetch(streamed, delegate)
+      outcome = .success(try await fetch(streamed, delegate))
     } catch {
-      // A producer failure closes the pipe on a body that stops mid-part, and
-      // what the transport makes of that — a dropped connection, a timeout — is
-      // a symptom of it, so the producer's error wins here too.
-      writer.cancel()
-      if let failure = producerFailure(in: await writer.result) { throw failure }
-      throw error
+      outcome = .failure(error)
     }
     // Cancel the writer rather than joining it, and do it before asking for its
     // outcome. The response can arrive while the body is still being written —
@@ -122,10 +115,12 @@ final class ChunkedRequestBody: @unchecked Sendable {
     // A *producer* failure (the `config` part failing to encode, say) truncates
     // the body, and the server answers with some generic 4xx that doesn't name
     // the cause — or, with nothing it can object to in what did arrive, even a
-    // 2xx — so that error wins whatever the status. Everything else defers to
-    // the response.
+    // 2xx — so that error wins whatever the status. It wins over a thrown fetch
+    // too: what the transport makes of a body that stops mid-part (a dropped
+    // connection, a timeout) is a symptom of it. Everything else defers to the
+    // response.
     if let failure = producerFailure(in: await writer.result) { throw failure }
-    return (responseData, response)
+    return try outcome.get()
   }
 
   /// The writer's error if the *producer* raised it, else nil.
