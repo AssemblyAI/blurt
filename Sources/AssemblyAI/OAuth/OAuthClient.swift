@@ -9,6 +9,11 @@ public struct OAuthClient: Sendable {
   /// token; when it does, the old one stops working, so the caller must keep the
   /// new one.
   public struct Tokens: Sendable, Equatable {
+    /// The one ID-token claim this client reads.
+    private struct Claims: Decodable {
+      let email: String?
+    }
+
     public let accessToken: String
     public let refreshToken: String?
     public let idToken: String?
@@ -27,11 +32,11 @@ public struct OAuthClient: Sendable {
       var payload = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
       payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
       guard let data = Data(base64Encoded: payload),
-        let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let claims = try? JSONDecoder().decode(Claims.self, from: data)
       else {
         return nil
       }
-      return (claims["email"] as? String)?.trimmedNonEmpty()
+      return claims.email?.trimmedNonEmpty()
     }
 
     public init(accessToken: String, refreshToken: String?, idToken: String?) {
@@ -92,6 +97,37 @@ public struct OAuthClient: Sendable {
     let apiKeyRotatesAt: String?
   }
 
+  /// A refused call's body: an OAuth error (`error`, `error_description`) or
+  /// FastAPI's `detail`. Each field is read on its own, so one of another type
+  /// (FastAPI's validation array for `detail`) doesn't lose the rest.
+  private struct ErrorBody: Decodable {
+    enum CodingKeys: String, CodingKey {
+      case error, detail
+      case errorDescription = "error_description"
+    }
+
+    let error: String?
+    let errorDescription: String?
+    let detail: String?
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      error = try? container.decode(String.self, forKey: .error)
+      errorDescription = try? container.decode(String.self, forKey: .errorDescription)
+      detail = try? container.decode(String.self, forKey: .detail)
+    }
+
+    /// The body, or nil when it isn't a JSON object (a proxy's page).
+    static func parse(_ data: Data) -> Self? {
+      try? JSONDecoder().decode(Self.self, from: data)
+    }
+  }
+
+  /// RFC 3339 with fractional seconds, tried first by `date(from:)`, then
+  /// without them.
+  private static let fractionalSeconds = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+  private static let wholeSeconds = Date.ISO8601FormatStyle()
+
   private let configuration: OAuthConfiguration
   private let transport: any HTTPTransport
   private let userAgent: String?
@@ -111,39 +147,35 @@ public struct OAuthClient: Sendable {
   /// Those fields describe the failure, never carry a credential.
   static func logRefusal(_ request: URLRequest, status: Int, data: Data) {
     let path = request.url?.path ?? "?"
-    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    let fields = ["error", "error_description", "detail"].compactMap { key in
-      (body?[key] as? String).map { "\(key)=\($0)" }
-    }
-    let reason = fields.isEmpty ? "-" : fields.joined(separator: " ")
+    let body = ErrorBody.parse(data)
+    let fields = [
+      ("error", body?.error),
+      ("error_description", body?.errorDescription),
+      ("detail", body?.detail),
+    ]
+    let named = fields.compactMap { key, value in value.map { "\(key)=\($0)" } }
+    let reason = named.isEmpty ? "-" : named.joined(separator: " ")
     SDKLog.oauth.error("\(path, privacy: .public) -> \(status, privacy: .public): \(reason, privacy: .public)")
   }
 
   /// Whether a token-endpoint error body names a dead credential: the refresh
   /// token or code (`invalid_grant`) or the client (`invalid_client`).
   static func isRefusedGrant(_ data: Data) -> Bool {
-    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    return ["invalid_grant", "invalid_client"].contains(body?["error"] as? String)
+    ["invalid_grant", "invalid_client"].contains(ErrorBody.parse(data)?.error)
   }
 
   /// The 403's reason: `error_description` from an `insufficient_scope` body, or
   /// FastAPI's `detail`.
   static func explanation(in data: Data) -> String? {
-    guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+    guard let body = ErrorBody.parse(data) else {
       return nil
     }
-    return ((body["error_description"] ?? body["detail"]) as? String)?.trimmedNonEmpty()
+    return (body.errorDescription ?? body.detail)?.trimmedNonEmpty()
   }
 
   /// RFC 3339, with or without fractional seconds.
   static func date(from string: String) -> Date? {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = formatter.date(from: string) {
-      return date
-    }
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter.date(from: string)
+    (try? fractionalSeconds.parse(string)) ?? (try? wholeSeconds.parse(string))
   }
 
   static func formEncoded(_ fields: [String: String]) -> String {

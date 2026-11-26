@@ -37,6 +37,23 @@ public struct SpeechClient: Sendable {
     let encoding: String
   }
 
+  /// A failed request's JSON body. Each field is read on its own, so a `code`
+  /// of another type doesn't lose the `message`.
+  private struct ErrorBody: Decodable {
+    enum CodingKeys: String, CodingKey {
+      case code, message
+    }
+
+    let code: String?
+    let message: String?
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      code = try? container.decode(String.self, forKey: .code)
+      message = try? container.decode(String.self, forKey: .message)
+    }
+  }
+
   /// The rate every chunk is spoken at: PCM16 mono at 24 kHz.
   public static let sampleRate = 24_000
   static let encoding = "pcm_s16le"
@@ -71,11 +88,11 @@ public struct SpeechClient: Sendable {
   /// A failed request's reason: the error body's `code` and `message`, or the
   /// bare status when the body isn't one (a proxy's page).
   static func failure(status: Int, body: Data) -> String {
-    let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
-    guard let message = (object?["message"] as? String)?.trimmedNonEmpty() else {
+    let object = try? JSONDecoder().decode(ErrorBody.self, from: body)
+    guard let message = object?.message?.trimmedNonEmpty() else {
       return "HTTP \(status)"
     }
-    if let code = object?["code"] as? String {
+    if let code = object?.code {
       return "(\(code)) \(message)"
     }
     return message
