@@ -85,11 +85,14 @@ reset_install() {
   # Microphone (recording), Accessibility (typing into other apps), and
   # ListenEvent / Input Monitoring (the CGEventTap that backs the hold-to-dictate
   # hotkey — see DictationKeyTap), and AppleEvents / Automation (controlling
-  # Spotify and Music for the music pause — see MediaPauseController).
+  # Spotify and Music for the music pause — see MediaPauseController), and
+  # AudioCapture / System Audio Recording (the Record button's process tap — see
+  # SystemAudioRecorder). PermissionsReset.Service lists the same five.
   tccutil reset Accessibility "$bundle_id" || true
   tccutil reset Microphone "$bundle_id" || true
   tccutil reset ListenEvent "$bundle_id" || true
   tccutil reset AppleEvents "$bundle_id" || true
+  tccutil reset AudioCapture "$bundle_id" || true
 
   echo "==> Removing duplicate LaunchServices registrations for $bundle_id"
   # Repeated builds leave Blurt.app copies in DerivedData, /tmp, periphery

@@ -18,17 +18,23 @@
       // System Settings calls the row.
       #expect(PermissionsReset.Service.inputMonitoring.rawValue == "ListenEvent")
       #expect(PermissionsReset.Service.appleEvents.rawValue == "AppleEvents")
+      // System Audio Recording's internal name, likewise.
+      #expect(PermissionsReset.Service.systemAudioRecording.rawValue == "AudioCapture")
     }
 
     /// `resetAll` walks the hand-written `sweep` (Periphery can't follow a case
     /// reached only through `allCases`), so this is what keeps that list honest: a
     /// service added to the enum and forgotten there would otherwise survive every
-    /// "full" reset in silence. The four are also the ones
-    /// `scripts/reset-lib.sh` lists — a fifth belongs in both places.
+    /// "full" reset in silence. The five are also the ones
+    /// `scripts/reset-lib.sh` lists — a sixth belongs in both places.
     @Test("the sweep covers every service the enum names")
     func sweepCoversEveryService() {
       #expect(Set(PermissionsReset.sweep) == Set(PermissionsReset.Service.allCases))
-      #expect(Set(PermissionsReset.sweep) == [.accessibility, .microphone, .inputMonitoring, .appleEvents])
+      #expect(
+        Set(PermissionsReset.sweep) == [
+          .accessibility, .microphone, .inputMonitoring, .appleEvents, .systemAudioRecording,
+        ]
+      )
     }
   }
 #endif

@@ -43,6 +43,9 @@
     private let mixSamples: UnsafeMutablePointer<Float>
     private let outputSamples: UnsafeMutablePointer<Int16>
     private let onPCM: @Sendable (Data) -> Void
+    /// How many of each cycle's buffers, at the end of the list, are the tap's
+    /// (`mix`): the rest are the microphone's.
+    private let tapBuffers: Int
     /// The converter's input, built once: hands it the armed buffer, then
     /// "no more for now".
     private let cycle = OneShot()
@@ -60,7 +63,9 @@
       "\(callbacks) callbacks, \(framesIn) frames in, \(framesOut) out\(lastError.map { ", last error: \($0)" } ?? "")"
     }
 
-    init(url: URL, inputRate: Double, maxFrames: Int, onPCM: @escaping @Sendable (Data) -> Void) throws {
+    init(
+      url: URL, inputRate: Double, maxFrames: Int, tapBuffers: Int, onPCM: @escaping @Sendable (Data) -> Void
+    ) throws {
       // Room for the largest cycle the device delivers, twice over: a larger
       // one would be truncated to this (`mix`), so the margin is generous.
       let capacity = AVAudioFrameCount(max(maxFrames, 512) * 2)
@@ -88,6 +93,7 @@
       unsafe self.mixSamples = unsafe mixChannel
       unsafe self.outputSamples = unsafe outputChannel
       self.onPCM = onPCM
+      self.tapBuffers = tapBuffers
       unsafe inputBlock = { [cycle] _, status in
         guard let buffer = cycle.take() else {
           unsafe status.pointee = .noDataNow
@@ -111,19 +117,33 @@
       )
     }
 
-    /// Each buffer (one stream: the mic, the tap) averaged across its own
-    /// interleaved channels, then the streams summed and clamped to [-1, 1],
-    /// into `out`. Float32 samples, as the HAL delivers to an IOProc. Returns
-    /// the frame count, at most `capacity`.
+    /// Each source — the microphone, the tap — averaged to mono across every
+    /// channel it delivers, then the two summed and clamped to [-1, 1], into
+    /// `out`. A source can span several buffers: a non-interleaved stereo
+    /// microphone arrives as one mono buffer per channel, and summing those
+    /// as separate sources would play it twice as loud as the tap and clip it.
+    /// The last `tapBuffers` buffers are the tap's (the aggregate lists its
+    /// sub-device's streams before its tap's); the rest are the microphone's.
+    /// Float32 samples, as the HAL delivers to an IOProc. Returns the frame
+    /// count, at most `capacity`.
     static func mix(
-      _ buffers: UnsafeMutableAudioBufferListPointer, into out: UnsafeMutablePointer<Float>, capacity: Int
+      _ buffers: UnsafeMutableAudioBufferListPointer,
+      into out: UnsafeMutablePointer<Float>,
+      capacity: Int,
+      tapBuffers: Int
     ) -> Int {
+      let tapStart = max(buffers.count - tapBuffers, 0)
+      // Every channel of a source counts once toward its average.
+      let channelTotals = unsafe buffers.indices.reduce(into: [0, 0]) { totals, index in
+        unsafe totals[index < tapStart ? 0 : 1] += Int(max(buffers[index].mNumberChannels, 1))
+      }
       var frames = 0
       // swift-format 604 lints the `for unsafe` spelling SE-0458 requires as
       // a spacing error, while its own formatter writes it this way.
       // swift-format-ignore
-      for unsafe buffer in buffers {
+      for unsafe (index, buffer) in buffers.enumerated() {
         let channels = unsafe Int(max(buffer.mNumberChannels, 1))
+        let sourceChannels = Float(channelTotals[index < tapStart ? 0 : 1])
         guard let data = unsafe buffer.mData?.assumingMemoryBound(to: Float.self) else { continue }
         let count = unsafe min(Int(buffer.mDataByteSize) / (MemoryLayout<Float>.size * channels), capacity)
         if count > frames {
@@ -133,7 +153,7 @@
         for frame in 0..<count {
           var sum: Float = 0
           for channel in 0..<channels { unsafe sum += data[frame * channels + channel] }
-          unsafe out[frame] += sum / Float(channels)
+          unsafe out[frame] += sum / sourceChannels
         }
       }
       for index in 0..<frames { unsafe out[index] = unsafe min(max(out[index], -1), 1) }
@@ -145,7 +165,9 @@
         return
       }
       let buffers = unsafe UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
-      let frames = unsafe Self.mix(buffers, into: mixSamples, capacity: Int(mixBuffer.frameCapacity))
+      let frames = unsafe Self.mix(
+        buffers, into: mixSamples, capacity: Int(mixBuffer.frameCapacity), tapBuffers: tapBuffers
+      )
       callbacks += 1
       framesIn += frames
       if callbacks == 1 {

@@ -27,7 +27,7 @@ enum ListeningChunks {
     var chunks: [String] = []
     var current = ""
     var limit: Int { chunks.isEmpty ? min(firstMaxCharacters, maxCharacters) : maxCharacters }
-    for paragraph in text.split(separator: "\n\n", omittingEmptySubsequences: true) {
+    for paragraph in paragraphs(of: text) {
       let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !trimmed.isEmpty else { continue }
       let pieces =
@@ -44,5 +44,25 @@ enum ListeningChunks {
     }
     if !current.isEmpty { chunks.append(current) }
     return chunks
+  }
+
+  /// The text's paragraphs: runs of lines between blank ones, whatever the
+  /// line ending. Splitting on "\n\n" missed text copied with Windows line
+  /// endings — "\r\n" is one `Character` in Swift, so "\r\n\r\n" holds no
+  /// "\n\n" — and read the whole selection as one paragraph. A paragraph's own
+  /// lines are joined with "\n".
+  static func paragraphs(of text: String) -> [String] {
+    var paragraphs: [String] = []
+    var lines: [Substring] = []
+    for line in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+      if line.allSatisfy(\.isWhitespace) {
+        if !lines.isEmpty { paragraphs.append(lines.joined(separator: "\n")) }
+        lines.removeAll()
+      } else {
+        lines.append(line)
+      }
+    }
+    if !lines.isEmpty { paragraphs.append(lines.joined(separator: "\n")) }
+    return paragraphs
   }
 }

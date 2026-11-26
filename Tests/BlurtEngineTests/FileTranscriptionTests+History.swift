@@ -87,8 +87,18 @@ extension FileTranscriptionTests {
 
     #expect(store.load() == [good])
     let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-    #expect(names.contains { $0.hasPrefix("history.backup-") })
+    let backup = try #require(names.first { $0.hasPrefix("history.backup-") })
     #expect(names.contains("history.json"))
+
+    // A later launch, before anything saves, skips the same entry — and finds
+    // its backup already there. (Renamed to an earlier stamp, so a second copy
+    // couldn't just collide with the first's name.)
+    try FileManager.default.moveItem(
+      at: directory.appending(path: backup), to: directory.appending(path: "history.backup-1.json")
+    )
+    #expect(store.load() == [good])
+    let after = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+    #expect(after.filter { $0.hasPrefix("history.backup-") } == ["history.backup-1.json"])
   }
 
   @Test("file stamps go to the millisecond, so two in one second differ")

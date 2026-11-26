@@ -78,7 +78,9 @@ public struct TranscriptStore: Sendable {
   /// Decoded an entry at a time, so one that won't decode — a kind a newer
   /// build wrote, read by an older one — costs that entry, not the history.
   /// When any are skipped the file is copied aside first
-  /// (`history.backup-<date>.json`), since the next save drops them. A file
+  /// (`history.backup-<date>.json`), since the next save drops them — once:
+  /// until a save replaces the file, every later load would skip the same
+  /// entries, and a backup with the same contents is already there. A file
   /// that isn't a list at all is moved aside (`history.corrupt-<date>.json`)
   /// rather than left for the next save to overwrite.
   public func load() -> [SavedTranscript] {
@@ -93,10 +95,21 @@ public struct TranscriptStore: Sendable {
       return []
     }
     let kept = entries.compactMap(\.value)
-    if kept.count < entries.count {
+    if kept.count < entries.count, !hasBackup(of: data) {
       try? FileManager.default.copyItem(at: url, to: aside("backup-\(stamp)"))
     }
     return kept
+  }
+
+  /// Whether a `backup-` copy of this history already holds exactly `data`.
+  /// Read only on a load that skipped entries, so the scan is off the usual path.
+  private func hasBackup(of data: Data) -> Bool {
+    let directory = url.deletingLastPathComponent()
+    let prefix = url.deletingPathExtension().lastPathComponent + ".backup-"
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    return names.contains { name in
+      name.hasPrefix(prefix) && (try? Data(contentsOf: directory.appending(path: name))) == data
+    }
   }
 
   private func aside(_ tag: String) -> URL {

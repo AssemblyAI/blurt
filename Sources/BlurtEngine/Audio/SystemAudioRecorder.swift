@@ -24,7 +24,8 @@
   /// headset whose mic and speaker are one device isn't added twice, an output
   /// interface's own inputs never reach the mix, and switching the output
   /// mid-recording doesn't pull the clock away. One IOProc delivers both
-  /// streams in the same cycle; each is averaged to mono, the two summed and
+  /// streams in the same cycle; each is averaged to mono across all its
+  /// channels (a non-interleaved mic spans several buffers), the two summed and
   /// clamped, then converted to 16 kHz. The first recording asks for the
   /// System Audio Recording permission (`NSAudioCaptureUsageDescription`);
   /// refused, the tap delivers silence and the microphone still records.
@@ -75,7 +76,9 @@
         Self.log.notice(
           "recorder starting: aggregate \(self.aggregateID, privacy: .public) at \(rate, privacy: .public) Hz, \(frames, privacy: .public)-frame buffers"
         )
-        let mixWriter = try MixWriter(url: url, inputRate: rate, maxFrames: Int(frames), onPCM: onPCM)
+        let mixWriter = try MixWriter(
+          url: url, inputRate: rate, maxFrames: Int(frames), tapBuffers: try tapBufferCount(), onPCM: onPCM
+        )
         self.writer = mixWriter
         var proc: AudioDeviceIOProcID?
         try unsafe check(
@@ -189,6 +192,16 @@
         ],
       ]
       try unsafe check("aggregate", AudioHardwareCreateAggregateDevice(description as CFDictionary, &aggregateID))
+    }
+
+    /// How many buffers the tap fills each cycle: one per channel when its
+    /// format is non-interleaved, else one. `MixWriter.mix` needs it to tell
+    /// the tap's buffers from the microphone's, which come first.
+    private func tapBufferCount() throws -> Int {
+      var format = AudioStreamBasicDescription()
+      try read(kAudioTapPropertyFormat, of: tapID, into: &format)
+      let nonInterleaved = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
+      return nonInterleaved ? Int(max(format.mChannelsPerFrame, 1)) : 1
     }
 
     private func nominalSampleRate(of device: AudioObjectID) throws -> Double {
