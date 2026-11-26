@@ -123,7 +123,7 @@ final class ListeningWindow {
     self.idle = idle
     self.launchID = launchID
     machine = Machine(
-      launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: SyncSTTLimits.maxAudioSeconds
+      launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: RecordingLimits.maxAudioSeconds
     )
     let (inputs, continuation) = AsyncStream<Input>.makeStream()
     inbox = continuation

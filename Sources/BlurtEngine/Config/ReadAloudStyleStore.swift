@@ -22,9 +22,6 @@ public struct ReadAloudStyleStore {
   /// On, unlike `ReadAloudStyle.standard` (the verbatim style a caller gets
   /// when it names none).
   public static let defaultSkipsJargon = true
-  /// The voice an unset (or unknown) slot reads as.
-  public static let defaultVoiceID = ReadAloudStyle.standard.voiceID
-
   /// The speeds the Settings picker offers. Capped at 3: past that the
   /// time-domain pitch correction smears syllables together.
   public static let speedChoices = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
@@ -36,7 +33,7 @@ public struct ReadAloudStyleStore {
     ReadAloudStyle(
       rate: speed,
       skipsJargon: skipsJargon,
-      voiceID: Self.knownVoiceID(defaults.string(forKey: Self.voiceDefaultsKey))
+      voiceID: defaults.string(forKey: Self.voiceDefaultsKey).trimmedNonEmpty()
     )
   }
 
@@ -61,15 +58,6 @@ public struct ReadAloudStyleStore {
 
   init(defaults: UserDefaults) {
     self.defaults = defaults
-  }
-
-  /// `id` when it names a catalog voice, else the default. The slot is a plain
-  /// string anyone can `defaults write`, and an id the service doesn't know
-  /// refuses the whole read (`3012`), so it is never passed through. The
-  /// picker's binding reads through this too, so a stale value shows as the
-  /// voice that will actually speak.
-  public static func knownVoiceID(_ id: String?) -> String {
-    id.flatMap(ReadAloudVoice.voice(id:))?.id ?? defaultVoiceID
   }
 
   /// The entry in `speedChoices` closest to `speed`, or the default for a

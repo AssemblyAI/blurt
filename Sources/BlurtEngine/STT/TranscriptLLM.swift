@@ -13,12 +13,9 @@ import Foundation
 /// Like every LLM client it sends through `GatewayConnection`, so the gateway's
 /// URL lives only in the SDK's `GatewayChatClient.swift`.
 public struct TranscriptLLM: GatewayClient, Sendable {
-  /// Gemma 4 (31B), the owner's pick (2026-10-30): $0.14 in / $0.40
-  /// out per million tokens on the docs' list, with a 256k-token context — some
-  /// twenty hours of speech, so a recording fits whole. An hour of speech is
-  /// roughly 12k tokens, a fraction of a cent a transform. (The gateway has no
-  /// free model.)
-  static let model = "gemma-4-31b"
+  /// The provider's larger model, whose context holds a whole recording's
+  /// transcript (an hour of speech is roughly 12k tokens).
+  static let tier = ChatModelTier.capable
   /// Room for a long speaker summary or entity list; a reply that hits it is
   /// still shown, cut where it stopped.
   static let maxTokens = 8_192
@@ -75,7 +72,7 @@ public struct TranscriptLLM: GatewayClient, Sendable {
 
   private func complete(system: String, user: String, maxTokens: Int) async throws -> String {
     try await gateway.send(
-      ReadAloudLLM.chat(system: system, user: user, maxTokens: maxTokens, model: Self.model), timeout: Self.timeout
+      ReadAloudLLM.chat(system: system, user: user, maxTokens: maxTokens, tier: Self.tier), timeout: Self.timeout
     ).text
   }
 }

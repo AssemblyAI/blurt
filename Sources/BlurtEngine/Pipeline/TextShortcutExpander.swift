@@ -23,7 +23,7 @@ import Foundation
 ///
 /// One pass over the text, longest trigger first, so an expansion is never
 /// itself re-expanded and "personal email work" wins over "personal email".
-enum TextShortcutExpander {
+package enum TextShortcutExpander {
   /// What counts as part of a word — the regex spelling of
   /// `CharacterSet.alphanumerics` (letters, marks, digits), which `words(in:)`
   /// splits on.
@@ -113,7 +113,7 @@ enum TextShortcutExpander {
   /// `text` counts too.
   /// Replaced with the trigger rather than nothing, so the prompt still reads as
   /// the continuous passage it is.
-  static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
+  package static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
     var result = text
     for shortcut in shortcuts.sorted(by: { $0.expansion.count > $1.expansion.count }) {
       let expansion = shortcut.expansion

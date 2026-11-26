@@ -43,8 +43,9 @@ public struct ChatRequest: Sendable, Equatable {
     }
   }
 
-  /// The model the client chose, by the name its provider knows it by.
-  public let model: String
+  /// Which of the provider's models the client wants; the provider picks the
+  /// model itself.
+  public let tier: ChatModelTier
   /// The system prompt, then the turns.
   public let messages: [Message]
   /// The most tokens the reply may run to.

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AssemblyAI
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// What one entry carries. These drive `makeEntry` and assert the value, because
@@ -68,7 +69,7 @@ struct DictationLogEntryTests {
     #expect(entry.keyterms.isEmpty)
   }
 
-  @Test("logs the same contextual prompt the transcriber sends, in order")
+  @Test("logs the contextual prompt the transcriber reports sending, in order")
   func logsWhatTheRequestCarries() {
     let withHistory = TranscriptionContext(
       appName: "Mail",
@@ -78,9 +79,10 @@ struct DictationLogEntryTests {
       selectedText: "the old plan",
       recentTranscripts: ["Sent the deck over."]
     )
-    let entry = DictationLog.makeEntry(transcript: "p", context: withHistory, now: Date())
-    // The entry mirrors the request because the writer calls the same builder.
-    #expect(entry.sttPrompt == STTPrompt.text(context: withHistory))
+    let sent = AssemblyAITranscriber().contextPrompt(for: withHistory)
+    let entry = DictationLog.makeEntry(transcript: "p", context: withHistory, now: Date(), contextPrompt: sent)
+    // The entry records what the transcriber reports, rather than rebuilding it.
+    #expect(entry.sttPrompt == sent)
     // So the logged prompt shows the narrowing too: the history and the prior chunk
     // went on the wire, the window title and the selected text did not — even
     // though the entry's own fields record all three.
@@ -96,10 +98,12 @@ struct DictationLogEntryTests {
     // (`InsertionSeparator.withLeadingSeparator` branches on `prior.last.isWhitespace`),
     // and the wire copy has it trimmed off — so dropping `prior` for being a
     // duplicate would take the only record of that bit with it.
+    let spaced = TranscriptionContext(appName: "Mail", priorText: "Hi Sam, ")
     let entry = DictationLog.makeEntry(
       transcript: "p",
-      context: TranscriptionContext(appName: "Mail", priorText: "Hi Sam, "),
-      now: Date()
+      context: spaced,
+      now: Date(),
+      contextPrompt: STTPrompt.text(context: spaced)
     )
     #expect(entry.prior == "Hi Sam, ")
     #expect(entry.sttPrompt == "Hi Sam,")
@@ -111,12 +115,9 @@ struct DictationLogEntryTests {
   func nilPriorDisambiguatesTheLastTurn() {
     // The other half: the prompt's last line is a recent dictation here, not text
     // at the caret, and only `prior == nil` says so.
+    let historyOnly = TranscriptionContext(appName: "Mail", priorText: nil, recentTranscripts: ["Said this before."])
     let entry = DictationLog.makeEntry(
-      transcript: "p",
-      context: TranscriptionContext(
-        appName: "Mail", priorText: nil, recentTranscripts: ["Said this before."]
-      ),
-      now: Date()
+      transcript: "p", context: historyOnly, now: Date(), contextPrompt: STTPrompt.text(context: historyOnly)
     )
     #expect(entry.prior == nil)
     #expect(entry.sttPrompt == "Said this before.")

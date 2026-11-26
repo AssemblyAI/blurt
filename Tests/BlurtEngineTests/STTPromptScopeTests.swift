@@ -1,5 +1,6 @@
 import Testing
 
+@testable import BlurtAssemblyAI
 @testable import BlurtEngine
 
 /// What the context is *not* allowed to carry. Every signal below is captured at

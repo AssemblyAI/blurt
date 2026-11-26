@@ -8,10 +8,10 @@
 /// cleanup stays the dictation API's server-side rewrite (AGENTS.md's settled
 /// decisions).
 struct SelectionRewriter: SelectionRewriting, GatewayClient {
-  /// The file transcripts' model (`TranscriptLLM.model`), the owner's pick
+  /// The file transcripts' tier (`TranscriptLLM.tier`), the owner's pick
   /// for this too (2026-11-03): a rewrite is writing, where the larger model
   /// earns its latency over read-aloud's small one.
-  static let model = TranscriptLLM.model
+  static let tier = TranscriptLLM.tier
   /// The most of a selection a rewrite takes. Past it the press fails rather
   /// than rewriting a part: the paste replaces the whole selection, so a
   /// rewrite of its opening would delete the rest.
@@ -57,7 +57,7 @@ struct SelectionRewriter: SelectionRewriting, GatewayClient {
         system: Self.instruction,
         user: ReadAloudLLM.answerPrompt(request, about: String(edges.words)),
         maxTokens: Self.maxTokens,
-        model: Self.model
+        tier: Self.tier
       ),
       timeout: Self.timeout
     )

@@ -55,7 +55,7 @@ struct VoiceNoticeTests {
     snapshot: PhaseSnapshot = .idle,
     heldError: PhaseSnapshot? = nil,
     handshake: VoiceNotice.Handshake = .idle,
-    autoRelease: TimeInterval = SyncSTTLimits.autoReleaseSeconds
+    autoRelease: TimeInterval = RecordingLimits.autoReleaseSeconds
   ) -> VoiceNotice.Line? {
     VoiceNotice.line(
       for: VoiceNotice.Input(
@@ -216,7 +216,7 @@ struct VoiceNoticeTests {
 
   @Test("the countdown: from 30 s before the auto-release, up to the second, never below zero")
   func countdown() {
-    let release = SyncSTTLimits.autoReleaseSeconds
+    let release = RecordingLimits.autoReleaseSeconds
     #expect(release == 1_195)
     #expect(line(snapshot: phase(.recording, recordingFor: release - 30.5)) == nil)
     #expect(line(snapshot: phase(.recording, recordingFor: release - 30)) == expected("30 s left", .press))
@@ -280,7 +280,7 @@ struct VoiceNoticeTests {
     #expect(VoiceNotice.transcribingPatience == 3)
     #expect(VoiceNotice.countdownWindow == 30)
     let input = VoiceNotice.Input(hasFullAccess: true, state: nil, snapshot: .idle, handshake: .idle, now: now)
-    #expect(input.autoReleaseSeconds == SyncSTTLimits.autoReleaseSeconds)
+    #expect(input.autoReleaseSeconds == RecordingLimits.autoReleaseSeconds)
     #expect(input.heldError == nil)
   }
 }

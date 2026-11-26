@@ -15,10 +15,10 @@ import Foundation
 struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   private typealias Field = VoiceCommandStep.Field
 
-  /// The file transcripts' model (`TranscriptLLM.model`), as the rewrite
+  /// The file transcripts' tier (`TranscriptLLM.tier`), as the rewrite
   /// key's is: knowing an app's shortcuts is where the larger model earns its
   /// latency over read-aloud's small one, and a wrong plan is acted on.
-  static let model = TranscriptLLM.model
+  static let tier = TranscriptLLM.tier
   /// Room for the longest plan: `maxSteps` steps, one of them typing
   /// `VoiceCommandStep.maxTypedCharacters` characters. A reply that hits it is
   /// cut short and never run.
@@ -197,7 +197,7 @@ struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
 
   func plan(_ command: String, context: ScreenContext, trace: PlanTrace) async throws -> [VoiceCommandStep] {
     let ask = ChatRequest.Message(role: "user", content: Self.prompt(command, context: context))
-    trace.record(prompt: ask.content, model: Self.model, promptVersion: Self.promptVersion)
+    trace.record(prompt: ask.content, promptVersion: Self.promptVersion)
     let first = try await complete([ask], trace: trace)
     let steps: [VoiceCommandStep]
     do {
@@ -217,10 +217,10 @@ struct VoiceCommandPlanner: VoiceCommandPlanning, GatewayClient {
   /// One completion's text. Cut off part-way, the JSON doesn't close, and half
   /// a plan is a different command: never retried, since it would be again.
   private func complete(_ turns: [ChatRequest.Message], trace: PlanTrace) async throws -> String {
-    var body = ReadAloudLLM.chat(system: Self.instruction, turns: turns, maxTokens: Self.maxTokens, model: Self.model)
+    var body = ReadAloudLLM.chat(system: Self.instruction, turns: turns, maxTokens: Self.maxTokens, tier: Self.tier)
     body.responseFormat = Self.responseFormat
     let reply = try await gateway.send(body, timeout: Self.timeout)
-    trace.record(reply: reply.text)
+    trace.record(reply: reply.text, model: reply.model)
     guard !reply.truncated else { throw VoiceCommandError.truncatedReply }
     return reply.text
   }
@@ -239,9 +239,10 @@ extension VoiceCommandPlanner {
 
 // The `response_format` schema the gateway holds a plan to.
 extension VoiceCommandPlanner {
-  /// The plan's shape, enforced by the gateway (`response_format`): gemma-4-31b
-  /// follows it, measured 2026-11-03 — without it the same request came back
-  /// as prose, a fenced bare array, and an element named by its label rather
+  /// The plan's shape, enforced by the gateway (`response_format`): the
+  /// capable tier's model (gemma-4-31b on AssemblyAI's gateway) follows it,
+  /// measured 2026-11-03 — without it the same request came back as prose, a
+  /// fenced bare array, and an element named by its label rather
   /// than its number. One `anyOf` branch per action, requiring that action's
   /// own fields: with every field optional, "close this tab" came back as a
   /// shortcut with no keys, and the gateway enforces `anyOf` (measured the same

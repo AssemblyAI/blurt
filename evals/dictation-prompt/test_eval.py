@@ -1755,7 +1755,7 @@ def _swift_literal(name: str) -> str:
     """A `static let <name> = \"\"\" … \"\"\"` literal from CleanupInstruction.swift, dedented."""
     swift = (
         pathlib.Path(__file__).resolve().parents[2]
-        / "Sources/BlurtEngine/STT/CleanupInstruction.swift"
+        / "Sources/BlurtAssemblyAI/CleanupInstruction.swift"
     ).read_text(encoding="utf-8")
     match = re.search(rf'static let {name} = """\n(.*?)\n    """', swift, re.S)
     assert match, name
@@ -1766,7 +1766,7 @@ def _swift_raw_string(name: str) -> str:
     """A `static let <name> = #"…"# + #"…"#` constant from CleanupInstruction.swift."""
     swift = (
         pathlib.Path(__file__).resolve().parents[2]
-        / "Sources/BlurtEngine/STT/CleanupInstruction.swift"
+        / "Sources/BlurtAssemblyAI/CleanupInstruction.swift"
     ).read_text(encoding="utf-8")
     match = re.search(rf"static let {name} =(.*?)(?=\n\n|\n  ///|\n}})", swift, re.S)
     assert match, name

@@ -7,9 +7,12 @@ public import Foundation
 /// behaviour of its own. `AnyObject`, because a recording tells a stale
 /// session from the current one by identity.
 public protocol LiveTranscriptionSession: AnyObject, Sendable {
-  /// Opens the session and returns every turn update as it arrives — a turn's
-  /// partials, then its final — until the session ends or fails.
-  func start() async -> AsyncThrowingStream<RealtimeTurn, any Error>
+  /// Every turn update as it arrives — a turn's partials, then its final —
+  /// until the session ends or fails. There from the session's creation, so
+  /// it can be read before, and whether or not, `start` opens anything.
+  var turns: AsyncThrowingStream<RealtimeTurn, any Error> { get }
+  /// Opens the session; its turns arrive on `turns`.
+  func start() async
   /// Queues recorded PCM (16 kHz mono S16LE) for the session.
   func send(_ pcm: Data) async
   /// Sends what's left and waits for the last turn's final, then closes.
