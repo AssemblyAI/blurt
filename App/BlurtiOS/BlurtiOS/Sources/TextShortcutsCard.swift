@@ -21,10 +21,7 @@ struct TextShortcutsCard: View {
     let shortcuts = store.shortcuts(decoding: raw)
     // Every shortcut's match key: a phrase one of them holds is refused, as on
     // the Mac, rather than silently replacing that shortcut.
-    let takenKeys = Set(shortcuts.map { TextShortcut.matchKey(for: $0.trigger) })
-    let canAdd =
-      TextShortcut.canSave(trigger: trigger, expansion: expansion, otherKeys: takenKeys)
-      && shortcuts.count < TextShortcutStore.shortcutLimit
+    let taken = takenKeys(in: shortcuts)
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
       Eyebrow("Text shortcuts")
       if !shortcuts.isEmpty {
@@ -35,7 +32,10 @@ struct TextShortcutsCard: View {
           }
         }
       }
-      addForm(isTaken: TextShortcut.isTaken(trigger, by: takenKeys), canAdd: canAdd)
+      addForm(
+        isTaken: TextShortcut.isTaken(trigger, by: taken),
+        canAdd: canAdd(to: shortcuts, takenKeys: taken)
+      )
       Text("Say the phrase anywhere in a dictation and Blurt types the full text instead. They stay on this phone.")
         .brandFootnote()
     }
@@ -75,14 +75,31 @@ struct TextShortcutsCard: View {
           if clamped != value { expansion = clamped }
         }
         .brandInput()
-      Button("Add shortcut") { if canAdd { add() } }
+      Button("Add shortcut") { add() }
         .buttonStyle(BrandButtonStyle())
         .disabled(!canAdd)
     }
   }
 
-  /// Called only when `body`'s `canAdd` holds.
+  /// Every shortcut's match key: a phrase one of them holds is refused, as on
+  /// the Mac, rather than silently replacing that shortcut.
+  private func takenKeys(in shortcuts: [TextShortcut]) -> Set<String> {
+    Set(shortcuts.map { TextShortcut.matchKey(for: $0.trigger) })
+  }
+
+  private func canAdd(to shortcuts: [TextShortcut], takenKeys: Set<String>) -> Bool {
+    TextShortcut.canSave(trigger: trigger, expansion: expansion, otherKeys: takenKeys)
+      && shortcuts.count < TextShortcutStore.shortcutLimit
+  }
+
+  /// Checks against the current fields and store, not the `canAdd` the last
+  /// redraw captured: a second tap before the redraw would otherwise add an
+  /// empty shortcut.
   private func add() {
+    let shortcuts = store.shortcuts(decoding: raw)
+    guard canAdd(to: shortcuts, takenKeys: takenKeys(in: shortcuts)) else {
+      return
+    }
     store.insertFirst(TextShortcut(trigger: trigger, expansion: expansion))
     trigger = ""
     expansion = ""

@@ -47,7 +47,19 @@ final class GatedRewrites: GatewayStub, Sendable {
       } onCancel: {
         gate.open()
       }
-      try Task.checkCancellation()
+      // Released answers even if cancelled too, as the polling fake did; only
+      // a request still held throws, and leaves `held` so no later release
+      // opens a gate nobody waits on.
+      let released = state.withLock { state in
+        guard state.released < number else {
+          return true
+        }
+        state.held[number] = nil
+        return false
+      }
+      if !released {
+        throw CancellationError()
+      }
     }
     return try ok(request, completion("Rewritten \(number). The words read aloud."))
   }

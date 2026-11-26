@@ -17,6 +17,8 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
   func testPillShowsAReadAndNeverReplaysAnOldNotice() {
     let harness = readyHarness()
     dictate(in: harness, expecting: UITestIdentifiers.defaultCannedTranscript, "The bound key should dictate")
+    // Seen first, so the wait below can't pass before the notice has shown.
+    waitForLabel(pill, equals: "Your dictation was pasted.", "The dictation should show its notice")
     let cleared = XCTNSPredicateExpectation(
       predicate: NSPredicate { _, _ in !self.showsPastedNotice },
       object: nil
