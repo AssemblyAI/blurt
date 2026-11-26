@@ -116,14 +116,17 @@ struct LiveRecordingTests {
   private func mixed(_ sources: [(channels: UInt32, samples: [Float])], tapBuffers: Int) -> [Float] {
     let list = AudioBufferList.allocate(maximumBuffers: sources.count)
     let storage = sources.map { source in
-      let pointer = UnsafeMutablePointer<Float>.allocate(capacity: source.samples.count)
+      let pointer = unsafe UnsafeMutablePointer<Float>.allocate(capacity: source.samples.count)
       unsafe pointer.initialize(from: source.samples, count: source.samples.count)
       return unsafe pointer
     }
     let out = UnsafeMutablePointer<Float>.allocate(capacity: 8)
     defer {
       unsafe out.deallocate()
-      for pointer in unsafe storage { unsafe pointer.deallocate() }
+      // swift-format lints the `for unsafe` spelling SE-0458 requires as a
+      // spacing error (as in `MixWriter.mix`).
+      // swift-format-ignore
+      for unsafe pointer in storage { unsafe pointer.deallocate() }
       unsafe free(list.unsafeMutablePointer)
     }
     for (index, source) in sources.enumerated() {
