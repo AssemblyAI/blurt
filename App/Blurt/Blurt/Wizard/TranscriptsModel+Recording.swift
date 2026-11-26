@@ -171,13 +171,14 @@ extension TranscriptsModel {
   private func saveRecording(_ url: URL) {
     recording = nil
     let entry = recordingEntry(at: url)
-    guard !entry.text.isEmpty else {
+    guard !entry.needsTranscription else {
       // Nothing heard live — silence, or a live session that never got going.
       // The audio may still hold speech: try the async pass on it. Saved
       // first, so no way the pass ends — failed, or abandoned with Back —
       // leaves the file with nothing pointing at it.
       state = .idle
-      transcribe(url, entry: keepUntranscribed(entry))
+      keepUntranscribed(entry)
+      transcribe(url, entry: entry)
       return
     }
     add(entry)
@@ -232,7 +233,10 @@ extension TranscriptsModel {
       }
       history[index].replaceTranscript(result.text, plain: result.plainText)
       save()
-      if openEntry?.id == entry.id { showTranscript(of: history[index]) }
+      let diarized = history[index]
+      if openEntry?.id == entry.id { showTranscript(of: diarized) }
+      // The title so far came from the live transcript; title the better text.
+      await applyTitle(to: diarized)
     }
   }
 
@@ -248,10 +252,9 @@ extension TranscriptsModel {
   /// Saves a recording `entry` with no transcript yet (`needsTranscription`),
   /// so it is in the Library — playable, in Finder, and transcribed when
   /// opened — however its transcription ends.
-  private func keepUntranscribed(_ entry: SavedTranscript) -> SavedTranscript {
+  private func keepUntranscribed(_ entry: SavedTranscript) {
     history.insert(entry, at: 0)
     save()
-    return entry
   }
 
   /// Gives a recording kept without a transcript the one just made, and
@@ -288,12 +291,11 @@ extension TranscriptsModel {
   }
 
   /// Writes the history now, in place of the pending debounced save, queued
-  /// behind any write already under way so this one lands last. If the saved
-  /// file hasn't been read in yet, it is read and merged first rather than
-  /// overwritten with only this session's entries.
+  /// behind any write already under way so this one lands last — merged with
+  /// the saved file if that hasn't been read in yet (`TranscriptWriter.saveNow`).
   private func flushHistory() {
     pendingSave?.cancel()
-    writer.saveNow(history, mergingSaved: !isLoaded)
+    writer.saveNow(history)
   }
 
   /// Stops capturing and ends the audio feed — every way a recording ends.
