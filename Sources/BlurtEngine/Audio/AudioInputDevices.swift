@@ -90,12 +90,9 @@ public enum AudioInputDevices {
 
   /// The device carrying `uid`, or nil when none does. `isConnected` is checked
   /// as well as the lookup succeeding: a device that has just gone away can
-  /// still be handed back, and every caller means "usable right now".
-  ///
-  /// Internal, not private, because `CaptureSessionRecorder` resolves the same
-  /// pin a moment later to attach it — one spelling of "resolve a pin to a
-  /// device", so the two layers can't apply different presence rules.
-  static func device(forUID uid: String) -> AVCaptureDevice? {
+  /// still be handed back, and every caller means "usable right now". Recorders
+  /// go through `device(forPinnedUID:)`, which adds the system-default fallback.
+  private static func device(forUID uid: String) -> AVCaptureDevice? {
     guard let device = AVCaptureDevice(uniqueID: uid), device.isConnected else {
       return nil
     }

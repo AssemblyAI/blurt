@@ -45,6 +45,10 @@ struct DictationLogEntryTests {
     #expect(entry.transcript == DictationLog.withheldTranscript)
     #expect(entry.app == "1Password")
     #expect(DictationLog.makeEntry(transcript: "hunter2", context: context, now: Date()).transcript == "hunter2")
+    let unknown = TranscriptionContext(appName: "Safari", priorText: nil, targetSecurity: .unknown)
+    #expect(
+      DictationLog.makeEntry(transcript: "hunter2", context: unknown, now: Date()).transcript
+        == DictationLog.unverifiedTranscript)
   }
 
   @Test("threads every focus-context field, including the selected text")

@@ -13,7 +13,7 @@ extension DictationLog {
   /// What the log may keep of `text` dictated into a target of `security`: the
   /// words only for an ordinary field; a password field's are withheld, and an
   /// unknown target's too, since a read that never landed leaves nothing to
-  /// decide from. `makeEntry`'s secure check is the backstop.
+  /// decide from. `makeEntry` applies it again as the backstop.
   static func loggable(_ text: String, security: TargetSecurity) -> String {
     switch security {
     case .secure:

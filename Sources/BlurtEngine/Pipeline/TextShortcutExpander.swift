@@ -51,13 +51,10 @@ package enum TextShortcutExpander {
     // "a.s.a.p." would otherwise outrank "asap reply". Group i+1 of
     // `alternation` is `ordered[i]`.
     // The length is computed once per shortcut, not once per comparison.
-    let ordered =
-      shortcuts
-      .compactMap { shortcut in
-        pattern(for: shortcut.trigger).map { (shortcut, $0, TextShortcut.matchKey(for: shortcut.trigger).count) }
-      }
-      .sorted { $0.2 > $1.2 }
-      .map { ($0.0, $0.1) }
+    let keyed = shortcuts.compactMap { shortcut in
+      pattern(for: shortcut.trigger).map { (shortcut, $0, TextShortcut.matchKey(for: shortcut.trigger).count) }
+    }
+    let ordered = keyed.sorted { $0.2 > $1.2 }.map { ($0.0, $0.1) }
     guard !ordered.isEmpty else {
       return text
     }
