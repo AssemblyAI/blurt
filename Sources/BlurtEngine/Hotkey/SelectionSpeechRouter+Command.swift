@@ -13,7 +13,7 @@ import os
       private(set) var records: [StepRecord] = []
 
       func add(_ step: String, since started: ContinuousClock.Instant, how: String? = nil, error: String? = nil) {
-        let milliseconds = Int((ContinuousClock.now - started) / .milliseconds(1))
+        let milliseconds = Int((ContinuousClock.now - started).milliseconds)
         records.append(StepRecord(step: step, how: how, milliseconds: milliseconds, error: error))
       }
     }
@@ -41,7 +41,7 @@ import os
       do {
         // Never planned, nor its screen read waited for: a command that long
         // is something overheard.
-        guard command.split(whereSeparator: \.isWhitespace).count <= VoiceCommandStep.maxCommandWords else {
+        guard command.wordCount <= VoiceCommandStep.maxCommandWords else {
           screen?.cancel()
           throw VoiceCommandError.commandTooLong
         }

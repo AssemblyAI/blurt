@@ -11,16 +11,17 @@ the code you are about to change (`AGENTS.md`'s "Architecture reference" indexes
 A `check.yml` run takes ~37 minutes, so the time to merge is mostly the number of runs a PR needs.
 
 1. **Run `scripts/check.sh --portable` before every push, Swift changes included.** It catches jscpd
-   (copy/paste), invariant, shell, workflow and Markdown failures, SwiftLint's size budgets and the
-   lint-lite rules, that otherwise cost a CI run. The `push-gate` hook (below) runs it for you on
-   every `git push` and blocks the push when it fails — fix what it names rather than skipping it.
-   On a Mac, `scripts/check.sh --lint-only` adds swift-format, `swiftlint lint` and design-sync in
-   minutes.
-2. **Know what only CI checks from a web sandbox**: `swiftlint lint` (not installed here — read
-   `.swiftlint.yml` before writing Swift), periphery (a property assigned but never read is the
-   usual catch), `scripts/design-sync.sh --check` (after touching `App/BlurtiOS/Design/tokens.json`
-   or a keyboard view), swift-format, the build and every test. `AGENTS.md` › "Rules only CI
-   catches" lists the opt-in rules recent PRs each spent a run on (`variable_shadowing`,
+   (copy/paste), invariant, shell, workflow and Markdown failures, and — with the Linux Swift
+   toolchain and SwiftLint the web `SessionStart` hook installs — `swift-format lint --strict`,
+   `swiftlint lint --strict` and `design-sync.sh --check`: everything CI's `lint` job runs but the
+   iOS typecheck. The `push-gate` hook (below) runs it for you on every `git push` and blocks the
+   push when it fails — fix what it names rather than skipping it. On a Mac,
+   `scripts/check.sh --lint-only` is the same set plus the iOS typecheck.
+2. **Know what only CI checks from a web sandbox**: the build and every test, `swiftlint analyze`
+   and periphery (a property assigned but never read is the usual catch; both read a build log), and
+   the iOS typecheck. The Linux toolchain has no Apple SDK, and the engine imports AVFoundation,
+   CoreMedia, `os` and CryptoKit, so none of those can run there. `AGENTS.md` › "Rules that
+   cost a CI run" lists the opt-in rules recent PRs each spent a run on (`variable_shadowing`,
    `one_declaration_per_file`, `type_contents_order`, `multiline_function_chains`,
    `MemberImportVisibility`, swift-format's one-argument-per-line) — write to them up front.
 3. **Watch the `lint` job first.** It runs `check.sh --lint-only` and turns red in minutes; `macos`
@@ -36,24 +37,41 @@ This file adds only what is specific to Claude Code: the tooling wired up under 
 
 ## Hooks (`.claude/settings.json`)
 
-| Hook                                | What it does                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SessionStart` → `session-start.sh` | Web/Linux sandboxes only (`CLAUDE_CODE_REMOTE=true`): installs the portable linters so `scripts/check.sh --portable` works, then prints a preflight noting CI is the authority on green. SwiftLint and swift-format are _not_ installed — their Linux builds ship as GitHub release binaries, which the default network policy blocks. Local macOS sessions exit immediately.                         |
-| `PreToolUse` → `push-gate.sh`       | Runs `scripts/check.sh --portable` (~20 s) before any Bash call that runs `git push`, and blocks the push (exit 2) with the failing checks when it is red — the "before every push" rule, made mechanical. Prefix the command with `BLURT_SKIP_PUSH_GATE=1` only for a push that must go out while `main` itself is red, and say so in the PR.                                                        |
-| `PostToolUse` → `swift-format.sh`   | Formats every edited `*.swift` file with the repo's `.swift-format` config, so edits are CI-clean by construction. No-ops when the tool is absent.                                                                                                                                                                                                                                                    |
-| `PostToolUse` → `swiftlint.sh`      | Lints edited Swift files and surfaces violations immediately rather than at `check.sh` time.                                                                                                                                                                                                                                                                                                          |
-| `PostToolUse` → `swift-budgets.sh`  | Runs `check-swift-size.sh` (SwiftLint's file and type-body length limits), `check-swift-lint-lite.sh` (the opt-in SwiftLint/swift-format rules a text match can see) and, for test files, `check-test-clock.sh` (a wall-clock wait must say why) on the edited file. Needs no toolchain, so unlike the two hooks above it works in the web sandbox, where those limits otherwise surfaced only on CI. |
+| Hook                                | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart` → `session-start.sh` | Web/Linux sandboxes only (`CLAUDE_CODE_REMOTE=true`): installs the portable linters so `scripts/check.sh --portable` works — including the Linux Swift 6.2 toolchain (`scripts/install-linux-swift.sh`: swift-format, SourceKit, `swift` for design-sync) and SwiftLint (its GitHub release, pinned by version and checksum) — then prints a preflight noting CI is the authority on green. About 30 s on a cold container, hence its 600 s timeout. Local macOS sessions exit immediately. |
+| `PreToolUse` → `push-gate.sh`       | Runs `scripts/check.sh --portable` (~20 s) before any Bash call that runs `git push`, and blocks the push (exit 2) with the failing checks when it is red — the "before every push" rule, made mechanical. Prefix the command with `BLURT_SKIP_PUSH_GATE=1` only for a push that must go out while `main` itself is red, and say so in the PR.                                                                                                                                              |
+| `PostToolUse` → `swift-format.sh`   | Formats every edited `*.swift` file with the repo's `.swift-format` config, so edits are CI-clean by construction — `xcrun swift-format` on a Mac, the Linux toolchain's on the web. No-ops when the tool is absent.                                                                                                                                                                                                                                                                        |
+| `PostToolUse` → `swiftlint.sh`      | Lints edited Swift files with `--strict` and surfaces violations immediately rather than at `check.sh` time — on the web too, with SourceKit from the Linux toolchain.                                                                                                                                                                                                                                                                                                                      |
+| `PostToolUse` → `swift-budgets.sh`  | Runs `check-swift-size.sh` (SwiftLint's file and type-body length limits), `check-swift-lint-lite.sh` (the opt-in SwiftLint/swift-format rules a text match can see) and, for test files, `check-test-clock.sh` (a wall-clock wait must say why) on the edited file. Needs no toolchain, so it works even where the two hooks above have nothing to run.                                                                                                                                    |
 
-The `swift-format` and `swiftlint` hooks are silent no-ops off-Mac, which is exactly when
-`check.sh --portable` also skips Swift lint — so on the web, Swift formatting and lint are otherwise
-a pure CI concern.
-`check.yml`'s `format-patch` job softens that: it runs `swift-format` for real on every PR and
-publishes the resulting diff as a job summary and a `swift-format-patch` artifact, so the fix is
-`git apply` rather than a blind reflow.
+### The Swift toolchain on Linux
 
-`.claude/hooks/swift-line-length.sh` narrows that gap: line width is the one `.swift-format` rule
-checkable with no toolchain, so it flags over-long lines (reading the limit from `.swift-format`) and
-stays quiet whenever `swift-format` is present and about to reflow the file anyway. It is
+The web sandbox runs every part of the Swift toolchain that needs no Apple SDK.
+`scripts/install-linux-swift.sh` (run by the `SessionStart` hook; idempotent, so run it by hand in
+any Ubuntu 24.04 x86_64 sandbox) installs Swift 6.2.4 — the 6.2 line CI's Xcode 26 ships — under
+`/opt/swift-6.2.4` and links `swift`, `swiftc`, `swift-format` and `sourcekit-lsp` into
+`/usr/local/bin`. download.swift.org is blocked there and Docker Hub's anonymous pull limit is
+shared, so it takes the official `swift:6.2-noble` image's toolchain layer from `mirror.gcr.io`,
+pinned and verified by digest. To move to a new Swift, change the script's version and digests
+together.
+
+| What                                          | Runs on the web | How                                                                    |
+| --------------------------------------------- | --------------- | ---------------------------------------------------------------------- |
+| `swift-format lint --strict`                  | Yes             | `check.sh --portable` (push gate) and the `swift-format` hook per edit |
+| `swiftlint lint --strict`                     | Yes             | `check.sh --portable` (push gate) and the `swiftlint` hook per edit    |
+| `design-sync.sh --check`                      | Yes             | `check.sh --portable`, whenever `swift` is on PATH                     |
+| Build, tests, coverage                        | No              | The engine imports AVFoundation, CoreMedia, `os`, CryptoKit — CI only  |
+| `swiftlint analyze`, periphery, iOS typecheck | No              | Need a build log or the iOS SDK — CI only                              |
+
+`check.sh` without `--portable` (and `--lint-only`) still refuses to run off macOS: the toolchain
+being present doesn't make the Apple SDK present. `check.yml`'s `format-patch` job still publishes
+swift-format's diff as a `swift-format-patch` artifact, for a session without the toolchain.
+
+`.claude/hooks/swift-line-length.sh` is for a machine with no swift-format at all: line width is the
+one `.swift-format` rule checkable with no toolchain, so it flags over-long lines (reading the limit
+from `.swift-format`) and stays quiet whenever `swift-format` is present and about to reflow the
+file anyway. It is
 **deliberately not registered** in `settings.json`, so it never runs as shipped — enable it by adding
 a fourth `PostToolUse` entry beside the other three:
 
@@ -157,7 +175,7 @@ itself when this Mac has the matching runtime.
 ## Permissions
 
 `.claude/settings.json` pre-allows the read-only and verification commands this repo needs
-(`swift test`, `swift build`, `xcodegen generate`, the Debug `xcodebuild` invocation, the linters,
+(`swift test`, `swift build`, `scripts/install-linux-swift.sh`, `xcodegen generate`, the Debug `xcodebuild` invocation, the linters,
 `scripts/check.sh` with and without `--portable` or `--lint-only`, the standalone checks it runs
 (`check-invariants.sh`, `check-portability.sh`, `check-release-notes.sh`, `check-swift-size.sh`,
 `check-swift-lint-lite.sh`, `check-test-clock.sh`, `design-sync.sh --check`,

@@ -112,6 +112,22 @@ struct FocusCaptureTests {
       maxChars: 320,
       expected: nil
     ),
+    // A caret inside a character rounds down to its start; the text after the
+    // caret never counts as prior text.
+    PriorCase(
+      name: "a caret between a letter and its combining accent rounds down",
+      full: "cafe\u{301} later text",
+      caret: 4,
+      maxChars: 320,
+      expected: "caf"
+    ),
+    PriorCase(
+      name: "a caret inside a surrogate pair rounds down",
+      full: "hi 😀 there",
+      caret: 4,
+      maxChars: 320,
+      expected: "hi "
+    ),
   ]
 
   // MARK: selectLabel
@@ -180,9 +196,10 @@ struct FocusCaptureTests {
     #expect(FocusCapture.priorSlice(full: "😀😀ab", caret: 4, maxChars: 320) == "😀😀")
     // Caret between the emoji = offset 2.
     #expect(FocusCapture.priorSlice(full: "😀😀ab", caret: 2, maxChars: 320) == "😀")
-    // A caret that splits a surrogate pair isn't a character boundary — fall
-    // back to the whole value's tail rather than slicing mid-character.
-    #expect(FocusCapture.priorSlice(full: "😀b", caret: 1, maxChars: 320) == "😀b")
+    // A caret that splits a surrogate pair isn't a character boundary — it
+    // rounds down to the emoji's start, so nothing precedes it. Never the whole
+    // value: the "b" after the caret is not prior text.
+    #expect(FocusCapture.priorSlice(full: "😀b", caret: 1, maxChars: 320) == nil)
     // Offsets past the UTF-16 length keep the existing tail fallback.
     #expect(FocusCapture.priorSlice(full: "😀b", caret: 99, maxChars: 320) == "😀b")
   }

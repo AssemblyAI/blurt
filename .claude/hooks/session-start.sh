@@ -1,10 +1,13 @@
 #!/bin/bash
 # SessionStart hook: prepare a Claude Code on the web (Linux) sandbox.
 #
-# Blurt is macOS-only, so the Swift toolchain can't run here — but the portable
+# Blurt is macOS-only, so it can't be built or tested here — but the portable
 # checks (prettier / xmllint / markdownlint / shellcheck / actionlint / zizmor /
-# shfmt / jscpd / release.test.sh) can. This hook installs the missing portable
-# linters so `scripts/check.sh --portable` works, then prints a one-line preflight
+# shfmt / jscpd / release.test.sh) can run, and so can every part of the Swift
+# toolchain that needs no Apple SDK: swift-format, SourceKit (for SwiftLint) and
+# the `swift` script design-sync runs. This hook installs all of them so
+# `scripts/check.sh --portable` (and the push gate that runs it) covers Swift
+# formatting, SwiftLint and the design tokens, then prints a one-line preflight
 # so the session starts knowing CI (macos-26) is the authority on green.
 #
 # Local (macOS) sessions are untouched: the hook exits immediately unless
@@ -13,11 +16,10 @@
 # degrade to a note rather than failing the hook: the portable check skips
 # absent tools the same way check.sh always has.
 #
-# SwiftLint and swift-format are NOT installed: their Linux builds ship as
-# GitHub release binaries, which the default web network policy blocks (only
-# npm / apt / the Go module proxy are reachable). Swift formatting and lint
-# therefore stay a CI concern on the web — the PostToolUse hooks no-op cleanly
-# when the tools are absent.
+# The Swift toolchain (scripts/install-linux-swift.sh: Swift 6.2.4 from the
+# official image's layer, by digest) and SwiftLint (its GitHub release, by
+# version and checksum) are the slow installs — about 40 s on a cold container —
+# which is why settings.json gives this hook a longer timeout than the default.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -97,19 +99,55 @@ if ! command -v zizmor >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
   command -v zizmor >/dev/null 2>&1 || note "zizmor install failed (pip)"
 fi
 
+# The Swift toolchain — swift-format (check.sh lints with it, and the
+# swift-format PostToolUse hook formats each edit), SourceKit (SwiftLint's
+# SourceKit-backed rules load it) and `swift` itself (design-sync's token
+# script). Before SwiftLint, so its smoke test runs with SourceKit present.
+if ! command -v swift >/dev/null 2>&1; then
+  "$repo_root/scripts/install-linux-swift.sh" >/dev/null 2>&1 \
+    || note "Swift toolchain install failed (scripts/install-linux-swift.sh)"
+fi
+
+# SwiftLint (GitHub release) — `check.sh --portable` runs `swiftlint lint
+# --strict` whenever it is on PATH, which makes the push gate catch the opt-in
+# rules (type_contents_order, unused_parameter, async_without_await, …) that
+# otherwise cost a ~37-minute CI run (#434). Pinned to the version CI's Homebrew
+# installs, and checked against the release's checksum before it is unpacked:
+# bump both together when CI's moves. The smoke test lints one file CI passes;
+# a binary that can't (a missing SourceKit library, say) is removed rather than
+# left to fail every push.
+swiftlint_version="0.65.1"
+swiftlint_sha256="caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d"
+if ! command -v swiftlint >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+  swiftlint_tmp="$(mktemp -d "${TMPDIR:-/tmp}/swiftlint.XXXXXX")"
+  swiftlint_url="https://github.com/realm/SwiftLint/releases/download/${swiftlint_version}/swiftlint_linux_amd64.zip"
+  if curl -fsSL -m 180 -o "$swiftlint_tmp/swiftlint.zip" "$swiftlint_url" \
+    && echo "$swiftlint_sha256  $swiftlint_tmp/swiftlint.zip" | shasum -a 256 -c --status - \
+    && unzip -q -o "$swiftlint_tmp/swiftlint.zip" swiftlint -d "$swiftlint_tmp" \
+    && install -m 0755 "$swiftlint_tmp/swiftlint" /usr/local/bin/swiftlint; then
+    if ! (cd "$repo_root" && swiftlint lint --strict --quiet -- Sources/BlurtEngine/BlurtError.swift) >/dev/null 2>&1; then
+      rm -f /usr/local/bin/swiftlint
+      note "swiftlint ${swiftlint_version} installed but failed its smoke test; removed (CI still lints)"
+    fi
+  else
+    note "swiftlint ${swiftlint_version} install failed (download, checksum or unzip)"
+  fi
+  rm -rf "$swiftlint_tmp"
+fi
+
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt; do
+for tool in prettier xmllint markdownlint-cli2 shellcheck actionlint zizmor shfmt swift swift-format swiftlint; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 [ -x "$jscpd_dir/node_modules/.bin/jscpd" ] || missing="$missing jscpd"
 for tool in $python_tools; do
   [ -x "$python_bin/$tool" ] || missing="$missing $tool"
 done
-echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."
+echo "Blurt web sandbox: Linux Swift toolchain only — the build and tests run on CI (macos-26), the authority on green."
 if [ -n "$missing" ]; then
   echo "Portable linters missing:${missing}. 'scripts/check.sh --portable' will skip them with a note."
 else
-  echo "Portable linters ready. Run 'scripts/check.sh --portable' to verify docs/scripts/workflow changes."
+  echo "Portable linters ready, swift-format and SwiftLint included. 'scripts/check.sh --portable' (run by the push gate) checks everything but the build and tests."
 fi
 exit 0

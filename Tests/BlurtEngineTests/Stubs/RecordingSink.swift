@@ -35,6 +35,8 @@ final class RecordingSink: PCMSink {
     }
     set { record.withLock { $0.buffered = newValue } }
   }
+  /// Everything counts as heard the moment it's enqueued: a clip is never trimmed.
+  var unplayedAudioSeconds: Double { 0 }
   var bufferedAfterEnqueue: Double? {
     get { record.withLock(\.bufferedAfterEnqueue) }
     set { record.withLock { $0.bufferedAfterEnqueue = newValue } }

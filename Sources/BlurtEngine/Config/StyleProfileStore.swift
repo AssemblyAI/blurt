@@ -205,10 +205,8 @@ public struct StyleProfileStore {
     profiles.prefix(limit).map { profile in
       StyleProfile(
         id: profile.id,
-        name: String((profile.name.trimmedNonEmpty() ?? fallbackName).prefix(nameLimit)),
-        // Whole graphemes, so an emoji at the boundary is dropped rather than
-        // split into an invalid fragment (see `String.prefix(maxUTF8Bytes:)`).
-        instructions: profile.instructions.prefix(maxUTF8Bytes: characterLimit)
+        name: clampedName(profile.name.trimmedNonEmpty() ?? fallbackName),
+        instructions: clampedInstructions(profile.instructions)
       )
     }
   }

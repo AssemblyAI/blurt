@@ -21,8 +21,9 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 
 # --portable: run only the platform-independent checks (actionlint / zizmor /
 # prettier / markdownlint / shellcheck / shfmt / jscpd / ruff / mypy / pytest /
-# release.test.sh, plus swift-format and
-# swiftlint lint when their Linux builds happen to be present). For Linux / web
+# release.test.sh, plus swift-format, swiftlint lint and design-sync when the
+# Linux Swift toolchain and SwiftLint are installed — the web SessionStart hook
+# installs both, scripts/install-linux-swift.sh the toolchain). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
 # "green" in the CI sense — the Swift build, tests, sanitizers, coverage gate,
 # and app build are all SKIPPED; CI on macos-26 stays the
@@ -51,8 +52,10 @@ case "${1:-}" in
     ;;
 esac
 
-if [ "$PORTABLE" -eq 0 ] && ! command -v swift >/dev/null 2>&1; then
-  echo "error: no Swift toolchain found (Linux or web sandbox?)." >&2
+# macOS, not merely `swift`: the Linux toolchain (scripts/install-linux-swift.sh)
+# has no Apple SDK, so the build, the tests and the iOS typecheck can't run there.
+if [ "$PORTABLE" -eq 0 ] && { [ "$(uname -s)" != "Darwin" ] || ! command -v swift >/dev/null 2>&1; }; then
+  echo "error: no macOS Swift toolchain found (Linux or web sandbox?)." >&2
   echo "       Run 'scripts/check.sh --portable' for the platform-independent subset;" >&2
   echo "       full verification happens on a Mac / CI (macos-26)." >&2
   exit 1
@@ -518,12 +521,13 @@ run_check "swift lint-lite (rules swiftlint/swift-format fail CI on)" check_swif
 # generated from it — BlurtDesign/DesignTokens.swift (the Mac app compiles it too),
 # DESIGN.md's token tables, both apps' colour sets — must agree, and the keyboard's views must carry no
 # design literal that belongs in the tokens. scripts/design-sync.sh --check
-# regenerates into .build/ and diffs. It runs scripts/design-tokens.swift as a `swift` script,
-# which --portable mode does without.
-if [ "$PORTABLE" -eq 0 ]; then
+# regenerates into .build/ and diffs. It runs scripts/design-tokens.swift as a `swift` script —
+# plain Foundation, so the Linux toolchain runs it too — which --portable mode does without only
+# when no `swift` is installed.
+if [ "$PORTABLE" -eq 0 ] || command -v swift >/dev/null 2>&1; then
   run_check "design tokens in sync (scripts/design-sync.sh --check)" bash scripts/design-sync.sh --check
 else
-  echo "==> design-sync.sh --check skipped in portable mode (needs swift)"
+  echo "==> design-sync.sh --check skipped in portable mode (needs swift; scripts/install-linux-swift.sh)"
 fi
 
 # Mutation-testing target list. The full run stays out of this script (minutes, and

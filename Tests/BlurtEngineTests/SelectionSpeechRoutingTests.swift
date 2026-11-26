@@ -185,6 +185,19 @@ struct SelectionSpeechRoutingTests {
     #expect(routing.keyLatched() == [.speak("Hello there."), .resetGate])
   }
 
+  @Test("a recovery reset while a read is out drops that read, so the next press is decided by its own")
+  func recoveryResetWhileReadOut() {
+    var routing = SelectionSpeechRouting()
+    _ = read(&routing)
+    #expect(routing.submit(.cancelRecording) == [.forward(.cancelRecording)])
+    #expect(read(&routing) == [.readSelection])
+    // The reset press's read lands first, empty, and is dropped rather than
+    // abandoning the new press.
+    #expect(routing.selectionResolved(nil).isEmpty)
+    #expect(routing.selectionResolved("Hello there.").isEmpty)
+    #expect(routing.keyLatched() == [.speak("Hello there."), .resetGate])
+  }
+
   @Test("a stale selection result after the press resolved is ignored")
   func staleSelection() {
     var routing = SelectionSpeechRouting()

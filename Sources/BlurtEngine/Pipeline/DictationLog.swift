@@ -213,8 +213,10 @@ public enum DictationLog {
   /// a field was correctly absent or the write had failed outright.
   ///
   /// A transcript dictated into a password field is the password, so it is
-  /// never written: the entry says only that it was withheld (the pipeline has
-  /// applied `loggable(_:security:)` already). The same rule keeps it out of the
+  /// never written: the entry says only that it was withheld, and one dictated
+  /// into a field that couldn't be checked is withheld too. The pipeline has
+  /// applied `loggable(_:security:)` already; applying it again here is the
+  /// backstop, and a no-op on a placeholder. The same rule keeps it out of the
   /// recent-dictations ring (`DictationSession`), and
   /// `FocusCapture.mustRedactContents` already keeps the field's own text out.
   static func makeEntry(
@@ -226,7 +228,7 @@ public enum DictationLog {
     outcome: PipelinePhase? = nil
   ) -> Entry {
     Entry(
-      transcript: context?.targetSecurity == .secure ? withheldTranscript : transcript,
+      transcript: context.map { loggable(transcript, security: $0.targetSecurity) } ?? transcript,
       ts: now.formatted(timestampFormat),
       app: context?.appName,
       window: context?.windowTitle,

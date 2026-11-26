@@ -177,7 +177,10 @@ struct SelectionSpeechRouting: Sendable {
 
     case let .deciding(intent, trigger, _):
       if command == .cancelRecording {
+        // The press is dropped with its read still out: count that read stale,
+        // as a re-press over an ended one does, so it can't decide the next press.
         mode = .passthrough
+        staleReads += 1
         return [.forward(command)]
       }
       mode = .deciding(intent, trigger: trigger, ended: true)

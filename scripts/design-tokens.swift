@@ -91,8 +91,21 @@ func typeName(_ group: String) -> String {
   group == "type" ? "Typography" : group.prefix(1).uppercased() + group.dropFirst()
 }
 
+/// Whether `raw` is a JSON `true`/`false` rather than a number. Apple's
+/// Foundation hands both back as NSNumber, told apart by their CF type;
+/// swift-corelibs Foundation (Linux, where the web sandbox runs this) hands a
+/// boolean back as a Swift `Bool`, and has no `CFBooleanGetTypeID`.
+func isBoolean(_ raw: Any) -> Bool {
+  #if canImport(Darwin)
+    guard let number = raw as? NSNumber else { return false }
+    return CFGetTypeID(number) == CFBooleanGetTypeID()
+  #else
+    return type(of: raw) == Bool.self
+  #endif
+}
+
 func parseValue(_ raw: Any) -> Value {
-  if let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+  if !isBoolean(raw), let number = raw as? NSNumber {
     return .number(number.doubleValue)
   }
   if let numbers = raw as? [NSNumber] {

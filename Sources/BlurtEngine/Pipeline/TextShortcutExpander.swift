@@ -51,13 +51,10 @@ package enum TextShortcutExpander {
     // "a.s.a.p." would otherwise outrank "asap reply". Group i+1 of
     // `alternation` is `ordered[i]`.
     // The length is computed once per shortcut, not once per comparison.
-    let ordered =
-      shortcuts
-      .compactMap { shortcut in
-        pattern(for: shortcut.trigger).map { (shortcut, $0, TextShortcut.matchKey(for: shortcut.trigger).count) }
-      }
-      .sorted { $0.2 > $1.2 }
-      .map { ($0.0, $0.1) }
+    let keyed = shortcuts.compactMap { shortcut in
+      pattern(for: shortcut.trigger).map { (shortcut, $0, TextShortcut.matchKey(for: shortcut.trigger).count) }
+    }
+    let ordered = keyed.sorted { $0.2 > $1.2 }
     guard !ordered.isEmpty else {
       return text
     }
@@ -121,9 +118,15 @@ package enum TextShortcutExpander {
   /// the continuous passage it is.
   package static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
     var result = text
-    for shortcut in shortcuts.sorted(by: { $0.expansion.count > $1.expansion.count }) {
+    // Lengths measured once per shortcut, not once per comparison. The regex
+    // is compiled only when the expansion occurs literally (UTF-16, as the
+    // regex matches): no literal hit, no whole-word one.
+    let measured = shortcuts.map { ($0, $0.expansion.count) }
+    for (shortcut, length) in measured.sorted(by: { $0.1 > $1.1 }) {
       let expansion = shortcut.expansion
-      if let whole = try? NSRegularExpression(pattern: wholeWordPattern(for: expansion)) {
+      if result.range(of: expansion, options: .literal) != nil,
+        let whole = try? NSRegularExpression(pattern: wholeWordPattern(for: expansion))
+      {
         result = whole.stringByReplacingMatches(
           in: result,
           range: NSRange(location: 0, length: result.utf16.count),
@@ -131,7 +134,7 @@ package enum TextShortcutExpander {
         )
       }
       // No clip longer than `result` can be its prefix, so start there.
-      let longest = min(expansion.count - 1, result.count)
+      let longest = min(length - 1, result.count)
       if let clip = stride(from: longest, through: minimumClippedOverlap, by: -1).lazy
         .map({ expansion.suffix($0) })
         .first(where: { tail in

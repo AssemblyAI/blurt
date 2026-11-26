@@ -79,7 +79,7 @@ enum AppLink {
       return true
 
     case .shortcut(let chord):
-      return chord.spelled == "cmd+tab"
+      return chord == KeyChord("cmd+tab")
 
     case .pressElement(let id), .select(let id):
       return listed.first { $0.id == id }.map { NameMatch.normalized($0.label) == NameMatch.normalized(named) } ?? false

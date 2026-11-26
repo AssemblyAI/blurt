@@ -227,10 +227,7 @@
       // Require the range to actually decode, not merely that the read succeeded: a
       // `.success` carrying a non-CFRange payload is not an insertion point, and this
       // signal is one of the two that can green-light a ⌘V on an unknown role.
-      var rangeRef: CFTypeRef?
-      let hasInsertionPoint =
-        unsafe AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
-        && rangeRef.flatMap(axRange) != nil
+      let hasInsertionPoint = selectedTextRange(of: element) != nil
       let settled = isEditableTarget(role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
       return PasteFacts(
         focused: true,

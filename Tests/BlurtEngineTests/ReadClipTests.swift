@@ -33,6 +33,33 @@ struct ReadClipTests {
     #expect(data == WAVWriter.header(sampleRate: 24_000, dataBytes: 160) + data.dropFirst(44))
   }
 
+  @Test("a stopped read's clip ends where the listening did, and takes nothing after")
+  func stopTrimsUnplayedAudio() throws {
+    let folder = try directory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    // 1,000 samples a second: 2,000 bytes. Half a second was still queued.
+    let writer = try WAVWriter(url: folder.appending(path: "clip.wav"), sampleRate: 1_000)
+    let sink = ClipRecordingSink(base: QueuedSink(unplayed: 0.5), writer: writer)
+    sink.enqueue(Data(repeating: 1, count: 1_000))
+    sink.enqueue(Data(repeating: 2, count: 1_000))
+    sink.stop()
+    sink.stop()  // idempotent: trims once
+    sink.enqueue(Data(repeating: 3, count: 1_000))  // the stream's tail, after the stop
+    #expect(writer.finish() == 1_000)
+    #expect(try Data(contentsOf: writer.url).count == 44 + 1_000)
+  }
+
+  @Test("a read stopped before any of it played leaves an empty clip")
+  func stopBeforeAnythingPlayed() throws {
+    let folder = try directory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let writer = try WAVWriter(url: folder.appending(path: "clip.wav"), sampleRate: 1_000)
+    let sink = ClipRecordingSink(base: QueuedSink(unplayed: 5), writer: writer)
+    sink.enqueue(Data(repeating: 1, count: 600))
+    sink.stop()
+    #expect(writer.finish() == 0)
+  }
+
   @Test("a clip never overwrites another's file")
   func noOverwrite() throws {
     let folder = try directory()

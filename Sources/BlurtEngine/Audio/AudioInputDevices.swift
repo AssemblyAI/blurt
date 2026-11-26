@@ -90,29 +90,25 @@ public enum AudioInputDevices {
 
   /// The device carrying `uid`, or nil when none does. `isConnected` is checked
   /// as well as the lookup succeeding: a device that has just gone away can
-  /// still be handed back, and every caller means "usable right now".
-  ///
-  /// Internal, not private, because `CaptureSessionRecorder` resolves the same
-  /// pin a moment later to attach it — one spelling of "resolve a pin to a
-  /// device", so the two layers can't apply different presence rules.
-  static func device(forUID uid: String) -> AVCaptureDevice? {
+  /// still be handed back, and every caller means "usable right now". Recorders
+  /// go through `device(forPinnedUID:)`, which adds the system-default fallback.
+  private static func device(forUID uid: String) -> AVCaptureDevice? {
     guard let device = AVCaptureDevice(uniqueID: uid), device.isConnected else {
       return nil
     }
     return device
   }
 
-  /// The device to record from: the pinned device when its UID still resolves
-  /// (`AVCaptureDevice.uniqueID` is the CoreAudio device UID on macOS, the
-  /// same string `MicDeviceStore` persists), else the system default input —
-  /// the same per-capture fallback `MicCapture.resolveInput` applies. Nil when
-  /// the machine has no input at all. One spelling for dictation's
-  /// `CaptureSessionRecorder` and the Record button's `SystemAudioRecorder`.
+  /// The device to record from: the device carrying `pinnedUID`, else the
+  /// system default input. Not a policy — `MicCapture.resolveInput` (through
+  /// `MicDeviceSelection.effective`) has already folded a missing pin to nil.
+  /// The fallback here covers only a device that vanishes between that
+  /// resolution and the session build, so it degrades identically rather than
+  /// failing the capture. Nil when the machine has no input at all. Shared by
+  /// dictation's `CaptureSessionRecorder` and the Record button's
+  /// `SystemAudioRecorder`.
   static func device(forPinnedUID pinnedUID: String?) -> AVCaptureDevice? {
-    if let pinnedUID, let pinned = device(forUID: pinnedUID) {
-      return pinned
-    }
-    return systemDefaultDevice
+    pinnedUID.flatMap(device(forUID:)) ?? systemDefaultDevice
   }
 
   /// `AVCaptureDevice.transportType` as the `UInt32` four-character code

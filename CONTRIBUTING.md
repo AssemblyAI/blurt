@@ -142,9 +142,12 @@ Access — and **Start listening** in Blurt. A phone needs a paid team for the A
 ### Working without a Mac
 
 You can read and edit Swift, and `scripts/check.sh --portable` fully verifies
-docs, site, script, and workflow changes. It skips the entire Swift side and
-says so on its last line, so don't read a green portable run as "it builds" —
-open the PR and let CI on `macos-26` answer that.
+docs, site, script, and workflow changes. On Ubuntu 24.04 (x86_64),
+`scripts/install-linux-swift.sh` installs the Linux Swift toolchain, and with it
+(and SwiftLint) on `PATH` the portable run adds swift-format, SwiftLint and the
+design-token check. It still skips the build and the tests and says so on its
+last line, so don't read a green portable run as "it builds" — open the PR and
+let CI on `macos-26` answer that.
 
 ## Pull requests
 

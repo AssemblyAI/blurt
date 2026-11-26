@@ -275,13 +275,7 @@ extension DictationSession {
         setPhase(.idle, for: press)
         return nil
       }
-      if let blurtError = error as? BlurtError {
-        // e.g. `.apiKeyMissing` — surface it directly rather than burying it
-        // inside `.sttFailed`.
-        setPhase(.failed(blurtError), for: press)
-      } else {
-        setPhase(.failed(.sttFailed(underlying: error)), for: press)
-      }
+      setPhase(.failed(.wrapping(error, as: BlurtError.sttFailed(underlying:))), for: press)
       return nil
     }
   }
@@ -301,13 +295,7 @@ extension DictationSession {
   /// `.noTarget` or `.failed` (`pasteOutcome`) — without setting it: the
   /// session is at rest, and this is not a dictation. Throws only on cancellation.
   public func replaceSelection(with text: String) async throws -> PipelinePhase {
-    do {
-      try await injector.insert(text, after: nil, windowTitle: nil, security: .ordinary)
-      return .pasted
-    } catch {
-      if error is CancellationError || Task.isCancelled { throw CancellationError() }
-      return Self.pasteOutcome(error)
-    }
+    try await pasteResult { try await injector.insert(text, after: nil, windowTitle: nil, security: .ordinary) }
   }
 
   /// Pastes `text` wherever focus is now: a voice command's `type` step,
@@ -316,8 +304,14 @@ extension DictationSession {
   /// it is, so nothing here can race the next press pinning its own. Answers
   /// as `replaceSelection` does.
   public func typeText(_ text: String) async throws -> PipelinePhase {
+    try await pasteResult { try await injector.insertAtFocus(text) }
+  }
+
+  /// The phase `paste` ends in — `.pasted`, else what `pasteOutcome` makes of
+  /// its error — for the two pastes outside a dictation. Throws only on cancellation.
+  private func pasteResult(of paste: () async throws -> Void) async throws -> PipelinePhase {
     do {
-      try await injector.insertAtFocus(text)
+      try await paste()
       return .pasted
     } catch {
       if error is CancellationError || Task.isCancelled { throw CancellationError() }

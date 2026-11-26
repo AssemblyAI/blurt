@@ -50,10 +50,8 @@ public struct TextShortcutStore {
     var result: [TextShortcut] = []
     for shortcut in shortcuts {
       guard result.count < shortcutLimit,
-        let trigger = shortcut.trigger.trimmedNonEmpty().map({ String($0.prefix(triggerLimit)) }),
-        let expansion = shortcut.expansion.trimmedNonEmpty().map({ trimmed in
-          String(trimmed.prefix(expansionLimit))
-        }),
+        let trigger = shortcut.trigger.trimmedNonEmpty().map(clampedTrigger),
+        let expansion = shortcut.expansion.trimmedNonEmpty().map(clampedExpansion),
         case let key = TextShortcut.matchKey(for: trigger), !key.isEmpty,
         seen.insert(key).inserted
       else { continue }

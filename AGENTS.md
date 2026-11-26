@@ -471,8 +471,11 @@ ad-hoc" — present exactly when the signature isn't — never the value recorde
 ### Working without a macOS toolchain (remote / Linux sandboxes)
 
 This is a macOS-only project (AppKit + AVFoundation, and the engine imports AVFoundation), so on
-Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `xcodebuild`,
-`xcodegen`, and Xcode's `swift-format` are all unavailable.
+Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `xcodebuild` and
+`xcodegen` need the Apple SDK. What needs no SDK does run: `scripts/install-linux-swift.sh` (the web
+`SessionStart` hook runs it) installs the Linux Swift 6.2 toolchain, so `swift-format`, SourceKit
+(for SwiftLint) and `swift` scripts are available; `CLAUDE.md` › "The Swift toolchain on Linux" has
+the table.
 
 - **You can**: read and edit Swift, reason about the pipeline, adjust the transcription prompt and
   docs, and write tests for later verification.
@@ -483,11 +486,13 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   (dependencies, sound catalog, site, shell portability), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, jscpd, ruff (lint + format check), mypy and pytest (with its
   95% coverage gate) over the evals, and
-  `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
-  builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
-  It skips the entire Swift side, and its closing line says so. **Run it before every push, Swift
-  changes included**: jscpd, the invariants and the shell, workflow and Markdown linters all catch
-  real CI failures from here. So do three Swift checks that need no toolchain:
+  `release.test.sh`, plus — when the Linux toolchain and SwiftLint are installed —
+  `swift-format lint --strict`, `swiftlint lint --strict` and `design-sync.sh --check`. It fully
+  verifies docs, site, scripts, eval, and workflow changes, and Swift formatting and lint; it skips
+  the build, the tests and the static analysis, and its closing line says so. **Run it before every
+  push, Swift changes included** (the `push-gate` hook does): jscpd, the invariants, SwiftLint,
+  swift-format and the shell, workflow and Markdown linters all catch real CI failures from here.
+  So do three Swift checks that need no toolchain at all:
   `scripts/check-swift-size.sh` counts SwiftLint's `file_length` (400) and `type_body_length`
   (~250) budgets and notes files within 20 lines of either, where a parallel PR can tip the merge
   over; `scripts/check-test-clock.sh` fails a fixed sleep or real clock in a test that doesn't
@@ -496,7 +501,9 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   rules text can see (`modifier_order`'s `nonisolated public`, `no_empty_block`, `NoBlockComments`,
   swift-format's `catch  where` spacing). **After merging `main` into a branch, run it again**: two PRs that
   each fit a size budget merge into one that doesn't (#363, #378), and a merge fires no edit hook.
-- **Rules only CI catches**, each of which cost a recent PR a run — write Swift to them up front:
+- **Rules that cost a CI run**, each of which cost a recent PR one — write Swift to them up front.
+  With the Linux toolchain and SwiftLint installed, the push gate now catches all of them but
+  `MemberImportVisibility` (a compiler check):
   - `variable_shadowing` / `shadowing`: don't rebind a parameter or outer name with `let`
     (`let entries = … entries` → `let written`), and don't redeclare a name a helper already binds
     (#410, #416).
@@ -514,12 +521,11 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
 - **Splitting a file**: give each new file only the imports it uses — `swiftlint analyze`'s
   `unused_import` (CI only) flagged 86 copied headers in #392 — and import a type from the module
   that declares it (`CGFloat` from CoreFoundation, `DispatchQueue` from Dispatch).
-- **What only CI can tell you**: `swiftlint lint` (its Linux build is a GitHub release download the
-  default network policy blocks, so the `SessionStart` hook can't install it), periphery (a property
-  that is assigned but never read is the usual catch), `scripts/design-sync.sh --check` (after
-  touching `App/BlurtiOS/Design/tokens.json` or a keyboard view), swift-format, the build and every
-  test. Read the rules in `.swiftlint.yml` before writing Swift you can't lint, and expect `lint` to
-  answer these in minutes rather than `check` in forty.
+- **What only CI can tell you**: the build and every test, the compiler's checks
+  (`MemberImportVisibility`, strict concurrency), `swiftlint analyze` and periphery (a property
+  that is assigned but never read is the usual catch), and the iOS typecheck — plus swift-format,
+  SwiftLint and design-sync if the `SessionStart` hook couldn't install them (its preflight line
+  says so). Expect `lint` to answer the last group in minutes rather than `check` in forty.
 - **Push once per batch of fixes**: every push cancels the `check.yml` run in progress and restarts
   its ~37 minutes. When a run goes red, fix every failure it names (and apply the
   `swift-format-patch` artifact rather than guessing at a reflow) before pushing again.

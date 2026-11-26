@@ -76,6 +76,14 @@ extension BlurtError {
       false
     }
   }
+
+  /// `error` itself when it is already a `BlurtError` — `.apiKeyMissing`, or
+  /// `MicCapture`'s own capture failures — else `error` wrapped by `wrap`. One
+  /// rule, so a typed error is never wrapped twice ("Audio capture failed:
+  /// Audio capture failed: …" on the pill and in `errors.jsonl`).
+  static func wrapping(_ error: any Error, as wrap: (any Error) -> Self) -> Self {
+    error as? Self ?? wrap(error)
+  }
 }
 
 extension BlurtError: LocalizedError {
