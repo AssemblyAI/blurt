@@ -17,10 +17,7 @@ struct StyleEditor: View {
   @State private var name: String
   @State private var instructions: String
 
-  private var canSave: Bool {
-    !name.trimmingCharacters(in: .whitespaces).isEmpty
-      && !instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-  }
+  private var canSave: Bool { StyleProfile.canSave(name: name, instructions: instructions) }
 
   var body: some View {
     NavigationStack {
@@ -31,7 +28,8 @@ struct StyleEditor: View {
         Section {
           TextField("e.g. Casual", text: $name)
             .onChange(of: name) { _, value in
-              if value.count > StyleProfileStore.nameLimit { name = String(value.prefix(StyleProfileStore.nameLimit)) }
+              let clamped = StyleProfileStore.clampedName(value)
+              if clamped != value { name = clamped }
             }
         } header: {
           Eyebrow("Name")
@@ -40,7 +38,7 @@ struct StyleEditor: View {
         if profile != nil {
           Section {
             Button("Delete style", role: .destructive) {
-              store.profiles = store.profiles.filter { $0.id != profile?.id }
+              if let profile { store.remove(id: profile.id) }
               dismiss()
             }
           }
@@ -89,8 +87,8 @@ struct StyleEditor: View {
       )
       .lineLimit(3...8)  // literal-ok: the editor's rows
       .onChange(of: instructions) { _, value in
-        let trimmed = value.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
-        if trimmed != value { instructions = trimmed }
+        let clamped = StyleProfileStore.clampedInstructions(value)
+        if clamped != value { instructions = clamped }
       }
     } header: {
       Eyebrow("Instructions")
@@ -107,15 +105,13 @@ struct StyleEditor: View {
   }
 
   private func save() {
-    var list = store.profiles
-    if let profile, let index = list.firstIndex(where: { $0.id == profile.id }) {
-      list[index].name = name
-      list[index].instructions = instructions
-      store.profiles = list
+    if var edited = profile {
+      edited.name = name
+      edited.instructions = instructions
+      store.save(edited)
     } else {
       let created = StyleProfile(name: name, instructions: instructions)
-      list.append(created)
-      store.profiles = list
+      store.save(created)
       store.activate(created)
     }
     dismiss()

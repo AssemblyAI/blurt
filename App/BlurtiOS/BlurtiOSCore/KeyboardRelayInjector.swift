@@ -25,8 +25,9 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   private static let log = HostIdentity.current.logger("Relay")
 
   /// How long a password field's words stay on the clipboard when no keyboard
-  /// took them: `TargetSecurity.concealedClipboardLifetime`, as an iOS expiry.
-  private static let secureClipboardLifetime = TimeInterval(
+  /// took them: the engine's `TargetSecurity.concealedClipboardLifetime`, the
+  /// Mac's figure, as an iOS expiry.
+  package static let secureClipboardLifetime = TimeInterval(
     TargetSecurity.concealedClipboardLifetime.components.seconds
   )
 

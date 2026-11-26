@@ -72,7 +72,9 @@ struct KeyTermsCard: View {
   }
 
   private func add(to terms: [String]) {
-    let updated = WordsEdit.addingKeyTerms(draft, to: terms)
+    // Nothing past the request's term cap, so a term that couldn't be sent
+    // isn't kept; a list the keyboard's + took over it keeps every term.
+    let updated = KeyTermList.appending(draft, to: terms, maxCount: KeyTerms.termCap)
     guard updated != terms else {
       return
     }

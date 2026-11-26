@@ -59,4 +59,12 @@ struct MicDeviceStoreTests {
     #expect(
       MicDeviceSelection.systemDefault.effective(pinnedDevicePresent: false) == .systemDefault)
   }
+
+  @Test("missingPin names a pin no connected device carries, and nothing else")
+  func missingPinAmongConnected() {
+    let pinned = MicDeviceSelection.pinned(uid: "uid:usb")
+    #expect(pinned.missingPin(amongConnected: ["uid:built-in"]) == pinned)
+    #expect(pinned.missingPin(amongConnected: ["uid:built-in", "uid:usb"]) == nil)
+    #expect(MicDeviceSelection.systemDefault.missingPin(amongConnected: []) == nil)
+  }
 }

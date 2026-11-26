@@ -121,15 +121,13 @@ struct ResetSection: View {
 
   /// Runs the sweep, then restarts — or reports what survived and stays put.
   ///
-  /// The bundle id is the **running** one, never `HostIdentity.current.subsystem`:
-  /// debug builds ship under `dev.alex.blurt.dev`, and the constant would have a
-  /// dev build clearing the released Blurt's grants (the same rule
-  /// `AppDelegate.runAccessibilityGrantMigration` follows). The key is cleared
+  /// The bundle id is the **running** one (`HostIdentity.runningBundleID`), so
+  /// a dev build never clears the released Blurt's grants. The key is cleared
   /// through the model's own storage seam, so a UI-test run sweeps its in-memory
   /// store instead of the developer's Keychain item.
   private func reset() {
     let report = InstallReset(
-      bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem,
+      bundleID: HostIdentity.current.runningBundleID,
       keyStore: coordinator.apiKey.storage
     ) { [storage = coordinator.account.storage] in
       storage.save(nil)

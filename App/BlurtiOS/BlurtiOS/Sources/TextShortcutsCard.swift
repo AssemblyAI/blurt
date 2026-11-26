@@ -25,7 +25,7 @@ struct TextShortcutsCard: View {
         VStack(spacing: 0) {
           ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
             if index > 0 { Rectangle().fill(BlurtBrand.cardBorder).frame(height: DesignTokens.Metrics.cardBorder) }
-            ShortcutRow(shortcut: shortcut) { store.shortcuts = shortcuts.filter { $0.id != shortcut.id } }
+            ShortcutRow(shortcut: shortcut) { store.remove(id: shortcut.id) }
           }
         }
       }
@@ -48,9 +48,8 @@ struct TextShortcutsCard: View {
         .focused($focus, equals: .trigger)
         .onSubmit { focus = .expansion }
         .onChange(of: trigger) { _, value in
-          if value.count > TextShortcutStore.triggerLimit {
-            trigger = String(value.prefix(TextShortcutStore.triggerLimit))
-          }
+          let clamped = TextShortcutStore.clampedTrigger(value)
+          if clamped != value { trigger = clamped }
         }
         .brandInput()
       takenNote
@@ -60,9 +59,8 @@ struct TextShortcutsCard: View {
         .autocorrectionDisabled()
         .focused($focus, equals: .expansion)
         .onChange(of: expansion) { _, value in
-          if value.count > TextShortcutStore.expansionLimit {
-            expansion = String(value.prefix(TextShortcutStore.expansionLimit))
-          }
+          let clamped = TextShortcutStore.clampedExpansion(value)
+          if clamped != value { expansion = clamped }
         }
         .brandInput()
       Button("Add shortcut", action: add)
@@ -94,7 +92,7 @@ struct TextShortcutsCard: View {
     guard canAdd else {
       return
     }
-    store.shortcuts = [TextShortcut(trigger: trigger, expansion: expansion)] + shortcuts
+    store.insertFirst(TextShortcut(trigger: trigger, expansion: expansion))
     trigger = ""
     expansion = ""
     focus = nil

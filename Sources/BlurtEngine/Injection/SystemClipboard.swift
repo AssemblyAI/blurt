@@ -35,7 +35,7 @@
     }
 
     /// How long a concealed leave-behind stays for the paste by hand before it
-    /// is cleared (`TargetSecurity.concealedClipboardLifetime`).
+    /// is cleared — the engine's one figure for every host.
     static let concealedLifetime = TargetSecurity.concealedClipboardLifetime
 
     /// Counts the writes Blurt itself makes to the pasteboard, bumped *before*

@@ -36,6 +36,19 @@ public struct TranscriptStore: Sendable {
     self.url = url
   }
 
+  /// "Recording 2026-10-30 at 10.04.08.123.m4a" — a recording's file, named
+  /// the way macOS names a screenshot, so recordings sort by time and read like
+  /// the system's own.
+  public static func recordingFileName(at date: Date) -> String {
+    "Recording \(fileStamp(date)).m4a"
+  }
+
+  /// "Read 2026-10-30 at 10.04.08.123.wav" — a read-aloud clip's file, beside
+  /// the recordings and named the same way.
+  static func readAloudClipFileName(at date: Date) -> String {
+    "Read \(fileStamp(date)).wav"
+  }
+
   /// "2026-10-30 at 10.04.08.123" — how recordings and read-aloud clips are
   /// named: sortable, readable like the system's screenshots, and to the
   /// millisecond, so two in one second never share a file.

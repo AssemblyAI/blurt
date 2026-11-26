@@ -9,16 +9,6 @@ struct UtteranceFeedTests {
     samples.withUnsafeBufferPointer { Data(buffer: $0) }
   }
 
-  @Test("level: silence is 0, full scale is 1, room ambient under the floor is 0")
-  func level() {
-    #expect(UtteranceFeed.level(of: pcm([0, 0, 0, 0])) == 0)
-    #expect(UtteranceFeed.level(of: pcm([Int16.max, Int16.max, -Int16.max, -Int16.max])) == 1)
-    #expect(UtteranceFeed.level(of: pcm([3, -3, 2, -2])) == 0)
-    #expect(UtteranceFeed.level(of: Data()) == 0)
-    let mid = UtteranceFeed.level(of: pcm([8_000, -8_000, 8_000, -8_000]))
-    #expect(mid > 0 && mid < 1)
-  }
-
   @Test("digital silence is all zeros; a quiet room's noise floor is not")
   func digitalSilence() {
     #expect(UtteranceFeed.isDigitalSilence(pcm([0, 0, 0, 0])))

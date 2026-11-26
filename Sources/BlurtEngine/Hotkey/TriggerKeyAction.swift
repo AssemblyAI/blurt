@@ -18,3 +18,32 @@ public enum TriggerKeyAction: Sendable, Hashable {
   /// carries it out (`VoiceCommandPlanner`, `VoiceCommandPerforming`).
   case command
 }
+
+extension TriggerKeyAction {
+  /// Whether a press records — cued on the capture's edges, so its cue voice
+  /// is reloaded with dictation's (`CueReprimeSchedule.Reloads.dictation`).
+  /// Every action but a read records: an ask, a rewrite, a compose and a
+  /// command each record the instruction they act on.
+  public var records: Bool { self != .readAloud }
+
+  /// Whether a press speaks — cued around a read, so its cue voice is reloaded
+  /// with read-aloud's (`CueReprimeSchedule.Reloads.readAloud`). An ask both
+  /// records and speaks.
+  public var speaks: Bool { self == .readAloud || self == .ask }
+
+  /// The cue setting a key with no voice of its own follows: a read key sounds
+  /// like a read and a command key like a command, and any other key —
+  /// dictate, ask, rewrite, compose, each a recording — like a dictation.
+  public var cue: SoundPackStore.Cue {
+    switch self {
+    case .readAloud:
+      .readAloud
+
+    case .command:
+      .command
+
+    case .off, .dictate, .ask, .rewrite, .compose:
+      .dictation
+    }
+  }
+}
