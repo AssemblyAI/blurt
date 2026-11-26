@@ -10,9 +10,9 @@ import CoreFoundation
 //   `openWindow(id:)`. While the app isn't fully configured it shows the setup
 //   wizard; once it is, it shows `ReadyView` (the shortcut readout).
 // - Settings (`SettingsWindowRoot`): change the API key or dictation shortcut. A
-//   `Settings` scene, so ⌘, comes wired for free; opened programmatically via the
-//   `openSettings` environment action (the ready screen's buttons and the menu
-//   bar item).
+//   `Settings` scene, so ⌘, comes wired for free; opened from the ready screen
+//   through `SettingsLink` and from the menu bar item through the
+//   `openSettings` environment action.
 
 enum MainWindow {
   /// Scene identifier for `openWindow(id:)` / the `Window(id:)` scene.

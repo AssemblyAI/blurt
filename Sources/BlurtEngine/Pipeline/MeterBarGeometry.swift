@@ -2,8 +2,7 @@ public import CoreGraphics
 public import Foundation
 
 /// Shape of the overlay pill's live level meter — the bar row that tracks the
-/// current mic level, plus the breathing curve the REC dot and "Transcribing…"
-/// label share. Pure math, owned in the engine for the same reason as
+/// current mic level, plus the brand orb's ring rotation. Pure math, owned in the engine for the same reason as
 /// `OverlayPlacement`: the rules are worth pinning, and a SwiftUI `View` body is
 /// not somewhere a test can reach them.
 ///
@@ -74,18 +73,6 @@ public enum MeterBarGeometry {
     return envelopeEdge + (1 - envelopeEdge) * sin(.pi * position)
   }
 
-  /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so a view
-  /// eases through the dim point instead of bouncing off it.
-  ///
-  /// Shared by the REC dot and the "Transcribing…" label so the pill's two
-  /// heartbeats are literally one curve rather than two that look alike.
-  public static func breathingOpacity(time: TimeInterval, period: Double, minOpacity: Double)
-    -> Double
-  {
-    let osc = (cos(time / period * 2 * .pi) + 1) / 2  // 0...1
-    return minOpacity + (1 - minOpacity) * osc
-  }
-
   /// Angle in degrees of a continuous rotation of `period` seconds per turn —
   /// the brand orb's ring while the pill is waiting on something.
   ///
@@ -93,9 +80,9 @@ public enum MeterBarGeometry {
   /// `rotationEffect`, and after a long session an ever-increasing angle loses
   /// precision in the `Double` and starts quantising the spin.
   ///
-  /// Here beside `breathingOpacity` for the same reason that one is: it's the
-  /// pill's motion expressed as a pure function of the clock, so it's testable
-  /// without a view and can't drift into a second, subtly different curve.
+  /// Here beside the meter's idle wave for the same reason: it's the pill's
+  /// motion expressed as a pure function of the clock, so it's testable without
+  /// a view and can't drift into a second, subtly different curve.
   public static func rotationDegrees(time: TimeInterval, period: Double) -> Double {
     guard period > 0 else {
       return 0

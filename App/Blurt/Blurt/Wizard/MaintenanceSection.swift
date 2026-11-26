@@ -47,12 +47,18 @@ struct MaintenanceSection: View {
     }
   }
 
-  /// Opens the log directory in Finder. The directory only exists once the first
-  /// entry lands, and a button that silently did nothing right after the switch
-  /// went on would read as broken — so it's created here if need be (the reset
-  /// sweep removes it again once it's empty).
+  /// Reveals the dictation log in Finder, selected in its folder, as "Show in
+  /// Finder" does everywhere. Before the first entry lands there is no file to
+  /// select, and a button that silently did nothing right after the switch went
+  /// on would read as broken — so the directory is created if need be and
+  /// opened instead (the reset sweep removes it again once it's empty).
   private func showLogs() {
-    let directory = DictationLog.defaultURL.deletingLastPathComponent()
+    let log = DictationLog.defaultURL
+    if FileManager.default.fileExists(atPath: log.path(percentEncoded: false)) {
+      NSWorkspace.shared.activateFileViewerSelecting([log])
+      return
+    }
+    let directory = log.deletingLastPathComponent()
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     NSWorkspace.shared.open(directory)
   }

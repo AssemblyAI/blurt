@@ -146,12 +146,7 @@ struct PermissionsStepView: View {
     -> some View
   {
     if opened, !granted {
-      HStack(spacing: 6) {
-        ProgressView().controlSize(.small)
-        Text(waiting)
-      }
-      .font(.callout)
-      .foregroundStyle(.secondary)
+      ProgressLine(waiting).font(.callout)
     }
   }
 
@@ -163,9 +158,10 @@ struct PermissionsStepView: View {
   ) -> some View {
     SettingRow(title: info.label, systemImage: info.symbol, subtitle: info.detail) {
       if granted {
-        HStack(spacing: 4) {
-          Image(systemName: "checkmark.circle.fill").foregroundStyle(BlurtBrand.accent)
+        Label {
           Text("Granted").foregroundStyle(.secondary)
+        } icon: {
+          Image(systemName: "checkmark.circle.fill").foregroundStyle(BlurtBrand.accent)
         }
       } else {
         Button(info.buttonLabel, action: action)

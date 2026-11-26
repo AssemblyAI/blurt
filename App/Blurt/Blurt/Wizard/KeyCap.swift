@@ -48,4 +48,31 @@ extension TriggerKeyAction {
       "keyboard"
     }
   }
+
+  /// The action's name — the Sounds tab's row subtitles and the main window's
+  /// key rows, the same names the Keys tab's pop-ups use.
+  var displayName: String {
+    switch self {
+    case .off:
+      "Off"
+
+    case .dictate:
+      "Dictate"
+
+    case .readAloud:
+      KeyActionName.readAloud
+
+    case .ask:
+      KeyActionName.ask
+
+    case .rewrite:
+      KeyActionName.rewrite
+
+    case .compose:
+      KeyActionName.compose
+
+    case .command:
+      KeyActionName.command
+    }
+  }
 }
