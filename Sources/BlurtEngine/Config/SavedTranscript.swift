@@ -77,8 +77,8 @@ public struct SavedTranscript: Codable, Identifiable, Equatable, Sendable {
   public var isTranscript: Bool { kind == .file || kind == .recording }
 
   /// A recording kept with no transcript yet: its transcription failed
-  /// (offline, a server error), so it is saved with its audio and no text,
-  /// for the Library to offer it again rather than lose it.
+  /// (offline, a server error) or found no speech, so it is saved with its
+  /// audio and no text, for the Library to offer it again rather than lose it.
   public var needsTranscription: Bool { kind == .recording && hasAudio && text.isEmpty }
 
   /// What a row and the sheet's header call it: for a file or recording, the

@@ -464,17 +464,20 @@ run_check "sound catalog integrity" check_sound_catalog
 
 cd "$REPO_ROOT"
 
+# A gate with its own --self-test, run first: a rule that stopped matching is
+# indistinguishable from a clean tree.
+self_tested() {
+  bash "$1" --self-test >/dev/null || return 1
+  bash "$1"
+}
+
 # Shell portability. scripts/ and .claude/hooks/ run against BSD userland on a Mac
 # and CI, and GNU userland in a Linux / web sandbox; shellcheck reads both as
 # correct shell, so a GNU-only idiom is written green and ships red (PR #116, a
 # BSD-sed invocation). Pure text, so it runs in --portable — which is exactly
 # where the divergence gets introduced. --self-test first, because a pattern that
 # stops matching is indistinguishable from a clean tree.
-check_portability() {
-  bash scripts/check-portability.sh --self-test >/dev/null || return 1
-  bash scripts/check-portability.sh
-}
-run_check "shell portability (GNU-only idioms)" check_portability
+run_check "shell portability (GNU-only idioms)" self_tested scripts/check-portability.sh
 
 # Settled decisions (AGENTS.md). The table there is prose, and prose is enforced
 # only for as long as a reviewer remembers it; check-invariants.sh carries the
@@ -483,39 +486,23 @@ run_check "shell portability (GNU-only idioms)" check_portability
 # the production Keychain in tests. Same shape as check-portability.sh above
 # (rules table, per-rule probe, escape hatch), and same reason for the --self-test
 # first: a rule that stopped matching looks exactly like a tree that stayed clean.
-check_invariants() {
-  bash scripts/check-invariants.sh --self-test >/dev/null || return 1
-  bash scripts/check-invariants.sh
-}
-run_check "settled decisions (AGENTS.md invariants)" check_invariants
+run_check "settled decisions (AGENTS.md invariants)" self_tested scripts/check-invariants.sh
 
 # SwiftLint's file_length and type_body_length, counted without SwiftLint: the
 # most common reason a PR needed another CI run (#358, #363, #364, #368, #378,
 # #380), and a line count needs no toolchain, so --portable too. It also notes
 # files near a limit, where a parallel PR growing the same file tips the merge.
-check_swift_size() {
-  bash scripts/check-swift-size.sh --self-test >/dev/null || return 1
-  bash scripts/check-swift-size.sh
-}
-run_check "swift size budgets (file_length, type_body_length)" check_swift_size
+run_check "swift size budgets (file_length, type_body_length)" self_tested scripts/check-swift-size.sh
 
 # Tests that wait on real time: the flakes behind #353, #357, #370, #379, #380,
 # #396, #399–#401, which mostly failed other PRs. Every fixed sleep or real clock
 # in a test carries a `// wall-clock-ok: <reason>`; an unmarked one fails. Pure text.
-check_test_clock() {
-  bash scripts/check-test-clock.sh --self-test >/dev/null || return 1
-  bash scripts/check-test-clock.sh
-}
-run_check "wall-clock waits in tests say why" check_test_clock
+run_check "wall-clock waits in tests say why" self_tested scripts/check-test-clock.sh
 
 # The opt-in SwiftLint and swift-format rules a text match can see — modifier_order,
 # no_empty_block, NoBlockComments, catch-where spacing — each of which cost a PR a
 # CI run after #392 enabled every rule (#414, #422, #425). Pure text, so --portable.
-check_swift_lint_lite() {
-  bash scripts/check-swift-lint-lite.sh --self-test >/dev/null || return 1
-  bash scripts/check-swift-lint-lite.sh
-}
-run_check "swift lint-lite (rules swiftlint/swift-format fail CI on)" check_swift_lint_lite
+run_check "swift lint-lite (rules swiftlint/swift-format fail CI on)" self_tested scripts/check-swift-lint-lite.sh
 
 # The design's one source (App/BlurtiOS/Design/tokens.json) and everything
 # generated from it — BlurtDesign/DesignTokens.swift (the Mac app compiles it too),
@@ -577,7 +564,7 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/swift-format-lib.sh"
 check_swift_format() {
   git ls-files -z -- '*.swift' \
-    | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict
+    | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict --parallel
 }
 if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
   run_check "swift-format" check_swift_format
@@ -655,7 +642,17 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   # run and a lint of any one script alone agree (no SC1091 for a library that
   # isn't on the command line). (shfmt below deliberately still covers only
   # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
-  run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit
+  #
+  # One file per batch of four, a process per core: a single shellcheck over all
+  # of them was a third of --portable's time. gcc format keeps each finding on one
+  # line, so parallel output can't interleave mid-finding.
+  check_shellcheck() {
+    local jobs
+    jobs="$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+    printf '%s\0' scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit \
+      | xargs -0 -P "$jobs" -n 4 shellcheck --format=gcc
+  }
+  run_check "shellcheck" check_shellcheck
 fi
 
 if tool_ready shfmt 'brew install shfmt'; then

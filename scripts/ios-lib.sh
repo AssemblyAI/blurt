@@ -25,6 +25,23 @@ IOS_SIM_BUILD=(-destination "generic/platform=iOS Simulator" ARCHS=arm64)
 # shellcheck disable=SC2034 # used by the scripts that source this file
 IOS_DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
 
+# ios_generate_project → generates App/BlurtiOS/BlurtiOS.xcodeproj from its
+# project.yml (none of it is committed), as release-lib.sh's
+# generate_mac_project does the Mac's. A subshell: the caller's directory stays.
+ios_generate_project() {
+  (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+}
+
+# ios_build_install UDID DERIVED → builds BlurtiOS for simulator UDID into
+# DERIVED and installs it there. `xcodebuild test` does not reinstall a host app
+# it thinks it has installed, and the keyboard is inside it, so a probe run puts
+# the last build on the simulator first.
+ios_build_install() {
+  xcodebuild build -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
+    -destination "platform=iOS Simulator,id=$1" -derivedDataPath "$2" "${IOS_SIM_SIGNING[@]}" -quiet
+  xcrun simctl install "$1" "$2/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
+}
+
 # ios_resolve_packages DERIVED → resolves the iPhone project's packages into
 # DERIVED/SourcePackages before the build, retrying. KeyboardKit and LicenseKit
 # arrive as two git clones and two zips from GitHub releases; a transient fetch

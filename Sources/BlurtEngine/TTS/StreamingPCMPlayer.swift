@@ -65,8 +65,9 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   var bufferedSeconds: Double { (remaining() ?? 0) / rate }
 
   /// Seconds of audio queued ahead of what's playing, in the audio's own time,
-  /// or 0 once stopped.
-  var unplayedAudioSeconds: Double { remaining() ?? 0 }
+  /// or 0 once stopped. A late chunk's lead is silence never written to a
+  /// clip, so it isn't counted.
+  var unplayedAudioSeconds: Double { onTimeline { $0.unplayed(now: $1) } ?? 0 }
 
   /// The loudness of what's playing right now, 0...1, or 0 between words,
   /// before the first chunk, and once stopped. Reads the media clock, so it
@@ -231,10 +232,13 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     stop()
   }
 
-  /// Seconds of audio still ahead of the clock, or nil once stopped.
-  private func remaining() -> Double? {
+  /// Seconds of the timeline still ahead of the clock, or nil once stopped.
+  private func remaining() -> Double? { onTimeline { $0.remaining(now: $1) } }
+
+  /// `read` of the schedule at the clock's current time, or nil once stopped.
+  private func onTimeline(_ read: (PCMSchedule, Double) -> Double) -> Double? {
     state.withLock { state in
-      state.stopped ? nil : state.schedule.remaining(now: CMTimeGetSeconds(synchronizer.currentTime()))
+      state.stopped ? nil : read(state.schedule, CMTimeGetSeconds(synchronizer.currentTime()))
     }
   }
 

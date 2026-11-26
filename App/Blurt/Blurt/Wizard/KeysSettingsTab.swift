@@ -104,13 +104,9 @@ struct KeysSettingsTab: View {
       + profiles.map { profile in
         ActionRow(choice: .dictate(style: profile.id.uuidString), title: "Dictate: \(profile.name)", isStyled: true)
       }
-      + [
-        ActionRow(choice: .readAloud, title: KeyActionName.readAloud),
-        ActionRow(choice: .ask, title: KeyActionName.ask),
-        ActionRow(choice: .rewrite, title: KeyActionName.rewrite),
-        ActionRow(choice: .compose, title: KeyActionName.compose),
-        ActionRow(choice: .command, title: KeyActionName.command),
-      ]
+      + [TriggerKeyChoice.readAloud, .ask, .rewrite, .compose, .command].map { choice in
+        ActionRow(choice: choice, title: choice.action.title)
+      }
   }
 
   private func keyRow(_ row: ActionRow, bindings: TriggerKeyBindings, profiles: [StyleProfile]) -> some View {

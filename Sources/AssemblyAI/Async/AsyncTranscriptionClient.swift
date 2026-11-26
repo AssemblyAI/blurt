@@ -186,7 +186,9 @@ public struct AsyncTranscriptionClient: Sendable {
       throw AsyncTranscriptionError.http(status: 0, message: nil)
     }
     guard (200..<300).contains(status) else {
-      throw AsyncTranscriptionError.http(status: status, message: ErrorResponse.message(in: data))
+      // Only a documented message: this error's text reaches the Library's
+      // failure page, where a proxy's HTML 502 would be noise.
+      throw AsyncTranscriptionError.http(status: status, message: ErrorResponse.documentedMessage(in: data))
     }
     return data
   }

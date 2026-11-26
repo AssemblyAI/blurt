@@ -1,5 +1,3 @@
-import AVFoundation
-
 /// The audio session as the listening window needs it: up with the options a
 /// held microphone wants, down again, the input it prefers, and what the
 /// system says about it. A protocol so `ListeningWindowTests` run against a

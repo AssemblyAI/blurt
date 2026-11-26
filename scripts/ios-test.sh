@@ -64,7 +64,7 @@ else
   ios_boot_async "$UDID"
 fi
 
-(cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+ios_generate_project
 ios_resolve_packages "$DERIVED"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS="$DERIVED/BlurtiOSTests-$STAMP.xcresult"

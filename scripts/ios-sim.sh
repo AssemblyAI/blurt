@@ -46,7 +46,7 @@ done
 APP="$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
 if [ "$BUILD" -eq 1 ]; then
   echo "generate + build"
-  (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+  ios_generate_project
   xcodebuild -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
     -destination 'generic/platform=iOS Simulator' -derivedDataPath "$DERIVED" \
     "${IOS_SIM_SIGNING[@]}" -quiet build
