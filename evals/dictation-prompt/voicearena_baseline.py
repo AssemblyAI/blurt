@@ -14,9 +14,9 @@ rewording, digits versus words and a kept self-correction, all of which WER char
 So before a multi-hour search, this measures the target itself.
 
 **What it runs.** Every public clip's recording, through the real `/v1/transcribe/live`
-route with the shipped instruction (`candidates.PRIOR_WINNER`, byte-identical to
-`CleanupInstruction.text`) and `--rewrite-mode` (default `smart`, the mode the
-leaderboard ran Blurt in). The draft is what the app would paste: `llm_response`,
+route with the shipped instruction for `--rewrite-mode`: `candidates.SMART_WINNER`
+for Smart (the default) or `candidates.PRIOR_WINNER` for Fast, matching the app.
+The draft is what the app would paste: `llm_response`,
 falling back to the verbatim `text` when the rewrite failed.
 
 **How it scores.** `amend`'s own prompt (`build_prompt`, version v1) and its own
@@ -68,7 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import corpus  # noqa: E402
 import voicearena  # noqa: E402
-from candidates import PRIOR_WINNER  # noqa: E402
+from candidates import PRIOR_WINNER, SMART_WINNER  # noqa: E402
 
 #: `amend` 0.2.1's defaults, named here only to key the judge cache.
 JUDGE_MODEL = "claude-opus-5-5"
@@ -276,7 +276,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--instruction",
         default="shipped",
         choices=("shipped", "none"),
-        help="shipped sends CleanupInstruction.text; none omits it (the service default)",
+        help="shipped sends the app's instruction for the selected mode; none uses the service default",
     )
     parser.add_argument(
         "--instruction-file",
@@ -308,7 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         instruction = Path(args.instruction_file).read_text(encoding="utf-8").strip()
         label = f"instruction from {Path(args.instruction_file).name} ({len(instruction)} chars)"
     elif args.instruction == "shipped":
-        instruction, label = PRIOR_WINNER, "shipped instruction"
+        instruction = SMART_WINNER if args.rewrite_mode == "smart" else PRIOR_WINNER
+        label = "shipped instruction"
     else:
         instruction, label = None, "service default (no instruction)"
     runs = transcribe_all(
