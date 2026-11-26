@@ -134,7 +134,7 @@
     ) -> Int {
       let tapStart = max(buffers.count - tapBuffers, 0)
       // Every channel of a source counts once toward its average.
-      let channelTotals = unsafe buffers.indices.reduce(into: [0, 0]) { totals, index in
+      let channelTotals = buffers.indices.reduce(into: [0, 0]) { totals, index in
         unsafe totals[index < tapStart ? 0 : 1] += Int(max(buffers[index].mNumberChannels, 1))
       }
       var frames = 0
