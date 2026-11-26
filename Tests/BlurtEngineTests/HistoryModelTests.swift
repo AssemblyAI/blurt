@@ -62,11 +62,6 @@ struct HistoryModelTests {
 
   @Test("a file comes back labelled by speaker, with the plain text beside it")
   func fileTranscriberBothWays() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "HistoryModelTests-\(UUID())")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let url = directory.appending(path: "call.m4a")
-    try Data("audio".utf8).write(to: url)
     let transport = FakeHTTPTransport { request in
       switch request.url?.path {
       case "/v2/upload":
@@ -88,7 +83,9 @@ struct HistoryModelTests {
     let transcriber = FileTranscriber(
       client: AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
     ) { "key" }
-    let result = try await transcriber.transcribe(fileAt: url)
+    let result = try await withScratchAudioFile { url in
+      try await transcriber.transcribe(fileAt: url)
+    }
     #expect(result.text == "Speaker A: Hi.\n\nSpeaker B: Hey.")
     #expect(result.plainText == "Hi. Hey.")
     #expect(SpeakerTurn.parse(result.text).map(\.speaker) == ["A", "B"])
@@ -160,25 +157,20 @@ struct HistoryModelTests {
 
   @Test("onStart runs once, at the first audio, however many levels follow")
   func textReaderOnStart() async throws {
-    let starts = Mutex(0)
-    try await TextReader(speaker: LevelSpeaker(levels: 3)).read("Meeting notes.") {
-      starts.withLock { $0 += 1 }
+    try await confirmation("onStart runs once", expectedCount: 1) { started in
+      try await TextReader(speaker: LevelSpeaker(levels: 3)).read("Meeting notes.") { started() }
     }
-    #expect(starts.withLock { $0 } == 1)
   }
 
   @Test("onStart doesn't run when no audio plays")
   func textReaderNoAudio() async throws {
-    let starts = Mutex(0)
-    try await TextReader(speaker: LevelSpeaker(levels: 0)).read("Meeting notes.") {
-      starts.withLock { $0 += 1 }
+    try await confirmation("onStart never runs", expectedCount: 0) { started in
+      try await TextReader(speaker: LevelSpeaker(levels: 0)).read("Meeting notes.") { started() }
     }
-    #expect(starts.withLock { $0 } == 0)
   }
 
   @Test("onStart doesn't run on the real speaker's silent readings: before audio, or the final 0")
   func textReaderSilentLevels() async {
-    let starts = Mutex(0)
     // The read fails before any audio, so all the meter ever reports is the
     // silent sink's 0 and the final 0 the speaker sends however it ends.
     let speaker = SelectionSpeaker(
@@ -188,9 +180,8 @@ struct HistoryModelTests {
       ),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: FakeHTTPTransport.failing(with: URLError(.timedOut)))
     ) { _ in RecordingSink() }
-    try? await TextReader(speaker: speaker).read("Meeting notes.") {
-      starts.withLock { $0 += 1 }
+    await confirmation("onStart never runs", expectedCount: 0) { started in
+      _ = try? await TextReader(speaker: speaker).read("Meeting notes.") { started() }
     }
-    #expect(starts.withLock { $0 } == 0)
   }
 }

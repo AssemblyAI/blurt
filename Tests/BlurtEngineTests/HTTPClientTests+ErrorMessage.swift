@@ -11,7 +11,7 @@ import Testing
 /// type-body-length budget; it shares that suite's helpers.
 extension HTTPClientTests {
   @Test("transcriber HTTP error carries the decoded server message")
-  func transcribeHTTPErrorMessage() async {
+  func transcribeHTTPErrorMessage() async throws {
     // A documented status carrying a documented shape: 503 with
     // `{error, error_code}`. This asserted a 422 with a `message` key until
     // 2026-09-11, and neither the status nor the field is in the reference —
@@ -19,19 +19,25 @@ extension HTTPClientTests {
     // `audio_too_large` until that became the over-cap fallback's trigger
     // (`LiveCapFallbackTests`), which this fake would have answered twice.
     let body = json(["error": "server at capacity", "error_code": "capacity_exceeded"])
-    let transport = FakeHTTPTransport { _ in (503, body) }
+    let failure = try await httpFailure(answering: 503, body: body)
+    #expect(failure.status == 503)
+    #expect(failure.message == "server at capacity")
+  }
 
-    // The transcriber surfaces its transport error directly; DictationSession is
-    // the layer that wraps it in BlurtError.sttFailed before it reaches the UI.
-    do {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
-      Issue.record("expected a throw")
-    } catch let AssemblyAIError.http(status, message) {
-      #expect(status == 503)
-      #expect(message == "server at capacity")
-    } catch {
-      Issue.record("expected AssemblyAIError.http, got \(error)")
+  /// The `AssemblyAIError.http` a dictation ends in when the route answers
+  /// `status` and `body`; any other outcome fails the test. The transcriber
+  /// surfaces its transport error directly; DictationSession is the layer that
+  /// wraps it in BlurtError.sttFailed before it reaches the UI.
+  private func httpFailure(answering status: Int, body: Data) async throws -> (status: Int, message: String?) {
+    let transport = FakeHTTPTransport { _ in (status, body) }
+    let error = try await #require(throws: AssemblyAIError.self) {
+      try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
     }
+    guard case let .http(thrown, message) = error else {
+      Issue.record("expected AssemblyAIError.http, got \(error)")
+      return (0, nil)
+    }
+    return (thrown, message)
   }
 
   @Test("HTTP error falls back to the raw body when the shape is unknown")
@@ -74,21 +80,14 @@ extension HTTPClientTests {
   }
 
   @Test("a documented `{error, error_code}` 400 surfaces its sentence, not the body")
-  func httpErrorUsesDocumentedErrorField() async {
+  func httpErrorUsesDocumentedErrorField() async throws {
     // End to end, because the decode is only half of it: the status has to
     // arrive carrying the sentence the route sent. This is the shape the
     // reference gives for a 400 — the status a bad config field earns.
     let body = json(["error": "audio part must not be empty", "error_code": "bad_request"])
-    let transport = FakeHTTPTransport { _ in (400, body) }
-    do {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
-      Issue.record("expected a throw")
-    } catch let AssemblyAIError.http(status, message) {
-      #expect(status == 400)
-      #expect(message == "audio part must not be empty")
-    } catch {
-      Issue.record("expected AssemblyAIError.http, got \(error)")
-    }
+    let failure = try await httpFailure(answering: 400, body: body)
+    #expect(failure.status == 400)
+    #expect(failure.message == "audio part must not be empty")
   }
 
   @Test("a non-string `detail` (validation array) falls back to the raw body")

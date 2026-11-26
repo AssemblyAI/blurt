@@ -29,15 +29,15 @@ struct SelectionCopyTests {
   @Test("an unreadable clipboard can't be restored, so no copy is attempted")
   func unreadableClipboard() async {
     let pasteboard = FakeCopyPasteboard(readable: false)
-    let posted = Mutex(false)
-    let copy = SelectionCopy(
-      pasteboard: pasteboard
-    ) {
-      posted.withLock { $0 = true }
-      return true
+    await confirmation("no ⌘C is posted", expectedCount: 0) { posted in
+      let copy = SelectionCopy(
+        pasteboard: pasteboard
+      ) {
+        posted()
+        return true
+      }
+      #expect(await copy.copySelection(maxCharacters: 100) == nil)
     }
-    #expect(await copy.copySelection(maxCharacters: 100) == nil)
-    #expect(!posted.withLock { $0 })
   }
 
   @Test("waits for a paste's turn, so its transcript isn't kept as the user's clipboard (issue #341)")

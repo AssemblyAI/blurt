@@ -17,6 +17,9 @@ final class GatedSpeaker: ReadAloudSpeaker, Sendable {
     var calls: [Call] = []
     var cancellations = 0
     var released = false
+    /// One gate per read still playing: `finishAll()` opens them all, and a
+    /// read's own cancellation opens only its own.
+    var playing: [AsyncGate] = []
   }
 
   private let state = Mutex(State())
@@ -28,7 +31,14 @@ final class GatedSpeaker: ReadAloudSpeaker, Sendable {
   init(fails: Bool = false) { self.fails = fails }
 
   /// Lets every read playing now, and any later, finish on its own.
-  func finishAll() { state.withLock { $0.released = true } }
+  func finishAll() {
+    let playing = state.withLock { state -> [AsyncGate] in
+      state.released = true
+      defer { state.playing.removeAll() }
+      return state.playing
+    }
+    for gate in playing { gate.open() }
+  }
 
   func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws {
     try await play(Call(kind: "speak: \(text)", style: style), onLevel: onLevel)
@@ -40,18 +50,38 @@ final class GatedSpeaker: ReadAloudSpeaker, Sendable {
     try await play(Call(kind: "answer: \(request)", style: style), onLevel: onLevel)
   }
 
+  /// Parks on the read's own gate rather than polling: `AsyncGate.wait()`
+  /// doesn't answer cancellation itself, so the cancellation handler opens the
+  /// gate, and a read woken while it isn't released was stopped.
   private func play(_ call: Call, onLevel: (@Sendable (Float) -> Void)?) async throws {
     state.withLock { $0.calls.append(call) }
-    if fails { throw URLError(.badServerResponse) }
-    while !state.withLock(\.released) {
-      do {
-        // wall-clock-ok: a fake that waits until the test releases or cancels it
-        try await Task.sleep(for: .milliseconds(5))
-      } catch {
-        state.withLock { $0.cancellations += 1 }
-        onLevel?(0.7)
-        throw error
+    if fails {
+      throw URLError(.badServerResponse)
+    }
+    let gate = AsyncGate()
+    let released = state.withLock { state -> Bool in
+      if !state.released { state.playing.append(gate) }
+      return state.released
+    }
+    if released {
+      return
+    }
+    await withTaskCancellationHandler {
+      await gate.wait()
+    } onCancel: {
+      gate.open()
+    }
+    let stopped = state.withLock { state -> Bool in
+      guard !state.released else {
+        return false
       }
+      state.playing.removeAll { $0 === gate }
+      state.cancellations += 1
+      return true
+    }
+    if stopped {
+      onLevel?(0.7)
+      throw CancellationError()
     }
   }
 }

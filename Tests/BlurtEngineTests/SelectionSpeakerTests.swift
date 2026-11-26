@@ -66,7 +66,7 @@ struct SelectionSpeakerTests {
     let sink = RecordingSink()
     let transport = HangingSpeechTransport()
     let speaking = Task { try await speaker(transport, sink: sink).speak("Say something here.") }
-    while !transport.asked { await Task.yield() }
+    await transport.waitUntilAsked()
     speaking.cancel()
     _ = await speaking.result
     #expect(sink.stopped)
@@ -154,14 +154,14 @@ struct SelectionSpeakerTests {
   }
 
   @Test("a stop during the rewrite plays nothing, rather than falling back")
-  func cancelledDuringRewrite() async {
+  func cancelledDuringRewrite() async throws {
     let sink = RecordingSink()
     let transport = FakeSpeechTransport()
     let gateway = HangingTransport()
     let speaking = Task {
       try await speaker(transport, sink: sink, gateway: gateway).speak("Say something here.", style: fastSkipping)
     }
-    while !gateway.asked { await Task.yield() }
+    try await waitUntil("the rewrite request to go out") { gateway.asked }
     speaking.cancel()
     await #expect(throws: CancellationError.self) { try await speaking.value }
     #expect(transport.requests.isEmpty)
@@ -195,7 +195,7 @@ struct SelectionSpeakerTests {
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway)
     ) { _ in sink }
     let task = Task { try await start(speaker) }
-    while !gateway.asked { await Task.yield() }
+    await gateway.waitUntilAsked()
     task.cancel()
     gateway.release()
     await #expect(throws: CancellationError.self) { try await task.value }

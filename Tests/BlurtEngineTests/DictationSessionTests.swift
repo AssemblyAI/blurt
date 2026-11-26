@@ -55,11 +55,9 @@ extension DictationSessionTests {
 
     await fixture.session.dictate()
 
-    if case .failed(.sttFailed) = await fixture.session.phase {
-      // ok
-    } else {
-      Issue.record("expected .failed(.sttFailed), got \(await fixture.session.phase)")
-    }
+    // `BlurtError`'s `==` compares a wrapped error by domain and code, so this
+    // pins the session wrapping the transcriber's own error, once.
+    #expect(await fixture.session.phase == .failed(.sttFailed(underlying: Boom())))
     #expect(await fixture.injector.inserted.isEmpty)
   }
 
@@ -82,11 +80,7 @@ extension DictationSessionTests {
 
     // First run: fail in STT
     await fixture.session.dictate()
-    if case .failed = await fixture.session.phase {
-      // The expected outcome: the failed STT run left the session failed.
-    } else {
-      Issue.record("expected .failed after STT throws")
-    }
+    #expect(await fixture.session.phase == .failed(.sttFailed(underlying: Boom())))
 
     // Second run: press() must be allowed again — verify it changes phase.
     await fixture.session.press()
@@ -103,11 +97,7 @@ extension DictationSessionTests {
 
     await fixture.session.press()
 
-    if case .failed(.audioCaptureFailed) = await fixture.session.phase {
-      // ok
-    } else {
-      Issue.record("expected .failed(.audioCaptureFailed), got \(await fixture.session.phase)")
-    }
+    #expect(await fixture.session.phase == .failed(.audioCaptureFailed(underlying: Boom())))
   }
 
   @Test("empty transcript returns to idle without injecting")
@@ -178,11 +168,7 @@ extension DictationSessionTests {
 
     await fixture.session.dictate()
 
-    if case .failed(.audioCaptureFailed) = await fixture.session.phase {
-      // ok
-    } else {
-      Issue.record("expected .failed(.audioCaptureFailed), got \(await fixture.session.phase)")
-    }
+    #expect(await fixture.session.phase == .failed(.audioCaptureFailed(underlying: Boom())))
     #expect(await fixture.injector.inserted.isEmpty)
   }
 

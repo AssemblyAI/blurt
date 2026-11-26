@@ -56,7 +56,7 @@ struct LongReadTests {
     // minute queued, and is what would send the second piece if pacing were
     // broken. Wait for that check rather than sleeping past it: once it has
     // answered, the next piece can only go out after the queue drains.
-    while sink.roomChecks < 2 { await Task.yield() }
+    try await waitUntil("the speaker's second room check") { sink.roomChecks >= 2 }
     #expect(transport.spoken == [pieces[0]], "a piece went out while a minute was still queued")
     // The listener catches up.
     sink.bufferedAfterEnqueue = nil
@@ -96,7 +96,7 @@ struct LongReadTests {
     }
     // Only the first piece's rewrite is answered, and it's already being read.
     gateway.release(1)
-    while transport.spoken.isEmpty { await Task.yield() }
+    try await waitUntil("the first piece to be spoken") { !transport.spoken.isEmpty }
     for _ in 0..<200 { await Task.yield() }
     #expect(transport.spoken == ["Rewritten 1. The words read aloud."])
     #expect(gateway.asked <= 2, "the whole article went to the gateway before reading")

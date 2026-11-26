@@ -94,16 +94,15 @@
       try JSONDecoder().decode(State.self, from: Data(contentsOf: statePath))
     }
 
-    /// The fixture's state once `condition` holds, or its last state after 30 s.
-    /// Every caller expects the condition to hold, so the bound only catches a hang.
+    /// The fixture's state once `condition` holds, or its last state after
+    /// `waitUntil`'s 30 s. Every caller expects the condition to hold, so the
+    /// bound only catches a hang, and a timeout isn't rethrown: the caller's
+    /// expectation on the state returned names what never happened.
     func state(until condition: (State) -> Bool) async throws -> State {
-      let deadline = ContinuousClock.now.advanced(by: .seconds(30))
-      while ContinuousClock.now < deadline {
-        if let state = try? state(), condition(state) {
-          return state
-        }
-        // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
-        try await Task.sleep(for: .milliseconds(25))
+      do {
+        try await waitUntil("the fixture's state to match") { (try? state()).map(condition) ?? false }
+      } catch is WaitTimedOut {
+        // Fall through to the last state, for the caller's expectation to report.
       }
       return try state()
     }
