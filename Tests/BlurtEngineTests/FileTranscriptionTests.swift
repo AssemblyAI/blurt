@@ -120,6 +120,17 @@ struct FileTranscriptionTests {
     }
   }
 
+  @Test("a failure body in no documented shape, a proxy's HTML, isn't shown to the user")
+  func asyncUndocumentedError() async throws {
+    let url = try scratchAudioFile()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let transport = FakeHTTPTransport { _ in (400, Data("<!DOCTYPE html><title>Blocked</title>".utf8)) }
+    await #expect(throws: AsyncTranscriptionError.http(status: 400, message: nil)) {
+      try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
+        .transcribe(fileAt: url, apiKey: "key")
+    }
+  }
+
   @Test("no API key fails before any request")
   func missingKey() async throws {
     let transcriber = FileTranscriber(

@@ -22,6 +22,10 @@ struct PCMSchedule {
   /// Where the next chunk goes, in seconds on the playback timeline.
   private(set) var nextTime = 0.0
   private(set) var started = false
+  /// Where the audio since the last lead starts. Only this lead's gap can be
+  /// ahead of the clock: a lead is added only once the clock has passed every
+  /// chunk before it.
+  private var audioStart = 0.0
 
   init(sampleRate: Int, rate: Double = 1) {
     self.sampleRate = Double(sampleRate)
@@ -33,6 +37,7 @@ struct PCMSchedule {
   mutating func place(frames: Int, now: Double) -> Double {
     if !started || nextTime < now {
       nextTime = (started ? now : 0) + leadTime
+      audioStart = nextTime
     }
     started = true
     let at = nextTime
@@ -40,8 +45,15 @@ struct PCMSchedule {
     return at
   }
 
-  /// Seconds of scheduled audio still ahead of the clock.
+  /// Seconds of the timeline still ahead of the clock, a lead's silence
+  /// included: how far ahead of the listener the reading is.
   func remaining(now: Double) -> Double {
     started ? max(0, nextTime - now) : 0
+  }
+
+  /// Seconds of audio still ahead of the clock, without a lead's silence:
+  /// what was scheduled but not yet heard.
+  func unplayed(now: Double) -> Double {
+    started ? max(0, nextTime - max(now, audioStart)) : 0
   }
 }
