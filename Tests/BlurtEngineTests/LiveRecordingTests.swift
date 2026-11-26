@@ -115,26 +115,24 @@ struct LiveRecordingTests {
   /// `MixWriter.mix` over one buffer per `(channels, samples)` pair, in order.
   private func mixed(_ sources: [(channels: UInt32, samples: [Float])], tapBuffers: Int) -> [Float] {
     let list = AudioBufferList.allocate(maximumBuffers: sources.count)
-    let storage = sources.map { source in
-      let pointer = unsafe UnsafeMutablePointer<Float>.allocate(capacity: source.samples.count)
-      unsafe pointer.initialize(from: source.samples, count: source.samples.count)
-      return unsafe pointer
-    }
+    // Every source's samples in one allocation, each buffer pointing at its own run.
+    let samples = sources.flatMap(\.samples)
+    let storage = UnsafeMutablePointer<Float>.allocate(capacity: samples.count)
+    unsafe storage.initialize(from: samples, count: samples.count)
     let out = UnsafeMutablePointer<Float>.allocate(capacity: 8)
     defer {
       unsafe out.deallocate()
-      // swift-format lints the `for unsafe` spelling SE-0458 requires as a
-      // spacing error (as in `MixWriter.mix`).
-      // swift-format-ignore
-      for unsafe pointer in storage { unsafe pointer.deallocate() }
+      unsafe storage.deallocate()
       unsafe free(list.unsafeMutablePointer)
     }
+    var offset = 0
     for (index, source) in sources.enumerated() {
       unsafe list[index] = unsafe AudioBuffer(
         mNumberChannels: source.channels,
         mDataByteSize: UInt32(source.samples.count * MemoryLayout<Float>.size),
-        mData: storage[index]
+        mData: storage + offset
       )
+      offset += source.samples.count
     }
     let frames = unsafe MixWriter.mix(list, into: out, capacity: 8, tapBuffers: tapBuffers)
     return unsafe Array(UnsafeBufferPointer(start: out, count: frames))
