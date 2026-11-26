@@ -926,7 +926,7 @@ target (`App/Blurt/Blurt/SoundPackCatalog.swift`) by `scripts/generate-sounds.sw
 `.m4a` files they name, because a voice list whose cues live in someone else's bundle is a picker in
 which every choice plays silence. Regenerate both halves together — `check.sh`'s sound-catalog guard
 exists because a drift plays silence with no error — and note that adding or removing a voice changes
-the app target's file list, so `xcodegen generate` and a committed `.pbxproj` are part of that edit. **`RecordingCueGate`** decides
+the app target's file list, which the generated project picks up from the folder on the next build. **`RecordingCueGate`** decides
 which chime fires on each recording edge — on the `.recording` edge, i.e. once audio is actually
 flowing, never at the press (see the latency notes above for why that ordering is load-bearing); the
 AppKit `CueSoundPlayer` just plays what it resolves.
@@ -1210,7 +1210,7 @@ restating them.
 ## Updates
 
 Blurt updates itself with [Sparkle](https://sparkle-project.org) 2 — the Mac app's one remote
-package, pinned exactly in `project.yml` and `Package.resolved`. Sparkle owns the whole flow: the scheduled
+package, pinned exactly (`exactVersion:`) in `project.yml`. Sparkle owns the whole flow: the scheduled
 background check (daily), the "up to date" / "new version available" UI, downloading the DMG,
 verifying its EdDSA signature, and replacing the app in place. Nothing about updates lives in the
 engine any more; the download-only GitHub-API checker (`UpdateChecker`, `UpdateAlertContent`,

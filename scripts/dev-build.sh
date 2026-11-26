@@ -13,6 +13,7 @@
 # Security rows, separate settings, either one runnable. Grant the dev app its
 # own permissions once and they stick across rebuilds.
 #
+# Generates App/Blurt/Blurt.xcodeproj from project.yml first (it isn't committed).
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
 # Safe to re-run.
 
@@ -28,6 +29,8 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 require_tools xcodebuild
 
 pretty_xcodebuild
+
+generate_mac_project
 
 cd "$APP_DIR"
 

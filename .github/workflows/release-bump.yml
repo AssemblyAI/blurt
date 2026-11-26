@@ -2,10 +2,12 @@ name: release-bump
 
 # Run the version-bump half of a release without a Mac terminal.
 #
-# `scripts/release-bump.sh` needs `xcodegen`, which is macOS-only, so bumping
-# used to require the maintainer's laptop — the one step of the release that a
-# web or chat session could not do. This runs the same script unmodified on a
-# `macos-26` runner and pushes the branch.
+# Bumping used to require the maintainer's laptop (`scripts/release-bump.sh`
+# regenerated the committed Mac project with `xcodegen`, which is macOS-only) —
+# the one step of the release that a web or chat session could not do. This
+# runs the same script unmodified on a `macos-26` runner and pushes the branch.
+# (The project is no longer committed, so the script now edits only project.yml
+# and the release notes and needs no Homebrew tool.)
 #
 # It deliberately stops at the push and does NOT open the pull request. Events
 # created by GITHUB_TOKEN do not trigger workflows, so a PR opened from here
@@ -112,9 +114,9 @@ jobs:
       - name: Resolve the target version
         id: target
         working-directory: blurt
-        # Before the brew install, so a version problem costs seconds rather
-        # than minutes. release-bump.sh re-checks all of this; these are the
-        # same rules applied early enough to be useful.
+        # Before the bump, so a version problem is named here, with the rule it
+        # broke. release-bump.sh re-checks all of this; these are the same rules
+        # applied early enough to be useful.
         env:
           EVENT: ${{ github.event_name }}
           INPUT_VERSION: ${{ inputs.version }}
@@ -158,10 +160,6 @@ jobs:
           echo "version=$version" >>"$GITHUB_OUTPUT"
           info "main is at $main_v; bumping to $version"
 
-      - name: Install build tools
-        working-directory: blurt
-        run: brew bundle --file=Brewfile
-
       - name: Identify the committer
         working-directory: blurt
         run: |
@@ -188,7 +186,7 @@ jobs:
           # wherever the marker was pointing.
           git checkout -B "$branch"
           # Unmodified: it owns the semver / greater-than / tag-collision guards,
-          # the project.yml edit, the xcodegen regeneration, and the commit.
+          # the project.yml edit, the release-notes scaffold, and the commit.
           scripts/release-bump.sh "$VERSION"
 
           if [ "$EVENT" = "push" ]; then

@@ -60,6 +60,7 @@
       "label": "Xcode: Build App",
       "type": "shell",
       "command": "xcodebuild -project App/Blurt/Blurt.xcodeproj -scheme Blurt -configuration Debug -derivedDataPath /tmp/blurt-build build",
+      "dependsOn": "XcodeGen: Generate App Project",
       "group": "build",
       "problemMatcher": ["$msCompile"],
       "presentation": {

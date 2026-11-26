@@ -206,9 +206,10 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 
 ## Build / tests
 
-- **Don't hand-edit `App/Blurt/Blurt.xcodeproj/project.pbxproj`** — it's
-  generated from `project.yml`; edit that and run `xcodegen generate`. check.sh
-  fails on pbxproj drift (a PreToolUse hook also blocks edits to it).
+- **Don't commit a generated Xcode project, `Info.plist` or `.entitlements`**
+  (either app) — each is generated from its `project.yml` by every script that
+  builds, and `.gitignore` covers them. Edit the yml; a committed copy brings
+  back the drift check that failed unrelated PRs (#392, #415).
 - The engine has **no external SPM dependencies** (Foundation/Security/
   AVFoundation/CoreAudio only). Don't add one to `Sources/BlurtEngine/`. Each
   app carries only the remote packages check.sh allowlists for it, pinned with

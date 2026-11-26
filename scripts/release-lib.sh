@@ -52,6 +52,15 @@ pretty_xcodebuild() {
   fi
 }
 
+# Generate App/Blurt/Blurt.xcodeproj (and the Info.plist and entitlements it
+# names) from App/Blurt/project.yml. None of it is committed, so every script
+# that builds the Mac app calls this first, the way the iPhone scripts generate
+# theirs. Runs in a subshell: the caller's working directory is unchanged.
+generate_mac_project() {
+  require_tools --hint='scripts/bootstrap.sh installs it' xcodegen
+  (cd "$REPO_ROOT/App/Blurt" && xcodegen generate --quiet)
+}
+
 # Die unless the git working tree is clean; $1 names the action for the message
 # (e.g. "publishing" -> "… commit or stash before publishing").
 require_clean_tree() {

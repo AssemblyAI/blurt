@@ -376,20 +376,15 @@ identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
 require_clean_tree "building a release artifact"
 
 step "Verify pinned dependencies"
-# The Mac app's one remote package is Sparkle, so Xcode writes its pin to the
-# Package.resolved beside the committed project; the gate is that the pin is
-# tracked and reviewed, never floating. (The iPhone app pins KeyboardKit with
-# `exactVersion:` in App/BlurtiOS/project.yml instead — its project, and so
-# its Package.resolved, is generated and not committed, and check.sh enforces
-# the pin's shape. This script builds the Mac app only.)
-RESOLVED="$APP_DIR/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-if [ -f "$RESOLVED" ]; then
-  git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
-    || die "Package.resolved exists but is not tracked by git — dependency pins would be unreviewed"
-  info "dependency pins tracked: $RESOLVED"
-else
-  info "no external SPM dependencies (no Package.resolved) — nothing to pin"
-fi
+# Both apps pin their remote packages with `exactVersion:` in project.yml —
+# Sparkle here, KeyboardKit on the iPhone — which fully determines resolution,
+# so neither generated project (nor the Package.resolved Xcode writes into it)
+# is committed. check.sh's dependency guard enforces the pin's shape; this
+# re-checks the one remote package this script ships before building with it.
+grep -A1 -E '^[[:space:]]+url: https://github.com/sparkle-project/Sparkle[[:space:]]*$' "$APP_DIR/project.yml" \
+  | grep -qE '^[[:space:]]+exactVersion:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*$' \
+  || die "App/Blurt/project.yml must pin Sparkle with 'exactVersion: x.y.z' on the line after its url"
+info "Sparkle pinned exactly in project.yml"
 
 step "Read version"
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
@@ -692,9 +687,8 @@ PROVENANCE="$BUILD_ROOT/build-info.txt"
   echo "swift:        $(swift --version | head -1)"
   echo "macos sdk:    $(xcrun --sdk macosx --show-sdk-version) ($(xcrun --sdk macosx --show-sdk-build-version))"
   echo
-  echo "Package.resolved sha256:"
+  echo "Package.resolved sha256 (written by this build's package resolution):"
   shasum -a 256 "$REPO_ROOT/App/Blurt/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" 2>/dev/null \
-    || shasum -a 256 "$REPO_ROOT/Package.resolved" 2>/dev/null \
     || echo "  (Package.resolved not found)"
 } >"$PROVENANCE"
 info "provenance: $PROVENANCE"

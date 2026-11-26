@@ -236,10 +236,11 @@ jobs:
           persist-credentials: false
 
       - name: Install the Mac static gates' tools
-        # swiftlint for `swiftlint analyze`, periphery for the unused-code scan,
-        # xcbeautify for the build output; all in the Brewfile too, so these are
-        # the versions check.sh uses.
-        run: brew install swiftlint periphery xcbeautify
+        # xcodegen for the project (generated, not committed), swiftlint for
+        # `swiftlint analyze`, periphery for the unused-code scan, xcbeautify for
+        # the build output; all in the Brewfile too, so these are the versions
+        # check.sh uses.
+        run: brew install xcodegen swiftlint periphery xcbeautify
 
       - name: Build the Mac app, then run swiftlint analyze and periphery
         working-directory: blurt
@@ -249,8 +250,7 @@ jobs:
   # (scripts/uitest.sh — 69 tests driving every trigger key, read-aloud and the
   # audits end to end, ~20 minutes of test) and the leak scan (scripts/leaks.sh).
   # A job of its own: it needs nothing the `macos` job produces — both scripts
-  # build the app themselves, from the committed project (`macos` runs the
-  # xcodegen drift check).
+  # generate the project and build the app themselves.
   #
   # Two runners, by test class, balanced on CI's per-class times (Nov 2026: ~580
   # and ~600 s): shard a runs the classes it names and the leak scan; shard b
@@ -272,6 +272,7 @@ jobs:
             selection: >-
               -only-testing:BlurtUITests/KeysAndReadAloudUITests
               -only-testing:BlurtUITests/SettingsUITests
+              -only-testing:BlurtUITests/APIKeySheetUITests
               -only-testing:BlurtUITests/CommandPipelineUITests
               -only-testing:BlurtUITests/MenuBarUITests
               -only-testing:BlurtUITests/LaunchPerformanceUITests
@@ -281,6 +282,7 @@ jobs:
               -only-testing:BlurtUITests
               -skip-testing:BlurtUITests/KeysAndReadAloudUITests
               -skip-testing:BlurtUITests/SettingsUITests
+              -skip-testing:BlurtUITests/APIKeySheetUITests
               -skip-testing:BlurtUITests/CommandPipelineUITests
               -skip-testing:BlurtUITests/MenuBarUITests
               -skip-testing:BlurtUITests/LaunchPerformanceUITests
@@ -292,10 +294,10 @@ jobs:
           path: blurt
           persist-credentials: false
 
-      - name: Install xcbeautify
-        # Just the one formula: both scripts need only Xcode, and fall back to raw
-        # output without it.
-        run: brew install xcbeautify
+      - name: Install xcodegen and xcbeautify
+        # Both scripts generate the project (it isn't committed), then need only
+        # Xcode; they fall back to raw output without xcbeautify.
+        run: brew install xcodegen xcbeautify
 
       - name: Run the XCUITest suite (shard ${{ matrix.shard }})
         working-directory: blurt

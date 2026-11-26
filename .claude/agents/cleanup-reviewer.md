@@ -111,5 +111,6 @@ A markdown list. Per finding: `file:line`, a one-line summary, the concrete cost
 the code actually runs and how you established that), and the precise fix. Your
 final message is the deliverable — no preamble.
 
-Never propose editing `App/Blurt/Blurt.xcodeproj/project.pbxproj`; it is generated
-from `App/Blurt/project.yml`.
+Never propose editing or committing a generated Xcode project
+(`App/Blurt/Blurt.xcodeproj`, `App/BlurtiOS/BlurtiOS.xcodeproj`); each is generated
+from its `project.yml`, which is the file to change.

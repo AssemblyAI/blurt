@@ -45,6 +45,7 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 
 require_tools --hint='macOS/Xcode required' xcodebuild
 pretty_xcodebuild
+generate_mac_project
 
 echo "==> building Blurt (Debug, ad-hoc) for the leak run"
 cd "$APP_DIR"
