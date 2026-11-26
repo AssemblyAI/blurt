@@ -7,10 +7,8 @@ import Testing
 @Suite("Keyboard model: the mic, the phase and results", .serialized)
 @MainActor
 struct KeyboardModelProtocolTests {
-  @Test("a tap presses and latches; answered, the next tap releases the dictation by its id")
+  @Test("a tap presses and latches; answered, the next tap releases the dictation by its id", .scratchSuite)
   func tapThenTap() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -24,10 +22,8 @@ struct KeyboardModelProtocolTests {
     #expect(release?.dictationID == dictation)
   }
 
-  @Test("a dictation started elsewhere, named by the app, latches on the finger so one tap stops it")
+  @Test("a dictation started elsewhere, named by the app, latches on the finger so one tap stops it", .scratchSuite)
   func latchOnInFlight() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -39,10 +35,8 @@ struct KeyboardModelProtocolTests {
     #expect(commands.sent.last?.dictationID == dictation)
   }
 
-  @Test("a press while transcribing is refused rather than dropped by the engine")
+  @Test("a press while transcribing is refused rather than dropped by the engine", .scratchSuite)
   func noPressWhileProcessing() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -52,10 +46,10 @@ struct KeyboardModelProtocolTests {
     #expect(model.gate.isIdle)
   }
 
-  @Test("leaving the screen releases a recording this keyboard owns, and ends its presence once that is answered")
+  @Test(
+    "leaving the screen releases a recording this keyboard owns, and ends its presence once that is answered",
+    .scratchSuite)
   func disappearEndsDictation() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -75,10 +69,8 @@ struct KeyboardModelProtocolTests {
     #expect(SharedStore.keyboardPresence?.onScreen == false)
   }
 
-  @Test("a result is inserted once, only while fresh, only if addressed here")
+  @Test("a result is inserted once, only while fresh, only if addressed here", .scratchSuite)
   func results() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
@@ -107,10 +99,8 @@ struct KeyboardModelProtocolTests {
   /// #346: the words were for the field the dictation was made in. Tapping
   /// into another while they are transcribed — iOS keeping this controller
   /// for it, or a new one coming up in the same process — must not move them.
-  @Test("a result for another field in this process is left for the app to copy out")
+  @Test("a result for another field in this process is left for the app to copy out", .scratchSuite)
   func resultForAnotherField() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
@@ -163,10 +153,8 @@ struct KeyboardModelProtocolTests {
     #expect(!onlyController.isFor(controllerID: "d", documentID: id))
   }
 
-  @Test("the term field never claims a cursor move or a selection")
+  @Test("the term field never claims a cursor move or a selection", .scratchSuite)
   func termFieldIgnoresCursorMoves() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
@@ -189,10 +177,8 @@ struct KeyboardModelProtocolTests {
     #expect(model.termDraft?.isEmpty == true)
   }
 
-  @Test("a selection with spaces around it is replaced with the spaces kept")
+  @Test("a selection with spaces around it is replaced with the spaces kept", .scratchSuite)
   func termReplaceKeepsSpaces() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy

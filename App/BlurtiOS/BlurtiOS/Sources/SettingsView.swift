@@ -18,9 +18,6 @@ struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss)
   private var dismiss
-  @State private var autoDictate = SharedStore.autoDictate
-  @State private var windowMinutes = SharedStore.windowMinutes
-  @State private var airPodsMic = SharedStore.airPodsMic
   @State private var showsKeyEntry = false
   @State private var confirmsStatsReset = false
   @State private var showsTypingTest = false
@@ -34,6 +31,14 @@ struct SettingsView: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
+  // The App Group's settings, read and written in place, as the keyboard and
+  // the listening window read them (`SharedStore`'s getters keep these defaults).
+  @AppStorage(BlurtShared.Key.autoDictate, store: SharedStore.defaults)
+  private var autoDictate = false
+  @AppStorage(BlurtShared.Key.windowMinutes, store: SharedStore.defaults)
+  private var windowMinutes = SharedStore.defaultWindowMinutes
+  @AppStorage(BlurtShared.Key.airPodsMic, store: SharedStore.defaults)
+  private var airPodsMic = false
 
   var body: some View {
     NavigationStack {
@@ -107,7 +112,6 @@ struct SettingsView: View {
   private var keyboardSection: some View {
     Section {
       Toggle("Hands-free", isOn: $autoDictate)
-        .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
     } header: {
       Eyebrow("Keyboard")
     } footer: {
@@ -121,18 +125,16 @@ struct SettingsView: View {
   private var listeningSection: some View {
     Section {
       Picker("Keep listening for", selection: $windowMinutes) {
-        Text("5 minutes").tag(5)
-        Text("15 minutes").tag(15)
-        Text("1 hour").tag(60)
+        ForEach([5, 15, 60], id: \.self) { minutes in
+          Text(KeepOpen.duration(minutes: minutes)).tag(minutes)
+        }
         Text("Until I stop it").tag(0)
       }
-      .onChange(of: windowMinutes) { _, value in
-        SharedStore.windowMinutes = value
+      .onChange(of: windowMinutes) {
         // The window that is open takes the new length, not only the next one.
         coordinator.windowMinutesChanged()
       }
       Toggle("Use AirPods mic", isOn: $airPodsMic)
-        .onChange(of: airPodsMic) { _, value in SharedStore.airPodsMic = value }
     } header: {
       Eyebrow("Listening")
     } footer: {

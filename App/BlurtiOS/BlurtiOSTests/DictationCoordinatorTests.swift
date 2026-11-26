@@ -67,10 +67,8 @@ struct DictationCoordinatorTests {
     coordinator.handleCommand()
   }
 
-  @Test("start writes a fresh launch: no window, sequence 0, and the phase idle under it")
+  @Test("start writes a fresh launch: no window, sequence 0, and the phase idle under it", .scratchSuite)
   func start() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.listeningState = ListeningState(launchID: UUID(), sequence: 9, window: .open, micLive: true)
     let (coordinator, rig) = coordinator()
     coordinator.start()
@@ -87,10 +85,10 @@ struct DictationCoordinatorTests {
     #expect(phase?.dictation == nil && phase?.answers == nil)
   }
 
-  @Test("a press to a closed window is acked notListening and never submitted; its resend is answered the same")
+  @Test(
+    "a press to a closed window is acked notListening and never submitted; its resend is answered the same",
+    .scratchSuite)
   func pressToClosedWindow() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = coordinator()
     coordinator.start()
     let press = command(.press)
@@ -113,10 +111,10 @@ struct DictationCoordinatorTests {
     #expect(coordinator.answered.count == 1)
   }
 
-  @Test("a press while the window is closing is refused on the window as it is, never promised the mic on its way out")
+  @Test(
+    "a press while the window is closing is refused on the window as it is, never promised the mic on its way out",
+    .scratchSuite)
   func pressWhileClosing() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = coordinator(closeDelay: .milliseconds(400))
     coordinator.start()
     coordinator.apiKey.save("key")
@@ -133,10 +131,8 @@ struct DictationCoordinatorTests {
     #expect(coordinator.phase == .idle)
   }
 
-  @Test("a release or cancel with nothing in flight is acked nothingInFlight")
+  @Test("a release or cancel with nothing in flight is acked nothingInFlight", .scratchSuite)
   func endingNothing() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, _) = coordinator()
     coordinator.start()
     let release = command(.release)
@@ -149,10 +145,9 @@ struct DictationCoordinatorTests {
     #expect(coordinator.lastCommandID == nil)
   }
 
-  @Test("the answered ids are bounded: the oldest make room, and a resend of one of those is decided afresh")
+  @Test(
+    "the answered ids are bounded: the oldest make room, and a resend of one of those is decided afresh", .scratchSuite)
   func answeredBounded() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, _) = coordinator()
     coordinator.start()
     let first = command(.press)
@@ -166,10 +161,8 @@ struct DictationCoordinatorTests {
     #expect(coordinator.answered.count == DictationCoordinator.answeredCapacity)
   }
 
-  @Test("the setup hop sets the Full Access flag and opens no window; the start hop asks for one")
+  @Test("the setup hop sets the Full Access flag and opens no window; the start hop asks for one", .scratchSuite)
   func hops() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = coordinator()
     coordinator.start()
     coordinator.handle(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed))

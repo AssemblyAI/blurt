@@ -8,8 +8,6 @@ import Testing
 extension KeyboardModelGateTests {
   @Test("a swipe off the orb undoes only its own press: a fresh one is cancelled, a latched recording kept")
   func undoPress() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -43,8 +41,6 @@ extension KeyboardModelGateTests {
 
   @Test("a swipe over a recording this keyboard just released cancels nothing: those words are being transcribed")
   func undoPressOverReleasedRecording() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands

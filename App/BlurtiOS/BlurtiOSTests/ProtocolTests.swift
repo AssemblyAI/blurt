@@ -13,10 +13,8 @@ struct ProtocolTests {
     #expect(SharedStore.keyTermsKey == KeyTermsStore.defaultsKey)
   }
 
-  @Test("listening is the record's word: an open window with a live mic and a fresh lease")
+  @Test("listening is the record's word: an open window with a live mic and a fresh lease", .scratchSuite)
   func isListening() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let now = Date()
     KeyboardRig.listening(true, now: now)
     #expect(SharedStore.isListening(now: now))
@@ -52,10 +50,8 @@ struct ProtocolTests {
     #expect(SharedStore.presenceWindow > 2 * SharedStore.keyboardHeartbeatInterval)
   }
 
-  @Test("addKeyTerm trims and refuses a duplicate in any case")
+  @Test("addKeyTerm trims and refuses a duplicate in any case", .scratchSuite)
   func addKeyTerm() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     #expect(SharedStore.addKeyTerm(" Rizz "))
     #expect(!SharedStore.addKeyTerm("rizz"))
     #expect(!SharedStore.addKeyTerm("  "))
@@ -66,10 +62,9 @@ struct ProtocolTests {
   /// and expiring, options UIKit doesn't read back — never lost.
   @Test(
     "with no keyboard on screen the words go to the clipboard and the phase is the quiet one",
+    .scratchSuite,
     arguments: [TargetSecurity.ordinary, .unknown, .secure])
   func relayFallsBackToClipboard(security: TargetSecurity) async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = nil
     UIPasteboard.general.string = ""
     let injector = KeyboardRelayInjector()
@@ -80,10 +75,8 @@ struct ProtocolTests {
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
 
-  @Test("a result the keyboard never takes is copied out after the delivery timeout")
+  @Test("a result the keyboard never takes is copied out after the delivery timeout", .scratchSuite)
   func relayTimesOut() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
     UIPasteboard.general.string = ""
@@ -104,10 +97,10 @@ struct ProtocolTests {
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
 
-  @Test("the words go back to the keyboard that pressed; another keyboard up in its place means the clipboard")
+  @Test(
+    "the words go back to the keyboard that pressed; another keyboard up in its place means the clipboard",
+    .scratchSuite)
   func relayToPresser() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-2"
     UIPasteboard.general.string = ""
@@ -128,10 +121,8 @@ struct ProtocolTests {
     try await insert.value
   }
 
-  @Test("a dictation cancelled while its result waits for the keyboard takes the result back")
+  @Test("a dictation cancelled while its result waits for the keyboard takes the result back", .scratchSuite)
   func relayCancelledTakesResultBack() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
     let injector = KeyboardRelayInjector()
@@ -143,10 +134,8 @@ struct ProtocolTests {
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
 
-  @Test("a result taken by the keyboard counts as delivered")
+  @Test("a result taken by the keyboard counts as delivered", .scratchSuite)
   func relayDelivered() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
     let clock = TestClock()

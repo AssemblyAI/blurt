@@ -6,10 +6,8 @@ import Testing
 @Suite("Shared defaults")
 @MainActor
 struct SharedDefaultsTests {
-  @Test("a payload round-trips through the App Group; unreadable or removed is nothing")
+  @Test("a payload round-trips through the App Group; unreadable or removed is nothing", .scratchSuite)
   func payloads() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let result = DictationResult(id: UUID(), text: "hi", deliveredAt: Date(), recipient: "kb")
     SharedStore.write(result, forKey: BlurtShared.Key.result)
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.id == result.id)
@@ -20,10 +18,8 @@ struct SharedDefaultsTests {
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
 
-  @Test("each setting has its default until chosen, and keeps what was chosen")
+  @Test("each setting has its default until chosen, and keeps what was chosen", .scratchSuite)
   func settings() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     #expect(!SharedStore.autoDictate)
     SharedStore.autoDictate = true
     #expect(SharedStore.autoDictate)

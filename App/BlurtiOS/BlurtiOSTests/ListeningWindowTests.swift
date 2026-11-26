@@ -8,13 +8,11 @@ import Testing
 /// session and its background tasks for each thing that happens, and the
 /// record it leaves for the keyboard at every step. The rules themselves are
 /// `ListeningWindowMachineTests`; this is the wiring.
-@Suite("Listening window", .serialized)
+@Suite("Listening window", .serialized, .scratchSuite)
 @MainActor
 struct ListeningWindowTests {
   @Test("open in front: the session up, the source opened, the record open with a live mic")
   func openInFront() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     #expect(await rig.opened())
     let record = rig.state
@@ -32,8 +30,6 @@ struct ListeningWindowTests {
 
   @Test("open in the background: refused with needsForeground; the source and the session are never touched")
   func openInBackground() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     rig.app.state = .background
     rig.window.open()
@@ -50,8 +46,6 @@ struct ListeningWindowTests {
 
   @Test("a call releases the dictation in flight with its words and pauses the window under a background task")
   func interruptionBegan() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     #expect(await rig.dictating())
     #expect(rig.idle.began == 1)
@@ -69,8 +63,6 @@ struct ListeningWindowTests {
 
   @Test("the interruption's end resumes by polling the source, never by starting it from the background")
   func interruptionEnded() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
     await rig.interrupted()
@@ -86,8 +78,6 @@ struct ListeningWindowTests {
 
   @Test("a source that does not come back stays interrupted; the next foreground starts it again")
   func resumeOnForeground() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
     await rig.interrupted()
@@ -110,8 +100,6 @@ struct ListeningWindowTests {
 
   @Test("a runtimeError from the source flips micLive off at once, with the mic busy as the reason")
   func runtimeError() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
     rig.source.eventSink.yield(.runtimeError(code: -12_782))
@@ -131,8 +119,6 @@ struct ListeningWindowTests {
 
   @Test("the lease is never distantFuture, and a beat renews it with the mic as the idle mode reads it")
   func lease() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     rig.window.start()
     await rig.opened()
@@ -159,8 +145,6 @@ struct ListeningWindowTests {
 
   @Test("a reopen during close: the source closes once and opens once more")
   func reopenDuringClose() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig(closeDelay: .milliseconds(200))
     await rig.opened()
     rig.window.close()
@@ -174,16 +158,11 @@ struct ListeningWindowTests {
   }
 
   @Test("windowMinutesChanged reschedules the expiry: the shorter window ends on the clock with its words kept")
-  func windowMinutesChanged() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
+  func windowMinutesChanged() async throws {
     SharedStore.windowMinutes = 15
     let rig = WindowRig()
     await rig.opened()
-    guard let long = rig.state?.windowUntil else {
-      Issue.record("no end on a 15-minute window")
-      return
-    }
+    let long = try #require(rig.state?.windowUntil, "no end on a 15-minute window")
     SharedStore.windowMinutes = 1
     rig.window.windowMinutesChanged()
     #expect(await until { (rig.state?.windowUntil ?? .distantFuture) < long })
@@ -199,8 +178,6 @@ struct ListeningWindowTests {
 
   @Test("the user's stop cancels the dictation in flight and stands the session down")
   func stop() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     #expect(await rig.dictating())
     rig.window.close()
@@ -214,8 +191,6 @@ struct ListeningWindowTests {
 
   @Test("a press's failed start is the window's news: a refused background start waits for the foreground")
   func captureFailed() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
     let sequence = rig.state?.sequence ?? 0
@@ -234,8 +209,6 @@ struct ListeningWindowTests {
 
   @Test("the idle mode's report reaches the record: parked under the keeper, or the source lost")
   func idleReports() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     await rig.opened()
     #expect(rig.idle.generation == 1, "armed for the first window")

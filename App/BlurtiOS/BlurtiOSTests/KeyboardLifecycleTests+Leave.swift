@@ -16,8 +16,6 @@ extension KeyboardLifecycleTests {
 
   @Test("leaving with a release of its own out: the command goes first, and presence holds until the app answers it")
   func leaveWaitsForStopAck() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.autoDictate = false
     let posts = Posts()
     let observer = DarwinObserver(name: BlurtShared.Signal.keyboard) { posts.count.withLock { $0 += 1 } }
@@ -56,8 +54,6 @@ extension KeyboardLifecycleTests {
 
   @Test("with no answer, presence ends at the grace — the stop's own deadline — and not before")
   func leaveGrace() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.autoDictate = false
     let rig = KeyboardRig()
     let model = rig.model
@@ -83,8 +79,6 @@ extension KeyboardLifecycleTests {
 
   @Test("back on screen before the answer, the leave is dropped; detached with one pending, it lands at once")
   func leaveDroppedOrForced() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.autoDictate = false
     let rig = KeyboardRig()
     let model = rig.model

@@ -6,10 +6,9 @@ import Testing
 @Suite("Keyboard model: the chip and the term field")
 struct KeyboardModelChipTests {
   @Test(
-    "a tap on a chip for a word Blurt has puts the + back; the chip returns for another word, or the same one again")
+    "a tap on a chip for a word Blurt has puts the + back; the chip returns for another word, or the same one again",
+    .scratchSuite)
   func dismissKnownChip() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.addKeyTerm("Rizz")
     let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
@@ -37,10 +36,8 @@ struct KeyboardModelChipTests {
 
   /// The list is stored comma-separated: a chip for "Acme, Inc" used to add
   /// "Acme" and "Inc", call the phrase known, and offer it as new again.
-  @Test("a highlight with a comma in it is no chip: its one tap could not add it as it stands")
+  @Test("a highlight with a comma in it is no chip: its one tap could not add it as it stands", .scratchSuite)
   func commaIsNoChip() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     #expect(KeyboardModel.termCandidate(from: "Acme, Inc") == nil)
     let (model, _) = typingModel(before: "we met ", selected: "Acme, Inc")
     model.hasFullAccess = true
@@ -54,10 +51,8 @@ struct KeyboardModelChipTests {
   /// A request carries the first `KeyTerms.termCap` terms, the user's own
   /// first: a chip tap that added a 101st showed its ✓ for a word no dictation
   /// would ever send. At the cap the chip refuses, and the line says why.
-  @Test("with the list at the cap the chip adds nothing and the status line says the list is full")
+  @Test("with the list at the cap the chip adds nothing and the status line says the list is full", .scratchSuite)
   func chipAtTheCap() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let full = (0..<KeyTerms.termCap).map { "term\($0)" }
     SharedStore.keyTerms = full
     let (model, proxy) = typingModel(before: "we met ", selected: "Zed")
@@ -77,10 +72,8 @@ struct KeyboardModelChipTests {
     #expect(model.selectedTermIsKnown)
   }
 
-  @Test("with the list at the cap a typed term is refused and the field keeps what was typed")
+  @Test("with the list at the cap a typed term is refused and the field keeps what was typed", .scratchSuite)
   func typedTermAtTheCap() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let full = (0..<KeyTerms.termCap).map { "term\($0)" }
     SharedStore.keyTerms = full
     let (model, _) = typingModel(before: "he said ")
@@ -94,10 +87,9 @@ struct KeyboardModelChipTests {
     #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
   }
 
-  @Test("the + coming back after a term was added from the chip keeps the highlight's word out of the chip")
+  @Test(
+    "the + coming back after a term was added from the chip keeps the highlight's word out of the chip", .scratchSuite)
   func dismissAfterAdd() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (model, _) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
@@ -111,10 +103,8 @@ struct KeyboardModelChipTests {
     #expect(model.selectedTerm == nil)
   }
 
-  @Test("collapsing the highlight the field opened over is not typing: the word stays in the text")
+  @Test("collapsing the highlight the field opened over is not typing: the word stays in the text", .scratchSuite)
   func collapseIsNotTyping() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     proxy.after = " today"
     model.hasFullAccess = true
@@ -129,10 +119,8 @@ struct KeyboardModelChipTests {
     #expect(model.termDraft == "Rizz")
   }
 
-  @Test("saving does not replace the word once the cursor has moved off the highlight")
+  @Test("saving does not replace the word once the cursor has moved off the highlight", .scratchSuite)
   func noReplaceAfterCursorMove() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (model, proxy) = typingModel(before: "he said ", selected: "riz")
     model.hasFullAccess = true
     model.contextChanged()

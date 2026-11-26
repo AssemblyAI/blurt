@@ -8,7 +8,7 @@ import Testing
 /// command carries, and the term field closing a live dictation. The latch
 /// over another keyboard's dictation, the stop and the record's changes are
 /// in `KeyboardModelLatchTests.swift`.
-@Suite("Keyboard model: the handshake and the app's answers", .serialized)
+@Suite("Keyboard model: the handshake and the app's answers", .serialized, .scratchSuite)
 @MainActor
 struct KeyboardModelGateTests {
   /// A settable clock for `KeyboardModel.now`.
@@ -20,8 +20,6 @@ struct KeyboardModelGateTests {
 
   @Test("a settled phase settles the gate only when it answers the press; an older notice does not")
   func resetOnSettled() throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -78,8 +76,6 @@ struct KeyboardModelGateTests {
 
   @Test("a command names this process and controller, counts up, and says which record it decided on")
   func commandCarriesSender() throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     rig.model.tapMic()
     let dictation = UUID()
@@ -99,8 +95,6 @@ struct KeyboardModelGateTests {
 
   @Test("a press the app never answers is sent again at the retry delay, the same id; one it answered is not")
   func pressRetried() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -129,8 +123,6 @@ struct KeyboardModelGateTests {
 
   @Test("an unanswered press expires at the deadline: the gate comes up, the line says so, and the next tap hops")
   func unansweredPressExpires() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let (hops, window) = rig.capturingHops()
@@ -156,8 +148,6 @@ struct KeyboardModelGateTests {
 
   @Test("hands-free after an expired press presses afresh rather than skipping over a dead latch")
   func appearanceAfterExpiredPress() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -175,8 +165,6 @@ struct KeyboardModelGateTests {
 
   @Test("the + over a live dictation closes it: a recording is released, a mic coming up cancelled, a press taken back")
   func termFieldClosesDictation() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -215,8 +203,6 @@ struct KeyboardModelGateTests {
 
   @Test("the + while words are being transcribed lets them land; from a highlighted word it cancels them")
   func termFieldDuringProcessing() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -235,8 +221,6 @@ struct KeyboardModelGateTests {
 
   @Test("leaving the screen while the words are being transcribed lets them finish")
   func disappearDuringProcessing() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -249,8 +233,6 @@ struct KeyboardModelGateTests {
 
   @Test("a tap stays a tap when writing the press outlasts the hold threshold")
   func slowTapIsStillATap() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
@@ -278,8 +260,6 @@ extension KeyboardModelGateTests {
   /// the press is the only place the phone can say it was one.
   @Test("a press into a password field carries none of its text and says it is secure")
   func passwordFieldPress() throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.before = "user@example.com "
     proxy.selected = "hunter"
@@ -302,8 +282,6 @@ extension KeyboardModelGateTests {
 
   @Test("a press into an ordinary field carries its text and says it is not secure")
   func ordinaryFieldPress() throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.before = "Hi Sam, "
     let rig = KeyboardRig(proxy: proxy)

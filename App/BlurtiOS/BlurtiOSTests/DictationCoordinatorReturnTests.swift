@@ -8,7 +8,7 @@ import UIKit
 
 /// The way back after the keyboard's hop: when the coordinator asks iOS for
 /// the host app, and when it does not (`HopReturn`, `HostReturn`).
-@Suite("Dictation coordinator: the hop's return", .serialized)
+@Suite("Dictation coordinator: the hop's return", .serialized, .scratchSuite)
 @MainActor
 struct DictationCoordinatorReturnTests {
   final class Returns {
@@ -55,8 +55,6 @@ struct DictationCoordinatorReturnTests {
 
   @Test("a hop from another app goes back to it as soon as the window is open under a held mic")
   func returnsWhenOpen() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let bench = make()
     let coordinator = bench.coordinator
     coordinator.handle(BlurtShared.startURL(reason: .sessionOff, host: Self.messages))
@@ -74,8 +72,6 @@ struct DictationCoordinatorReturnTests {
 
   @Test("no return when the hop came with no host, from Blurt's own box, or with the app already in front")
   func noReturn() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let bench = make()
     bench.coordinator.handle(BlurtShared.startURL(reason: .sessionOff))
     #expect(bench.coordinator.returnHost == nil)
@@ -96,8 +92,6 @@ struct DictationCoordinatorReturnTests {
 
   @Test("with a keeper expected, the return waits for the keeper's report")
   func waitsForKeeper() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let bench = await hopped(expectsKeeper: true)
     #expect(bench.returns.hosts.isEmpty, "open, but the keeper is not up")
     #expect(bench.coordinator.returnCap != nil, "the cap is armed")
@@ -108,8 +102,6 @@ struct DictationCoordinatorReturnTests {
 
   @Test("with a keeper expected but silent, the return comes at the cap")
   func returnsAtCap() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let bench = await hopped(expectsKeeper: true)
     #expect(bench.returns.hosts.isEmpty)
     // The cap is a task: advance only once it has parked on the clock, or the
@@ -122,8 +114,6 @@ struct DictationCoordinatorReturnTests {
 
   @Test("the user leaving first, or the window closing before it opened, cancels the return")
   func cancelled() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let cap = Duration.seconds(BlurtShared.hopReturnCap)
     let bench = await hopped(expectsKeeper: true)
     let coordinator = bench.coordinator

@@ -68,10 +68,8 @@ extension DictationCoordinatorTests {
     return result
   }
 
-  @Test("an accepted press: started(d), owned by the keyboard that pressed, and every phase names it")
+  @Test("an accepted press: started(d), owned by the keyboard that pressed, and every phase names it", .scratchSuite)
   func acceptedPress() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening(startDelay: .milliseconds(200))
     let press = command(.press)
     send(press, to: coordinator)
@@ -94,10 +92,9 @@ extension DictationCoordinatorTests {
     #expect(await until { coordinator.phase == .cancelled })
   }
 
-  @Test("a release from the owner: stopped(d), the words addressed to that keyboard, and the dictation over")
+  @Test(
+    "a release from the owner: stopped(d), the words addressed to that keyboard, and the dictation over", .scratchSuite)
   func ownerRelease() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let dictation = try await recording(coordinator)
     let release = command(.release)
@@ -117,10 +114,8 @@ extension DictationCoordinatorTests {
 
   /// #349: the engine's rule — a password field's words are pasted, never
   /// remembered — reaches the phone only through the press's flag.
-  @Test("a dictation into a password field is inserted but never joins Recent")
+  @Test("a dictation into a password field is inserted but never joins Recent", .scratchSuite)
   func secureDictationNotRemembered() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     send(command(.press, isSecure: true), to: coordinator)
     #expect(await until { self.published?.state == .recording })
@@ -137,10 +132,8 @@ extension DictationCoordinatorTests {
 
   /// #346: the words carry the field, not only the process, so a keyboard in
   /// the same process over another field can tell they aren't its own.
-  @Test("the words are addressed to the field the press came from, or the accepted stop's")
+  @Test("the words are addressed to the field the press came from, or the accepted stop's", .scratchSuite)
   func resultNamesTheField() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let fieldA = UUID()
     send(command(.press, controllerID: "c-a", documentID: fieldA), to: coordinator)
@@ -157,10 +150,8 @@ extension DictationCoordinatorTests {
     #expect(stopped?.recipient == Self.keyboard && stopped?.controllerID == "c-b" && stopped?.documentID == fieldB)
   }
 
-  @Test("a release from a keyboard that neither owns the dictation nor is on screen is notOwner")
+  @Test("a release from a keyboard that neither owns the dictation nor is on screen is notOwner", .scratchSuite)
   func strangerRelease() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, _) = await listening()
     let dictation = try await recording(coordinator)
     let release = command(.release, keyboard: "kb-2")
@@ -173,10 +164,9 @@ extension DictationCoordinatorTests {
     #expect(await until { coordinator.phase == .cancelled })
   }
 
-  @Test("the watchdog releases a dictation whose owner's record went stale, on its tick, once, words kept")
+  @Test(
+    "the watchdog releases a dictation whose owner's record went stale, on its tick, once, words kept", .scratchSuite)
   func watchdogReleases() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let dictation = try await recording(coordinator)
     // Older than the watchdog, and older than the presence window too, so no
@@ -195,10 +185,9 @@ extension DictationCoordinatorTests {
     #expect(rig.tasks.begun.filter { $0 == DictationCoordinator.releaseTask }.count == 1, "released once")
   }
 
-  @Test("the watchdog stands down for a stop already accepted: the keyboard's own release is not doubled")
+  @Test(
+    "the watchdog stands down for a stop already accepted: the keyboard's own release is not doubled", .scratchSuite)
   func watchdogAfterAcceptedStop() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let dictation = try await recording(coordinator)
     send(command(.release), to: coordinator)
@@ -219,10 +208,8 @@ extension DictationCoordinatorTests {
     #expect(coordinator.inFlight == nil && coordinator.watchdogReleased == nil)
   }
 
-  @Test("a resend of an accepted press is re-acked started(d), with nothing started twice")
+  @Test("a resend of an accepted press is re-acked started(d), with nothing started twice", .scratchSuite)
   func resend() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let press = command(.press)
     send(press, to: coordinator)

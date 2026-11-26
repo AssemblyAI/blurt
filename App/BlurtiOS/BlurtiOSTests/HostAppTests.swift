@@ -32,10 +32,8 @@ struct HostAppTests {
     #expect(HostApp.keys == ["_hostBundleID", "hostBundleID"])
   }
 
-  @Test("the hop carries the host the keyboard read")
+  @Test("the hop carries the host the keyboard read", .scratchSuite)
   func hopCarriesHost() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let (hops, window) = rig.capturingHops()
     defer { window.isHidden = true }

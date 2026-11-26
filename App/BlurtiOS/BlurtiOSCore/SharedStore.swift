@@ -15,16 +15,14 @@ package nonisolated enum SharedStore {
   nonisolated(unsafe) static var override: UserDefaults?
   // `UserDefaults` is thread-safe by contract; the type just isn't marked Sendable.
   nonisolated(unsafe) private static let shared = UserDefaults(suiteName: BlurtShared.appGroup) ?? .standard
+  /// `windowMinutes` until the user picks one — also Settings' `@AppStorage`
+  /// default, so the picker and the window agree before anything is stored.
+  package static let defaultWindowMinutes = 15
 
   /// Hands-free: a dictation starts the moment the keyboard appears in a text field. Off by default: sessions
   /// come on whenever Blurt opens, so it would record whenever a keyboard came up after, unasked (DESIGN.md).
   package static var autoDictate: Bool {
-    get {
-      guard defaults.object(forKey: BlurtShared.Key.autoDictate) != nil else {
-        return false
-      }
-      return defaults.bool(forKey: BlurtShared.Key.autoDictate)
-    }
+    get { defaults.bool(forKey: BlurtShared.Key.autoDictate) }
     set { defaults.set(newValue, forKey: BlurtShared.Key.autoDictate) }
   }
 
@@ -33,7 +31,7 @@ package nonisolated enum SharedStore {
   package static var windowMinutes: Int {
     get {
       guard defaults.object(forKey: BlurtShared.Key.windowMinutes) != nil else {
-        return 15
+        return defaultWindowMinutes
       }
       return defaults.integer(forKey: BlurtShared.Key.windowMinutes)
     }

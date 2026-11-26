@@ -4,7 +4,8 @@ import Foundation
 
 /// A throwaway App Group for one test: nothing a test writes reaches the real
 /// suite the installed app and keyboard share (the engine's own rule about
-/// never touching the real Keychain in tests, applied here).
+/// never touching the real Keychain in tests, applied here). Tests take one
+/// through the `.scratchSuite` trait (`ScratchSuiteTrait`), not by hand.
 @MainActor
 struct ScratchSuite {
   let name: String

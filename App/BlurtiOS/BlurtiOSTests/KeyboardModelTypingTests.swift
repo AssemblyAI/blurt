@@ -42,10 +42,8 @@ struct KeyboardModelTypingTests {
     #expect(model.termDraft?.isEmpty == true)
   }
 
-  @Test("return saves the term; with nothing typed it closes the field and saves nothing")
+  @Test("return saves the term; with nothing typed it closes the field and saves nothing", .scratchSuite)
   func termReturn() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (model, _) = typingModel()
     model.hasFullAccess = true
     model.beginAddingTerm()
@@ -102,10 +100,8 @@ struct KeyboardModelTypingTests {
     #expect(KeyboardModel.termCandidate(from: String(repeating: "a", count: KeyboardModel.termLengthCap + 1)) == nil)
   }
 
-  @Test("a highlighted word is the chip; one tap adds it as it stands and leaves the text alone")
+  @Test("a highlighted word is the chip; one tap adds it as it stands and leaves the text alone", .scratchSuite)
   func addSelectedTerm() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
@@ -123,10 +119,9 @@ struct KeyboardModelTypingTests {
     #expect(SharedStore.keyTerms == ["Rizz"])
   }
 
-  @Test("a word already in the key terms is known on selection; clearing the highlight takes the chip away")
+  @Test(
+    "a word already in the key terms is known on selection; clearing the highlight takes the chip away", .scratchSuite)
   func knownSelection() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.addKeyTerm("rizz")
     let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
@@ -150,10 +145,10 @@ struct KeyboardModelTypingTests {
     #expect(model.selectedTerm == nil)
   }
 
-  @Test("holding the chip opens the field with the word; saving puts the + back though the word stays highlighted")
+  @Test(
+    "holding the chip opens the field with the word; saving puts the + back though the word stays highlighted",
+    .scratchSuite)
   func chipToField() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (model, proxy) = typingModel(before: "he said ", selected: "riz")
     model.hasFullAccess = true
     model.contextChanged()

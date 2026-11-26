@@ -11,7 +11,7 @@ import UIKit
 /// sequence that made it. This is the "nothing is ever left stale" check: a
 /// state the model can be driven into and not out of shows up here as a
 /// broken invariant. The event table is in `KeyboardModelFuzzTests+Drive.swift`.
-@Suite("Keyboard model: random transition sequences", .serialized)
+@Suite("Keyboard model: random transition sequences", .serialized, .scratchSuite)
 @MainActor
 struct KeyboardModelFuzzTests {
   /// One event the fuzz can send. Phases come as the app would publish
@@ -48,8 +48,6 @@ struct KeyboardModelFuzzTests {
   @Test(
     "ten thousand random events never leave the model in a stale or contradictory state", arguments: [1, 2, 3, 4, 5])
   func fuzz(seed: UInt64) {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     var random = Random(state: seed &* 7_919)
     let rig = KeyboardRig()
     let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
@@ -162,8 +160,6 @@ struct KeyboardModelFuzzTests {
 
   @Test("from any state, an appearance is a clean keyboard that can dictate")
   func recovers() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     var random = Random(state: 42)
     let rig = KeyboardRig()
     let (model, commands) = (rig.model, rig.commands)

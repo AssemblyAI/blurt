@@ -6,7 +6,7 @@ import Testing
 /// The latch over a dictation this keyboard didn't start, the stop and its
 /// timing, the × and the record's changes, driven through the model. The
 /// press and its answers are in `KeyboardModelGateTests.swift`.
-@Suite("Keyboard model: the latch, the stop and the record", .serialized)
+@Suite("Keyboard model: the latch, the stop and the record", .serialized, .scratchSuite)
 @MainActor
 struct KeyboardModelLatchTests {
   /// A finger down at `start`, answered with a started dictation that the
@@ -22,8 +22,6 @@ struct KeyboardModelLatchTests {
 
   @Test("a dictation started elsewhere latches on the finger, and one tap stops it with its id")
   func foreignLatches() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let dictation = UUID()
@@ -39,8 +37,6 @@ struct KeyboardModelLatchTests {
 
   @Test("a running dictation the app has not named takes no press and no stop: a buzz, the gate untouched")
   func unnamedInFlight() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     rig.model.apply(snapshot(.recording))
     rig.model.tapMic()
@@ -50,8 +46,6 @@ struct KeyboardModelLatchTests {
 
   @Test("ack busy: the press latches onto the dictation; its lift leaves it running, the next tap stops it")
   func busy() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     // A tap, on a held clock: on the wall clock a slow runner (ASan) can take
@@ -76,8 +70,6 @@ struct KeyboardModelLatchTests {
 
   @Test("ack notListening: the press is refused, the line says why, and the next tap opens Blurt with the reason")
   func notListening() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let (hops, window) = rig.capturingHops()
@@ -94,8 +86,6 @@ struct KeyboardModelLatchTests {
 
   @Test("a stop during connecting is a release at once: a second tap before the mic is up")
   func releaseWhileConnecting() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let start = Date()
@@ -110,8 +100,6 @@ struct KeyboardModelLatchTests {
 
   @Test("a second tap before the answer releases the moment the answer names the dictation")
   func secondTapBeforeAnswer() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let start = Date()
@@ -129,8 +117,6 @@ struct KeyboardModelLatchTests {
 
   @Test("a hold: the press on the finger down, the release the instant it lifts")
   func holdToTalk() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let start = Date()
     let dictation = Self.pressedAndStarted(rig, at: start, phase: .recording)
@@ -142,8 +128,6 @@ struct KeyboardModelLatchTests {
 
   @Test("the × cancels with the dictation's id, and the gate comes up on the app's answer")
   func cancel() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     let dictation = rig.latchRecording()
@@ -160,8 +144,6 @@ struct KeyboardModelLatchTests {
 
   @Test("the record closing ends a press out or a latch, never a dictation this keyboard owns; a lapsed lease ends all")
   func recordChanges() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let pressing = KeyboardRig()
     pressing.model.tapMic()
     KeyboardRig.listening(false)
@@ -195,8 +177,6 @@ struct KeyboardModelLatchTests {
 
   @Test("a phase in flight with the app's lease lapsed is a picture of nothing: idle, no mic nobody can stop")
   func inFlightWithAppGone() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = KeyboardRig()
     let model = rig.model
     KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)

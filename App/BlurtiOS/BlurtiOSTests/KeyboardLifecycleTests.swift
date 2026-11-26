@@ -9,7 +9,7 @@ import UIKit
 /// go and the error line it leaves, the host app leaving, the word list
 /// handed to the app, and the responder walk that brings the app forward.
 /// Leaving with a stop out is in `KeyboardLifecycleTests+Leave.swift`.
-@Suite("Keyboard model: lifecycle and the app's signals", .serialized)
+@Suite("Keyboard model: lifecycle and the app's signals", .serialized, .scratchSuite)
 @MainActor
 struct KeyboardLifecycleTests {
   /// Polls until `condition` holds or `timeout` passes; true when it held. The
@@ -21,8 +21,6 @@ struct KeyboardLifecycleTests {
 
   @Test("on screen, the keyboard writes its presence record and the older keys, and beats; gone, it says so")
   func heartbeat() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.autoDictate = false
     let model = KeyboardRig().model
     model.appeared()
@@ -42,8 +40,6 @@ struct KeyboardLifecycleTests {
 
   @Test("leaving never clears another process's record, nor another controller's in this one, nor the older key")
   func presenceCompareAndWrite() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.autoDictate = false
     let model = KeyboardRig().model
     model.appeared()
@@ -68,8 +64,6 @@ struct KeyboardLifecycleTests {
 
   @Test("attached to its controller, the keyboard follows the app's phase, result, state and ack signals")
   func darwinSignals() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.before = "Hi"
     let rig = KeyboardRig(proxy: proxy)
@@ -104,8 +98,6 @@ struct KeyboardLifecycleTests {
 
   @Test("detached, nothing reaches the model: no observers, no heartbeat, no ticks, no controller")
   func detach() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     SharedStore.autoDictate = false
     let model = KeyboardRig().model
     // Up first, then attached: a controller outside a keyboard extension has
@@ -124,8 +116,6 @@ struct KeyboardLifecycleTests {
 
   @Test("a notice lets go after its dwell, and a second read of the same snapshot does not bring it back")
   func noticeDwell() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let model = KeyboardRig().model
     let clock = TestClock()
     model.clock = clock
@@ -145,8 +135,6 @@ struct KeyboardLifecycleTests {
 
   @Test("an error's line outlives the ring's dwell and goes on the next tap")
   func heldError() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let model = KeyboardRig().model
     let clock = TestClock()
     model.clock = clock
@@ -166,8 +154,6 @@ struct KeyboardLifecycleTests {
 
   @Test("the host app leaving ends a dictation this keyboard owns: a recording released, a mic coming up cancelled")
   func hostLeaving() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let recording = KeyboardRig()
     let dictation = recording.latchRecording()
     recording.model.hostLeaving()
@@ -201,8 +187,6 @@ struct KeyboardLifecycleTests {
 
   @Test("the saved check clears after its dwell and takes the chip for that word with it")
   func termSavedDwell() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.selected = "Rizz"
     let model = KeyboardRig(proxy: proxy).model
@@ -222,8 +206,6 @@ struct KeyboardLifecycleTests {
 
   @Test("the phone's word list reaches the app: written, stamped, and only re-read once it is old")
   func lexicon() throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let entries = [
       LexiconEntry(userInput: "Neil Bisht", documentText: "Neil Bisht"),
       LexiconEntry(userInput: "omw", documentText: "On my way!"),
@@ -241,8 +223,6 @@ struct KeyboardLifecycleTests {
 
   @Test("opening the app walks the responder chain to the application: setup without Full Access, start with it")
   func openApp() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let model = KeyboardModel()
     // No controller: nothing to walk.
     var opened: [URL] = []

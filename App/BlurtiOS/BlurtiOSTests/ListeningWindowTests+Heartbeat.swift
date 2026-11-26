@@ -13,15 +13,10 @@ import Testing
 
 extension ListeningWindowTests {
   @Test("start writes the launch record and beats from then on: the closed record renewed, its reason kept")
-  func startBeatsWhileClosed() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
+  func startBeatsWhileClosed() async throws {
     let rig = WindowRig()
     rig.window.start()
-    guard let launched = rig.state else {
-      Issue.record("start published nothing")
-      return
-    }
+    let launched = try #require(rig.state, "start published nothing")
     #expect(launched.window == .closed && launched.sequence == 0 && launched.reason == .sessionOff)
     #expect(launched.launchID == rig.window.launchID)
     #expect(SharedStore.listeningState == launched)
@@ -41,8 +36,6 @@ extension ListeningWindowTests {
 
   @Test("a refused open's reason survives the beats, and the next window's records follow them in sequence")
   func beatsKeepTheReasonAndTheOrder() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     rig.window.start()
     rig.app.state = .background
@@ -70,8 +63,6 @@ extension ListeningWindowTests {
 
   @Test("start is once: a second call neither republishes nor doubles the beat")
   func startOnce() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let rig = WindowRig()
     rig.window.start()
     rig.window.start()
