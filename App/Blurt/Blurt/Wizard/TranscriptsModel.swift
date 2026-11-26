@@ -106,7 +106,7 @@ final class TranscriptsModel {
   @ObservationIgnored var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
   @ObservationIgnored private(set) var pendingSave: Task<Void, Never>?
   /// History writes, one at a time and in order, so an older list never lands last.
-  /// Internal, like `pendingSave` and `isLoaded`: `prepareForExit` reads them.
+  /// Internal, like `pendingSave` and `isLoaded`: `prepareForExit`'s `flushHistory` reads them.
   let writer: TranscriptWriter
   /// Whether the saved history has been read in. Until it has, nothing is written: a save
   /// then would replace the file with this session's entries. The load's merge saves them.
