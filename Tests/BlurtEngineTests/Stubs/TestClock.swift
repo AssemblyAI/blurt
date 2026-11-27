@@ -82,6 +82,7 @@ nonisolated final class TestClock: Clock, Sendable {
     }
   }
 
+  // periphery:ignore - the engine's tests' wait, which the iPhone scan (which compiles this file in) doesn't index.
   /// Suspends until something is parked waiting exactly `duration` from now, so a
   /// test can advance virtual time knowing the sleeper it means to wake has
   /// actually registered. Waits on that condition rather than draining a fixed
@@ -93,7 +94,9 @@ nonisolated final class TestClock: Clock, Sendable {
   /// satisfied by the wrong one — and then `advance(by:)` fires into a queue the
   /// racer hasn't joined yet and the awaited work parks forever. Unbounded on
   /// purpose: the suites carry a `.timeLimit`, so a sleeper that never arrives
-  /// fails as a timeout rather than quietly.
+  /// fails as a timeout rather than quietly. The iPhone tests, which compile
+  /// this file in but whose suites carry no `.timeLimit`, use the bounded
+  /// `parked(on:for:)` (App/BlurtiOS/BlurtiOSTests/Ledger.swift) instead.
   func waitUntilSleeping(for duration: Duration) async {
     let deadline = now.advanced(by: duration)
     func isParked() -> Bool {
