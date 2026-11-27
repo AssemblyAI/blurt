@@ -55,10 +55,21 @@ struct ProtocolTests {
     let record = ListeningState(
       launchID: UUID(), sequence: 1, window: .open, micLive: true, writtenAt: Date(timeIntervalSinceReferenceDate: 0)
     )
-    // A record that says nothing of an utterance has none.
+    // A record that says nothing of an utterance has none, nor of the mic a live one.
     #expect(!record.utterance)
+    #expect(!ListeningState(launchID: UUID(), sequence: 0, window: .open).micLive)
     #expect(record.notReady(now: record.leaseUntil.addingTimeInterval(-1)) == nil)
     #expect(record.notReady(now: record.leaseUntil) == .suspended)
+  }
+
+  @Test("a command is fresh until its window's instant, not at it")
+  func commandFreshUntilItsInstant() {
+    let sent = Date(timeIntervalSinceReferenceDate: 0)
+    let command = KeyboardCommand(
+      id: UUID(), kind: .press, priorText: nil, selectedText: nil, sentAt: sent, keyboard: nil
+    )
+    #expect(command.isFresh(now: sent.addingTimeInterval(BlurtShared.commandFreshnessWindow - 1)))
+    #expect(!command.isFresh(now: sent.addingTimeInterval(BlurtShared.commandFreshnessWindow)))
   }
 
   @Test("only a blurt URL to the start host is a start link")

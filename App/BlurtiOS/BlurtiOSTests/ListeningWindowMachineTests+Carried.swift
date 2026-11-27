@@ -61,6 +61,10 @@ extension ListeningWindowMachineTests {
     effects += m.handle(.opened(2), now: t0 + 4)
     let opens = effects.compactMap { if case .openSource(let gen) = $0 { gen } else { nil } }
     #expect(opens == [2] && m.state == .open(2, idle: .held, utterance: false))
+    // The reopen is spent: the next Stop rests closed.
+    _ = m.handle(.closeRequested, now: t0 + 5)
+    _ = m.handle(.closed(2), now: t0 + 6)
+    #expect(m.state == .closed)
   }
 
   @Test("while closing, a hop from the background and a foreground change nothing")

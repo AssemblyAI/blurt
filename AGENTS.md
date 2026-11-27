@@ -764,7 +764,7 @@ catch it), and a required gate that reports unactionable failures is one people 
   lists files at ≥ 95% line coverage, with mutants to try, that are in neither list. Add each, or
   mark it `// mutate-not-target: <reason>` so it stops being suggested.
 - **On CI.** The `mutate` workflow (`.github/workflows/mutate.yml`) runs both suites daily on `main`,
-  and from the Actions tab on demand: eight engine and six iPhone macOS runners (`--shard K/N`), a
+  and from the Actions tab on demand: eight engine and ten iPhone macOS runners (`--shard K/N`), a
   `report` job that scores each suite and goes red while any mutant survives, and a `candidates`
   job. The daily run keeps one open issue labelled `mutation-testing` listing the latest survivors and
   candidates, rewritten each run and closed by the first complete run with neither. Its `fix` job

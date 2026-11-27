@@ -43,6 +43,8 @@ struct TypingTestTests {
     #expect(TypingSpeed.current(in: defaults) == DictationStats.averageTypingWordsPerMinute)
     #expect(TypingSpeed.record(52.4, in: defaults) == .init(isBest: true, setsSpeed: true))
     #expect(TypingSpeed.current(in: defaults) == 52)
+    // Matching the best is not a new best.
+    #expect(TypingSpeed.record(52.4, in: defaults) == .init(isBest: false, setsSpeed: true))
     #expect(TypingSpeed.record(40, in: defaults) == .init(isBest: false, setsSpeed: true))
     #expect(TypingSpeed.current(in: defaults) == 40)
     #expect(TypingSpeed.best(in: defaults) == 52.4)

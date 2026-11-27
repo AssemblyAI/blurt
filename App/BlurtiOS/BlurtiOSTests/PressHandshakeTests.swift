@@ -85,6 +85,11 @@ struct PressHandshakeTests {
     _ = pressed(&ticked)
     let refused = ticked.handle(.tick(now: due), now: due)
     #expect(refused == [.resetGate, .show(.unanswered)])
+    // And the one resend is due at the retry delay's instant, not after it.
+    var waiting = PressHandshake()
+    let waitingID = pressed(&waiting)
+    let retry = sent.addingTimeInterval(waiting.retryDelay)
+    #expect(waiting.handle(.tick(now: retry), now: retry) == [.resendPress(id: waitingID)])
   }
 
   @Test("ack started → owned; the ack for another command is ignored")

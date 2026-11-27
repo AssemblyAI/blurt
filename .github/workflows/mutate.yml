@@ -2,7 +2,7 @@ name: mutate
 
 # Mutation testing (scripts/mutate.sh) on CI, sharded across macOS runners so the
 # whole default target set finishes in one sitting instead of a laptop afternoon:
-# eight shards for the engine (`swift test`) and six for the iPhone core
+# eight shards for the engine (`swift test`) and ten for the iPhone core
 # (BlurtiOSTests on a simulator). The `candidates` job lists well-covered files
 # that are in neither target list (scripts/mutate-candidates.sh).
 # Not a required check and not part of `check`: survivors need judgement (see the
@@ -46,7 +46,9 @@ jobs:
   shard:
     runs-on: macos-26
     # An iPhone mutant is an incremental xcodebuild and a simulator run of
-    # BlurtiOSTests, ~5x an engine one (mutate.sh's estimate prints per shard).
+    # BlurtiOSTests: 86–113 s each on the first run (2026-11-27), against ~13 s
+    # for an engine one. Six shards of ~40 took 56–100 min, too near this
+    # limit; ten of ~25 leave it room (mutate.sh prints each shard's estimate).
     timeout-minutes: ${{ matrix.suite == 'ios' && 100 || 60 }}
     strategy:
       fail-fast: false
@@ -61,12 +63,16 @@ jobs:
           - { suite: engine, index: 6, count: 8 }
           - { suite: engine, index: 7, count: 8 }
           - { suite: engine, index: 8, count: 8 }
-          - { suite: ios, index: 1, count: 6 }
-          - { suite: ios, index: 2, count: 6 }
-          - { suite: ios, index: 3, count: 6 }
-          - { suite: ios, index: 4, count: 6 }
-          - { suite: ios, index: 5, count: 6 }
-          - { suite: ios, index: 6, count: 6 }
+          - { suite: ios, index: 1, count: 10 }
+          - { suite: ios, index: 2, count: 10 }
+          - { suite: ios, index: 3, count: 10 }
+          - { suite: ios, index: 4, count: 10 }
+          - { suite: ios, index: 5, count: 10 }
+          - { suite: ios, index: 6, count: 10 }
+          - { suite: ios, index: 7, count: 10 }
+          - { suite: ios, index: 8, count: 10 }
+          - { suite: ios, index: 9, count: 10 }
+          - { suite: ios, index: 10, count: 10 }
     steps:
       # A dispatch can ask for one suite, or name files (which belong to one);
       # the other suite's shards then finish at once with no results.

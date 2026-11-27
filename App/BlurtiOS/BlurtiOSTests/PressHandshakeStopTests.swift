@@ -135,6 +135,10 @@ struct PressHandshakeStopTests {
     let ours = handshake.handle(Fixture.published(.pasted, dictation: dictation), now: Fixture.at(5.2))
     #expect(ours == [.resetGate])
     #expect(handshake.isIdle)
+    // A terminal phase naming no dictation ends the stop too: no name on one side is no mismatch.
+    var nameless = PressHandshake()
+    _ = Fixture.stopping(&nameless)
+    #expect(nameless.handle(Fixture.published(.pasted), now: Fixture.at(5.1)) == [.resetGate])
     var byAck = PressHandshake()
     let (second, secondStop) = Fixture.stopping(&byAck)
     let stopped = byAck.handle(Fixture.ack(.stopped(second), for: secondStop), now: Fixture.at(5.1))
