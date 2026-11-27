@@ -71,7 +71,9 @@ struct FileTranscriptionTests {
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let bodies = Mutex<[Data]>([])
     let transport = FakeHTTPTransport { request in
-      if request.url?.path == "/v2/upload" { return (200, json(["upload_url": "https://cdn.example/abc"])) }
+      if request.url?.path == "/v2/upload" {
+        return (200, json(["upload_url": "https://cdn.example/abc"]))
+      }
       bodies.withLock { $0.append(request.httpBody ?? Data()) }
       return (200, json(["id": "t1", "status": "completed", "text": "Hi."]))
     }
@@ -83,8 +85,8 @@ struct FileTranscriptionTests {
       speechModels: ["universal-2"]
     )
     _ = try await explicit.transcribe(fileAt: url, apiKey: "key")
-    let sent = try bodies.withLock { $0 }.map {
-      try #require(try JSONSerialization.jsonObject(with: $0) as? [String: Any])["speech_models"] as? [String]
+    let sent = try bodies.withLock { $0 }.map { raw in
+      try #require(try JSONSerialization.jsonObject(with: raw) as? [String: Any])["speech_models"] as? [String]
     }
     #expect(sent == [["assemblyai-stt-3-7", "universal-2"], ["universal-2"]])
   }
