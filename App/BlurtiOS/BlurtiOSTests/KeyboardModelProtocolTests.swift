@@ -4,12 +4,16 @@ import Testing
 
 @testable import BlurtiOSCore
 
-@Suite("Keyboard model: the mic, the phase and results", .serialized)
+@Suite("Keyboard model: the mic, the phase and results")
 @MainActor
 struct KeyboardModelProtocolTests {
-  @Test("a tap presses and latches; answered, the next tap releases the dictation by its id", .scratchSuite)
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
+  @Test("a tap presses and latches; answered, the next tap releases the dictation by its id")
   func tapThenTap() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     model.tapMic()
@@ -22,9 +26,9 @@ struct KeyboardModelProtocolTests {
     #expect(release?.dictationID == dictation)
   }
 
-  @Test("a dictation started elsewhere, named by the app, latches on the finger so one tap stops it", .scratchSuite)
+  @Test("a dictation started elsewhere, named by the app, latches on the finger so one tap stops it")
   func latchOnInFlight() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     let dictation = UUID()
@@ -35,9 +39,9 @@ struct KeyboardModelProtocolTests {
     #expect(commands.sent.last?.dictationID == dictation)
   }
 
-  @Test("a press while transcribing is refused rather than dropped by the engine", .scratchSuite)
+  @Test("a press while transcribing is refused rather than dropped by the engine")
   func noPressWhileProcessing() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     model.apply(snapshot(.processing, dictation: UUID()))
@@ -47,10 +51,9 @@ struct KeyboardModelProtocolTests {
   }
 
   @Test(
-    "leaving the screen releases a recording this keyboard owns, and ends its presence once that is answered",
-    .scratchSuite)
+    "leaving the screen releases a recording this keyboard owns, and ends its presence once that is answered")
   func disappearEndsDictation() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     model.appeared()
@@ -60,23 +63,23 @@ struct KeyboardModelProtocolTests {
     #expect(commands.sent.last?.dictationID == dictation)
     // Presence holds behind the release (DESIGN.md: leaving with a stop
     // out), so the app's watchdog has nothing to release a second time.
-    #expect(SharedStore.keyboardSeenAt != nil)
-    #expect(SharedStore.keyboardPresence?.onScreen == true)
+    #expect(store.keyboardSeenAt != nil)
+    #expect(store.keyboardPresence?.onScreen == true)
     // The gate comes up with the app's answer, and presence ends with it.
     rig.answer(.stopped(dictation))
     #expect(model.gate.isIdle)
-    #expect(SharedStore.keyboardSeenAt == nil)
-    #expect(SharedStore.keyboardPresence?.onScreen == false)
+    #expect(store.keyboardSeenAt == nil)
+    #expect(store.keyboardPresence?.onScreen == false)
   }
 
-  @Test("a result is inserted once, only while fresh, only if addressed here", .scratchSuite)
+  @Test("a result is inserted once, only while fresh, only if addressed here")
   func results() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "Hi"
     func deliver(_ text: String, to recipient: String?, age: TimeInterval = 0) {
-      SharedStore.write(
+      store.write(
         DictationResult(id: UUID(), text: text, deliveredAt: Date().addingTimeInterval(-age), recipient: recipient),
         forKey: BlurtShared.Key.result
       )
@@ -84,7 +87,7 @@ struct KeyboardModelProtocolTests {
     deliver("one", to: nil)
     model.resultArrived()
     #expect(proxy.before == "Hi one")
-    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+    #expect(store.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
     deliver("two", to: nil, age: 20)
     model.resultArrived()
     #expect(proxy.before == "Hi one")
@@ -99,14 +102,14 @@ struct KeyboardModelProtocolTests {
   /// #346: the words were for the field the dictation was made in. Tapping
   /// into another while they are transcribed — iOS keeping this controller
   /// for it, or a new one coming up in the same process — must not move them.
-  @Test("a result for another field in this process is left for the app to copy out", .scratchSuite)
+  @Test("a result for another field in this process is left for the app to copy out")
   func resultForAnotherField() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let proxy = rig.proxy
     let fieldA = proxy.documentIdentifier
     func deliver(_ text: String, controller: String?, document: UUID?) {
-      SharedStore.write(
+      store.write(
         DictationResult(
           id: UUID(),
           text: text,
@@ -124,10 +127,10 @@ struct KeyboardModelProtocolTests {
     model.resultArrived()
     #expect(proxy.before.isEmpty)
     // Not taken: the app sees it still there and copies it out at its timeout.
-    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "for A")
+    #expect(store.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "for A")
     // Another controller in this process — a new one for field B — leaves it too,
     // including on appearing, which looks for words that landed while away.
-    let other = KeyboardRig(proxy: proxy)
+    let other = KeyboardRig(store: store, proxy: proxy)
     other.model.resultArrived()
     deliver("for A", controller: model.controllerID, document: nil)
     other.model.resultArrived()
@@ -137,7 +140,7 @@ struct KeyboardModelProtocolTests {
     deliver("for A", controller: model.controllerID, document: fieldA)
     model.resultArrived()
     #expect(proxy.before == "for A")
-    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+    #expect(store.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
 
   @Test("a result naming no field — an older app build — goes to whichever field is up")
@@ -153,9 +156,9 @@ struct KeyboardModelProtocolTests {
     #expect(!onlyController.isFor(controllerID: "d", documentID: id))
   }
 
-  @Test("the term field never claims a cursor move or a selection", .scratchSuite)
+  @Test("the term field never claims a cursor move or a selection")
   func termFieldIgnoresCursorMoves() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "Hello wor"
@@ -177,9 +180,9 @@ struct KeyboardModelProtocolTests {
     #expect(model.termDraft?.isEmpty == true)
   }
 
-  @Test("a selection with spaces around it is replaced with the spaces kept", .scratchSuite)
+  @Test("a selection with spaces around it is replaced with the spaces kept")
   func termReplaceKeepsSpaces() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "he said"
@@ -189,6 +192,6 @@ struct KeyboardModelProtocolTests {
     model.termType("z")
     model.saveTerm()
     #expect(proxy.before == "he said rizz ")
-    #expect(SharedStore.keyTerms == ["rizz"])
+    #expect(store.keyTerms == ["rizz"])
   }
 }

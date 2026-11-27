@@ -19,8 +19,7 @@ struct RootView: View {
   private var finished = false
   @Environment(\.scenePhase)
   private var scenePhase
-  @State private var wasSetUpAtLaunch =
-    AVAudioApplication.shared.recordPermission == .granted && SharedStore.keyboardEverSeen
+  @State private var wasSetUpAtLaunch: Bool
 
   /// Away from the front with a window on. `isOn` reads the machine, which
   /// observation doesn't track; the record it publishes is, so reading that
@@ -42,7 +41,7 @@ struct RootView: View {
         MainView(coordinator: coordinator)
       }
       if showsKeepOpen {
-        KeepOpenView(windowMinutes: SharedStore.windowMinutes)
+        KeepOpenView(windowMinutes: coordinator.store.windowMinutes)
           .transition(.opacity)
           .zIndex(1)
       }
@@ -62,5 +61,12 @@ struct RootView: View {
           .accessibilityHidden(true)
       }
     }
+  }
+
+  init(coordinator: DictationCoordinator) {
+    self.coordinator = coordinator
+    _wasSetUpAtLaunch = State(
+      initialValue: AVAudioApplication.shared.recordPermission == .granted && coordinator.store.keyboardEverSeen
+    )
   }
 }

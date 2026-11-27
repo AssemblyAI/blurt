@@ -8,19 +8,23 @@ import Testing
 /// session and its background tasks for each thing that happens, and the
 /// record it leaves for the keyboard at every step. The rules themselves are
 /// `ListeningWindowMachineTests`; this is the wiring.
-@Suite("Listening window", .serialized, .scratchSuite)
+@Suite("Listening window")
 @MainActor
 struct ListeningWindowTests {
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   @Test("open in front: the session up, the source opened, the record open with a live mic")
   func openInFront() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     #expect(await rig.opened())
     let record = rig.state
     #expect(record?.micLive == true)
     #expect(record?.launchID == rig.window.launchID)
     #expect(record?.windowUntil != nil)
-    #expect(SharedStore.listeningState == record)
-    #expect(SharedStore.isListening)
+    #expect(store.listeningState == record)
+    #expect(store.isListening)
     #expect(rig.source.opened == 1)
     #expect(rig.audio.activated == 1)
     #expect(rig.idle.opened == 1)
@@ -30,7 +34,7 @@ struct ListeningWindowTests {
 
   @Test("open in the background: refused with needsForeground; the source and the session are never touched")
   func openInBackground() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     rig.app.state = .background
     rig.window.open()
     #expect(await until { rig.state?.reason == .needsForeground })
@@ -38,7 +42,7 @@ struct ListeningWindowTests {
     #expect(rig.source.opened == 0)
     #expect(rig.audio.activated == 0)
     #expect(!rig.window.isOn)
-    #expect(!SharedStore.isListening)
+    #expect(!store.isListening)
     // Inactive is not the background: a hop lands there, and iOS lets capture start.
     rig.app.state = .inactive
     #expect(await rig.opened())
@@ -46,7 +50,7 @@ struct ListeningWindowTests {
 
   @Test("a call releases the dictation in flight with its words and pauses the window under a background task")
   func interruptionBegan() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     #expect(await rig.dictating())
     #expect(rig.idle.began == 1)
     #expect(await rig.interrupted())
@@ -63,7 +67,7 @@ struct ListeningWindowTests {
 
   @Test("the interruption's end resumes by polling the source, never by starting it from the background")
   func interruptionEnded() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     await rig.interrupted()
     rig.audio.sink.yield(.interruptionEnded(shouldResume: true))
@@ -73,12 +77,12 @@ struct ListeningWindowTests {
     #expect(rig.audio.activated == 2)
     #expect(rig.tasks.ended == [ListeningWindow.interruptionTask])
     #expect(rig.state?.micLive == true)
-    #expect(SharedStore.isListening)
+    #expect(store.isListening)
   }
 
   @Test("a source that does not come back stays interrupted; the next foreground starts it again")
   func resumeOnForeground() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     await rig.interrupted()
     rig.source.setOpen(false)
@@ -100,13 +104,13 @@ struct ListeningWindowTests {
 
   @Test("a runtimeError from the source flips micLive off at once, with the mic busy as the reason")
   func runtimeError() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     rig.source.eventSink.yield(.runtimeError(code: -12_782))
     #expect(await until { rig.state?.window == .interrupted })
     #expect(rig.state?.micLive == false)
     #expect(rig.state?.reason == .micBusy)
-    #expect(!SharedStore.isListening)
+    #expect(!store.isListening)
     // No background task for a dead session: there is no call to wait out.
     #expect(rig.tasks.begun.isEmpty)
     // A beat says the same, however the idle mode reads the source.
@@ -119,7 +123,7 @@ struct ListeningWindowTests {
 
   @Test("the lease is never distantFuture, and a beat renews it with the mic as the idle mode reads it")
   func lease() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     rig.window.start()
     await rig.opened()
     guard let first = rig.state else {
@@ -145,7 +149,7 @@ struct ListeningWindowTests {
 
   @Test("a reopen during close: the source closes once and opens once more")
   func reopenDuringClose() async {
-    let rig = WindowRig(closeDelay: .milliseconds(200))
+    let rig = WindowRig(store: store, closeDelay: .milliseconds(200))
     await rig.opened()
     rig.window.close()
     rig.window.open()
@@ -159,11 +163,11 @@ struct ListeningWindowTests {
 
   @Test("windowMinutesChanged reschedules the expiry: the shorter window ends on the clock with its words kept")
   func windowMinutesChanged() async throws {
-    SharedStore.windowMinutes = 15
-    let rig = WindowRig()
+    store.windowMinutes = 15
+    let rig = WindowRig(store: store)
     await rig.opened()
     let long = try #require(rig.state?.windowUntil, "no end on a 15-minute window")
-    SharedStore.windowMinutes = 1
+    store.windowMinutes = 1
     rig.window.windowMinutesChanged()
     #expect(await until { (rig.state?.windowUntil ?? .distantFuture) < long })
     rig.clock.advance(by: .seconds(61))
@@ -178,7 +182,7 @@ struct ListeningWindowTests {
 
   @Test("the user's stop cancels the dictation in flight and stands the session down")
   func stop() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     #expect(await rig.dictating())
     rig.window.close()
     #expect(await until { rig.state?.window == .closed })
@@ -191,7 +195,7 @@ struct ListeningWindowTests {
 
   @Test("a press's failed start is the window's news: a refused background start waits for the foreground")
   func captureFailed() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     let sequence = rig.state?.sequence ?? 0
     rig.window.captureFailed(reason: .sessionOff)
@@ -209,7 +213,7 @@ struct ListeningWindowTests {
 
   @Test("the idle mode's report reaches the record: parked under the keeper, or the source lost")
   func idleReports() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     #expect(rig.idle.generation == 1, "armed for the first window")
     rig.idle.report?(.idleChanged(.pip), rig.idle.generation)

@@ -262,6 +262,9 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 - **No private Settings URLs** (`App-Prefs:`): `openSettingsURLString` only, and the copy names
   the whole path (Apps › Blurt › Keyboards).
 - **No bundled brand fonts** — removed over their licence; `BlurtType`'s roles use system faces.
-- **`BlurtiOSTests` run serially** (scheme + `-parallel-testing-enabled NO`): they swap a global
-  `SharedStore.override`, which `.serialized` alone doesn't protect across suites.
+- **`SharedStore` is injected, never a global.** A value handed through initializers: `.live` only
+  at the composition roots (`BlurtiOSApp`, `KeyboardViewController`), `SharedStore.scratch()` in
+  every test (its own suite, its own Darwin signal names). That is what lets `BlurtiOSTests` run in
+  parallel. No `static var override` to swap, no `nonisolated(unsafe) static var` in the iPhone
+  code (mechanized), and no going back to serial: a test that shares other state injects it.
 - The full list, with every number, is `App/BlurtiOS/DESIGN.md`.

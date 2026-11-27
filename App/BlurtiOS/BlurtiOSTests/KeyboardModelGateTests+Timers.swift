@@ -8,7 +8,7 @@ import Testing
 extension KeyboardModelGateTests {
   @Test("the retry and the deadline fire on the clock by themselves")
   func pressTimers() async {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let clock = TestClock()
     model.clock = clock

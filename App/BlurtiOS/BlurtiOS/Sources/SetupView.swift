@@ -16,7 +16,7 @@ struct SetupView: View {
   @AppStorage(SetupProgress.finishedKey)
   private var finished = false
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-  @State private var keyboardSeen = SharedStore.keyboardEverSeen
+  @State private var keyboardSeen: Bool
 
   private var hasKey: Bool { coordinator.apiKey.hasAPIKey }
 
@@ -73,9 +73,14 @@ struct SetupView: View {
     .card()
   }
 
+  init(coordinator: DictationCoordinator) {
+    self.coordinator = coordinator
+    _keyboardSeen = State(initialValue: coordinator.store.keyboardEverSeen)
+  }
+
   private func refresh() {
     microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-    keyboardSeen = SharedStore.keyboardEverSeen
+    keyboardSeen = coordinator.store.keyboardEverSeen
     coordinator.apiKey.refreshStatus()
   }
 }

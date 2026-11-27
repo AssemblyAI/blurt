@@ -30,7 +30,7 @@ extension DictationCoordinator {
       launchID: window.launchID,
       recordingSince: recordingSince
     )
-    SharedStore.write(snapshot, forKey: BlurtShared.Key.phase)
-    SharedStore.post(BlurtShared.Signal.phase)
+    store.write(snapshot, forKey: BlurtShared.Key.phase)
+    store.post(BlurtShared.Signal.phase)
   }
 }

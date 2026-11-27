@@ -87,11 +87,11 @@ if [ "${BLURT_IOS_BUILD_ONLY:-0}" = "1" ]; then
   exit 0
 fi
 ios_wait_booted "$UDID"
-# Serial for the reason project.yml's scheme gives (the tests share one global
-# App Group override); said here too so no test plan or default can undo it.
+# In parallel, as project.yml's scheme says: each test builds its own App
+# Group (`SharedStore.scratch()`), so none reads another's records.
 xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -destination "platform=iOS Simulator,id=$UDID" \
   -resultBundlePath "$RESULTS" \
-  -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}"
+  -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}"
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)

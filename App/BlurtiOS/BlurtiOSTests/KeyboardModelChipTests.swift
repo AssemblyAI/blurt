@@ -5,19 +5,22 @@ import Testing
 
 @Suite("Keyboard model: the chip and the term field")
 struct KeyboardModelChipTests {
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   @Test(
-    "a tap on a chip for a word Blurt has puts the + back; the chip returns for another word, or the same one again",
-    .scratchSuite)
+    "a tap on a chip for a word Blurt has puts the + back; the chip returns for another word, or the same one again")
   func dismissKnownChip() {
-    SharedStore.addKeyTerm("Rizz")
-    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
+    store.addKeyTerm("Rizz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
     #expect(model.selectedTermIsKnown)
     model.addSelectedTerm()
     #expect(model.selectedTerm == nil)
-    #expect(SharedStore.keyTerms == ["Rizz"])
+    #expect(store.keyTerms == ["Rizz"])
     model.contextChanged()
     #expect(model.selectedTerm == nil)
     // Another word highlighted: its chip.
@@ -36,31 +39,31 @@ struct KeyboardModelChipTests {
 
   /// The list is stored comma-separated: a chip for "Acme, Inc" used to add
   /// "Acme" and "Inc", call the phrase known, and offer it as new again.
-  @Test("a highlight with a comma in it is no chip: its one tap could not add it as it stands", .scratchSuite)
+  @Test("a highlight with a comma in it is no chip: its one tap could not add it as it stands")
   func commaIsNoChip() {
     #expect(KeyboardModel.termCandidate(from: "Acme, Inc") == nil)
-    let (model, _) = typingModel(before: "we met ", selected: "Acme, Inc")
+    let (model, _) = typingModel(store, before: "we met ", selected: "Acme, Inc")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == nil)
     #expect(!model.selectedTermIsKnown)
     model.addSelectedTerm()
-    #expect(SharedStore.keyTerms.isEmpty)
+    #expect(store.keyTerms.isEmpty)
   }
 
   /// A request carries the first `KeyTerms.termCap` terms, the user's own
   /// first: a chip tap that added a 101st showed its ✓ for a word no dictation
   /// would ever send. At the cap the chip refuses, and the line says why.
-  @Test("with the list at the cap the chip adds nothing and the status line says the list is full", .scratchSuite)
+  @Test("with the list at the cap the chip adds nothing and the status line says the list is full")
   func chipAtTheCap() {
     let full = (0..<KeyTerms.termCap).map { "term\($0)" }
-    SharedStore.keyTerms = full
-    let (model, proxy) = typingModel(before: "we met ", selected: "Zed")
+    store.keyTerms = full
+    let (model, proxy) = typingModel(store, before: "we met ", selected: "Zed")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Zed")
     model.addSelectedTerm()
-    #expect(SharedStore.keyTerms == full)
+    #expect(store.keyTerms == full)
     #expect(!model.selectedTermIsKnown)
     #expect(model.termSavedAt == nil)
     #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
@@ -72,25 +75,25 @@ struct KeyboardModelChipTests {
     #expect(model.selectedTermIsKnown)
   }
 
-  @Test("with the list at the cap a typed term is refused and the field keeps what was typed", .scratchSuite)
+  @Test("with the list at the cap a typed term is refused and the field keeps what was typed")
   func typedTermAtTheCap() {
     let full = (0..<KeyTerms.termCap).map { "term\($0)" }
-    SharedStore.keyTerms = full
-    let (model, _) = typingModel(before: "he said ")
+    store.keyTerms = full
+    let (model, _) = typingModel(store, before: "he said ")
     model.hasFullAccess = true
     model.beginAddingTerm()
     model.termDraft = "Zed"
     model.saveTerm()
-    #expect(SharedStore.keyTerms == full)
+    #expect(store.keyTerms == full)
     #expect(model.termDraft == "Zed")
     #expect(model.termSavedAt == nil)
     #expect(model.statusLine?.text == VoiceNotice.Copy.termsFull)
   }
 
   @Test(
-    "the + coming back after a term was added from the chip keeps the highlight's word out of the chip", .scratchSuite)
+    "the + coming back after a term was added from the chip keeps the highlight's word out of the chip")
   func dismissAfterAdd() {
-    let (model, _) = typingModel(before: "he said ", selected: "Rizz")
+    let (model, _) = typingModel(store, before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     model.addSelectedTerm()
@@ -103,9 +106,9 @@ struct KeyboardModelChipTests {
     #expect(model.selectedTerm == nil)
   }
 
-  @Test("collapsing the highlight the field opened over is not typing: the word stays in the text", .scratchSuite)
+  @Test("collapsing the highlight the field opened over is not typing: the word stays in the text")
   func collapseIsNotTyping() {
-    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "Rizz")
     proxy.after = " today"
     model.hasFullAccess = true
     model.contextChanged()
@@ -119,9 +122,9 @@ struct KeyboardModelChipTests {
     #expect(model.termDraft == "Rizz")
   }
 
-  @Test("saving does not replace the word once the cursor has moved off the highlight", .scratchSuite)
+  @Test("saving does not replace the word once the cursor has moved off the highlight")
   func noReplaceAfterCursorMove() {
-    let (model, proxy) = typingModel(before: "he said ", selected: "riz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "riz")
     model.hasFullAccess = true
     model.contextChanged()
     model.beginAddingTerm()
@@ -129,13 +132,13 @@ struct KeyboardModelChipTests {
     // The host moved the cursor but still reports the old selection for a moment.
     proxy.before = "he said riz and"
     model.saveTerm()
-    #expect(SharedStore.keyTerms == ["rizz"])
+    #expect(store.keyTerms == ["rizz"])
     #expect(proxy.before == "he said riz and")
   }
 
   @Test("a key term capitalises to start and after a space, then as typed; closed, the field wants nothing")
   func termCase() {
-    let (model, _) = typingModel()
+    let (model, _) = typingModel(store)
     #expect(!model.termWantsUppercase)
     model.beginAddingTerm()
     #expect(model.termWantsUppercase)

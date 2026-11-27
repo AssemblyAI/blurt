@@ -14,12 +14,12 @@ import Testing
 extension ListeningWindowTests {
   @Test("start writes the launch record and beats from then on: the closed record renewed, its reason kept")
   func startBeatsWhileClosed() async throws {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     rig.window.start()
     let launched = try #require(rig.state, "start published nothing")
     #expect(launched.window == .closed && launched.sequence == 0 && launched.reason == .sessionOff)
     #expect(launched.launchID == rig.window.launchID)
-    #expect(SharedStore.listeningState == launched)
+    #expect(store.listeningState == launched)
     // The heartbeat takes its first turn before the clock moves.
     await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
     rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
@@ -30,13 +30,13 @@ extension ListeningWindowTests {
     #expect(beat.window == .closed && beat.reason == .sessionOff && !beat.micLive)
     #expect(beat.leaseUntil > launched.leaseUntil && beat.leaseUntil > Date())
     #expect(beat.notReady(now: Date()) == .sessionOff, "off, never suspended")
-    #expect(SharedStore.listeningState == beat)
+    #expect(store.listeningState == beat)
     #expect(rig.source.opened == 0 && rig.audio.activated == 0, "a beat opens nothing")
   }
 
   @Test("a refused open's reason survives the beats, and the next window's records follow them in sequence")
   func beatsKeepTheReasonAndTheOrder() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     rig.window.start()
     rig.app.state = .background
     rig.window.open()
@@ -63,7 +63,7 @@ extension ListeningWindowTests {
 
   @Test("start is once: a second call neither republishes nor doubles the beat")
   func startOnce() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     rig.window.start()
     rig.window.start()
     #expect(rig.state?.sequence == 0)

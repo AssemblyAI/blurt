@@ -38,8 +38,11 @@ package final class KeyboardModel {
   /// (`disappeared`, DESIGN.md › The two processes: leaving with a stop out).
   package static let leaveGrace: TimeInterval = BlurtShared.stopDeadline
 
+  /// The App Group this keyboard talks to the app over: `live` from the
+  /// keyboard's controller, a scratch suite of its own in a test.
+  package let store: SharedStore
   package var snapshot = PhaseSnapshot.idle
-  /// The app's readiness record as last read (`SharedStore.listeningState`):
+  /// The app's readiness record as last read (`store.listeningState`):
   /// at every appearance, signal, heartbeat and tap. Nil until an app has
   /// written one, or without Full Access.
   package var listeningState: ListeningState?
@@ -120,11 +123,8 @@ package final class KeyboardModel {
   @ObservationIgnored var urlOpener: (UIApplication, URL) -> Void = { application, url in
     application.open(url, options: [:], completionHandler: nil)
   }
-  /// Where commands go: the App Group, or a test's capture.
-  @ObservationIgnored package var transport: (KeyboardCommand) -> Void = { command in
-    SharedStore.write(command, forKey: BlurtShared.Key.command)
-    SharedStore.post(BlurtShared.Signal.command)
-  }
+  /// Where commands go: the App Group (`store`), or a test's capture.
+  @ObservationIgnored package var transport: (KeyboardCommand) -> Void
   @ObservationIgnored package var termDraftFromSelection: String?
   /// A highlighted word the chip is done with — added, or its ✓ tapped —
   /// while the host still shows it highlighted: the + is back, and stays
@@ -164,8 +164,13 @@ package final class KeyboardModel {
     return termDraft.isEmpty || termDraft.last == " "
   }
 
-  package init() {
-    // Nothing to set up: every property has its resting value, and the controller wires the rest.
+  /// Every other property has its resting value, and the controller wires the rest.
+  package init(store: SharedStore) {
+    self.store = store
+    transport = { command in
+      store.write(command, forKey: BlurtShared.Key.command)
+      store.post(BlurtShared.Signal.command)
+    }
   }
 
   /// The cursor moved or the text around it changed, including by our own

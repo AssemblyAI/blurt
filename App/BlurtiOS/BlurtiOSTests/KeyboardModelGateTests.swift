@@ -8,7 +8,7 @@ import Testing
 /// command carries, and the term field closing a live dictation. The latch
 /// over another keyboard's dictation, the stop and the record's changes are
 /// in `KeyboardModelLatchTests.swift`.
-@Suite("Keyboard model: the handshake and the app's answers", .serialized, .scratchSuite)
+@Suite("Keyboard model: the handshake and the app's answers")
 @MainActor
 struct KeyboardModelGateTests {
   /// A settable clock for `KeyboardModel.now`.
@@ -18,9 +18,13 @@ struct KeyboardModelGateTests {
     init(_ now: Date) { self.now = now }
   }
 
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   @Test("a settled phase settles the gate only when it answers the press; an older notice does not")
   func resetOnSettled() throws {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     let (hops, window) = rig.capturingHops()
@@ -76,7 +80,7 @@ struct KeyboardModelGateTests {
 
   @Test("a command names this process and controller, counts up, and says which record it decided on")
   func commandCarriesSender() throws {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     rig.model.tapMic()
     let dictation = UUID()
     rig.answer(.started(dictation))
@@ -89,13 +93,13 @@ struct KeyboardModelGateTests {
     let first = try #require(sent[0].seq)
     let second = try #require(sent[1].seq)
     #expect(second == first + 1)
-    #expect(sent[0].stateSequence == SharedStore.listeningState?.sequence)
+    #expect(sent[0].stateSequence == store.listeningState?.sequence)
     #expect(sent[0].dictationID == nil && sent[1].dictationID == dictation)
   }
 
   @Test("a press the app never answers is sent again at the retry delay, the same id; one it answered is not")
   func pressRetried() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     let start = Date()
@@ -112,7 +116,7 @@ struct KeyboardModelGateTests {
     model.tick()
     #expect(commands.sent.count == 2)
     // Answered: nothing to send again.
-    let answered = KeyboardRig()
+    let answered = KeyboardRig(store: store)
     answered.model.now = { start }
     answered.model.tapMic()
     answered.answer(.started(UUID()))
@@ -123,7 +127,7 @@ struct KeyboardModelGateTests {
 
   @Test("an unanswered press expires at the deadline: the gate comes up, the line says so, and the next tap hops")
   func unansweredPressExpires() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let (hops, window) = rig.capturingHops()
     defer { window.isHidden = true }
@@ -148,10 +152,10 @@ struct KeyboardModelGateTests {
 
   @Test("hands-free after an expired press presses afresh rather than skipping over a dead latch")
   func appearanceAfterExpiredPress() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
-    SharedStore.autoDictate = true
+    store.autoDictate = true
     let start = Date()
     model.now = { start }
     model.tapMic()
@@ -165,7 +169,7 @@ struct KeyboardModelGateTests {
 
   @Test("the + over a live dictation closes it: a recording is released, a mic coming up cancelled, a press taken back")
   func termFieldClosesDictation() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     let dictation = rig.latchRecording()
@@ -203,7 +207,7 @@ struct KeyboardModelGateTests {
 
   @Test("the + while words are being transcribed lets them land; from a highlighted word it cancels them")
   func termFieldDuringProcessing() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     let dictation = rig.latchRecording()
@@ -221,7 +225,7 @@ struct KeyboardModelGateTests {
 
   @Test("leaving the screen while the words are being transcribed lets them finish")
   func disappearDuringProcessing() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     let dictation = rig.latchRecording()
@@ -233,7 +237,7 @@ struct KeyboardModelGateTests {
 
   @Test("a tap stays a tap when writing the press outlasts the hold threshold")
   func slowTapIsStillATap() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let commands = rig.commands
     // The clock jumps past the hold threshold while the press is written, as
@@ -264,7 +268,7 @@ extension KeyboardModelGateTests {
     proxy.before = "user@example.com "
     proxy.selected = "hunter"
     proxy.textContentType = .password
-    let rig = KeyboardRig(proxy: proxy)
+    let rig = KeyboardRig(store: store, proxy: proxy)
     rig.model.tapMic()
     let press = try #require(rig.lastPress)
     #expect(press.isSecure == true)
@@ -284,7 +288,7 @@ extension KeyboardModelGateTests {
   func ordinaryFieldPress() throws {
     let proxy = FakeProxy()
     proxy.before = "Hi Sam, "
-    let rig = KeyboardRig(proxy: proxy)
+    let rig = KeyboardRig(store: store, proxy: proxy)
     rig.model.tapMic()
     let press = try #require(rig.lastPress)
     #expect(press.isSecure == false && press.priorText == "Hi Sam, ")

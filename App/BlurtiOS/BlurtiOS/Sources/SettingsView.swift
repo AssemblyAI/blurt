@@ -23,7 +23,7 @@ struct SettingsView: View {
   @State private var showsTypingTest = false
   @State private var showsSetupSteps = false
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-  @State private var keyboardSeen = SharedStore.keyboardEverSeen
+  @State private var keyboardSeen: Bool
   @Environment(\.scenePhase)
   private var scenePhase
   @AppStorage(TypingSpeed.defaultsKey)
@@ -32,13 +32,11 @@ struct SettingsView: View {
   private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
   // The App Group's settings, read and written in place, as the keyboard and
-  // the listening window read them (`SharedStore`'s getters keep these defaults).
-  @AppStorage(BlurtShared.Key.autoDictate, store: SharedStore.defaults)
-  private var autoDictate = false
-  @AppStorage(BlurtShared.Key.windowMinutes, store: SharedStore.defaults)
-  private var windowMinutes = SharedStore.defaultWindowMinutes
-  @AppStorage(BlurtShared.Key.airPodsMic, store: SharedStore.defaults)
-  private var airPodsMic = false
+  // the listening window read them (`SharedStore`'s getters keep these
+  // defaults) — in the coordinator's store, so bound in `init`.
+  @AppStorage private var autoDictate: Bool
+  @AppStorage private var windowMinutes: Int
+  @AppStorage private var airPodsMic: Bool
 
   var body: some View {
     NavigationStack {
@@ -202,9 +200,20 @@ struct SettingsView: View {
     }
   }
 
+  init(coordinator: DictationCoordinator) {
+    self.coordinator = coordinator
+    let store = coordinator.store
+    _keyboardSeen = State(initialValue: store.keyboardEverSeen)
+    _autoDictate = AppStorage(wrappedValue: false, BlurtShared.Key.autoDictate, store: store.defaults)
+    _windowMinutes = AppStorage(
+      wrappedValue: SharedStore.defaultWindowMinutes, BlurtShared.Key.windowMinutes, store: store.defaults
+    )
+    _airPodsMic = AppStorage(wrappedValue: false, BlurtShared.Key.airPodsMic, store: store.defaults)
+  }
+
   private func refreshSetup() {
     microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-    keyboardSeen = SharedStore.keyboardEverSeen
+    keyboardSeen = coordinator.store.keyboardEverSeen
     coordinator.apiKey.refreshStatus()
   }
 }

@@ -14,6 +14,10 @@ struct HostAppTests {
     init(_ id: String?) { _hostBundleID = id }
   }
 
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   @Test("a getter that answers is read; empty, '<null>' and a class with neither getter nor ivar read as nothing")
   func reading() {
     #expect(HostApp.read("_hostBundleID", from: Holder("com.apple.MobileSMS")) == "com.apple.MobileSMS")
@@ -32,13 +36,13 @@ struct HostAppTests {
     #expect(HostApp.keys == ["_hostBundleID", "hostBundleID"])
   }
 
-  @Test("the hop carries the host the keyboard read", .scratchSuite)
+  @Test("the hop carries the host the keyboard read")
   func hopCarriesHost() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let (hops, window) = rig.capturingHops()
     defer { window.isHidden = true }
     // No session: the tap hops rather than presses.
-    KeyboardRig.listening(false)
+    KeyboardRig.listening(false, in: store)
     rig.model.readListeningState()
     rig.model.hostBundleID = "com.apple.MobileSMS"
     rig.model.tapMic()

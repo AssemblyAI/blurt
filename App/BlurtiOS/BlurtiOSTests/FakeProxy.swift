@@ -42,14 +42,16 @@ final class FakeProxy: NSObject, UITextDocumentProxy {
   }
 }
 
-/// A bare keyboard over a fake field holding `before` up to the caret, with
-/// `selected` highlighted: what the typing and chip rules read. Internal so the
-/// typing and chip suites share it.
-func typingModel(before: String = "", selected: String? = nil) -> (KeyboardModel, FakeProxy) {
+/// A bare keyboard over `store` and a fake field holding `before` up to the
+/// caret, with `selected` highlighted: what the typing and chip rules read.
+/// Internal so the typing and chip suites share it.
+func typingModel(
+  _ store: SharedStore, before: String = "", selected: String? = nil
+) -> (KeyboardModel, FakeProxy) {
   let proxy = FakeProxy()
   proxy.before = before
   proxy.selected = selected
-  let model = KeyboardModel()
+  let model = KeyboardModel(store: store)
   model.proxyOverride = proxy
   return (model, proxy)
 }

@@ -37,7 +37,7 @@ struct BlurtiOSApp: App {
   var body: some Scene {
     WindowGroup {
       #if DEBUG
-        if let probe = KeyboardProbeView.parse(CommandLine.arguments) {
+        if let probe = KeyboardProbeView.parse(CommandLine.arguments, store: coordinator.store) {
           // The keyboard over this field is only live if the app runs as it
           // does under the home screen: the coordinator up, listening on request.
           probe.task { await start() }
@@ -51,14 +51,15 @@ struct BlurtiOSApp: App {
           // A shared key-term list as it opens, for the audits without a
           // round trip through Messages.
           ImportTermsView(
-            pack: TermPack(name: "Design team", from: "Alex", terms: ["Blurt", "AssemblyAI", "Figma", "Kubernetes"])
+            pack: TermPack(name: "Design team", from: "Alex", terms: ["Blurt", "AssemblyAI", "Figma", "Kubernetes"]),
+            store: coordinator.store
           )
         } else if CommandLine.arguments.contains("-BlurtKeepOpen") {
           // The app-switcher card as the root, for a screenshot or a recording
           // without a trip to the switcher; `-BlurtGalleryStill` holds it at
           // time zero.
           KeepOpenView(
-            windowMinutes: SharedStore.windowMinutes, still: CommandLine.arguments.contains("-BlurtGalleryStill")
+            windowMinutes: coordinator.store.windowMinutes, still: CommandLine.arguments.contains("-BlurtGalleryStill")
           )
         } else {
           home
@@ -107,12 +108,19 @@ struct BlurtiOSApp: App {
       // The developer log and the device trace survive the hop's relaunch.
       if !Self.isTestHost { LaunchFlags.persist() }
     #endif
-    // The unit tests are hosted by this app: they get a coordinator that
-    // touches neither the Keychain nor the App Group (the Mac's UITestSupport
-    // does the same for its harness), and `start()` below never runs.
+    // The App Group, handed to everything that reads or writes it from here
+    // (`SharedStore`). The unit tests are hosted by this app: they get a
+    // coordinator that touches neither the Keychain nor the App Group (the
+    // Mac's UITestSupport does the same for its harness) — a scratch suite of
+    // its own, as every test builds — and `start()` below never runs.
+    let store: SharedStore = Self.isTestHost ? .scratch("test-host") : .live
+    let window = ListeningWindow(store: store)
     let initialCoordinator =
       Self.isTestHost || Self.isKeyless || Self.isUITestKeyed
-      ? DictationCoordinator(apiKey: APIKeyModel(keyStore: Self.inMemoryKeyStore())) : DictationCoordinator()
+      ? DictationCoordinator(
+        window: window, defaults: .standard, apiKey: APIKeyModel(keyStore: Self.inMemoryKeyStore())
+      )
+      : DictationCoordinator(window: window, defaults: .standard)
     _coordinator = State(initialValue: initialCoordinator)
   }
 

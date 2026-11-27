@@ -6,9 +6,13 @@ import Testing
 /// The latch over a dictation this keyboard didn't start, the stop and its
 /// timing, the × and the record's changes, driven through the model. The
 /// press and its answers are in `KeyboardModelGateTests.swift`.
-@Suite("Keyboard model: the latch, the stop and the record", .serialized, .scratchSuite)
+@Suite("Keyboard model: the latch, the stop and the record")
 @MainActor
 struct KeyboardModelLatchTests {
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   /// A finger down at `start`, answered with a started dictation that the
   /// app then publishes at `phase`; the finger is still down.
   private static func pressedAndStarted(_ rig: KeyboardRig, at start: Date, phase: PhaseSnapshot.State) -> UUID {
@@ -22,7 +26,7 @@ struct KeyboardModelLatchTests {
 
   @Test("a dictation started elsewhere latches on the finger, and one tap stops it with its id")
   func foreignLatches() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let dictation = UUID()
     model.apply(snapshot(.recording, dictation: dictation))
@@ -37,7 +41,7 @@ struct KeyboardModelLatchTests {
 
   @Test("a running dictation the app has not named takes no press and no stop: a buzz, the gate untouched")
   func unnamedInFlight() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     rig.model.apply(snapshot(.recording))
     rig.model.tapMic()
     #expect(rig.commands.sent.isEmpty)
@@ -46,7 +50,7 @@ struct KeyboardModelLatchTests {
 
   @Test("ack busy: the press latches onto the dictation; its lift leaves it running, the next tap stops it")
   func busy() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     // A tap, on a held clock: on the wall clock a slow runner (ASan) can take
     // longer than the hold threshold between micDown and micUp, and a hold's
@@ -70,7 +74,7 @@ struct KeyboardModelLatchTests {
 
   @Test("ack notListening: the press is refused, the line says why, and the next tap opens Blurt with the reason")
   func notListening() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let (hops, window) = rig.capturingHops()
     defer { window.isHidden = true }
@@ -86,7 +90,7 @@ struct KeyboardModelLatchTests {
 
   @Test("a stop during connecting is a release at once: a second tap before the mic is up")
   func releaseWhileConnecting() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let start = Date()
     let dictation = Self.pressedAndStarted(rig, at: start, phase: .connecting)
@@ -100,7 +104,7 @@ struct KeyboardModelLatchTests {
 
   @Test("a second tap before the answer releases the moment the answer names the dictation")
   func secondTapBeforeAnswer() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let start = Date()
     model.now = { start }
@@ -117,7 +121,7 @@ struct KeyboardModelLatchTests {
 
   @Test("a hold: the press on the finger down, the release the instant it lifts")
   func holdToTalk() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let start = Date()
     let dictation = Self.pressedAndStarted(rig, at: start, phase: .recording)
     rig.model.now = { start.addingTimeInterval(0.5) }
@@ -128,7 +132,7 @@ struct KeyboardModelLatchTests {
 
   @Test("the × cancels with the dictation's id, and the gate comes up on the app's answer")
   func cancel() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
     let dictation = rig.latchRecording()
     model.cancel()
@@ -144,30 +148,30 @@ struct KeyboardModelLatchTests {
 
   @Test("the record closing ends a press out or a latch, never a dictation this keyboard owns; a lapsed lease ends all")
   func recordChanges() {
-    let pressing = KeyboardRig()
+    let pressing = KeyboardRig(store: store)
     pressing.model.tapMic()
-    KeyboardRig.listening(false)
+    KeyboardRig.listening(false, in: store)
     pressing.model.stateChanged()
     #expect(pressing.model.gate.isIdle)
     #expect(pressing.model.handshake.unreadyReason == .sessionOff)
     #expect(pressing.model.statusLine?.text == VoiceNotice.Copy.tapToOpen)
     #expect(!pressing.model.isReady)
     // Owned: the app is alive to end the dictation itself.
-    let owned = KeyboardRig()
+    let owned = KeyboardRig(store: store)
     let dictation = owned.latchRecording()
-    KeyboardRig.record(.closed, reason: .sessionOff)
+    KeyboardRig.record(.closed, in: store, reason: .sessionOff)
     owned.model.stateChanged()
     #expect(owned.model.handshake.state == .owned(dictation: dictation, phase: .recording))
     #expect(!owned.model.gate.isIdle)
     // The lease lapsed: the app is suspended or gone, and so is its dictation.
-    KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+    KeyboardRig.record(.open, in: store, micLive: true, age: ListeningState.lease + 1)
     owned.model.stateChanged()
     #expect(owned.model.gate.isIdle)
     #expect(owned.model.handshake.unreadyReason == .suspended)
     #expect(owned.model.statusLine == VoiceNotice.Line(text: VoiceNotice.Copy.tapToOpen, tapOpens: .hop(.suspended)))
     // Ready again, with the app's picture settled, the handshake rests and a
     // tap presses.
-    KeyboardRig.listening(true)
+    KeyboardRig.listening(true, in: store)
     owned.model.stateChanged()
     owned.model.apply(snapshot(.idle))
     #expect(owned.model.handshake.isIdle && owned.model.isReady && owned.model.statusLine == nil)
@@ -177,9 +181,9 @@ struct KeyboardModelLatchTests {
 
   @Test("a phase in flight with the app's lease lapsed is a picture of nothing: idle, no mic nobody can stop")
   func inFlightWithAppGone() {
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let model = rig.model
-    KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+    KeyboardRig.record(.open, in: store, micLive: true, age: ListeningState.lease + 1)
     model.apply(snapshot(.recording, dictation: UUID()))
     #expect(model.snapshot.state == .idle)
     #expect(!model.isReady)

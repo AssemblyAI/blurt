@@ -8,7 +8,7 @@ import UIKit
 
 /// The way back after the keyboard's hop: when the coordinator asks iOS for
 /// the host app, and when it does not (`HopReturn`, `HostReturn`).
-@Suite("Dictation coordinator: the hop's return", .serialized, .scratchSuite)
+@Suite("Dictation coordinator: the hop's return")
 @MainActor
 struct DictationCoordinatorReturnTests {
   final class Returns {
@@ -23,14 +23,19 @@ struct DictationCoordinatorReturnTests {
 
   static let messages = "com.apple.MobileSMS"
 
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   /// A coordinator that believes the app is in `state` when a URL lands, and
   /// records every host it asks iOS for.
   func make(state: UIApplication.State = .background) -> Bench {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     let returns = Returns()
     let coordinator = DictationCoordinator(
-      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()) { _ in .unreachable },
       window: rig.window,
+      defaults: freshDefaults(),
+      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()) { _ in .unreachable },
       transcriber: StubTranscriber(text: "hello"),
       clock: rig.clock,
       appState: { state },

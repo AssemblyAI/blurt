@@ -14,7 +14,7 @@ import Testing
 extension ListeningWindowTests {
   @Test("an idle report for the window before changes nothing; one for the window that is up lands")
   func staleIdleReport() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     await rig.closed()
     await rig.opened()
@@ -33,7 +33,7 @@ extension ListeningWindowTests {
 
   @Test("a Stop during a call leaves no interruption on the next window's books: the source's own is news again")
   func interruptionResetByTheNextWindow() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     await rig.interrupted()
     await rig.closed()
@@ -46,7 +46,7 @@ extension ListeningWindowTests {
 
   @Test("a resume ends the interruption on the books even when the session's own end never came")
   func interruptionResetByResume() async {
-    let rig = WindowRig()
+    let rig = WindowRig(store: store)
     await rig.opened()
     await rig.interrupted()
     rig.window.foregrounded(turnedOff: false)
@@ -58,7 +58,7 @@ extension ListeningWindowTests {
 
   @Test("a hop over an interrupted window waits for the idle mode to let go before the next source opens")
   func hopWaitsForTheIdleMode() async {
-    let rig = WindowRig(closingDelay: .milliseconds(200))
+    let rig = WindowRig(store: store, closingDelay: .milliseconds(200))
     await rig.opened()
     await rig.interrupted()
     rig.window.open()

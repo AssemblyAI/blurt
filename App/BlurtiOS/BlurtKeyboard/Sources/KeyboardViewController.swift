@@ -14,7 +14,7 @@ final class KeyboardViewController: KeyboardInputViewController {
     .NSExtensionHostWillResignActive, .NSExtensionHostDidEnterBackground,
   ]
 
-  private let model = BlurtiOSCore.KeyboardModel()
+  private let model = BlurtiOSCore.KeyboardModel(store: .live)
   /// The host app leaving — resigning active, going to the background —
   /// with the keyboard still up: the field goes with it, so the model ends
   /// a dictation it owns (`KeyboardModel.hostLeaving`). Removed in `deinit`.

@@ -6,8 +6,7 @@ import UIKit
 /// A keyboard that is ready to dictate — a fake field, Full Access, the app
 /// listening (an open window with a fresh lease) — with every command it
 /// sends captured instead of reaching the App Group, and the app's answers
-/// written the way the app writes them. Build it after `ScratchSuite`: the
-/// record it writes goes to the store.
+/// written the way the app writes them, into the test's own `store`.
 @MainActor
 struct KeyboardRig {
   final class Commands {
@@ -22,9 +21,8 @@ struct KeyboardRig {
 
   /// The app process the rig stands in for: on the record and every ack.
   static let launch = UUID()
-  /// The record's sequence, climbing with every write as the app's does.
-  private static var sequence: UInt64 = 0
 
+  let store: SharedStore
   let model: KeyboardModel
   let proxy: FakeProxy
   let commands: Commands
@@ -32,8 +30,8 @@ struct KeyboardRig {
   /// The last press this keyboard sent, if any.
   var lastPress: KeyboardCommand? { commands.sent.last { $0.kind == .press } }
 
-  init(proxy: FakeProxy = FakeProxy()) {
-    let keyboard = KeyboardModel()
+  init(store: SharedStore, proxy: FakeProxy = FakeProxy()) {
+    let keyboard = KeyboardModel(store: store)
     keyboard.proxyOverride = proxy
     keyboard.hasFullAccess = true
     // Time stands still unless a test moves it (`model.now = { … }`): on the
@@ -42,10 +40,11 @@ struct KeyboardRig {
     // read as a hold sends a release nobody asked for.
     let start = Date()
     keyboard.now = { start }
-    Self.listening(true)
+    Self.listening(true, in: store)
     keyboard.readListeningState()
     let sentCommands = Commands()
     keyboard.transport = { sentCommands.sent.append($0) }
+    self.store = store
     self.model = keyboard
     self.proxy = proxy
     self.commands = sentCommands
@@ -53,14 +52,13 @@ struct KeyboardRig {
 
   /// The app listening — an open window with a live mic and a fresh lease,
   /// written as `ListeningState` and as the older keys a build before the
-  /// record still reads — or a closed one.
-  static func listening(_ on: Bool, now: Date = Date()) {
-    SharedStore.listeningUntil = on ? now.addingTimeInterval(600) : nil
-    SharedStore.appSeenAt = on ? now : nil
-    sequence += 1
-    SharedStore.listeningState = ListeningState(
+  /// record still reads — or a closed one, in `store`.
+  static func listening(_ on: Bool, in store: SharedStore, now: Date = Date()) {
+    store.listeningUntil = on ? now.addingTimeInterval(600) : nil
+    store.appSeenAt = on ? now : nil
+    store.listeningState = ListeningState(
       launchID: launch,
-      sequence: sequence,
+      sequence: nextSequence(in: store),
       window: on ? .open : .closed,
       micLive: on,
       reason: on ? nil : .sessionOff,
@@ -68,19 +66,28 @@ struct KeyboardRig {
     )
   }
 
-  /// A record in any state, with the lease fresh unless `age` says otherwise.
+  /// A record in any state, in `store`, with the lease fresh unless `age` says otherwise.
   static func record(
-    _ window: ListeningState.Window, micLive: Bool = false, reason: FailureReason? = nil, age: TimeInterval = 0
+    _ window: ListeningState.Window,
+    in store: SharedStore,
+    micLive: Bool = false,
+    reason: FailureReason? = nil,
+    age: TimeInterval = 0
   ) {
-    sequence += 1
-    SharedStore.listeningState = ListeningState(
+    store.listeningState = ListeningState(
       launchID: launch,
-      sequence: sequence,
+      sequence: nextSequence(in: store),
       window: window,
       micLive: micLive,
       reason: reason,
       writtenAt: Date().addingTimeInterval(-age)
     )
+  }
+
+  /// The record's next sequence: one past the last written to `store`,
+  /// climbing with every write as the app's does.
+  private static func nextSequence(in store: SharedStore) -> UInt64 {
+    (store.listeningState?.sequence ?? 0) + 1
   }
 
   /// The app answers a command — the last one sent unless named — with
@@ -89,7 +96,7 @@ struct KeyboardRig {
     guard let answered = command ?? commands.sent.last else {
       return
     }
-    SharedStore.acknowledge(CommandAck(commandID: answered.id, launchID: Self.launch, outcome: outcome))
+    store.acknowledge(CommandAck(commandID: answered.id, launchID: Self.launch, outcome: outcome))
     model.ackArrived()
   }
 

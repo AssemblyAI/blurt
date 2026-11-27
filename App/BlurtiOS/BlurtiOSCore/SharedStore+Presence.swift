@@ -18,18 +18,22 @@ nonisolated extension SharedStore {
   package static let keyboardHeartbeatInterval: TimeInterval = 4
   package static let presenceWindow: TimeInterval = 15
 
+  /// `BlurtKeyTerms` — spelled out here rather than imported from the engine so
+  /// the keyboard, which links it too, and the app can't disagree.
+  package static let keyTermsKey = "BlurtKeyTerms"
+
   /// Whether the app currently has the microphone open for the keyboard: the
   /// window has not lapsed, and the app is still there to hear — iOS may have
   /// killed it, or a phone call taken the microphone, with the window's end
   /// still in the future. The keyboard then opens the app rather than sending
   /// a press nobody would answer.
-  package static var isListening: Bool { isListening(now: Date()) }
+  package var isListening: Bool { isListening(now: Date()) }
 
   /// Which keyboard process is on screen — a fresh id per process, written
   /// with its heartbeat — so a result can be addressed to it.
-  package static var keyboardInstance: String? {
+  package var keyboardInstance: String? {
     get { defaults.string(forKey: BlurtShared.Key.keyboardInstance) }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardInstance) }
+    nonmutating set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardInstance) }
   }
 
   // MARK: Key terms
@@ -38,39 +42,35 @@ nonisolated extension SharedStore {
   /// right — under the engine's own key (`KeyTermsStore.defaultsKey`,
   /// `BlurtKeyTerms`, comma-separated) but in the App Group, so the keyboard
   /// can add one on the spot and the app reads it on the very next press.
-  package static var keyTerms: [String] {
-    get { KeyTermList.parse(defaults.string(forKey: keyTermsKey) ?? "") }
-    set { defaults.set(KeyTermList.join(newValue), forKey: keyTermsKey) }
+  package var keyTerms: [String] {
+    get { KeyTermList.parse(defaults.string(forKey: Self.keyTermsKey) ?? "") }
+    nonmutating set { defaults.set(KeyTermList.join(newValue), forKey: Self.keyTermsKey) }
   }
 
-  /// `BlurtKeyTerms` — spelled out here rather than imported from the engine so
-  /// the keyboard, which links it too, and the app can't disagree.
-  package static let keyTermsKey = "BlurtKeyTerms"
-
-  package static var appSeenAt: Date? {
+  package var appSeenAt: Date? {
     get { defaults.object(forKey: BlurtShared.Key.appSeenAt) as? Date }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.appSeenAt) }
+    nonmutating set { defaults.set(newValue, forKey: BlurtShared.Key.appSeenAt) }
   }
 
-  package static var keyboardSeenAt: Date? {
+  package var keyboardSeenAt: Date? {
     get { defaults.object(forKey: BlurtShared.Key.keyboardSeenAt) as? Date }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardSeenAt) }
+    nonmutating set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardSeenAt) }
   }
 
   /// When the keyboard last copied the phone's word list into the App Group.
-  package static var lexiconRefreshedAt: Date? {
+  package var lexiconRefreshedAt: Date? {
     get { defaults.object(forKey: BlurtShared.Key.lexiconRefreshedAt) as? Date }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.lexiconRefreshedAt) }
+    nonmutating set { defaults.set(newValue, forKey: BlurtShared.Key.lexiconRefreshedAt) }
   }
 
   /// Set by the keyboard the first time it runs with Full Access — the only
   /// public-API way the app can tell that the keyboard was added and allowed.
-  package static var keyboardEverSeen: Bool {
+  package var keyboardEverSeen: Bool {
     get { defaults.bool(forKey: BlurtShared.Key.keyboardEverSeen) }
-    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardEverSeen) }
+    nonmutating set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardEverSeen) }
   }
 
-  package static func isListening(now: Date) -> Bool {
+  package func isListening(now: Date) -> Bool {
     // The session record decides when there is one (`ListeningState`); the
     // older keys below answer for a build that has not written one yet.
     if let state = listeningState {
@@ -79,18 +79,18 @@ nonisolated extension SharedStore {
     guard (listeningUntil ?? .distantPast) > now else {
       return false
     }
-    return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
+    return now.timeIntervalSince(appSeenAt ?? .distantPast) < Self.presenceWindow
   }
 
   /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
-  package static func isKeyboardPresent(now: Date) -> Bool {
-    now.timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
+  package func isKeyboardPresent(now: Date) -> Bool {
+    now.timeIntervalSince(keyboardSeenAt ?? .distantPast) < Self.presenceWindow
   }
 
   /// Adds a term unless it is already there (case-insensitively). Returns
   /// whether the list changed.
   @discardableResult
-  package static func addKeyTerm(_ term: String) -> Bool {
+  package func addKeyTerm(_ term: String) -> Bool {
     let terms = keyTerms
     let updated = KeyTermList.appending(term, to: terms)
     guard updated != terms else {
@@ -100,11 +100,17 @@ nonisolated extension SharedStore {
     return true
   }
 
-  /// Fires a Darwin notification. Carries nothing: the receiver reads the
-  /// payload back out of these defaults.
-  package static func post(_ signal: String) {
-    CFNotificationCenterPostNotification(
-      CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(signal as CFString), nil, nil, true
-    )
+  /// Fires a Darwin notification, under this store's prefix. Carries nothing:
+  /// the receiver reads the payload back out of these defaults.
+  package func post(_ signal: String) {
+    let name = CFNotificationName((signalPrefix + signal) as CFString)
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), name, nil, nil, true)
+  }
+
+  /// Listens for a Darwin notification this store's `post` sends — under the
+  /// same prefix, so a scratch store hears only its own. The handler runs on
+  /// whichever thread the system delivers on (`DarwinObserver`).
+  package func observe(_ signal: String, handler: @escaping @Sendable () -> Void) -> DarwinObserver {
+    DarwinObserver(name: signalPrefix + signal, handler: handler)
   }
 }
