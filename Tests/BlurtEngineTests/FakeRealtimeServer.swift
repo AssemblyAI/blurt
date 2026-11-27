@@ -99,25 +99,7 @@ final class FakeRealtimeServer: Sendable {
           return entry.chunkSizes.count == 1
         }
         if first {
-          switch behavior {
-          case .normal:
-            send(
-              #"{"type":"Turn","turn_order":0,"transcript":"hello","end_of_turn":false,"speaker_label":"A"}"#,
-              on: connection
-            )
-            send(
-              #"{"type":"Turn","turn_order":0,"transcript":"Hello.","end_of_turn":true,"speaker_label":"A"}"#,
-              on: connection
-            )
-
-          case .errorFrame(let message, let closeReason):
-            if let payload = try? JSONEncoder().encode(["type": "Error", "error": message]),
-              let text = String(data: payload, encoding: .utf8)
-            {
-              send(text, on: connection)
-            }
-            close(reason: closeReason, on: connection)
-          }
+          respondToFirstAudio(on: connection)
         }
 
       case .text where String(data: data, encoding: .utf8)?.contains("Terminate") == true:
@@ -131,6 +113,28 @@ final class FakeRealtimeServer: Sendable {
     }
   }
 
+  private func respondToFirstAudio(on connection: NWConnection) {
+    switch behavior {
+    case .normal:
+      send(
+        #"{"type":"Turn","turn_order":0,"transcript":"hello","end_of_turn":false,"speaker_label":"A"}"#,
+        on: connection
+      )
+      send(
+        #"{"type":"Turn","turn_order":0,"transcript":"Hello.","end_of_turn":true,"speaker_label":"A"}"#,
+        on: connection
+      )
+
+    case let .errorFrame(message, closeReason):
+      if let payload = try? JSONEncoder().encode(["type": "Error", "error": message]),
+        let text = String(data: payload, encoding: .utf8)
+      {
+        send(text, on: connection)
+      }
+      close(reason: closeReason, on: connection)
+    }
+  }
+
   private func send(_ text: String, on connection: NWConnection) {
     let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
     let context = NWConnection.ContentContext(identifier: "text", metadata: [metadata])
@@ -139,7 +143,7 @@ final class FakeRealtimeServer: Sendable {
 
   private func close(reason: String, on connection: NWConnection) {
     let metadata = NWProtocolWebSocket.Metadata(opcode: .close)
-    metadata.closeCode = .applicationCode(3006)
+    metadata.closeCode = .applicationCode(3_006)
     let context = NWConnection.ContentContext(identifier: "close", metadata: [metadata])
     connection.send(content: Data(reason.utf8), contentContext: context, isComplete: true, completion: .idempotent)
   }

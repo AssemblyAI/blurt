@@ -300,8 +300,8 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
         // Streaming v3 follows every Error frame with a generic close reason
         // ("See Error message for details"); surface the frame's text before
         // the close overwrites it.
-        if let message = event.error, !message.isEmpty {
-          close(error: RealtimeError.connection(message))
+        if let serverError = event.error, !serverError.isEmpty {
+          close(error: RealtimeError.connection(serverError))
           return
         }
 
