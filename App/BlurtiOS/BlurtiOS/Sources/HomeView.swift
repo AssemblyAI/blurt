@@ -17,14 +17,14 @@ struct HomeView: View {
   @Environment(\.scenePhase)
   private var scenePhase
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-  @State private var keyboardSeen = SharedStore.keyboardEverSeen
+  @State private var keyboardSeen: Bool
 
   /// The card's words come off the window's own record — the one the keyboard
   /// decides on — and the failure the coordinator is holding for a moment.
   private var status: HomeStatus {
     HomeStatus(
       state: coordinator.window.state,
-      windowMinutes: SharedStore.windowMinutes,
+      windowMinutes: coordinator.store.windowMinutes,
       error: coordinator.error,
       micDenied: coordinator.microphoneDenied,
       hasKey: coordinator.apiKey.hasAPIKey,
@@ -69,9 +69,15 @@ struct HomeView: View {
     .frame(height: DesignTokens.Metrics.appHeaderHeight)
   }
 
+  init(coordinator: DictationCoordinator, showSettings: @escaping () -> Void) {
+    self.coordinator = coordinator
+    self.showSettings = showSettings
+    _keyboardSeen = State(initialValue: coordinator.store.keyboardEverSeen)
+  }
+
   private func refreshStatus() {
     microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-    keyboardSeen = SharedStore.keyboardEverSeen
+    keyboardSeen = coordinator.store.keyboardEverSeen
     coordinator.apiKey.refreshStatus()
   }
 }

@@ -16,6 +16,10 @@ struct DictationCoordinatorTests {
   /// The words every stub transcript carries.
   static let transcript = "hello there"
 
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   /// The instant the coordinator judges the keyboard's presence at, held for
   /// the whole test, and the one `onScreen` dates its presence from: a
   /// keyboard "seen 11 s ago" stays 11 s old however slowly the run goes
@@ -27,12 +31,13 @@ struct DictationCoordinatorTests {
   /// can be seen; `closeDelay` holds the source's close, so a press can land
   /// while the window is closing.
   func coordinator(startDelay: Duration = .zero, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
-    let rig = WindowRig(closeDelay: closeDelay, startDelay: startDelay)
+    let rig = WindowRig(store: store, closeDelay: closeDelay, startDelay: startDelay)
     let frozen = frozenNow
     let heldNow: @Sendable () -> Date = { frozen }
     let coordinator = DictationCoordinator(
-      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()) { _ in .unreachable },
       window: rig.window,
+      defaults: freshDefaults(),
+      apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore()) { _ in .unreachable },
       transcriber: StubTranscriber(text: Self.transcript),
       clock: rig.clock,
       now: heldNow
@@ -63,43 +68,40 @@ struct DictationCoordinatorTests {
 
   /// Writes the command where the keyboard would and lets the coordinator take it.
   func send(_ command: KeyboardCommand, to coordinator: DictationCoordinator) {
-    SharedStore.write(command, forKey: BlurtShared.Key.command)
+    store.write(command, forKey: BlurtShared.Key.command)
     coordinator.handleCommand()
   }
 
   @Test("start writes a fresh launch: no window, sequence 0, and the phase idle under it")
   func start() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    SharedStore.listeningState = ListeningState(launchID: UUID(), sequence: 9, window: .open, micLive: true)
+    store.listeningState = ListeningState(launchID: UUID(), sequence: 9, window: .open, micLive: true)
     let (coordinator, rig) = coordinator()
     coordinator.start()
-    let record = SharedStore.listeningState
+    let record = store.listeningState
     #expect(record?.window == .closed)
     #expect(record?.sequence == 0)
     #expect(record?.launchID == rig.window.launchID)
     #expect(record?.reason == .sessionOff)
     #expect(rig.state == record, "the window's own, so its beats renew it")
-    #expect(!SharedStore.isListening)
-    let phase = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase)
+    #expect(!store.isListening)
+    let phase = store.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase)
     #expect(phase?.state == .idle)
     #expect(phase?.launchID == rig.window.launchID)
     #expect(phase?.dictation == nil && phase?.answers == nil)
   }
 
-  @Test("a press to a closed window is acked notListening and never submitted; its resend is answered the same")
+  @Test(
+    "a press to a closed window is acked notListening and never submitted; its resend is answered the same")
   func pressToClosedWindow() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = coordinator()
     coordinator.start()
     let press = command(.press)
     send(press, to: coordinator)
-    let ack = SharedStore.commandAck
+    let ack = store.commandAck
     #expect(ack?.commandID == press.id)
     #expect(ack?.outcome == .notListening(.sessionOff))
     #expect(ack?.launchID == rig.window.launchID)
-    #expect(SharedStore.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) == nil, "consumed")
+    #expect(store.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) == nil, "consumed")
     #expect(coordinator.inFlight == nil)
     #expect(coordinator.answers == nil)
     #expect(coordinator.lastCommandID == nil)
@@ -107,16 +109,15 @@ struct DictationCoordinatorTests {
     #expect(coordinator.phase == .idle, "nothing reached the session")
     #expect(rig.source.started == 0)
     // The same press again — a missed ack — gets the same answer and nothing more.
-    SharedStore.commandAck = nil
+    store.commandAck = nil
     send(press, to: coordinator)
-    #expect(SharedStore.commandAck?.outcome == .notListening(.sessionOff))
+    #expect(store.commandAck?.outcome == .notListening(.sessionOff))
     #expect(coordinator.answered.count == 1)
   }
 
-  @Test("a press while the window is closing is refused on the window as it is, never promised the mic on its way out")
+  @Test(
+    "a press while the window is closing is refused on the window as it is, never promised the mic on its way out")
   func pressWhileClosing() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = coordinator(closeDelay: .milliseconds(400))
     coordinator.start()
     coordinator.apiKey.save("key")
@@ -125,8 +126,8 @@ struct DictationCoordinatorTests {
     #expect(await until { rig.window.liveState.window == .closing })
     let press = command(.press)
     send(press, to: coordinator)
-    #expect(SharedStore.commandAck?.commandID == press.id)
-    #expect(SharedStore.commandAck?.outcome == .notListening(.sessionOff))
+    #expect(store.commandAck?.commandID == press.id)
+    #expect(store.commandAck?.outcome == .notListening(.sessionOff))
     #expect(coordinator.inFlight == nil && coordinator.answers == nil)
     #expect(rig.source.started == 0, "nothing submitted")
     #expect(await until { rig.state?.window == .closed })
@@ -135,24 +136,21 @@ struct DictationCoordinatorTests {
 
   @Test("a release or cancel with nothing in flight is acked nothingInFlight")
   func endingNothing() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, _) = coordinator()
     coordinator.start()
     let release = command(.release)
     send(release, to: coordinator)
-    #expect(SharedStore.commandAck?.outcome == .nothingInFlight)
+    #expect(store.commandAck?.outcome == .nothingInFlight)
     let cancel = command(.cancel)
     send(cancel, to: coordinator)
-    #expect(SharedStore.commandAck?.commandID == cancel.id)
-    #expect(SharedStore.commandAck?.outcome == .nothingInFlight)
+    #expect(store.commandAck?.commandID == cancel.id)
+    #expect(store.commandAck?.outcome == .nothingInFlight)
     #expect(coordinator.lastCommandID == nil)
   }
 
-  @Test("the answered ids are bounded: the oldest make room, and a resend of one of those is decided afresh")
+  @Test(
+    "the answered ids are bounded: the oldest make room, and a resend of one of those is decided afresh")
   func answeredBounded() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, _) = coordinator()
     coordinator.start()
     let first = command(.press)
@@ -162,14 +160,12 @@ struct DictationCoordinatorTests {
     #expect(coordinator.answered[first.id] == nil)
     // Decided afresh means answered from the record, which still says the session is off.
     send(first, to: coordinator)
-    #expect(SharedStore.commandAck?.outcome == .notListening(.sessionOff))
+    #expect(store.commandAck?.outcome == .notListening(.sessionOff))
     #expect(coordinator.answered.count == DictationCoordinator.answeredCapacity)
   }
 
   @Test("the setup hop sets the Full Access flag and opens no window; the start hop asks for one")
   func hops() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = coordinator()
     coordinator.start()
     coordinator.handle(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed))
@@ -177,14 +173,13 @@ struct DictationCoordinatorTests {
     try? await Task.sleep(for: .milliseconds(100))  // wall-clock-ok: absence check: a slow runner can only make it pass
     #expect(rig.source.opened == 0)
     #expect(rig.state?.window == .closed && rig.state?.sequence == 0, "the window published only its launch")
-    #expect(SharedStore.listeningState?.window == .closed)
-    SessionAutoStart.setTurnedOff(true)
+    #expect(store.listeningState?.window == .closed)
+    SessionAutoStart.setTurnedOff(true, in: coordinator.defaults)
     coordinator.handle(BlurtShared.startURL(reason: .sessionOff))
-    #expect(!SessionAutoStart.isTurnedOff(), "the keyboard's ask undoes an earlier off")
+    #expect(!SessionAutoStart.isTurnedOff(in: coordinator.defaults), "the keyboard's ask undoes an earlier off")
     // No key in the in-memory store: the hop stops at the key, with no window.
     #expect(await until { coordinator.needsKey })
     #expect(rig.source.opened == 0)
-    SessionAutoStart.setTurnedOff(false)
   }
 
   @Test("the watchdog's tick keeps a dead keyboard's dictation inside the row: released within the watchdog and a tick")

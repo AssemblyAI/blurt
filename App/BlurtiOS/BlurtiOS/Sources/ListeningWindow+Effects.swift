@@ -217,7 +217,7 @@ extension ListeningWindow {
     let changed = state?.window != record.window
     state = record
     if [.opening, .open].contains(record.window) { lastError = nil }
-    SharedStore.publish(record)
+    store.publish(record)
     let fields = [
       "window": record.window.rawValue, "idle": record.idle.rawValue, "micLive": String(record.micLive),
       "seq": String(record.sequence), "reason": record.reason?.rawValue ?? "",

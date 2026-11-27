@@ -84,6 +84,11 @@ TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*
 # design keeps every audio type out of it, so an import there is a decision
 # being reversed by accident.
 KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/BlurtDesign/*.swift App/BlurtiOS/BlurtiOSCore/*.swift"
+# Every iPhone target, tests included: the App Group is handed to whatever
+# reads it (`SharedStore`, `.live` at the composition roots, a scratch suite per
+# test), and `BlurtiOSTests` run in parallel on that. A mutable static the tests
+# could swap is the override that held them serial, back by another name.
+IPHONE="App/BlurtiOS/*.swift"
 # The client-side-LLM rule's one carve-out: the SDK's LLM Gateway client
 # (Sources/AssemblyAI/Gateway/GatewayChatClient.swift), the one file that holds
 # the gateway's URL. Every engine client that talks to an LLM — read-aloud's
@@ -128,6 +133,7 @@ PATTERNS=(
   "@available\\(\\*, *deprecated"
   "import AVFoundation|import AVFAudio|AVCaptureSession|AVAudioSession|AVAudioApplication|AudioQueueNewInput"
   "\"/?(v1/)?transcribe\""
+  "nonisolated\\(unsafe\\)[a-z ]* static var|static var override\\b"
 )
 SCOPES=(
   "$ENGINE $APP"
@@ -144,6 +150,7 @@ SCOPES=(
   "$ENGINE $APP"
   "$KEYBOARD"
   "$ENGINE $APP $NOT_LIVE_CAP_FALLBACK"
+  "$IPHONE"
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
@@ -160,6 +167,7 @@ ADVICE=(
   "deleted types stay deleted — no deprecated re-exports"
   "the keyboard never hears anything: the app listens and transcribes, the keyboard inserts (KeyboardRelayInjector)"
   "dictation streams to /v1/transcribe/live; the buffered route is only the over-cap fallback's (DictationClient+LiveCapFallback.swift)"
+  "the App Group is injected (SharedStore: .live at the composition roots, SharedStore.scratch() in a test) so BlurtiOSTests run in parallel; inject shared state rather than swapping a global"
 )
 
 # One known-bad line per rule, same order. `--self-test` asserts each pattern
@@ -181,6 +189,7 @@ PROBES=(
   "@available(*, deprecated, renamed: \"NewName\")"
   "let session = AVCaptureSession()"
   "static let bufferedTranscribePath = \"v1/transcribe\""
+  "  nonisolated(unsafe) static var override: UserDefaults?"
 )
 
 # A verbatim slice of the row in AGENTS.md's "Settled decisions" table that each
@@ -204,6 +213,7 @@ TABLE_ANCHORS=(
   "Add backwards-compat shims for removed types"
   "Give the keyboard extension a microphone or any audio type"
   "Keep a copy of the recording for anything but the over-cap fallback"
+  "Swap a global \`SharedStore\` in the iPhone tests, or run them serially"
 )
 
 # The same rule as the guardrails skill words it. Deliberately not the table's
@@ -226,6 +236,7 @@ SKILL_ANCHORS=(
   "Don't add backwards-compat shims for removed types."
   "The keyboard never hears anything."
   "One copy of the recording exists, for one reason."
+  "\`SharedStore\` is injected, never a global."
 )
 
 if [ "${#SCOPES[@]}" -ne "${#PATTERNS[@]}" ] \
@@ -260,6 +271,7 @@ if [ "${1:-}" = "--self-test" ]; then
     "KeychainStore(service: \"dev.alex.blurt.tests\", account: \"test-\\(UUID().uuidString)\")"
     "case sttPrompt = \"stt_prompt\""
     "private static let transcribePath = \"v1/transcribe/live\""
+    "  nonisolated(unsafe) package let defaults: UserDefaults"
   )
   for good in "${GOOD[@]}"; do
     hit=""

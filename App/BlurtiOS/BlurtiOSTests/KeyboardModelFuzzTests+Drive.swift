@@ -80,25 +80,25 @@ extension KeyboardModelFuzzTests {
       model.now = clock
 
     case .appNotListening:
-      KeyboardRig.listening(false)
+      KeyboardRig.listening(false, in: store)
       model.stateChanged()
       model.apply(model.snapshot)
 
     case .appListening:
-      KeyboardRig.listening(true)
+      KeyboardRig.listening(true, in: store)
       model.stateChanged()
       model.apply(model.snapshot)
 
     case .stateClosed:
-      KeyboardRig.record(.closed, reason: .sessionOff)
+      KeyboardRig.record(.closed, in: store, reason: .sessionOff)
       model.stateChanged()
 
     case .stateInterrupted:
-      KeyboardRig.record(.interrupted, reason: .interrupted)
+      KeyboardRig.record(.interrupted, in: store, reason: .interrupted)
       model.stateChanged()
 
     case .stateLapsed:
-      KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+      KeyboardRig.record(.open, in: store, micLive: true, age: ListeningState.lease + 1)
       model.stateChanged()
 
     case .beginTerm:
@@ -161,20 +161,20 @@ extension KeyboardModelFuzzTests {
       model.contextChanged()
 
     case .resultFresh:
-      SharedStore.write(
+      store.write(
         DictationResult(id: UUID(), text: "words", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result
       )
       model.resultArrived()
 
     case .resultStale:
-      SharedStore.write(
+      store.write(
         DictationResult(id: UUID(), text: "old", deliveredAt: Date().addingTimeInterval(-60), recipient: nil),
         forKey: BlurtShared.Key.result
       )
       model.resultArrived()
 
     case .resultForOther:
-      SharedStore.write(
+      store.write(
         DictationResult(id: UUID(), text: "theirs", deliveredAt: Date(), recipient: "someone-else"),
         forKey: BlurtShared.Key.result
       )

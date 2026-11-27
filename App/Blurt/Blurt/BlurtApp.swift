@@ -29,8 +29,8 @@ struct BlurtApp: App {
 
     // Settings scene: change the API key or dictation shortcut. SwiftUI wires
     // the standard ⌘, "Settings…" menu item to this scene automatically; it's
-    // opened on demand (⌘, / the ready screen's link / the menu bar item, via
-    // `openSettings`), never at launch. Keeps standard window chrome.
+    // opened on demand (⌘, / the ready screen's `SettingsLink`s / the menu bar
+    // item, via `openSettings`), never at launch. Keeps standard window chrome.
     Settings {
       SettingsWindowRoot(appDelegate: appDelegate)
     }

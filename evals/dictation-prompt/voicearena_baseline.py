@@ -143,16 +143,9 @@ def _save_json(path: Path, cache: dict) -> None:
     Each run holds its own copy in memory, so writing that copy whole would drop
     whatever another run saved in the meantime.
     """
-    merged = {**_load_json(path), **cache}
+    merged = {**voicearena.load_json(path), **cache}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(merged, indent=1) + "\n", encoding="utf-8")
-
-
-def _load_json(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
 
 
 def transcribe_all(
@@ -177,7 +170,7 @@ def transcribe_all(
         # spread (a single Smart prompt scored 84.1 and 87.4 on two runs).
         tag = f"{tag}-s{sample}"
     path = _cache_dir() / f"voicearena-run-{tag}.json"
-    cache = _load_json(path)
+    cache = voicearena.load_json(path)
     missing = [r for r in rows if voicearena.cache_key(r) not in cache]
     rewrite_mode = None if mode == "fast" else mode
 
@@ -223,7 +216,7 @@ def judge_all(items: list[tuple[str, str, str]], judge) -> list[dict | None]:
     from amend import build_prompt, char_edits  # noqa: PLC0415
 
     path = _cache_dir() / f"amend-{JUDGE_MODEL}-{JUDGE_EFFORT}.json"
-    cache = _load_json(path)
+    cache = voicearena.load_json(path)
     prompts = [build_prompt(intended, draft, spoken) for draft, intended, spoken in items]
     keys = [_sha(p) for p in prompts]
     todo = sorted({k: p for k, p in zip(keys, prompts, strict=True) if k not in cache}.items())

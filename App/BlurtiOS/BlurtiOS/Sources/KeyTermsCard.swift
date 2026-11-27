@@ -8,9 +8,11 @@ import SwiftUI
 /// list's share link. They live in the App Group, where the keyboard's + adds
 /// one on the spot, so this reads and writes the shared slot.
 struct KeyTermsCard: View {
+  /// The App Group the terms live in — the coordinator's.
+  let store: SharedStore
   let contactNames: Int
-  @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults)
-  private var raw = ""
+  /// The list as stored, comma-separated, in `store`: bound in `init`.
+  @AppStorage private var raw: String
   @State private var draft = ""
 
   var body: some View {
@@ -21,7 +23,7 @@ struct KeyTermsCard: View {
       if !terms.isEmpty {
         FlowLayout {
           ForEach(terms, id: \.self) { term in
-            TermPill(term: term) { SharedStore.keyTerms = terms.filter { $0 != term } }
+            TermPill(term: term) { store.keyTerms = terms.filter { $0 != term } }
           }
         }
       }
@@ -52,6 +54,12 @@ struct KeyTermsCard: View {
     .card()
   }
 
+  init(store: SharedStore, contactNames: Int) {
+    self.store = store
+    self.contactNames = contactNames
+    _raw = AppStorage(wrappedValue: "", SharedStore.keyTermsKey, store: store.defaults)
+  }
+
   /// The whole list, for a friend: a `.blurtterms` file plus the words as text.
   private func shareLink(for terms: [String]) -> some View {
     let pack = TermPack(name: "Key terms", from: nil, terms: terms)
@@ -78,7 +86,7 @@ struct KeyTermsCard: View {
     guard updated != terms else {
       return
     }
-    SharedStore.keyTerms = updated
+    store.keyTerms = updated
     draft = ""
   }
 }

@@ -14,6 +14,14 @@ struct DictationCommandLogTests {
     incomplete: true
   )
 
+  /// `body` with a command log and an error log in a fresh temporary directory,
+  /// removed when `body` returns — never the host's own `~/Library/Logs/Blurt`.
+  private func withLogPair(_ body: (_ commands: URL, _ errors: URL) throws -> Void) throws {
+    try withTemporaryDirectory(named: "BlurtLogTests") { directory in
+      try body(directory.appending(path: "commands.jsonl"), directory.appending(path: "errors.jsonl"))
+    }
+  }
+
   @Test("an entry holds what was said, the screen, the plan with each element's label, and how it ended")
   func entry() {
     let steps: [VoiceCommandStep] = [
@@ -67,68 +75,67 @@ struct DictationCommandLogTests {
 
   @Test("a failure is written to the command log and to the error log, beside the dictations' failures")
   func failureWritesBoth() throws {
-    let directory = makeTempLogDirectory()
-    let commands = directory.appendingPathComponent("commands.jsonl")
-    let errors = directory.appendingPathComponent("errors.jsonl")
-    DictationLog.appendCommand(
-      .init(
-        command: "open figma",
-        context: screen,
-        steps: [.openApp("Figma")],
-        outcome: .error(message: "No app named Figma is installed."),
-        failure: ("VoiceCommandError.appNotFound", "No app named Figma is installed."),
-        duration: .milliseconds(900)
-      ),
-      store: developerModeStore(enabled: true),
-      to: commands,
-      errorsTo: errors
-    )
-    DictationLog.queue.sync {
-      // Nothing to run: the empty sync just waits out the writes already queued.
+    try withLogPair { commands, errors in
+      DictationLog.appendCommand(
+        .init(
+          command: "open figma",
+          context: screen,
+          steps: [.openApp("Figma")],
+          outcome: .error(message: "No app named Figma is installed."),
+          failure: ("VoiceCommandError.appNotFound", "No app named Figma is installed."),
+          duration: .milliseconds(900)
+        ),
+        store: developerModeStore(enabled: true),
+        to: commands,
+        errorsTo: errors
+      )
+      DictationLog.queue.sync {
+        // Nothing to run: the empty sync just waits out the writes already queued.
+      }
+      let command = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
+      #expect(command?["outcome"] as? String == "failed")
+      #expect(command?["errorKind"] as? String == "VoiceCommandError.appNotFound")
+      #expect(command?["steps"] as? [String] == ["open_app Figma"])
+      let error = try JSONSerialization.jsonObject(with: Data(contentsOf: errors)) as? [String: Any]
+      #expect(error?["kind"] as? String == "command.VoiceCommandError.appNotFound")
+      #expect(error?["error"] as? String == "No app named Figma is installed.")
+      #expect(error?["app"] as? String == "Mail")
     }
-    let command = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
-    #expect(command?["outcome"] as? String == "failed")
-    #expect(command?["errorKind"] as? String == "VoiceCommandError.appNotFound")
-    #expect(command?["steps"] as? [String] == ["open_app Figma"])
-    let error = try JSONSerialization.jsonObject(with: Data(contentsOf: errors)) as? [String: Any]
-    #expect(error?["kind"] as? String == "command.VoiceCommandError.appNotFound")
-    #expect(error?["error"] as? String == "No app named Figma is installed.")
-    #expect(error?["app"] as? String == "Mail")
   }
 
   @Test("with developer mode off nothing is written; a command that worked adds nothing to the error log")
-  func gated() {
-    let directory = makeTempLogDirectory()
-    let commands = directory.appendingPathComponent("commands.jsonl")
-    let errors = directory.appendingPathComponent("errors.jsonl")
-    let mute = DictationLog.CommandRecord(
-      command: "mute", context: screen, steps: [.media(.mute)], outcome: .done, failure: nil, duration: .zero
-    )
-    DictationLog.appendCommand(
-      mute, store: DeveloperModeStore(defaults: freshDefaults()), to: commands, errorsTo: errors
-    )
-    DictationLog.queue.sync {
-      // Nothing to run: the empty sync just waits out the writes already queued.
-    }
-    #expect(!FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
+  func gated() throws {
+    try withLogPair { commands, errors in
+      let mute = DictationLog.CommandRecord(
+        command: "mute", context: screen, steps: [.media(.mute)], outcome: .done, failure: nil, duration: .zero
+      )
+      DictationLog.appendCommand(
+        mute, store: DeveloperModeStore(defaults: freshDefaults()), to: commands, errorsTo: errors
+      )
+      DictationLog.queue.sync {
+        // Nothing to run: the empty sync just waits out the writes already queued.
+      }
+      #expect(!FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
 
-    DictationLog.appendCommand(
-      mute, store: developerModeStore(enabled: true), to: commands, errorsTo: errors
-    )
-    DictationLog.queue.sync {
-      // Nothing to run: the empty sync just waits out the writes already queued.
+      DictationLog.appendCommand(
+        mute, store: developerModeStore(enabled: true), to: commands, errorsTo: errors
+      )
+      DictationLog.queue.sync {
+        // Nothing to run: the empty sync just waits out the writes already queued.
+      }
+      #expect(FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
+      #expect(!FileManager.default.fileExists(atPath: errors.path(percentEncoded: false)))
     }
-    #expect(FileManager.default.fileExists(atPath: commands.path(percentEncoded: false)))
-    #expect(!FileManager.default.fileExists(atPath: errors.path(percentEncoded: false)))
   }
 
   @Test("the reset sweep removes the command log with the other two")
-  func reset() {
-    let directory = makeTempLogDirectory()
-    let urls = ["dictations", "errors", "commands"].map { directory.appendingPathComponent("\($0).jsonl") }
-    for url in urls { FileManager.default.createFile(atPath: url.path(percentEncoded: false), contents: Data()) }
-    #expect(DictationLog.removeStoredLogs(dictations: urls[0], errors: urls[1], commands: urls[2]))
-    #expect(urls.allSatisfy { !FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) })
+  func reset() throws {
+    try withTemporaryDirectory(named: "BlurtLogTests") { directory in
+      let urls = ["dictations", "errors", "commands"].map { directory.appendingPathComponent("\($0).jsonl") }
+      for url in urls { FileManager.default.createFile(atPath: url.path(percentEncoded: false), contents: Data()) }
+      #expect(DictationLog.removeStoredLogs(dictations: urls[0], errors: urls[1], commands: urls[2]))
+      #expect(urls.allSatisfy { !FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) })
+    }
     #expect(DictationLog.defaultCommandURL.lastPathComponent == "commands.jsonl")
   }
 
@@ -162,9 +169,6 @@ struct DictationCommandLogTests {
 
   @Test("a complaint is logged against the command it's about, and as a reported failure")
   func feedback() throws {
-    let directory = makeTempLogDirectory()
-    let commands = directory.appendingPathComponent("commands.jsonl")
-    let errors = directory.appendingPathComponent("errors.jsonl")
     let last = DictationLog.CommandRecord(
       command: "go to github.com",
       context: screen,
@@ -174,22 +178,24 @@ struct DictationCommandLogTests {
       duration: .zero,
       id: "cmd-1"
     )
-    DictationLog.appendFeedback(
-      "that didn't work",
-      about: last,
-      store: developerModeStore(enabled: true),
-      to: commands,
-      errorsTo: errors
-    )
-    DictationLog.queue.sync {
-      // Nothing to run: the empty sync just waits out the writes already queued.
+    try withLogPair { commands, errors in
+      DictationLog.appendFeedback(
+        "that didn't work",
+        about: last,
+        store: developerModeStore(enabled: true),
+        to: commands,
+        errorsTo: errors
+      )
+      DictationLog.queue.sync {
+        // Nothing to run: the empty sync just waits out the writes already queued.
+      }
+      let entry = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
+      #expect(entry?["feedback"] as? String == "that didn't work")
+      #expect(entry?["about"] as? String == "cmd-1")
+      #expect(entry?["aboutCommand"] as? String == "go to github.com")
+      let error = try JSONSerialization.jsonObject(with: Data(contentsOf: errors)) as? [String: Any]
+      #expect(error?["kind"] as? String == "command.userReported")
     }
-    let entry = try JSONSerialization.jsonObject(with: Data(contentsOf: commands)) as? [String: Any]
-    #expect(entry?["feedback"] as? String == "that didn't work")
-    #expect(entry?["about"] as? String == "cmd-1")
-    #expect(entry?["aboutCommand"] as? String == "go to github.com")
-    let error = try JSONSerialization.jsonObject(with: Data(contentsOf: errors)) as? [String: Any]
-    #expect(error?["kind"] as? String == "command.userReported")
   }
 
   @Test("a short complaint is feedback; a command that only mentions it isn't")

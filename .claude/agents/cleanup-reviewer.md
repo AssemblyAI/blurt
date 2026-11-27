@@ -86,7 +86,8 @@ On the iPhone (`App/BlurtiOS/`), equally deliberate:
 - **`BlurtiOSCore` uses `package` access, not `public`,** and its explicit
   `package init`s exist because a memberwise initializer is only ever internal.
   Seams with one production use (`KeyboardModel.transport`, `.urlOpener`,
-  `.proxyOverride`, `SharedStore.override`) are there for the tests.
+  `.proxyOverride`, `KeyboardRelayInjector.pasteboardName`,
+  `SharedStore.signalPrefix`) are there for the tests.
 - **`SimulatorAudioSource` is the simulator's microphone**, not a duplicate of
   `WindowedAudioSource`: `AVCaptureSession` carries no audio in the simulator.
 - The iPhone periphery scan is CI's and `ios-check.sh`'s, with `--retain-public`,

@@ -51,6 +51,8 @@ final class ListeningWindow {
 
   let source: any ListeningSource
   let launchID: UUID
+  /// The App Group the window's record is published to, and its length read from.
+  let store: SharedStore
   @ObservationIgnored let audioSession: any AudioSessionControlling
   @ObservationIgnored let appState: () -> UIApplication.State
   /// Shared with the coordinator, which holds its release task beside the
@@ -107,6 +109,7 @@ final class ListeningWindow {
   var pictureInPictureKeeper: PictureInPictureKeeper? { (idle as? PictureInPictureIdle)?.keeper }
 
   init(
+    store: SharedStore,
     source: any ListeningSource,
     audioSession: any AudioSessionControlling,
     appState: @escaping () -> UIApplication.State,
@@ -115,6 +118,7 @@ final class ListeningWindow {
     idle: any IdleMode,
     launchID: UUID = UUID()
   ) {
+    self.store = store
     self.source = source
     self.audioSession = audioSession
     self.appState = appState
@@ -123,7 +127,7 @@ final class ListeningWindow {
     self.idle = idle
     self.launchID = launchID
     machine = Machine(
-      launchID: launchID, windowMinutes: SharedStore.windowMinutes, maxAudioSeconds: RecordingLimits.maxAudioSeconds
+      launchID: launchID, windowMinutes: store.windowMinutes, maxAudioSeconds: RecordingLimits.maxAudioSeconds
     )
     let (inputs, continuation) = AsyncStream<Input>.makeStream()
     inbox = continuation
@@ -139,10 +143,10 @@ final class ListeningWindow {
     readers = [readSourceEvents(), readSessionEvents()]
   }
 
-  /// The phone's window: its capture source (the simulator's in the
-  /// simulator), the system audio session, the application's own state, and
-  /// the idle mode the device supports.
-  convenience init() {
+  /// The phone's window over `store`: its capture source (the simulator's in
+  /// the simulator), the system audio session, the application's own state,
+  /// and the idle mode the device supports.
+  convenience init(store: SharedStore) {
     #if targetEnvironment(simulator)
       // The simulator's capture session carries no audio; see SimulatorAudioSource.
       let captureSource: any ListeningSource = SimulatorAudioSource()
@@ -151,8 +155,9 @@ final class ListeningWindow {
     #endif
     let applicationState = { UIApplication.shared.applicationState }
     self.init(
+      store: store,
       source: captureSource,
-      audioSession: SystemAudioSession(),
+      audioSession: SystemAudioSession(store: store),
       appState: applicationState,
       backgroundTasks: SystemBackgroundTasks(),
       clock: ContinuousClock(),
@@ -192,9 +197,9 @@ final class ListeningWindow {
     feed(.foregrounded(turnedOff: turnedOff))
   }
 
-  /// Settings changed `SharedStore.windowMinutes`: applied to the window that is open.
+  /// Settings changed `store.windowMinutes`: applied to the window that is open.
   func windowMinutesChanged() {
-    feed(.windowMinutesChanged(SharedStore.windowMinutes))
+    feed(.windowMinutesChanged(store.windowMinutes))
   }
 
   /// A dictation is recording: the window's lifetime holds past it.

@@ -100,20 +100,17 @@ final class ReadyViewUITests: BlurtUITestCase {
     copyItem.click()
 
     // The row writes the transcript to the system pasteboard (its "Copied" badge
-    // is accessibility-hidden, so verify the real effect the copy has). Poll,
-    // since the cross-process write lands a beat after the click.
-    var copied: String?
-    let deadline = Date().addingTimeInterval(30)
-    while Date() < deadline {
-      copied = pasteboard.string(forType: .string)
-      if copied == UITestIdentifiers.defaultCannedTranscript { break }
-      usleep(100_000)  // wall-clock-ok: a UI test: the app under test runs on real time
-    }
-    XCTAssertEqual(
-      copied,
-      UITestIdentifiers.defaultCannedTranscript,
-      "Copying a recent transcript should put it on the pasteboard"
+    // is accessibility-hidden, so verify the real effect the copy has). Wait
+    // for it, since the cross-process write lands a beat after the click.
+    let copied = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        pasteboard.string(forType: .string) == UITestIdentifiers.defaultCannedTranscript
+      },
+      object: nil
     )
+    let result = XCTWaiter().wait(for: [copied], timeout: 30)
+    let held = pasteboard.string(forType: .string) ?? "nothing"
+    XCTAssertEqual(result, .completed, "Copying a recent transcript should put it on the pasteboard, not \(held)")
   }
 
   /// The ready and Settings windows are separate SwiftUI scenes. Deleting the

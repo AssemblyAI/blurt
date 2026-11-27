@@ -11,10 +11,6 @@ extension FileTranscriptionTests {
 
   @Test("the history round-trips every kind, newest first, with every entry kept")
   func storeRoundTrip() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "TranscriptStoreTests-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let store = TranscriptStore(url: directory.appending(path: "history.json"))
-    #expect(store.load().isEmpty)
     // Whole seconds: the dates are written ISO 8601, which keeps no fraction.
     let date = Date(timeIntervalSince1970: 1_793_380_962)
     let entries =
@@ -34,8 +30,12 @@ extension FileTranscriptionTests {
       + (0..<120).map { index in
         SavedTranscript(kind: .file, date: date, text: "Text \(index)", fileURL: URL(filePath: "/tmp/\(index).m4a"))
       }
-    try store.save(entries)
-    #expect(store.load() == entries)
+    try withTemporaryDirectory(named: "TranscriptStoreTests") { directory in
+      let store = TranscriptStore(url: directory.appending(path: "history.json"))
+      #expect(store.load().isEmpty)
+      try store.save(entries)
+      #expect(store.load() == entries)
+    }
   }
 
   @Test("a dictation is titled by what was said; a file by its name")
@@ -57,48 +57,47 @@ extension FileTranscriptionTests {
 
   @Test("a history that won't decode is moved aside, not overwritten")
   func corruptStore() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "TranscriptStoreTests-\(UUID())")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let url = directory.appending(path: "history.json")
-    try Data("not json".utf8).write(to: url)
-    #expect(TranscriptStore(url: url).load().isEmpty)
-    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-    #expect(names.contains { $0.hasPrefix("history.corrupt-") })
-    #expect(!names.contains("history.json"))
+    try withTemporaryDirectory(named: "TranscriptStoreTests") { directory in
+      let url = directory.appending(path: "history.json")
+      try Data("not json".utf8).write(to: url)
+      #expect(TranscriptStore(url: url).load().isEmpty)
+      let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+      #expect(names.contains { $0.hasPrefix("history.corrupt-") })
+      #expect(!names.contains("history.json"))
+    }
   }
 
   @Test("one entry that won't decode is skipped, and the file backed up first; the rest load")
   func lossyStore() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "TranscriptStoreTests-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let store = TranscriptStore(url: directory.appending(path: "history.json"))
-    let good = SavedTranscript(kind: .dictation, date: Date(timeIntervalSince1970: 1_793_380_962), text: "Kept.")
-    try store.save([good])
-    // A second entry of a kind this build doesn't know, as a newer build might write.
-    var json = try #require(
-      try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appending(path: "history.json")))
-        as? [[String: Any]])
-    var future = json[0]
-    future["id"] = UUID().uuidString
-    future["kind"] = "hologram"
-    json.append(future)
-    try JSONSerialization.data(withJSONObject: json).write(to: directory.appending(path: "history.json"))
+    try withTemporaryDirectory(named: "TranscriptStoreTests") { directory in
+      let store = TranscriptStore(url: directory.appending(path: "history.json"))
+      let good = SavedTranscript(kind: .dictation, date: Date(timeIntervalSince1970: 1_793_380_962), text: "Kept.")
+      try store.save([good])
+      // A second entry of a kind this build doesn't know, as a newer build might write.
+      var json = try #require(
+        try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appending(path: "history.json")))
+          as? [[String: Any]])
+      var future = json[0]
+      future["id"] = UUID().uuidString
+      future["kind"] = "hologram"
+      json.append(future)
+      try JSONSerialization.data(withJSONObject: json).write(to: directory.appending(path: "history.json"))
 
-    #expect(store.load() == [good])
-    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-    let backup = try #require(names.first { $0.hasPrefix("history.backup-") })
-    #expect(names.contains("history.json"))
+      #expect(store.load() == [good])
+      let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+      let backup = try #require(names.first { $0.hasPrefix("history.backup-") })
+      #expect(names.contains("history.json"))
 
-    // A later launch, before anything saves, skips the same entry — and finds
-    // its backup already there. (Renamed to an earlier stamp, so a second copy
-    // couldn't just collide with the first's name.)
-    try FileManager.default.moveItem(
-      at: directory.appending(path: backup), to: directory.appending(path: "history.backup-1.json")
-    )
-    #expect(store.load() == [good])
-    let after = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-    #expect(after.filter { $0.hasPrefix("history.backup-") } == ["history.backup-1.json"])
+      // A later launch, before anything saves, skips the same entry — and finds
+      // its backup already there. (Renamed to an earlier stamp, so a second copy
+      // couldn't just collide with the first's name.)
+      try FileManager.default.moveItem(
+        at: directory.appending(path: backup), to: directory.appending(path: "history.backup-1.json")
+      )
+      #expect(store.load() == [good])
+      let after = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+      #expect(after.filter { $0.hasPrefix("history.backup-") } == ["history.backup-1.json"])
+    }
   }
 
   @Test("file stamps go to the millisecond, so two in one second differ")
@@ -119,16 +118,15 @@ extension FileTranscriptionTests {
 
   @Test("a user's file is found through its bookmark after a move")
   func bookmarkFollowsMove() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "BookmarkTests-\(UUID())")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let original = directory.appending(path: "call.m4a")
-    try Data("audio".utf8).write(to: original)
-    let entry = SavedTranscript(kind: .file, date: .now, text: "Hi.", fileURL: original)
-    let moved = directory.appending(path: "renamed.m4a")
-    try FileManager.default.moveItem(at: original, to: moved)
-    #expect(entry.audioURL?.lastPathComponent == "renamed.m4a")
-    // A recording keeps its path; no bookmark.
-    #expect(SavedTranscript(kind: .recording, date: .now, text: "Hi.", fileURL: moved).fileBookmark == nil)
+    try withTemporaryDirectory(named: "BookmarkTests") { directory in
+      let original = directory.appending(path: "call.m4a")
+      try Data("audio".utf8).write(to: original)
+      let entry = SavedTranscript(kind: .file, date: .now, text: "Hi.", fileURL: original)
+      let moved = directory.appending(path: "renamed.m4a")
+      try FileManager.default.moveItem(at: original, to: moved)
+      #expect(entry.audioURL?.lastPathComponent == "renamed.m4a")
+      // A recording keeps its path; no bookmark.
+      #expect(SavedTranscript(kind: .recording, date: .now, text: "Hi.", fileURL: moved).fileBookmark == nil)
+    }
   }
 }

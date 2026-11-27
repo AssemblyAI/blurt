@@ -19,8 +19,6 @@ struct FileTranscriptionTests {
 
   @Test("uploads the raw file, submits it with speaker labels, polls until completed")
   func asyncFlow() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Mutex(0)
     let submitted = Mutex(Data())
     let transport = FakeHTTPTransport { request in
@@ -51,8 +49,10 @@ struct FileTranscriptionTests {
     }
     let client = AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
     let phases = Mutex<[AsyncTranscriptionClient.Phase]>([])
-    let transcript = try await client.transcribe(fileAt: url, apiKey: "key") { phase in
-      phases.withLock { $0.append(phase) }
+    let transcript = try await withScratchAudioFile { url in
+      try await client.transcribe(fileAt: url, apiKey: "key") { phase in
+        phases.withLock { $0.append(phase) }
+      }
     }
     #expect(transcript.text == "Hello there.")
     #expect(phases.withLock { $0 } == [.uploading, .transcribing])
@@ -67,8 +67,6 @@ struct FileTranscriptionTests {
 
   @Test("a failed status check is retried; the transcription carries on")
   func pollRetry() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Mutex(0)
     let transport = FakeHTTPTransport { request in
       switch request.url?.path {
@@ -88,46 +86,36 @@ struct FileTranscriptionTests {
           : (200, json(["id": "t1", "status": "completed", "text": "Done."]))
       }
     }
-    let transcript = try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-      .transcribe(fileAt: url, apiKey: "key")
+    let transcript = try await transcribeScratchFile(through: transport)
     #expect(transcript.text == "Done.")
     #expect(polls.withLock { $0 } == 2)
   }
 
   @Test("a transcript that ends in error throws its message")
   func asyncError() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { request in
       request.url?.path == "/v2/upload"
         ? (200, json(["upload_url": "https://cdn.example/abc"]))
         : (200, json(["id": "t1", "status": "error", "error": "File has no audio."]))
     }
     await #expect(throws: AsyncTranscriptionError.failed("File has no audio.")) {
-      try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-        .transcribe(fileAt: url, apiKey: "key")
+      try await transcribeScratchFile(through: transport)
     }
   }
 
   @Test("an HTTP failure carries the API's error sentence")
   func asyncHTTPError() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { _ in (401, json(["error": "Invalid API key"])) }
     await #expect(throws: AsyncTranscriptionError.http(status: 401, message: "Invalid API key")) {
-      try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-        .transcribe(fileAt: url, apiKey: "key")
+      try await transcribeScratchFile(through: transport)
     }
   }
 
   @Test("a failure body in no documented shape, a proxy's HTML, isn't shown to the user")
   func asyncUndocumentedError() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let transport = FakeHTTPTransport { _ in (400, Data("<!DOCTYPE html><title>Blocked</title>".utf8)) }
     await #expect(throws: AsyncTranscriptionError.http(status: 400, message: nil)) {
-      try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-        .transcribe(fileAt: url, apiKey: "key")
+      try await transcribeScratchFile(through: transport)
     }
   }
 

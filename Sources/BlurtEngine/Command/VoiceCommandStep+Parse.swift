@@ -15,8 +15,13 @@ extension VoiceCommandStep {
     let steps: [RawStep]
   }
 
-  /// One step as the instruction spells it: an `action` and the one field it uses.
+  /// One step as the instruction spells it: an `action` and the one field it
+  /// uses. The synthesized decoding, keyed by `Field`, so a property and its
+  /// wire name are one list.
   private struct RawStep: Decodable {
+    // periphery:ignore - read by the synthesized init(from:), which periphery doesn't see.
+    typealias CodingKeys = Field
+
     let action: String
     let app: String?
     let url: String?
@@ -24,29 +29,15 @@ extension VoiceCommandStep {
     let text: String?
     let control: String?
     let name: String?
-    /// Empty when absent, which `menuPath` refuses.
-    let path: [String]
+    /// Absent reads as empty, which `menuPath` refuses. Optional because the
+    /// synthesized decoding requires every non-optional key, and a step
+    /// without a path is still a step.
+    let path: [String]?  // swiftlint:disable:this discouraged_optional_collection
     let element: Int?
     let direction: String?
     let operation: String?
-    /// A slider's or stepper's value, the schema's number written as `plain`.
-    let value: String?
-
-    init(from decoder: any Decoder) throws {
-      let container = try decoder.container(keyedBy: Field.self)
-      action = try container.decode(String.self, forKey: .action)
-      app = try container.decodeIfPresent(String.self, forKey: .app)
-      url = try container.decodeIfPresent(String.self, forKey: .url)
-      keys = try container.decodeIfPresent(String.self, forKey: .keys)
-      text = try container.decodeIfPresent(String.self, forKey: .text)
-      control = try container.decodeIfPresent(String.self, forKey: .control)
-      name = try container.decodeIfPresent(String.self, forKey: .name)
-      path = try container.decodeIfPresent([String].self, forKey: .path) ?? []
-      element = try container.decodeIfPresent(Int.self, forKey: .element)
-      direction = try container.decodeIfPresent(String.self, forKey: .direction)
-      operation = try container.decodeIfPresent(String.self, forKey: .operation)
-      value = try container.decodeIfPresent(Double.self, forKey: .value).map(Self.plain)
-    }
+    /// A slider's or stepper's value, read as `plain` where a step takes it.
+    let value: Double?
 
     /// A number as `Double(_:)` reads it back: "40", "0.5" — never the
     /// user's locale's "0,5", which it can't.
@@ -221,7 +212,7 @@ extension VoiceCommandStep {
       .pressButton(try field(raw.name))
 
     case .menu:
-      .chooseMenuItem(try menuPath(raw.path))
+      .chooseMenuItem(try menuPath(raw.path ?? []))
 
     case .press:
       .pressElement(try element(raw.element))
@@ -244,7 +235,7 @@ extension VoiceCommandStep {
   private static func controlStep(_ action: Action, _ raw: RawStep) throws -> VoiceCommandStep {
     switch action {
     case .setValue:
-      .setValue(element: try element(raw.element), value: try field(raw.value))
+      .setValue(element: try element(raw.element), value: try field(raw.value.map(RawStep.plain)))
 
     case .increment:
       .increment(try element(raw.element))

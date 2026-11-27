@@ -15,7 +15,7 @@ struct LiveRecordingView: View {
     HStack(spacing: 8) {
       Image(systemName: model.isPaused ? "pause.circle.fill" : "record.circle.fill")
         .foregroundStyle(model.isPaused ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
-        .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion && !model.isPaused)
+        .symbolEffect(.breathe, isActive: !reduceMotion && !model.isPaused)
         .accessibilityHidden(true)
       // The system's own running clock: it redraws itself, holds still while
       // paused, and shows hours once there are any.

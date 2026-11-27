@@ -32,8 +32,6 @@ struct AsyncTranscriptionRetryTests {
 
   @Test("a cancelled status check surfaces at once, without burning the retries")
   func cancelledPollNotRetried() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let polls = Counter()
     let transport = ScriptedTransport { request in
       switch request.url?.path {
@@ -49,16 +47,13 @@ struct AsyncTranscriptionRetryTests {
       }
     }
     await #expect(throws: URLError(.cancelled)) {
-      try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-        .transcribe(fileAt: url, apiKey: "key")
+      try await transcribeScratchFile(through: transport)
     }
     #expect(polls.value == 1)
   }
 
   @Test("a dropped upload is retried; the recording isn't lost to one blip")
   func uploadRetry() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let uploads = Counter()
     let transport = ScriptedTransport { request in
       switch request.url?.path {
@@ -74,40 +69,37 @@ struct AsyncTranscriptionRetryTests {
         return .success((200, json(["id": "t1", "status": "completed", "text": "Done."])))
       }
     }
-    let transcript = try await AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-      .transcribe(fileAt: url, apiKey: "key")
+    let transcript = try await transcribeScratchFile(through: transport)
     #expect(transcript.text == "Done.")
     #expect(uploads.value == 2)
   }
 
-  @Test("a submit is retried when it never reached the API, but not after a timeout")
-  func submitRetry() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    for (failure, expectedSubmits) in [(URLError(.cannotConnectToHost), 2), (URLError(.timedOut), 1)] {
-      let submits = Counter()
-      let transport = ScriptedTransport { request in
-        switch request.url?.path {
-        case "/v2/upload":
-          return .success((200, json(["upload_url": "https://cdn.example/abc"])))
+  @Test(
+    "a submit is retried when it never reached the API, but not after a timeout",
+    arguments: [(URLError(.cannotConnectToHost), 2), (URLError(.timedOut), 1)]
+  )
+  func submitRetry(failure: URLError, expectedSubmits: Int) async throws {
+    let submits = Counter()
+    let transport = ScriptedTransport { request in
+      switch request.url?.path {
+      case "/v2/upload":
+        return .success((200, json(["upload_url": "https://cdn.example/abc"])))
 
-        case "/v2/transcript":
-          return submits.next() == 1
-            ? .failure(failure)
-            : .success((200, json(["id": "t1", "status": "completed", "text": "Done."])))
+      case "/v2/transcript":
+        return submits.next() == 1
+          ? .failure(failure)
+          : .success((200, json(["id": "t1", "status": "completed", "text": "Done."])))
 
-        default:
-          Issue.record("unexpected poll")
-          return .success((500, Data()))
-        }
+      default:
+        Issue.record("unexpected poll")
+        return .success((500, Data()))
       }
-      let client = AsyncTranscriptionClient(transport: transport, pollInterval: .zero)
-      if expectedSubmits == 1 {
-        await #expect(throws: failure) { try await client.transcribe(fileAt: url, apiKey: "key") }
-      } else {
-        #expect(try await client.transcribe(fileAt: url, apiKey: "key").text == "Done.")
-      }
-      #expect(submits.value == expectedSubmits)
     }
+    if expectedSubmits == 1 {
+      await #expect(throws: failure) { try await transcribeScratchFile(through: transport) }
+    } else {
+      #expect(try await transcribeScratchFile(through: transport).text == "Done.")
+    }
+    #expect(submits.value == expectedSubmits)
   }
 }

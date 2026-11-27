@@ -43,7 +43,8 @@ import BlurtiOSCore
     /// `-BlurtProbeField light|dark`: the face the field asks for, so the Blurt
     /// keyboard comes up that way for a capture of the real extension
     /// (`scripts/ios-keyboard-shot.sh`, `scripts/ios-keyboard-flows.sh`).
-    static func parse(_ arguments: [String]) -> Self? {
+    /// `store` is the App Group the keyboard reads.
+    static func parse(_ arguments: [String], store: SharedStore) -> Self? {
       guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else {
         return nil
       }
@@ -53,7 +54,7 @@ import BlurtiOSCore
       }
       // `-BlurtProbeResetTerms`: an empty key-term list, so a flow that adds a
       // word finds it new on every run (the App Group outlives the test).
-      if arguments.contains("-BlurtProbeResetTerms") { SharedStore.keyTerms = [] }
+      if arguments.contains("-BlurtProbeResetTerms") { store.keyTerms = [] }
       var initialText = ""
       if let textFlag = arguments.firstIndex(of: "-BlurtProbeText"), arguments.count > textFlag + 1 {
         initialText = arguments[textFlag + 1]
