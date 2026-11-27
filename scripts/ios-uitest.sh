@@ -33,7 +33,7 @@ echo "auditing on $NAME"
 # Booting under the build, as ios-test.sh does; waited for before the run.
 ios_boot_async "$UDID"
 
-(cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+ios_generate_project
 ios_resolve_packages "$IOS_DERIVED"
 RESULTS="$IOS_DERIVED/BlurtiOSUITests-$(date +%Y%m%d-%H%M%S).xcresult"
 pretty_xcodebuild

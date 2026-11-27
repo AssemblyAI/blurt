@@ -30,7 +30,7 @@ struct SoundsSettingsTab: View {
             title: key.spokenName,
             systemImage: KeysSettingsTab.symbol(for: key),
             accessibilityID: UITestIdentifiers.keySoundPicker(key.keyCode),
-            subtitle: current.action(for: key).displayName,
+            subtitle: current.action(for: key).title,
             pickerLabel: "Sound for \(key.fullName)",
             selection: selection(for: key, id: ids[key], action: current.action(for: key))
           ) {

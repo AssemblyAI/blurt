@@ -259,7 +259,7 @@ uplink, a 10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunke
 the two are within noise. The only buffered request is [the over-cap fallback](#the-over-cap-fallback),
 for a recording this route has refused as too long. The `config` part is written **first**, which the streaming route requires — it
 cannot open its upstream STT call without it, and rejects an audio-first body with a 400 (whose
-exact wording lives once, on `AssemblyAITranscriber.streamedBody`). That is
+exact wording lives once, on `DictationClient.streamedBody`). That is
 also where the rest of the win comes from: the service starts inferring as the audio arrives rather
 than after the last byte, and nothing at all sits between the final frame and the request closing.
 The cost is that the press-time context read has to be settled _before_ the request opens, so

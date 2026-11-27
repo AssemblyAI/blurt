@@ -15,21 +15,17 @@ file="$(hook_file_path)"
 case "$file" in
   *.swift)
     config="${CLAUDE_PROJECT_DIR:-.}/.swift-format"
-    # Prefer xcrun (macOS); fall back to a bare swift-format on PATH so a Linux
-    # build (e.g. in a web sandbox) formats too. Absent both, silently skip —
-    # CI's `swift-format lint --strict` remains the authority.
-    if command -v xcrun >/dev/null 2>&1; then
-      swift_format=(xcrun swift-format)
-    elif command -v swift-format >/dev/null 2>&1; then
-      swift_format=(swift-format)
-    else
-      exit 0
-    fi
+    # The same swift-format check.sh lints with: the Xcode toolchain's, else a
+    # bare one on PATH (a Linux build in a web sandbox). Absent both, silently
+    # skip — CI's `swift-format lint --strict` remains the authority.
+    # shellcheck source=scripts/swift-format-lib.sh
+    source "$(dirname "$0")/../../scripts/swift-format-lib.sh"
+    [ "${#SWIFT_FORMAT[@]}" -gt 0 ] || exit 0
     if [ -f "$file" ]; then
       if [ -f "$config" ]; then
-        "${swift_format[@]}" format -i --configuration "$config" "$file" >/dev/null 2>&1 || true
+        "${SWIFT_FORMAT[@]}" format -i --configuration "$config" "$file" >/dev/null 2>&1 || true
       else
-        "${swift_format[@]}" format -i "$file" >/dev/null 2>&1 || true
+        "${SWIFT_FORMAT[@]}" format -i "$file" >/dev/null 2>&1 || true
       fi
     fi
     ;;

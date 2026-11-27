@@ -38,7 +38,7 @@ struct KeyEntryView: View {
         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
         ToolbarItem(placement: .confirmationAction) {
           Button(isSubmitting ? "Checking…" : "Connect") { Task { await submit() } }
-            .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
+            .disabled(key.trimmedNonEmpty() == nil || isSubmitting)
         }
       }
     }

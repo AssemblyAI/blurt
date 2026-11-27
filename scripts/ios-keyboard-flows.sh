@@ -51,10 +51,8 @@ FAILED_RUNS=()
 ios_require_device ios-keyboard-flows
 ios_wait_booted "$UDID"
 
-(cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
-xcodebuild build -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
-  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" "${IOS_SIM_SIGNING[@]}" -quiet
-xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
+ios_generate_project
+ios_build_install "$UDID" "$DERIVED"
 xcrun simctl privacy "$UDID" grant microphone com.assemblyai.blurt.iphone
 
 for face in $FACES; do

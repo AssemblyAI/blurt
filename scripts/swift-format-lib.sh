@@ -1,5 +1,6 @@
 #!/bin/bash
-# Shared by check.sh and design-sync.sh: which swift-format to run. Sourced, not run.
+# Shared by check.sh, design-sync.sh and the swift-format edit hook: which
+# swift-format to run. Sourced, not run.
 #
 # Sets SWIFT_FORMAT to the command as an array: the active Xcode toolchain's
 # (through xcrun) when it has one, else a bare swift-format on PATH (e.g. a Linux

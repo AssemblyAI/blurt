@@ -25,33 +25,9 @@ struct KeyCap: View {
 }
 
 extension TriggerKeyAction {
-  /// The action's row icon — the main window's key rows and the Keys tab's
-  /// action rows, so an action looks the same in both.
-  var systemImage: String {
-    switch self {
-    case .readAloud:
-      LibraryKind.readAloud.systemImage
-
-    case .ask:
-      LibraryKind.ask.systemImage
-
-    case .rewrite:
-      "pencil.line"
-
-    case .compose:
-      "square.and.pencil"
-
-    case .command:
-      "command"
-
-    case .dictate, .off:
-      "keyboard"
-    }
-  }
-
-  /// The action's name — the Sounds tab's row subtitles and the main window's
-  /// key rows, the same names the Keys tab's pop-ups use.
-  var displayName: String {
+  /// The action's name — the Keys tab's pop-ups, the main window's key rows
+  /// and the Sounds tab's subtitles, so an action reads the same in each.
+  var title: String {
     switch self {
     case .off:
       "Off"
@@ -73,6 +49,30 @@ extension TriggerKeyAction {
 
     case .command:
       KeyActionName.command
+    }
+  }
+
+  /// The action's row icon — the main window's key rows and the Keys tab's
+  /// action rows, so an action looks the same in both.
+  var systemImage: String {
+    switch self {
+    case .readAloud:
+      LibraryKind.readAloud.systemImage
+
+    case .ask:
+      LibraryKind.ask.systemImage
+
+    case .rewrite:
+      "pencil.line"
+
+    case .compose:
+      "square.and.pencil"
+
+    case .command:
+      "command"
+
+    case .dictate, .off:
+      "keyboard"
     }
   }
 }

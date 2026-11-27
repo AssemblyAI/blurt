@@ -103,7 +103,7 @@ extension KeyboardModel {
       dismissedSelection = nil
     }
     selectedTerm = term
-    selectedTermIsKnown = store.keyTerms.contains { $0.caseInsensitiveCompare(term) == .orderedSame }
+    selectedTermIsKnown = KeyTermList.contains(term, in: store.keyTerms)
   }
 
   /// The chip: the highlighted word goes into Blurt's key terms as it stands
@@ -197,7 +197,7 @@ extension KeyboardModel {
     // was: the host may report a selection a moment after the user moved on,
     // and inserting then would put the word in twice.
     if let original, original != draft, let selected = proxy?.selectedText,
-      selected.trimmingCharacters(in: .whitespacesAndNewlines) == original,
+      selected.trimmedNonEmpty() == original,
       (proxy?.documentContextBeforeInput ?? "") == (baseline ?? "")
     {
       // The selection may have carried the spaces around the word; keep them.

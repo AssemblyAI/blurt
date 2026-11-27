@@ -58,9 +58,10 @@ extension TranscriptsModel {
     case .success(let result) where result.text.trimmedNonEmpty() == nil:
       // A recording's entry stays, untranscribed: quiet audio, or a language
       // the service didn't detect, is no reason to delete the user's audio.
-      // Deleting it is theirs to do, from the Library.
+      // Deleting it is theirs to do, from the Library. No Try Again: the same
+      // audio would be uploaded, and billed, only to find no speech again.
       let what = entry == nil ? "file" : "recording"
-      state = .failed(fileName: fileName, message: "No speech was found in that \(what).", retry: retry)
+      state = .failed(fileName: fileName, message: "No speech was found in that \(what).")
 
     case .success(let result):
       guard let entry else {

@@ -188,13 +188,22 @@ struct VoiceCommandParseTests {
     #expect(try steps([find, typed, esc, find, typed].joined(separator: ", ")).count == 5)
   }
 
-  @Test("Tab or Return between form fields, three times or more, is a plan, not a loop")
+  @Test("Tab between form fields, three times or more, is a plan, not a loop; Return too, if the plan tabs")
   func fieldNavigationAmongEntries() throws {
     let tab = #"{"action": "shortcut", "keys": "tab"}"#
     let entries = ["John", "Smith", "john@x.com"].map { #"{"action": "type", "text": ""# + $0 + #""}"# }
     #expect(try steps(entries.flatMap { [$0, tab] }.joined(separator: ", ")).count == 6)
     let enter = #"{"action": "shortcut", "keys": "return"}"#
-    #expect(try steps(entries.flatMap { [$0, enter] }.joined(separator: ", ")).count == 6)
+    #expect(try steps(([entries[0], tab] + entries.flatMap { [$0, enter] }).joined(separator: ", ")).count == 8)
+  }
+
+  @Test("Return after each of three different messages, with no Tab, is a loop of sends")
+  func returnAloneIsNotFieldNavigation() {
+    let enter = #"{"action": "shortcut", "keys": "return"}"#
+    let messages = ["hi", "hello", "hey"].map { #"{"action": "type", "text": ""# + $0 + #""}"# }
+    #expect(throws: VoiceCommandError.repeatedStep("shortcut")) {
+      try steps(messages.flatMap { [$0, enter] }.joined(separator: ", "))
+    }
   }
 
   @Test("a cell, listed as clickable, can be selected as well as pressed")

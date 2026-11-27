@@ -138,7 +138,9 @@ measure() {
 }
 
 # Applies the limits to measure's output; returns 1 if anything is over.
+# $1 lists, one per line, the files carrying a type_body_length disable.
 judge() {
+  local disabled=$'\n'"${1:-}"$'\n'
   local over=0
   local file kind name count line
   while IFS=$'\t' read -r file kind name count line; do
@@ -152,7 +154,7 @@ judge() {
       fi
     else
       # A type carrying its own disable is SwiftLint's business, not ours.
-      if grep -qE "swiftlint:disable.*type_body_length" "$file"; then continue; fi
+      case "$disabled" in *$'\n'"$file"$'\n'*) continue ;; esac
       if [ "$count" -gt "$TYPE_LIMIT" ]; then
         echo "error: $rel:$line type $name has ~$count body lines, over SwiftLint's type_body_length limit of $TYPE_LIMIT" >&2
         over=1
@@ -185,7 +187,8 @@ check_files() {
   [ "${#present[@]}" -gt 0 ] || return 0
   report="$(measure "${present[@]}")" || return 1
   [ -n "$report" ] || return 0
-  judge <<<"$report"
+  # One grep over every file, not one per type measured: there are a thousand.
+  judge "$(grep -lE "swiftlint:disable.*type_body_length" "${present[@]}" || true)" <<<"$report"
 }
 
 self_test() {
@@ -259,6 +262,27 @@ SWIFT
   else
     echo "  FAIL a disabled file still failed" >&2
     failed=1
+  fi
+
+  # A type_body_length disable anywhere in the file exempts its types.
+  {
+    echo "// swiftlint:disable type_body_length"
+    echo "struct Big {"
+    awk 'BEGIN { for (i = 0; i < 260; i++) print "  let x = 1" }'
+    echo "}"
+  } >"$dir/BigType.swift"
+  if check_files "$dir/BigType.swift" >/dev/null 2>&1; then
+    echo "  ok   swiftlint:disable type_body_length is honoured"
+  else
+    echo "  FAIL a type in a file disabling type_body_length still failed" >&2
+    failed=1
+  fi
+  sed 1d "$dir/BigType.swift" >"$dir/BigTypeOn.swift"
+  if check_files "$dir/BigTypeOn.swift" >/dev/null 2>&1; then
+    echo "  FAIL a 260-line type passed" >&2
+    failed=1
+  else
+    echo "  ok   a 260-line type fails"
   fi
 
   # The included list still matches .swiftlint.yml.

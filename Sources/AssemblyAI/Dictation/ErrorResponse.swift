@@ -57,19 +57,23 @@ struct ErrorResponse: Decodable, Sendable {
 }
 
 extension ErrorResponse {
+  /// `error`, then `detail`, from a body in one of the two documented shapes;
+  /// nil for anything else. What the `/v2` async client reads, since its text
+  /// is shown to the user as is.
+  static func documentedMessage(in data: Data) -> String? {
+    (try? JSONDecoder().decode(ErrorResponse.self, from: data))?.message
+  }
+
   /// Best human-readable explanation for a non-2xx response: `error`, then
   /// `detail` (the two documented shapes, above), then the raw body text,
-  /// trimmed and capped. The dictation and `/v2` async clients both read
-  /// their failures through it.
+  /// trimmed and capped. The dictation client reads its failures through it.
   ///
   /// The raw-body arm is deliberately kept. It is not compatibility with an old
   /// API shape — it is what turns a response the API never promised (a proxy's HTML
   /// 502, a captive-portal page) into something diagnosable instead of a bare
   /// status code. Returns nil only for an empty body.
   static func message(in data: Data) -> String? {
-    if let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: data),
-      let message = parsed.message
-    {
+    if let message = documentedMessage(in: data) {
       return message
     }
     guard let raw = String(bytes: data, encoding: .utf8)?.trimmedNonEmpty() else {

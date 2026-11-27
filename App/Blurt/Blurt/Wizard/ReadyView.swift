@@ -294,12 +294,14 @@ struct ReadyView: View {
     let choice = bindings.choice(for: key, profiles: profiles)
     let title: String =
       switch choice {
-      case .dictate(let style) where style != TriggerKeyChoice.mainWindowStyle:
+      case .dictate(TriggerKeyChoice.mainWindowStyle), .off:
+        "Dictate"
+
+      case .dictate(let style):
         "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)"
 
-      // `extraKeys` leaves out keys that are off, so `.off` never gets here.
-      default:
-        choice.action.displayName
+      case .readAloud, .ask, .rewrite, .compose, .command:
+        choice.action.title
       }
     let symbol = choice.action.systemImage
     let hint = bindings.activation.hint(for: choice.action)

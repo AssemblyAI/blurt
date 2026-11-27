@@ -54,13 +54,18 @@ extension VoiceCommandStep {
     .openApp, .quitApp, .hideApp, .openURL, .window, .focus, .select, .setValue,
   ]
 
-  /// Tab, ⇧Tab and Return: moving on to the next field, which a form-filling
-  /// plan does between every entry ("type John, tab, type Smith, tab, …"). Left
-  /// out of the three-separate-runs rule; a run of them is still held to its
-  /// own limit, and a repeated group still to `repeatedBlock`.
-  static let fieldNavigation: [VoiceCommandStep] = ["tab", "shift+tab", "return"].compactMap { keys in
+  /// Tab and ⇧Tab: moving on to the next field, which a form-filling plan does
+  /// between every entry ("type John, tab, type Smith, tab, …"). Left out of
+  /// the three-separate-runs rule; a run of them is still held to its own
+  /// limit, and a repeated group still to `repeatedBlock`.
+  static let fieldNavigation: [VoiceCommandStep] = ["tab", "shift+tab"].compactMap { keys in
     KeyChord(keys).map(Self.shortcut)
   }
+
+  /// Return: left out of the three-separate-runs rule only in a plan that also
+  /// tabs, as a form's way on to the next field. On its own it is how a chat
+  /// or search field submits, so three of them is three sends.
+  static let returnKey = KeyChord("return").map(Self.shortcut)
 
   /// The actions after which the window the snapshot read is surely still
   /// the one listed — the condition for rewriting a later `press_button` to
@@ -169,9 +174,12 @@ extension VoiceCommandStep {
     // Or one step back again and again among others: Obsidian's plan cycled
     // through cmd+f, return, escape, cmd+o (2026-11-04). Three separate runs
     // of the same step is a loop, whatever is between them — field
-    // navigation aside (`fieldNavigation`).
+    // navigation aside (`fieldNavigation`, and `returnKey` in a plan that tabs).
+    let tabs = steps.contains(where: Self.fieldNavigation.contains)
     let runStarts = steps.indices.filter { $0 == 0 || steps[$0 - 1] != steps[$0] }
-    let starts = runStarts.map { steps[$0] }.filter { !Self.fieldNavigation.contains($0) }
+    let starts = runStarts.map { steps[$0] }.filter { step in
+      !Self.fieldNavigation.contains(step) && !(tabs && step == Self.returnKey)
+    }
     if let looping = starts.first(where: { step in starts.count { $0 == step } > 2 }) {
       throw VoiceCommandError.repeatedStep(looping.action.rawValue)
     }
