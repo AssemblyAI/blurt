@@ -216,6 +216,15 @@ struct STTPromptTests {
     #expect(!prompt.contains(DictationPrompt.separator))
   }
 
+  @Test("an older entry that exactly fills what's left, its separator counted, is kept")
+  func keepsAnOlderTurnThatExactlyFits() {
+    // "newest" is 6 scalars; the older turn and the one separator take the rest.
+    let old = String(repeating: "a", count: DictationPrompt.characterCap - 7)
+    let prompt = DictationPrompt.fitted([old, "newest"])
+    #expect(prompt == old + DictationPrompt.separator + "newest")
+    #expect(prompt.unicodeScalars.count == DictationPrompt.characterCap)
+  }
+
   @Test("an older entry that doesn't fit is dropped whole, never half-sent")
   func doesNotClipOlderTurns() {
     // Half a sentence read as continuous text is worse than a shorter prompt: the

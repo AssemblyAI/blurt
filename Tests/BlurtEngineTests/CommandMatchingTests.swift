@@ -20,6 +20,12 @@ struct CommandMatchingTests {
     #expect(NameMatch.best(for: "notes", among: ["Notes…", "Notes"]) == "Notes…")
   }
 
+  @Test("of two names the query starts, equally long, the first listed wins")
+  func prefixTieGoesToTheFirst() {
+    #expect(NameMatch.best(for: "mail", among: ["Mail Drafts", "Mail Outbox"]) == "Mail Drafts")
+    #expect(NameMatch.best(for: "mail", among: ["Mail Outbox", "Mail Drafts"]) == "Mail Outbox")
+  }
+
   @Test("of names holding the word, the shortest wins")
   func wholeWordTakesTheShortest() {
     #expect(NameMatch.best(for: "chrome", among: ["Google Chrome Canary", "Google Chrome"]) == "Google Chrome")

@@ -18,7 +18,7 @@
     func claim(_ pid: pid_t) -> Int {
       state.withLock { state in
         state.pid = pid
-        state.generation += 1
+        state.generation += 1  // mutate-ok: generations are only compared for equality; counting down is as unique
         return state.generation
       }
     }

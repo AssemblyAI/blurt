@@ -71,7 +71,7 @@ struct VoiceCommandStepTests {
   }
 
   @Test("an unknown shortcut, media key, or too many steps is refused")
-  func refusesTheRest() {
+  func refusesTheRest() throws {
     #expect(throws: VoiceCommandError.unknownShortcut("cmd+hyper")) {
       try steps(#"{"steps": [{"action": "shortcut", "keys": "cmd+hyper"}]}"#)
     }
@@ -82,11 +82,15 @@ struct VoiceCommandStepTests {
       #"{"steps": [{"action": "media", "control": "mute"}, "#
       + #"{"action": "media", "control": "mute"}, {"action": "media", "control": "mute"}]}"#
     #expect(throws: VoiceCommandError.tooManySteps) { try steps(three, maxSteps: 2) }
+    // Exactly the cap is a plan, not one too many.
+    #expect(try steps(three, maxSteps: 3).count == 3)
   }
 
   @Test("typed text keeps its spaces, and a long one is refused rather than cut")
   func typedText() throws {
     #expect(try steps(#"{"steps": [{"action": "type", "text": " hi\n"}]}"#) == [.type(" hi\n")])
+    let longest = String(repeating: "a", count: VoiceCommandStep.maxTypedCharacters)
+    #expect(try steps(#"{"steps": [{"action": "type", "text": "\#(longest)"}]}"#) == [.type(longest)])
     let long = String(repeating: "a", count: VoiceCommandStep.maxTypedCharacters + 1)
     #expect(throws: VoiceCommandError.malformedReply) {
       try steps(#"{"steps": [{"action": "type", "text": "\#(long)"}]}"#)
@@ -97,12 +101,20 @@ struct VoiceCommandStepTests {
   func plainNumbers() throws {
     let steps = try VoiceCommandStep.steps(
       fromReply: #"{"steps": [{"action": "set_value", "element": 1, "value": 0.5}, "#
-        + #"{"action": "set_value", "element": 1, "value": 40}]}"#,
+        + #"{"action": "set_value", "element": 1, "value": 40}, "#
+        + #"{"action": "set_value", "element": 1, "value": 1e15}]}"#,
       maxSteps: 10,
       listed: [.init(id: 1, kind: "slider", label: "Volume")]
     )
-    #expect(steps == [.setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40")])
+    // From 1e15 up a whole number is no longer spelled through Int(_:), which
+    // overflows not far past it; Double(_:) reads that spelling back the same.
+    #expect(
+      steps == [
+        .setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40"), .setValue(element: 1, value: "1e+15"),
+      ]
+    )
     #expect(Double("0.5") == 0.5)
+    #expect(Double("1e+15") == 1e15)
   }
 
   @Test("a chord is any modifiers and exactly one key, by any of their names")
