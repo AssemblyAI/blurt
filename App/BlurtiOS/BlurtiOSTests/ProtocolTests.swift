@@ -50,6 +50,24 @@ struct ProtocolTests {
     #expect(!store.isListening(now: now))
   }
 
+  @Test("a lease ends at its instant: a press then would not record, and says suspended")
+  func leaseEndsAtItsInstant() {
+    let record = ListeningState(
+      launchID: UUID(), sequence: 1, window: .open, micLive: true, writtenAt: Date(timeIntervalSinceReferenceDate: 0)
+    )
+    // A record that says nothing of an utterance has none.
+    #expect(!record.utterance)
+    #expect(record.notReady(now: record.leaseUntil.addingTimeInterval(-1)) == nil)
+    #expect(record.notReady(now: record.leaseUntil) == .suspended)
+  }
+
+  @Test("only a blurt URL to the start host is a start link")
+  func startLinks() throws {
+    #expect(BlurtShared.isStart(BlurtShared.startURL(reason: .sessionOff)))
+    #expect(!BlurtShared.isStart(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed)))
+    #expect(!BlurtShared.isStart(try #require(URL(string: "https://\(BlurtShared.startHost)"))))
+  }
+
   @Test("the lease outlasts two missed app heartbeats and is never open-ended")
   func leaseRatio() {
     #expect(ListeningState.lease > 2 * SharedStore.appHeartbeatInterval)

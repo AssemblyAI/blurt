@@ -48,6 +48,10 @@ struct TypingTestTests {
     #expect(TypingSpeed.best(in: defaults) == 52.4)
     #expect(TypingSpeed.record(2, in: defaults) == .init(isBest: false, setsSpeed: false))
     #expect(TypingSpeed.current(in: defaults) == 40)
+    // Exactly the minimum is a meaningful result.
+    let minimum = TypingSpeed.minimumMeaningful
+    #expect(TypingSpeed.record(minimum, in: defaults) == .init(isBest: false, setsSpeed: true))
+    #expect(TypingSpeed.current(in: defaults) == minimum)
     TypingSpeed.resetToAverage(in: defaults)
     #expect(TypingSpeed.current(in: defaults) == DictationStats.averageTypingWordsPerMinute)
   }
