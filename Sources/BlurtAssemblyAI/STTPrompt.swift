@@ -100,11 +100,25 @@ enum STTPrompt {
   ///
   /// Matching is on the trimmed tail, since the paste inserts a leading separator
   /// and the field may hold trailing whitespace of its own.
+  ///
+  /// The match must sit where a paste can sit, or it is not the paste: at the
+  /// start of the field, after whitespace (the separator the paste carried, or
+  /// the field's own), or abutting an opener the separator defers to — the same
+  /// three positions `withLeadingSeparator` leaves spaceless. Preceded by a
+  /// letter or digit, the match is the tail of a longer word the field happens
+  /// to end in ("the" ends in a dictated "he"; "concat" in "cat"), the utterance
+  /// was never pasted there, and the entry is genuine history the model should
+  /// still see.
   private static func withoutTurnsAlreadyEnding(_ prior: String, from recent: [String]) -> [String] {
     var kept = recent
     var tail = prior
     while let newest = kept.last, tail.hasSuffix(newest) {
-      tail = String(tail.dropLast(newest.count))
+      let stripped = tail.dropLast(newest.count)
+      guard
+        stripped.isEmpty || stripped.last?.isWhitespace == true
+          || InsertionSeparator.endsInOpener(String(stripped))
+      else { break }
+      tail = String(stripped)
       while let last = tail.last, last.isWhitespace { tail.removeLast() }
       kept.removeLast()
     }

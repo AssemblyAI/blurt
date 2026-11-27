@@ -67,8 +67,10 @@ public enum InsertionSeparator {
     return " " + text
   }
 
+  // periphery:ignore - public for STTPrompt's dedupe (BlurtAssemblyAI), which reads
+  // paste positions the same way, and for the iOS keyboard (App/BlurtiOS).
   /// Whether `priorText` ends in a character the next word should abut.
-  static func endsInOpener(_ priorText: String) -> Bool {
+  public static func endsInOpener(_ priorText: String) -> Bool {
     guard let last = priorText.last else {
       return false
     }
