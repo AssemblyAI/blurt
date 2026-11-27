@@ -90,8 +90,8 @@ struct ListeningWindowTests {
     // The poll runs on the clock: ten steps of 50 ms, each advanced only once
     // it has parked, so no step lands before its sleeper.
     for _ in 0..<Int(ListeningWindow.resumePoll / ListeningWindow.resumePollStep) {
-      await rig.clock.waitUntilSleeping(for: ListeningWindow.resumePollStep)
-      rig.clock.advance(by: ListeningWindow.resumePollStep)
+      let step = ListeningWindow.resumePollStep
+      #expect(await rig.step(step, once: step...step))
     }
     #expect(await until { rig.state?.reason == .interrupted && rig.tasks.ended.count == 1 })
     #expect(rig.state?.window == .interrupted)
@@ -131,7 +131,7 @@ struct ListeningWindowTests {
     }
     #expect(first.leaseUntil < Date().addingTimeInterval(ListeningState.lease + 1))
     #expect(first.leaseUntil > Date())
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > first.sequence })
     guard let beat = rig.state else {
       return
@@ -141,7 +141,7 @@ struct ListeningWindowTests {
     #expect(beat.micLive && beat.window == .open)
     // The source gone under the window: the next beat says so.
     rig.source.setOpen(false)
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > beat.sequence })
     #expect(rig.state?.micLive == false)
     #expect(rig.state?.window == .open)
@@ -170,7 +170,9 @@ struct ListeningWindowTests {
     store.windowMinutes = 1
     rig.window.windowMinutesChanged()
     #expect(await until { (rig.state?.windowUntil ?? .distantFuture) < long })
-    rig.clock.advance(by: .seconds(61))
+    // The new expiry's timer, a minute out less the moments since it was set
+    // (the heartbeat's, at 5 s, is not it).
+    #expect(await rig.step(.seconds(61), once: .seconds(50)...(.seconds(60))), "no one-minute expiry parked")
     #expect(await until { rig.state?.window == .closed })
     #expect(rig.state?.reason == .sessionOff)
     #expect(rig.source.closed == 1)

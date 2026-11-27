@@ -21,9 +21,9 @@ final class WindowRig {
   var state: ListeningState? { window.state }
 
   init(
-    store: SharedStore, closeDelay: Duration = .zero, startDelay: Duration = .zero, closingDelay: Duration = .zero
+    store: SharedStore, closeDelay: Duration = .zero, holdsStart: Bool = false, closingDelay: Duration = .zero
   ) {
-    let fake = FakeListeningSource(closeDelay: closeDelay, startDelay: startDelay, ledger: ledger)
+    let fake = FakeListeningSource(closeDelay: closeDelay, holdsStart: holdsStart, ledger: ledger)
     self.source = fake
     idle = FakeIdle(closingDelay: closingDelay, ledger: ledger)
     let box = app
@@ -37,6 +37,28 @@ final class WindowRig {
       idle: idle
     )
     window.onEndingUtterance = { [weak self] keepWords in self?.endings.append(keepWords) }
+  }
+
+  /// Advances the clock by `duration` once a timer due within `due` of now
+  /// has parked on it; false when none parked in time. A timer is a task the
+  /// window starts, so the record that announces it can land before its
+  /// `sleep` does: advancing then leaves the timer to park after the step,
+  /// due a whole interval past it, and the test waits out its `until` for a
+  /// tick that never comes. Bounded, as `until` is, since these suites carry
+  /// no `.timeLimit` to end an unbounded wait.
+  @discardableResult
+  func step(_ duration: Duration, once due: ClosedRange<Duration>) async -> Bool {
+    let parked = await until { self.clock.sleepingFor.contains { due.contains($0) } }
+    clock.advance(by: duration)
+    return parked
+  }
+
+  /// One heartbeat: the clock stepped by `SharedStore.appHeartbeatInterval`
+  /// once the beat's timer has parked a full interval out.
+  @discardableResult
+  func beat() async -> Bool {
+    let interval = Duration.seconds(SharedStore.appHeartbeatInterval)
+    return await step(interval, once: interval...interval)
   }
 
   /// Opens the window in front and waits for the record to say so.

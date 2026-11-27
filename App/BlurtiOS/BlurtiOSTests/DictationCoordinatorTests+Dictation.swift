@@ -21,8 +21,8 @@ extension DictationCoordinatorTests {
 
   /// A coordinator listening, with a key saved and `keyboard` on screen —
   /// the state a press records from.
-  func listening(startDelay: Duration = .zero) async -> (DictationCoordinator, WindowRig) {
-    let (coordinator, rig) = coordinator(startDelay: startDelay)
+  func listening(holdsStart: Bool = false) async -> (DictationCoordinator, WindowRig) {
+    let (coordinator, rig) = coordinator(holdsStart: holdsStart)
     coordinator.start()
     coordinator.apiKey.save("key")
     #expect(await rig.opened())
@@ -70,7 +70,7 @@ extension DictationCoordinatorTests {
 
   @Test("an accepted press: started(d), owned by the keyboard that pressed, and every phase names it")
   func acceptedPress() async throws {
-    let (coordinator, rig) = await listening(startDelay: .milliseconds(200))
+    let (coordinator, rig) = await listening(holdsStart: true)
     let press = command(.press)
     send(press, to: coordinator)
     let dictation = try #require(coordinator.inFlight?.id)
@@ -83,6 +83,7 @@ extension DictationCoordinatorTests {
     #expect(connecting.answers == press.id && connecting.command == press.id)
     #expect(connecting.dictation == DictationRef(id: dictation, ownerProcessID: Self.keyboard))
     #expect(connecting.recordingSince == nil && connecting.launchID == rig.window.launchID)
+    rig.source.releaseStart()
     #expect(await until { self.published?.state == .recording })
     let recording = try #require(published)
     #expect(recording.answers == press.id && recording.dictation?.id == dictation)

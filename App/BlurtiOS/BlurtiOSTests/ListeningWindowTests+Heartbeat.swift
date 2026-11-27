@@ -21,8 +21,7 @@ extension ListeningWindowTests {
     #expect(launched.launchID == rig.window.launchID)
     #expect(store.listeningState == launched)
     // The heartbeat takes its first turn before the clock moves.
-    await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { rig.state?.sequence == 1 })
     guard let beat = rig.state else {
       return
@@ -42,7 +41,7 @@ extension ListeningWindowTests {
     rig.window.open()
     #expect(await until { rig.state?.reason == .needsForeground })
     let refused = rig.state?.sequence ?? 0
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > refused })
     #expect(rig.state?.window == .closed && rig.state?.reason == .needsForeground)
     let renewed = rig.state?.sequence ?? 0
@@ -51,11 +50,11 @@ extension ListeningWindowTests {
     #expect((rig.state?.sequence ?? 0) > renewed, "the window's records come after the beats")
     #expect(rig.state?.micLive == true)
     // Through the window's life the machine beats; after it, the record it left.
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { rig.state?.micLive == true && (rig.state?.sequence ?? 0) > renewed + 2 })
     #expect(await rig.closed())
     let closed = rig.state?.sequence ?? 0
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > closed })
     #expect(rig.state?.window == .closed && rig.state?.reason == .sessionOff && rig.state?.micLive == false)
     #expect(rig.state?.notReady(now: Date()) == .sessionOff)
@@ -67,11 +66,10 @@ extension ListeningWindowTests {
     rig.window.start()
     rig.window.start()
     #expect(rig.state?.sequence == 0)
-    await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { rig.state?.sequence == 1 })
     // The one heartbeat parks again; a second would have beaten too.
-    await rig.clock.waitUntilSleeping(for: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await until { rig.clock.sleepingFor.contains(.seconds(SharedStore.appHeartbeatInterval)) })
     #expect(rig.state?.sequence == 1, "one heartbeat, one beat")
     #expect(rig.clock.sleepingFor == [.seconds(SharedStore.appHeartbeatInterval)], "one sleeper")
   }

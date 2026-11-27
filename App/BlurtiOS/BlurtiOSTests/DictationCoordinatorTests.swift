@@ -27,11 +27,11 @@ struct DictationCoordinatorTests {
   let frozenNow = Date()
 
   /// A coordinator over a rig's window, transcribing offline and ticking on
-  /// the rig's clock. `startDelay` holds a press's start, so `.connecting`
-  /// can be seen; `closeDelay` holds the source's close, so a press can land
-  /// while the window is closing.
-  func coordinator(startDelay: Duration = .zero, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
-    let rig = WindowRig(store: store, closeDelay: closeDelay, startDelay: startDelay)
+  /// the rig's clock. `holdsStart` holds a press's start until the test calls
+  /// `rig.source.releaseStart()`, so `.connecting` can be seen; `closeDelay`
+  /// holds the source's close, so a press can land while the window is closing.
+  func coordinator(holdsStart: Bool = false, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
+    let rig = WindowRig(store: store, closeDelay: closeDelay, holdsStart: holdsStart)
     let frozen = frozenNow
     let heldNow: @Sendable () -> Date = { frozen }
     let coordinator = DictationCoordinator(
