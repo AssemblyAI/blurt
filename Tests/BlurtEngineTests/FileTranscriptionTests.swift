@@ -65,6 +65,30 @@ struct FileTranscriptionTests {
     #expect(Set(body.keys) == ["audio_url", "speaker_labels"])
   }
 
+  @Test("FileTranscriber selects assemblyai-stt-3-7 with universal-2 fallback while the SDK stays defaultless")
+  func fileTranscriberSpeechModels() async throws {
+    let url = try scratchAudioFile()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let bodies = Mutex<[Data]>([])
+    let transport = FakeHTTPTransport { request in
+      if request.url?.path == "/v2/upload" { return (200, json(["upload_url": "https://cdn.example/abc"])) }
+      bodies.withLock { $0.append(request.httpBody ?? Data()) }
+      return (200, json(["id": "t1", "status": "completed", "text": "Hi."]))
+    }
+    let client = FileTranscriber.client(transport: transport, pollInterval: .zero)
+    _ = try await FileTranscriber(client: client) { "key" }.transcribe(fileAt: url)
+    let explicit = AsyncTranscriptionClient(
+      transport: transport,
+      pollInterval: .zero,
+      speechModels: ["universal-2"]
+    )
+    _ = try await explicit.transcribe(fileAt: url, apiKey: "key")
+    let sent = try bodies.withLock { $0 }.map {
+      try #require(try JSONSerialization.jsonObject(with: $0) as? [String: Any])["speech_models"] as? [String]
+    }
+    #expect(sent == [["assemblyai-stt-3-7", "universal-2"], ["universal-2"]])
+  }
+
   @Test("a failed status check is retried; the transcription carries on")
   func pollRetry() async throws {
     let url = try scratchAudioFile()
