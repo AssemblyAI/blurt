@@ -9,12 +9,13 @@ extension BlurtUITestCase {
   /// `identifier` picks the row button by its state: "Connect…" before a key
   /// exists, "Change…" once one is stored.
   ///
-  /// Waits for the button to be hittable, not just to exist: as the first test
-  /// of a run, `testCancelDiscardsKeyEditAndKeepsRow` found Connect… present
-  /// but covered, Settings having opened behind another window.
-  /// `openSettingsWindow` now waits for Settings to be in front, so the row is
-  /// never raised a second time here; a row still covered fails naming every
-  /// window front to back, so the miss says what was on top.
+  /// Waits for the button to be hittable, not just to exist. As the first test
+  /// of a run, `testCancelDiscardsKeyEditAndKeepsRow` found Connect… covered by
+  /// macOS's "Keystroke Receiving" prompt, which the app's real key tap raised
+  /// at launch (PR #451's screenshot); the app makes no real tap under UI
+  /// testing now (`DictationKeyTap.ensureRunning`), so nothing raises the row a
+  /// second time here. A row still covered fails naming the app's state and
+  /// every window front first, with a screenshot of the whole screen.
   func openKeyEditor(
     _ settings: XCUIElement,
     via identifier: String = UITestIdentifiers.apiKeyConnect
@@ -23,9 +24,9 @@ extension BlurtUITestCase {
     XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
     let hittable = button.wait(for: \.isHittable, toEqual: true, timeout: 10)
     if !hittable {
-      // Settings in front of the app's own windows, the button inside it, and
-      // still covered (run 46025331730): what covers it is outside the app, so
-      // the whole screen is kept, and whether the app is the active one.
+      // What covers it is outside the app's own windows when Settings is in
+      // front and the button inside it (a system prompt, last time), so the
+      // whole screen is kept, and whether the app is the active one.
       let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
       screen.name = "screen with \(identifier) covered"
       screen.lifetime = .keepAlways
