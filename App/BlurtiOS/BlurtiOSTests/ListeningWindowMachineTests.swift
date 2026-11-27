@@ -21,6 +21,11 @@ struct ListeningWindowMachineTests {
   let standDown = Effect.deactivateSession(skipIfInterrupted: false)
   let leaveActive = Effect.deactivateSession(skipIfInterrupted: true)
 
+  @Test("a fresh machine has read no live mic: none until a source comes up")
+  func freshMachineHasNoLiveMic() {
+    #expect(!fresh().lastMicLive)
+  }
+
   @Test("closed + openRequested in front → opening: the session up, the source opening")
   func openFromClosed() throws {
     var m = fresh()

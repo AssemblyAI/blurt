@@ -200,7 +200,9 @@ nonisolated extension ListeningWindowMachine {
       return []
     }
     if turnedOff {
-      return close(gen, cause: .stop, keepWords: false, now: now) + [.log(Self.stopWhileInterruptedLog)]
+      // As a Stop there: an interrupted window has no utterance, so keepWords has nothing to act on.
+      let closed = close(gen, cause: .stop, keepWords: false, now: now)  // mutate-ok: no words while interrupted
+      return closed + [.log(Self.stopWhileInterruptedLog)]
     }
     return [.tryResume(gen, mayStart: true)]
   }

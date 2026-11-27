@@ -111,7 +111,10 @@ package nonisolated struct Bounce: Equatable, Sendable {
   /// axis within `tolerance` of one of its own? Counted once both have
   /// touched, so the tally and the flare never run ahead of the picture.
   private func cornersHit(byDrift drift: CGFloat) -> (Int, Corner?) {
-    guard x.travel > 0, y.travel > 0, speed > 0 else {
+    guard x.travel > 0,  // mutate-ok: with no room on x, x.hits is 0 and the guard below returns the same
+      y.travel > 0,
+      speed > 0
+    else {
       return (0, nil)
     }
     var count = 0
