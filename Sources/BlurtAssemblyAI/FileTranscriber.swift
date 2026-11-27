@@ -11,18 +11,37 @@ public import Foundation
 /// instruction or its history: a recording's transcript is a record of what
 /// was said, kept in `TranscriptStore`, never request context.
 public struct FileTranscriber: Sendable {
+  /// AssemblyAI's latest pre-recorded model (`assemblyai-stt-3-7`) with
+  /// Universal-2 fallback for languages outside 3.7's 32-language set:
+  /// omitting `speech_models` on `/v2/transcript` still routes to
+  /// `universal-3-5-pro`.
+  static let speechModels = ["assemblyai-stt-3-7", "universal-2"]
+
   private let client: AsyncTranscriptionClient
   private let apiKeyProvider: @Sendable () -> String?
 
   @preconcurrency
   public init(apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current }) {
-    self.init(client: AsyncTranscriptionClient(userAgent: UserAgent.current), apiKeyProvider: apiKeyProvider)
+    self.init(client: Self.client(), apiKeyProvider: apiKeyProvider)
   }
 
   @preconcurrency
   public init(client: AsyncTranscriptionClient, apiKeyProvider: @escaping @Sendable () -> String?) {
     self.client = client
     self.apiKeyProvider = apiKeyProvider
+  }
+
+  /// Blurt's async client: selects Blurt's pre-recorded models and User-Agent.
+  static func client(
+    transport: any HTTPTransport = URLSession.shared,
+    pollInterval: Duration = AsyncTranscriptionClient.pollInterval
+  ) -> AsyncTranscriptionClient {
+    AsyncTranscriptionClient(
+      transport: transport,
+      userAgent: UserAgent.current,
+      pollInterval: pollInterval,
+      speechModels: speechModels
+    )
   }
 
   /// The transcript as shown and as the transforms read it: one paragraph per

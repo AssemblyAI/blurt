@@ -1,0 +1,39 @@
+# Rules for .github/workflows/labeler.yml: a PR gets each label whose globs
+# match at least one changed file. Missing labels are created on first use.
+
+engine:
+  - changed-files:
+      - any-glob-to-any-file: ["Sources/**", "Tests/**", "Package.swift"]
+
+mac:
+  - changed-files:
+      - any-glob-to-any-file: ["App/Blurt/**", "App/Shared/**"]
+
+ios:
+  - changed-files:
+      - any-glob-to-any-file: ["App/BlurtiOS/**"]
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "scripts/**"
+          - "tools/**"
+          - "Brewfile"
+          - ".claude/**"
+          - ".githooks/**"
+
+docs:
+  - changed-files:
+      # Root guides, per-directory READMEs and DESIGN docs; not release notes
+      # (`release`) or the agent skills under .claude (`ci`).
+      - any-glob-to-any-file:
+          ["*.md", "**/README.md", "**/DESIGN.md", "Design/**"]
+
+release:
+  - changed-files:
+      - any-glob-to-any-file: ["release-notes/**", "RELEASE.md"]
+
+evals:
+  - changed-files:
+      - any-glob-to-any-file: ["evals/**"]

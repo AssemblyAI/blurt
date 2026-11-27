@@ -5,9 +5,11 @@ import Synchronization
 @testable import BlurtiOS
 
 /// A microphone that opens, parks, holds and closes on request, and reports
-/// through `eventSink` whatever the test says happened to it. A press's
-/// `start()` holds for `startDelay`, so the `.connecting` phase can be seen;
-/// its `stop()` reports enough audio to transcribe.
+/// through `eventSink` whatever the test says happened to it. With
+/// `holdsStart`, a press's `start()` waits for `releaseStart()`, so the
+/// `.connecting` phase lasts until the test has seen it; with `holdsClose`,
+/// `close()` waits for `releaseClose()`, so a press or a reopen can land while
+/// the source is closing. Its `stop()` reports enough audio to transcribe.
 nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendable {
   private struct Tally {
     var opened = 0
@@ -18,13 +20,15 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
 
   private let tally = Mutex(Tally())
   private let openFlag = Atomic<Bool>(false)
-  /// How long `close()` takes, so a reopen can land while the source is closing.
-  private let closeDelay: Duration
-  /// How long a press's `start()` takes to deliver its first frame, on `clock`.
-  private let startDelay: Duration
-  /// The virtual clock `startDelay` runs on: the start holds until the test
-  /// advances it, so a test sees `.connecting` however slowly it polls.
-  private let clock: TestClock
+  /// Whether `close()` waits for `releaseClose()` (`Hold`).
+  private let holdsClose: Bool
+  private let closeHold = Hold()
+  /// Whether a press's `start()` waits for `releaseStart()` before its first
+  /// frame. A hold rather than a delay: a 200 ms sleep here let `.connecting`
+  /// pass before a busy main actor polled for it, and the test then waited out
+  /// its whole 30 s for a phase already gone.
+  private let holdsStart: Bool
+  private let startHold = Hold()
   private let ledger: Ledger
   let events: AsyncStream<SourceEvent>
   let eventSink: AsyncStream<SourceEvent>.Continuation
@@ -34,22 +38,25 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   var closed: Int { tally.withLock { $0.closed } }
   var held: Int { tally.withLock { $0.held } }
   var started: Int { tally.withLock { $0.started } }
+  /// Whether a held `close()` is parked: the source is closing.
+  var isClosing: Bool { closeHold.isHolding }
 
   /// No meter: the fake captures nothing to measure.
   var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
 
-  init(
-    closeDelay: Duration = .zero,
-    startDelay: Duration = .zero,
-    clock: TestClock = TestClock(),
-    ledger: Ledger = Ledger()
-  ) {
-    self.closeDelay = closeDelay
-    self.startDelay = startDelay
-    self.clock = clock
+  init(holdsClose: Bool = false, holdsStart: Bool = false, ledger: Ledger = Ledger()) {
+    self.holdsClose = holdsClose
+    self.holdsStart = holdsStart
     self.ledger = ledger
     (events, eventSink) = AsyncStream<SourceEvent>.makeStream()
   }
+
+  /// Lets a held `start()` deliver its first frame, now or whenever it gets
+  /// there.
+  func releaseStart() { startHold.release() }
+
+  /// Lets a held `close()` finish, now or whenever it gets there.
+  func releaseClose() { closeHold.release() }
 
   /// Taken away or given back, as the window's polls see it.
   func setOpen(_ value: Bool) { openFlag.store(value, ordering: .releasing) }
@@ -71,8 +78,7 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   }
 
   func close() async {
-    // wall-clock-ok: a delay the test asks for, modelling a slow close; zero by default
-    if closeDelay > .zero { try? await Task.sleep(for: closeDelay) }
+    if holdsClose { await closeHold.wait() }
     tally.withLock { $0.closed += 1 }
     openFlag.store(false, ordering: .releasing)
     ledger.note("source.close")
@@ -81,7 +87,7 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   func start() async throws -> AsyncStream<Data> {
     tally.withLock { $0.started += 1 }
     guard isOpen else { throw BlurtError.audioCaptureFailed(underlying: ListeningSourceFailure.windowClosed) }
-    if startDelay > .zero { try await clock.sleep(for: startDelay) }
+    if holdsStart { await startHold.wait() }
     return AsyncStream { $0.finish() }
   }
 

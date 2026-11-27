@@ -167,10 +167,11 @@ struct KeyboardModelFuzzTests {
     var random = Random(state: 42)
     let rig = KeyboardRig(store: store)
     let (model, commands) = (rig.model, rig.commands)
-    // The wall clock, not the rig's held one: `appDies` ages the record by
-    // `Date()`, so over the run's rounds only a clock that moves with it sees
-    // the lease lapse.
-    model.now = { Date() }
+    // The rig's held time, not the wall clock: on the wall clock a stalled
+    // runner let the 1.2 s press deadline pass between a tap and its answer,
+    // the started ack landed on an expired press, and the second tap went out
+    // as a new press (run 45717226112, 24 s for this test). `appDies` ages the
+    // record against the same held time, so the lease still lapses.
     // Hands-free off: a tap must be the press here, not the stop of one the
     // appearance started.
     store.autoDictate = false
@@ -192,7 +193,7 @@ struct KeyboardModelFuzzTests {
       drive(rig, .deadline, &random)
       if let dictation = model.handshake.dictationID { model.apply(snapshot(.pasted, dictation: dictation)) }
       store.write(snapshot(.idle), forKey: BlurtShared.Key.phase)
-      KeyboardRig.listening(true, in: store)
+      KeyboardRig.listening(true, in: store, now: model.now())
       model.hasFullAccess = true
       model.appeared()
       #expect(model.termDraft == nil, "field open after an appearance (round \(round))")
@@ -237,7 +238,7 @@ struct KeyboardModelFuzzTests {
     _ random: inout Random
   ) {
     let model = rig.model
-    KeyboardRig.record(.open, in: store, micLive: true, age: ListeningState.lease + 1)
+    KeyboardRig.record(.open, in: store, micLive: true, age: ListeningState.lease + 1, now: model.now())
     model.stateChanged()
     if model.handshake.stopID != nil {
       drive(rig, .deadline, &random)

@@ -70,7 +70,7 @@ extension KeyboardLifecycleTests {
     model.cancelTicks()
     #expect(store.keyboardPresence?.onScreen == true)
     let grace = Duration.seconds(KeyboardModel.leaveGrace)
-    await clock.waitUntilSleeping(for: grace)
+    #expect(await parked(on: clock, for: grace))
     // Short of the grace, the leave is still waiting on the clock.
     let short = Duration.milliseconds(100)
     clock.advance(by: grace - short)

@@ -5,12 +5,14 @@ import XCTest
 ///
 /// On CI, and never on a Mac, that audit intermittently calls the rows at the
 /// foot of Settings' last page ("AssemblyAI's privacy policy", "Powered by
-/// AssemblyAI", "How fast can you type?") unsupported, on both of its passes,
-/// while the same rows render visibly larger at AX XXXL in the same test and
-/// the same commit passes an hour apart. So the claim is checked against the
-/// one thing it is about: a held finding fails only if its text is no taller
-/// at the largest size than at the default one, or never comes into full view
-/// there. A font that doesn't scale stays the same height and still fails.
+/// AssemblyAI", "How fast can you type?") unsupported, while the same rows
+/// render visibly larger at AX XXXL in the same test and the same commit
+/// passes an hour apart. So the claim is checked against the one thing it is
+/// about: a held finding fails only if its text is no taller at the largest
+/// size than at the default one, or never comes into full view there. A font
+/// that doesn't scale stays the same height and still fails, and the failure
+/// says which of the two it was, with the heights, since the log line is all
+/// most readers of a CI failure see.
 @MainActor
 struct ScalingCheck {
   private struct Held {
@@ -65,9 +67,19 @@ struct ScalingCheck {
     }
   }
 
-  /// The held findings whose text never grew: the ones that fail.
+  /// The held findings whose text never grew: the ones that fail, each with
+  /// what the check measured.
   func unscaled() -> [String] {
-    held.filter { (largest[Self.key($0.label, $0.type)] ?? 0) <= $0.height * Self.growth }
-      .map(\.finding)
+    held.compactMap { item in
+      let measured = "\(Int(item.height)) pt at the default size"
+      guard let tallest = largest[Self.key(item.label, item.type)] else {
+        return "\(item.finding) [ScalingCheck: \(measured); never in full view at the largest size]"
+      }
+      guard tallest <= item.height * Self.growth else {
+        return nil
+      }
+      return "\(item.finding) [ScalingCheck: \(measured), \(Int(tallest)) pt at the largest, "
+        + "under the \(Self.growth)× it needs]"
+    }
   }
 }

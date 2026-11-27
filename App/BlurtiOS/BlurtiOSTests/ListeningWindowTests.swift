@@ -90,8 +90,8 @@ struct ListeningWindowTests {
     // The poll runs on the clock: ten steps of 50 ms, each advanced only once
     // it has parked, so no step lands before its sleeper.
     for _ in 0..<Int(ListeningWindow.resumePoll / ListeningWindow.resumePollStep) {
-      await rig.clock.waitUntilSleeping(for: ListeningWindow.resumePollStep)
-      rig.clock.advance(by: ListeningWindow.resumePollStep)
+      let step = ListeningWindow.resumePollStep
+      #expect(await rig.step(step, once: step...step))
     }
     #expect(await until { rig.state?.reason == .interrupted && rig.tasks.ended.count == 1 })
     #expect(rig.state?.window == .interrupted)
@@ -129,19 +129,19 @@ struct ListeningWindowTests {
     guard let first = rig.state else {
       return
     }
-    #expect(first.leaseUntil < Date().addingTimeInterval(ListeningState.lease + 1))
-    #expect(first.leaseUntil > Date())
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(first.leaseUntil < rig.now.addingTimeInterval(ListeningState.lease + 1))
+    #expect(first.leaseUntil > rig.now)
+    #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > first.sequence })
     guard let beat = rig.state else {
       return
     }
     #expect(beat.leaseUntil >= first.leaseUntil)
-    #expect(beat.leaseUntil < Date().addingTimeInterval(ListeningState.lease + 1))
+    #expect(beat.leaseUntil < rig.now.addingTimeInterval(ListeningState.lease + 1))
     #expect(beat.micLive && beat.window == .open)
     // The source gone under the window: the next beat says so.
     rig.source.setOpen(false)
-    rig.clock.advance(by: .seconds(SharedStore.appHeartbeatInterval))
+    #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > beat.sequence })
     #expect(rig.state?.micLive == false)
     #expect(rig.state?.window == .open)
@@ -149,10 +149,12 @@ struct ListeningWindowTests {
 
   @Test("a reopen during close: the source closes once and opens once more")
   func reopenDuringClose() async {
-    let rig = WindowRig(store: store, closeDelay: .milliseconds(200))
+    let rig = WindowRig(store: store, holdsClose: true)
     await rig.opened()
     rig.window.close()
+    #expect(await until { rig.source.isClosing }, "the close never reached the source")
     rig.window.open()
+    rig.source.releaseClose()
     // The reopen goes through once the source has closed, so the second
     // open is what says it did.
     #expect(await until { rig.source.opened == 2 && rig.state?.window == .open })
@@ -170,12 +172,9 @@ struct ListeningWindowTests {
     store.windowMinutes = 1
     rig.window.windowMinutesChanged()
     #expect(await until { (rig.state?.windowUntil ?? .distantFuture) < long })
-    // The record can show the shorter end before the expiry is parked on the
-    // clock; advancing ahead of it wakes nothing, and the window never closes.
-    // Just under a minute (`scheduleExpiry` measures from `Date()`), which no
-    // other timer here comes near: the heartbeat's 5 s, the poll's 50 ms.
-    #expect(await until { rig.clock.sleepingFor.contains { $0 > .seconds(30) && $0 <= .seconds(60) } })
-    rig.clock.advance(by: .seconds(61))
+    // The new expiry's timer, a minute out on the rig's time (to a Date's
+    // rounding); the heartbeat's, at 5 s, is not it.
+    #expect(await rig.step(.seconds(61), once: .seconds(59)...(.seconds(60))), "no one-minute expiry parked")
     #expect(await until { rig.state?.window == .closed })
     #expect(rig.state?.reason == .sessionOff)
     #expect(rig.source.closed == 1)

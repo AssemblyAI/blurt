@@ -50,25 +50,26 @@ import XCTest
 ///   name. Named here rather than ignored by kind, so any other chip or any
 ///   other text that clips still fails.
 /// - "text clipped" on the consent sheet's four "Sent to AssemblyAI" rows at
-///   AX XXXL, by their text (`consentDisclosures`): the audit raised it on
-///   "The text just before your cursor" intermittently, on both passes, in
-///   merge-queue runs of `main` (#436, #439), while its own screenshot shows
+///   AX XXXL, by their text (`consentDisclosures`): the audit raises it on
+///   "The text just before your cursor" wherever the row sits — it only ever
+///   passed when a fling left the row under the bar, where it is excused
+///   anyway (#447's fixed drag put it mid-screen) — while its own screenshot shows
 ///   the row whole — three lines, the icon set inline with the first, as a
 ///   list lays out a label at accessibility sizes. The rows already wrap to
 ///   full height (`WrappingLabelStyle`). Named, so any other text on the
 ///   sheet that clips still fails.
 ///
-/// And a finding has to repeat: a screen that raised any is audited again,
-/// untouched, and only what both passes raise fails.
-///
 /// A default-size "Dynamic Type unsupported" is checked rather than taken on
 /// the audit's word (`ScalingCheck`): it fails only if the same text is no
 /// taller at AX XXXL. On CI the audit intermittently said it of Settings'
-/// last rows, on both passes, while they scaled. A font that doesn't scale
-/// stays the same height, so it still fails.
+/// last rows while they scaled. A font that doesn't scale stays the same
+/// height, so it still fails, and the failure says how tall it was at each
+/// size.
 ///
-/// A pass XCTest times out on, which reports nothing at all, is run again
-/// (`auditPass`).
+/// Nothing is run again in the hope of a different answer: not a tap, not an
+/// audit pass XCTest timed out on, not a screen that raised a finding. Pages
+/// are reached by a fixed drag rather than a fling (`drag`), so every run
+/// audits the same screens and a finding either holds or doesn't.
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
   private static let auditedTypes = XCUIAccessibilityAuditType.all.subtracting(.contrast)
@@ -84,6 +85,13 @@ final class AccessibilityAuditTests: XCTestCase {
   /// The text size the screen is being audited at: launch arguments, and the
   /// name the findings carry.
   private var textSize: (arguments: [String], name: String) = ([], "default text")
+
+  /// The cold first launch, once, before any test (`warmFirstLaunch`). XCTest
+  /// calls this on the main thread.
+  override nonisolated static func setUp() {
+    super.setUp()
+    MainActor.assumeIsolated { warmFirstLaunch() }
+  }
 
   override func setUp() async throws {
     try await super.setUp()
@@ -139,13 +147,13 @@ final class AccessibilityAuditTests: XCTestCase {
 
   func testConsent() throws {
     try atEachTextSize {
-      launchHome()
-      let session = app.switches.firstMatch
-      scrollTo(session)
-      XCTAssertTrue(
-        Self.tap(session, until: app.buttons["Not now"], timeout: 10),
-        "Turning a session on should ask consent (\(Self.missedTapReport(session, in: app)))"
-      )
+      // Raised at launch over home (`-BlurtAskConsent`), as turning a session
+      // on raises it: the suite audits the sheet, not the switch, and a tap on
+      // the switch just after a fresh install's launch could land before the
+      // app took touches, leaving it off with no sheet (PR #451's queue run).
+      launch("-BlurtUITestKey", "-SetupFinished", "YES", "-BlurtAskConsent")
+      let notNow = app.buttons["Not now"]
+      XCTAssertTrue(notNow.waitForExistence(timeout: 10), "-BlurtAskConsent should raise the consent sheet")
       try auditScrolling("consent sheet")
     }
   }
@@ -282,16 +290,14 @@ final class AccessibilityAuditTests: XCTestCase {
   private func scrollTo(_ element: XCUIElement) {
     let height = app.frame.height
     let band = (height * 0.25)...(height * 0.7)
-    let middle = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     for _ in 0..<40 {
       guard element.exists else {
-        middle.press(forDuration: 0.05, thenDragTo: middle.withOffset(CGVector(dx: 0, dy: -height / 3)))
+        Self.drag(app, by: -height / 3)
         continue
       }
       let y = element.frame.midY
       if band.contains(y) { break }
-      let step = y > band.upperBound ? -height / 4 : height / 4
-      middle.press(forDuration: 0.05, thenDragTo: middle.withOffset(CGVector(dx: 0, dy: step)))
+      Self.drag(app, by: y > band.upperBound ? -height / 4 : height / 4)
     }
     // At rest before anyone taps it: a tap while the list still coasts from
     // the last drag only stops the scroll and never reaches the control, which
@@ -308,25 +314,36 @@ final class AccessibilityAuditTests: XCTestCase {
 
   // MARK: - Auditing
 
-  /// Audits the screen, then again after each swipe up until the page shows
-  /// nothing it hasn't shown before, so what starts below the fold is audited
-  /// on screen too. (A sheet at its end can rock between two resting places,
-  /// so "unchanged since the last swipe" isn't enough.)
+  /// Audits the screen, then again after each page's drag until the page
+  /// shows nothing it hasn't shown before, so what starts below the fold is
+  /// audited on screen too. (A sheet at its end can rock between two resting
+  /// places, so "unchanged since the last drag" isn't enough.) Each drag runs
+  /// from low on the screen, clear of the tab bar, most of the way up: a
+  /// fixed distance, so every run audits the same pages (`drag`).
+  ///
+  /// A screen still scrolling after `maxPages` fails rather than stopping
+  /// quietly: the cap once cut Settings short at the largest text size, so
+  /// its last rows were never on screen to be measured there, and a default-
+  /// size finding about them that `ScalingCheck` would have cleared failed.
   private func auditScrolling(_ screen: String) throws {
+    let maxPages = 48
     try audit(screen)
     var seen: Set = [screenTexts()]
-    for page in 2...16 {
-      app.swipeUp()
-      guard seen.insert(screenTexts()).inserted else { break }
+    for page in 2...maxPages {
+      Self.drag(app, by: -app.frame.height * 0.7, from: 0.85)
+      guard seen.insert(screenTexts()).inserted else {
+        return
+      }
       try audit("\(screen), page \(page)")
     }
+    XCTFail("[\(screen) (\(textSize.name))] still scrolling after \(maxPages) pages; its end was never audited")
   }
 
   /// Every text on screen and where it is, from one snapshot: unchanged by a
   /// swipe once the page is at its end. (Not just the first text: that is a
   /// navigation bar's title on a pushed screen, which never moves.)
   private func screenTexts() -> String {
-    // Past the deceleration and the bounce a swipe sets off: snapshot until two
+    // Past the bounce a drag past the end sets off: snapshot until two
     // in a row agree, rather than after a fixed pause. A slow runner (CI's
     // takes half as long again as a Mac) can still be settling the last page
     // after 0.6 s, and an audit of rows in motion reads their Dynamic Type
@@ -344,6 +361,9 @@ final class AccessibilityAuditTests: XCTestCase {
   }
 
   private func audit(_ screen: String) throws {
+    // Never mid-change: the audit reads the whole hierarchy, and a screen
+    // still laying out (a launch, a keyboard coming up) is when it timed out.
+    _ = screenTexts()
     let name = "\(screen) (\(textSize.name))"
     // What was audited, beside what it raised, in the result bundle.
     let shot = XCTAttachment(screenshot: app.screenshot())
@@ -356,21 +376,9 @@ final class AccessibilityAuditTests: XCTestCase {
       + [app.otherElements["brand.tabBar"]].filter(\.exists)
       .map(\.frame)
     let screenArea = app.windows.firstMatch.frame
-    // One audit of the screen as it stands (`auditPass`), so the second pass
-    // below reads it exactly as the first did.
-    let pass = { [app] () throws -> [(line: String, unscaled: XCUIElement?)] in
-      try Self.auditPass(
-        of: app, for: Self.auditedTypes, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea
-      )
-    }
-    var issues = try pass()
-    // A finding has to hold on a second audit of the same, untouched screen:
-    // a reading the audit took mid-layout does not repeat.
-    if !issues.isEmpty {
-      Thread.sleep(forTimeInterval: 1)  // wall-clock-ok: a UI test: the app under test runs on real time
-      let again = Set(try pass().map(\.line))
-      issues = issues.filter { again.contains($0.line) }
-    }
+    let issues = try Self.auditPass(
+      of: app, for: Self.auditedTypes, atDefaultSize: isDefaultSize, bars: bars, screen: screenArea
+    )
     for issue in issues {
       let finding = "[\(name)] \(issue.line)"
       if let element = issue.unscaled, element.exists {

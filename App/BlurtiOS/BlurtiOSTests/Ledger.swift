@@ -36,3 +36,12 @@ func until(_ timeout: Duration = .seconds(30), _ condition: () -> Bool) async ->
   }
   return condition()
 }
+
+/// Waits, bounded as `until` is, for a sleeper due exactly `duration` from now
+/// to park on `clock`; true when one did. `TestClock.waitUntilSleeping` waits
+/// for the same thing without a bound, which suits the engine's suites, each
+/// under a `.timeLimit`; these carry none, so a timer that never parks would
+/// hang the whole run there instead of failing the one test here.
+func parked(on clock: TestClock, for duration: Duration) async -> Bool {
+  await until { clock.sleepingFor.contains(duration) }
+}
