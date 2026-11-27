@@ -31,6 +31,9 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
     TargetSecurity.concealedClipboardLifetime.components.seconds
   )
 
+  /// The App Group the words are handed over through.
+  package let store: SharedStore
+
   /// The field the words are for: the one that sent the accepted stop, else
   /// the one whose press started the dictation (`DictationCoordinator`). A nil
   /// keyboard means whichever keyboard is up.
@@ -45,24 +48,33 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// the words before they are delivered.
   package let now: @Sendable () -> Date
 
+  /// The pasteboard the words fall back to: the general one, or — named — a
+  /// test's own, since the general one is the simulator's and every test
+  /// running beside it could write to it.
+  package let pasteboardName: String?
+
   /// The keyboard process on screen: the presence record's, or — for a
   /// keyboard build that writes none yet — the older heartbeat keys'.
   private var onScreen: String? {
     let instant = now()
-    if let record = SharedStore.keyboardOnScreen(now: instant) {
+    if let record = store.keyboardOnScreen(now: instant) {
       return record.processID
     }
-    return SharedStore.isKeyboardPresent(now: instant) ? SharedStore.keyboardInstance : nil
+    return store.isKeyboardPresent(now: instant) ? store.keyboardInstance : nil
   }
 
   package init(
+    store: SharedStore,
     presser: @escaping @Sendable () -> ResultAddress = { ResultAddress() },
     clock: any Clock<Duration> & Sendable = ContinuousClock(),
-    now: @escaping @Sendable () -> Date = { Date() }
+    now: @escaping @Sendable () -> Date = { Date() },
+    pasteboardName: String? = nil
   ) {
+    self.store = store
     self.presser = presser
     self.clock = clock
     self.now = now
+    self.pasteboardName = pasteboardName
   }
 
   package func setTarget(_: CapturedFocus?) {
@@ -94,14 +106,14 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
       controllerID: address.controllerID,
       documentID: address.documentID
     )
-    SharedStore.write(result, forKey: BlurtShared.Key.result)
-    SharedStore.post(BlurtShared.Signal.result)
+    store.write(result, forKey: BlurtShared.Key.result)
+    store.post(BlurtShared.Signal.result)
     let waitClock: any Clock<Duration> = clock
     if try await taken(result.id, on: waitClock) {
       Self.log.notice("result \(result.id, privacy: .public) → inserted by \(current, privacy: .public)")
       return
     }
-    SharedStore.remove(forKey: BlurtShared.Key.result)
+    store.remove(forKey: BlurtShared.Key.result)
     Self.log.notice("result \(result.id, privacy: .public) → copied: not taken by \(current, privacy: .public)")
     try await copyOut(text, secure: secure)
   }
@@ -126,18 +138,18 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
         // A dictation cancelled mid-wait takes its words back: left in the
         // App Group, the keyboard would still insert them into the host app.
         // Only this result, though — a newer one isn't this wait's to drop.
-        if SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.id == id {
-          SharedStore.remove(forKey: BlurtShared.Key.result)
+        if store.read(DictationResult.self, forKey: BlurtShared.Key.result)?.id == id {
+          store.remove(forKey: BlurtShared.Key.result)
         }
         throw error
       }
-      guard let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result), pending.id == id
+      guard let pending = store.read(DictationResult.self, forKey: BlurtShared.Key.result), pending.id == id
       else {
         return true
       }
       if !resignalled, posted.duration(to: clock.now) >= .seconds(Self.resignalAfter) {
         resignalled = true
-        SharedStore.post(BlurtShared.Signal.result)
+        store.post(BlurtShared.Signal.result)
       }
     }
     return false
@@ -148,13 +160,14 @@ package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// so the secret doesn't sit there for whatever reads the clipboard next.
   private func copyOut(_ text: String, secure: Bool) async throws -> Never {
     await MainActor.run {
+      let pasteboard = pasteboardName.flatMap { UIPasteboard(name: .init(rawValue: $0), create: true) } ?? .general
       if secure {
-        UIPasteboard.general.setItems(
+        pasteboard.setItems(
           [[UTType.utf8PlainText.identifier: text]],
           options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Self.secureClipboardLifetime)]
         )
       } else {
-        UIPasteboard.general.string = text
+        pasteboard.string = text
       }
     }
     throw BlurtError.noEditableTarget

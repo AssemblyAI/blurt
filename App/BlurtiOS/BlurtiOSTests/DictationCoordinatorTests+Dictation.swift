@@ -17,7 +17,7 @@ extension DictationCoordinatorTests {
   static let keyboard = "kb-1"
 
   /// The phase the keyboard reads.
-  var published: PhaseSnapshot? { SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) }
+  var published: PhaseSnapshot? { store.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) }
 
   /// A coordinator listening, with a key saved and `keyboard` on screen —
   /// the state a press records from.
@@ -33,7 +33,7 @@ extension DictationCoordinatorTests {
   /// `keyboard` on screen, its presence `age` old by the coordinator's frozen
   /// `now`.
   func onScreen(_ keyboard: String, age: TimeInterval = 0) {
-    SharedStore.writeKeyboardPresence(
+    store.writeKeyboardPresence(
       KeyboardPresenceRecord(
         processID: keyboard,
         controllerID: "field",
@@ -57,12 +57,12 @@ extension DictationCoordinatorTests {
   /// delivery waits on the rig's clock, so it can't time out into the
   /// clipboard on a slow run before the test gets to the result.
   func takeResult(stepping clock: TestClock) async -> DictationResult? {
-    let arrived = await until { SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil }
+    let arrived = await until { store.read(DictationResult.self, forKey: BlurtShared.Key.result) != nil }
     guard arrived else {
       return nil
     }
-    let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
-    SharedStore.remove(forKey: BlurtShared.Key.result)
+    let result = store.read(DictationResult.self, forKey: BlurtShared.Key.result)
+    store.remove(forKey: BlurtShared.Key.result)
     await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
     clock.advance(by: KeyboardRelayInjector.deliveryPoll)
     return result
@@ -70,13 +70,11 @@ extension DictationCoordinatorTests {
 
   @Test("an accepted press: started(d), owned by the keyboard that pressed, and every phase names it")
   func acceptedPress() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening(startDelay: .milliseconds(200))
     let press = command(.press)
     send(press, to: coordinator)
     let dictation = try #require(coordinator.inFlight?.id)
-    #expect(SharedStore.commandAck?.outcome == .started(dictation))
+    #expect(store.commandAck?.outcome == .started(dictation))
     #expect(coordinator.inFlight == DictationRef(id: dictation, ownerProcessID: Self.keyboard))
     #expect(coordinator.answers == press.id && coordinator.lastCommandID == press.id)
     #expect(coordinator.watchdog != nil, "watched from the press")
@@ -85,6 +83,9 @@ extension DictationCoordinatorTests {
     #expect(connecting.answers == press.id && connecting.command == press.id)
     #expect(connecting.dictation == DictationRef(id: dictation, ownerProcessID: Self.keyboard))
     #expect(connecting.recordingSince == nil && connecting.launchID == rig.window.launchID)
+    // The start holds on the rig's clock until it is parked and stepped past.
+    #expect(await until { rig.clock.sleepingFor.contains(.milliseconds(200)) })
+    rig.clock.advance(by: .milliseconds(200))
     #expect(await until { self.published?.state == .recording })
     let recording = try #require(published)
     #expect(recording.answers == press.id && recording.dictation?.id == dictation)
@@ -94,24 +95,25 @@ extension DictationCoordinatorTests {
     #expect(await until { coordinator.phase == .cancelled })
   }
 
-  @Test("a release from the owner: stopped(d), the words addressed to that keyboard, and the dictation over")
+  @Test(
+    "a release from the owner: stopped(d), the words addressed to that keyboard, and the dictation over")
   func ownerRelease() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let dictation = try await recording(coordinator)
     let release = command(.release)
     send(release, to: coordinator)
-    #expect(SharedStore.commandAck?.outcome == .stopped(dictation))
+    #expect(store.commandAck?.outcome == .stopped(dictation))
     #expect(coordinator.stopAccepted == dictation && coordinator.lastCommandID == release.id)
-    #expect(DictationCoordinator.claimedPress.withLock { $0.stopAddress?.keyboard } == Self.keyboard)
+    let stopKeyboard = coordinator.handoff.claimedPress.withLock { $0.stopAddress?.keyboard }
+    #expect(stopKeyboard == Self.keyboard)
     let result = await takeResult(stepping: rig.clock)
     #expect(result?.recipient == Self.keyboard && result?.text == Self.transcript)
     #expect(await until { coordinator.phase == .pasted })
     #expect(published?.state == .pasted && published?.dictation?.id == dictation)
     #expect(coordinator.inFlight == nil && coordinator.answers == nil && coordinator.stopAccepted == nil)
     #expect(coordinator.watchdog == nil)
-    #expect(DictationCoordinator.claimedPress.withLock { $0.stopAddress } == nil)
+    let stopAfter = coordinator.handoff.claimedPress.withLock { $0.stopAddress }
+    #expect(stopAfter == nil)
     #expect(rig.idle.ended == 1 && rig.tasks.ended.contains(DictationCoordinator.releaseTask))
   }
 
@@ -119,8 +121,6 @@ extension DictationCoordinatorTests {
   /// remembered — reaches the phone only through the press's flag.
   @Test("a dictation into a password field is inserted but never joins Recent")
   func secureDictationNotRemembered() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     send(command(.press, isSecure: true), to: coordinator)
     #expect(await until { self.published?.state == .recording })
@@ -139,8 +139,6 @@ extension DictationCoordinatorTests {
   /// the same process over another field can tell they aren't its own.
   @Test("the words are addressed to the field the press came from, or the accepted stop's")
   func resultNamesTheField() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let fieldA = UUID()
     send(command(.press, controllerID: "c-a", documentID: fieldA), to: coordinator)
@@ -159,24 +157,21 @@ extension DictationCoordinatorTests {
 
   @Test("a release from a keyboard that neither owns the dictation nor is on screen is notOwner")
   func strangerRelease() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, _) = await listening()
     let dictation = try await recording(coordinator)
     let release = command(.release, keyboard: "kb-2")
     send(release, to: coordinator)
-    #expect(SharedStore.commandAck?.commandID == release.id)
-    #expect(SharedStore.commandAck?.outcome == .notOwner)
+    #expect(store.commandAck?.commandID == release.id)
+    #expect(store.commandAck?.outcome == .notOwner)
     #expect(coordinator.inFlight?.id == dictation && coordinator.stopAccepted == nil)
     #expect(coordinator.phase == .recording && coordinator.lastCommandID != release.id)
     send(command(.cancel), to: coordinator)
     #expect(await until { coordinator.phase == .cancelled })
   }
 
-  @Test("the watchdog releases a dictation whose owner's record went stale, on its tick, once, words kept")
+  @Test(
+    "the watchdog releases a dictation whose owner's record went stale, on its tick, once, words kept")
   func watchdogReleases() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let dictation = try await recording(coordinator)
     // Older than the watchdog, and older than the presence window too, so no
@@ -195,14 +190,13 @@ extension DictationCoordinatorTests {
     #expect(rig.tasks.begun.filter { $0 == DictationCoordinator.releaseTask }.count == 1, "released once")
   }
 
-  @Test("the watchdog stands down for a stop already accepted: the keyboard's own release is not doubled")
+  @Test(
+    "the watchdog stands down for a stop already accepted: the keyboard's own release is not doubled")
   func watchdogAfterAcceptedStop() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let dictation = try await recording(coordinator)
     send(command(.release), to: coordinator)
-    #expect(SharedStore.commandAck?.outcome == .stopped(dictation))
+    #expect(store.commandAck?.outcome == .stopped(dictation))
     // Stale for the watchdog, still fresh enough to take the words.
     onScreen(Self.keyboard, age: BlurtShared.ownerWatchdog + 1)
     coordinator.tickWatchdog()
@@ -221,17 +215,15 @@ extension DictationCoordinatorTests {
 
   @Test("a resend of an accepted press is re-acked started(d), with nothing started twice")
   func resend() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let (coordinator, rig) = await listening()
     let press = command(.press)
     send(press, to: coordinator)
     let dictation = try #require(coordinator.inFlight?.id)
     #expect(await until { coordinator.phase == .recording })
-    SharedStore.commandAck = nil
+    store.commandAck = nil
     send(press, to: coordinator)
-    #expect(SharedStore.commandAck?.commandID == press.id)
-    #expect(SharedStore.commandAck?.outcome == .started(dictation))
+    #expect(store.commandAck?.commandID == press.id)
+    #expect(store.commandAck?.outcome == .started(dictation))
     #expect(coordinator.answered.count == 1 && coordinator.inFlight?.id == dictation)
     #expect(rig.source.started == 1)
     send(command(.cancel), to: coordinator)
@@ -240,17 +232,14 @@ extension DictationCoordinatorTests {
 
   @Test("a release accepted before the session claims the press keeps its recipient")
   func releaseBeforeClaim() {
-    defer {
-      DictationCoordinator.pendingPress.withLock { $0 = DictationCoordinator.Press() }
-      DictationCoordinator.claimedPress.withLock { $0 = DictationCoordinator.Press() }
-    }
-    DictationCoordinator.pendingPress.withLock { pending in
+    let handoff = DictationHandoff(store: store)
+    handoff.pendingPress.withLock { pending in
       pending = DictationCoordinator.Press(address: ResultAddress(keyboard: Self.keyboard))
     }
     // The release lands first (`handleCommand`), then the session claims.
-    DictationCoordinator.claimedPress.withLock { $0.stopAddress = ResultAddress(keyboard: "kb-2") }
-    #expect(DictationCoordinator.claimPress() == nil)
-    let claimed = DictationCoordinator.claimedPress.withLock { $0 }
+    handoff.claimedPress.withLock { $0.stopAddress = ResultAddress(keyboard: "kb-2") }
+    #expect(handoff.claimPress() == nil)
+    let claimed = handoff.claimedPress.withLock { $0 }
     #expect(claimed.address.keyboard == Self.keyboard)
     #expect(claimed.stopAddress?.keyboard == "kb-2")
   }

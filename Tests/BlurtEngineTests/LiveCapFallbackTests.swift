@@ -191,11 +191,12 @@ struct LiveCapFallbackTests {
     capture.yield(Self.after)
     capture.finish()
 
-    do {
-      _ = try await dictation.value
-      Issue.record("expected a throw")
-    } catch AssemblyAIError.recordingTooLarge {
-      // The expected error: the over-cap recording was refused.
+    let error = try await #require(throws: AssemblyAIError.self) {
+      try await dictation.value
+    }
+    guard case .recordingTooLarge = error else {
+      Issue.record("expected AssemblyAIError.recordingTooLarge, got \(error)")
+      return
     }
     #expect(transport.bufferedRequests.isEmpty)
   }
@@ -295,13 +296,14 @@ extension LiveCapFallbackTests {
   func httpFailure(
     of dictation: Task<String, any Error>
   ) async throws -> (status: Int, message: String?) {
-    do {
-      _ = try await dictation.value
-    } catch let AssemblyAIError.http(status, message) {
-      return (status, message)
+    let error = try await #require(throws: AssemblyAIError.self) {
+      try await dictation.value
     }
-    Issue.record("expected AssemblyAIError.http")
-    return (0, nil)
+    guard case let .http(status, message) = error else {
+      Issue.record("expected AssemblyAIError.http, got \(error)")
+      return (0, nil)
+    }
+    return (status, message)
   }
 
   /// Whether nothing reads the capture feed any more — the state a real

@@ -6,6 +6,9 @@ import XCTest
 final class ReadAloudFlowsUITests: BlurtUITestCase {
   private var pill: XCUIElement { app.anyDescendant(identified: UITestIdentifiers.overlayPill) }
 
+  /// Whether the pill is showing a dictation's "pasted" notice.
+  private var showsPastedNotice: Bool { pill.exists && pill.label == "Your dictation was pasted." }
+
   // MARK: - U3: the pill
 
   /// A read wears the pill as "Reading aloud." and takes it down when stopped.
@@ -14,7 +17,10 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
   func testPillShowsAReadAndNeverReplaysAnOldNotice() {
     let harness = readyHarness()
     dictate(in: harness, expecting: UITestIdentifiers.defaultCannedTranscript, "The bound key should dictate")
-    sleep(2)  // let the "Pasted" notice clear
+    // The notice may already be up or gone when `dictate` returns, so no label
+    // wait can pin it.
+    // wall-clock-ok: lets the "pasted" notice show and clear before the read
+    sleep(2)
 
     startRead(in: harness)
     waitForLabel(pill, equals: "Reading aloud.", "The pill should show the read")
@@ -23,10 +29,7 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
     harness.buttons[UITestIdentifiers.hotkeyTapReleaseButton].click()
     waitForLabel(reading(in: harness), equals: "no", "The second tap should stop the read")
     for _ in 0..<10 {
-      XCTAssertFalse(
-        pill.exists && pill.label == "Your dictation was pasted.",
-        "A read's end must not replay the earlier dictation's notice"
-      )
+      XCTAssertFalse(showsPastedNotice, "A read's end must not replay the earlier dictation's notice")
       usleep(100_000)  // wall-clock-ok: a UI test: the app under test runs on real time
     }
   }

@@ -14,12 +14,15 @@ final class SystemAudioSession: AudioSessionControlling {
   static let baseOptions: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
 
   private let session = AVAudioSession.sharedInstance()
+  /// Where "Use AirPods mic" is read from, each time the session is set up.
+  private let store: SharedStore
   let events: AsyncStream<AudioSessionEvent>
   /// Registered once in `init`, removed in `deinit`, which is nonisolated:
   /// the same arrangement `WindowedAudioSource` keeps for its observers.
   nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
 
-  init() {
+  init(store: SharedStore) {
+    self.store = store
     let (stream, sink) = AsyncStream<AudioSessionEvent>.makeStream()
     self.events = stream
     let center = NotificationCenter.default
@@ -59,14 +62,14 @@ final class SystemAudioSession: AudioSessionControlling {
 
   func activate() throws {
     var options = Self.baseOptions
-    if SharedStore.airPodsMic { options.insert(.allowBluetoothHFP) }
+    if store.airPodsMic { options.insert(.allowBluetoothHFP) }
     try session.setCategory(.playAndRecord, mode: .default, options: options)
     // Before activation, or the key clicks and the recording's own haptic
     // fall silent for the whole window.
     try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
     try session.setActive(true)
     applyPreferredInput()
-    Self.log.notice("audio session active; airPodsMic=\(SharedStore.airPodsMic)")
+    Self.log.notice("audio session active; airPodsMic=\(self.store.airPodsMic)")
   }
 
   func deactivate() throws {
@@ -77,8 +80,8 @@ final class SystemAudioSession: AudioSessionControlling {
   func applyPreferredInput() {
     // With the opt-in, the system's own choice (AirPods when they are the
     // route) stands; without it, the phone's microphone whatever is connected.
-    let preferred = SharedStore.airPodsMic ? nil : session.availableInputs?.first { $0.portType == .builtInMic }
-    guard SharedStore.airPodsMic || preferred != nil else {
+    let preferred = store.airPodsMic ? nil : session.availableInputs?.first { $0.portType == .builtInMic }
+    guard store.airPodsMic || preferred != nil else {
       return
     }
     do {

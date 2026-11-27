@@ -375,12 +375,18 @@ schemes:
     test:
       config: Debug
       targets:
-        # Serial, on purpose: tests swap `SharedStore.override` (a global) for a
-        # scratch App Group, and an async test suspended mid-await would read
-        # another suite's — or the real one — if a second ran in the gap.
-        # `.serialized` only orders tests inside one suite.
+        # In parallel: nothing the tests touch is shared. The App Group is
+        # injected (`SharedStore`), and each test builds its own
+        # (`SharedStore.scratch()`, its Darwin signals prefixed with its own
+        # name); the coordinator's presses and its process defaults are per
+        # instance too. Coordinator tests still write UIPasteboard.general but
+        # never read it back. A test that needs a global again injects it
+        # instead of turning this off. The suites that drive the real window,
+        # coordinator or keyboard model stay `.serialized`: the target is
+        # main-actor by default, so their polled waits all share one thread,
+        # and a few dozen at once starved each other past their 30 s bounds.
         - name: BlurtiOSTests
-          parallelizable: false
+          parallelizable: true
   BlurtiOSProbe:
     build:
       targets:

@@ -8,6 +8,8 @@ import SwiftUI
 /// without duplicates.
 struct ImportTermsView: View {
   let pack: TermPack
+  /// The App Group the terms are added to — the coordinator's.
+  let store: SharedStore
   @Environment(\.dismiss)
   private var dismiss
   @State private var excluded: Set<String> = []
@@ -37,7 +39,7 @@ struct ImportTermsView: View {
         ToolbarItem(placement: .cancellationAction) { Button("Not now") { dismiss() } }
         ToolbarItem(placement: .confirmationAction) {
           Button("Add \(chosen.count)") {
-            for term in chosen { SharedStore.addKeyTerm(term) }
+            for term in chosen { store.addKeyTerm(term) }
             dismiss()
           }
           .disabled(chosen.isEmpty)

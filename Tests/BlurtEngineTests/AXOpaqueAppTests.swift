@@ -18,56 +18,58 @@
     /// An app bundle skeleton in a temp directory, with the Electron framework
     /// present or absent. Only the *path* matters to the check — nothing is loaded —
     /// so an empty directory at the framework's location is a faithful fixture.
-    private func makeBundle(withElectron: Bool) throws -> URL {
-      let bundle = URL.temporaryDirectory.appending(path: "Blurt-\(UUID().uuidString).app")
-      let contents =
-        withElectron
-        ? bundle.appending(path: "Contents/Frameworks/Electron Framework.framework")
-        : bundle.appending(path: "Contents/Frameworks")
-      try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
-      return bundle
+    /// The bundle is removed when `body` returns.
+    private func withBundle(withElectron: Bool, _ body: (URL) throws -> Void) throws {
+      try withTemporaryDirectory(named: "Blurt", pathExtension: "app") { bundle in
+        let contents =
+          withElectron
+          ? bundle.appending(path: "Contents/Frameworks/Electron Framework.framework")
+          : bundle.appending(path: "Contents/Frameworks")
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        try body(bundle)
+      }
     }
 
     // MARK: isElectronBundle
 
     @Test("a bundle shipping the Electron framework is Electron")
     func electronBundleDetected() throws {
-      let bundle = try makeBundle(withElectron: true)
-      defer { try? FileManager.default.removeItem(at: bundle) }
-      // The true arm is what keeps VS Code and Slack on the paste path: their focused
-      // text fields expose no editable AX signal, so without this they'd fall back to
-      // copy-only and the user's words would never land.
-      #expect(FocusCapture.isElectronBundle(bundle))
+      try withBundle(withElectron: true) { bundle in
+        // The true arm is what keeps VS Code and Slack on the paste path: their focused
+        // text fields expose no editable AX signal, so without this they'd fall back to
+        // copy-only and the user's words would never land.
+        #expect(FocusCapture.isElectronBundle(bundle))
+      }
     }
 
     @Test("a native bundle with no Electron framework is not Electron")
     func nativeBundleRejected() throws {
-      let bundle = try makeBundle(withElectron: false)
-      defer { try? FileManager.default.removeItem(at: bundle) }
-      // The false arm matters just as much: a native app with genuinely nothing
-      // editable focused must fall back to copy rather than beep a ⌘V.
-      #expect(!FocusCapture.isElectronBundle(bundle))
+      try withBundle(withElectron: false) { bundle in
+        // The false arm matters just as much: a native app with genuinely nothing
+        // editable focused must fall back to copy rather than beep a ⌘V.
+        #expect(!FocusCapture.isElectronBundle(bundle))
+      }
     }
 
     @Test("a rebranded Electron bundle is detected by its asar-integrity key")
     func rebrandedElectronBundleDetected() throws {
-      let bundle = URL.temporaryDirectory.appending(path: "Blurt-\(UUID().uuidString).app")
-      defer { try? FileManager.default.removeItem(at: bundle) }
-      // Codex renames the framework to `Codex Framework.framework`, so only the
-      // Info.plist key identifies it as Electron.
-      let contents = bundle.appending(path: "Contents")
-      try FileManager.default.createDirectory(
-        at: contents.appending(path: "Frameworks/Codex Framework.framework"),
-        withIntermediateDirectories: true
-      )
-      let plist: [String: Any] = [
-        "CFBundleIdentifier": "com.example.rebranded",
-        "CFBundlePackageType": "APPL",
-        "ElectronAsarIntegrity": ["Resources/app.asar": ["algorithm": "SHA256"]],
-      ]
-      let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-      try data.write(to: contents.appending(path: "Info.plist"))
-      #expect(FocusCapture.isElectronBundle(bundle))
+      try withTemporaryDirectory(named: "Blurt", pathExtension: "app") { bundle in
+        // Codex renames the framework to `Codex Framework.framework`, so only the
+        // Info.plist key identifies it as Electron.
+        let contents = bundle.appending(path: "Contents")
+        try FileManager.default.createDirectory(
+          at: contents.appending(path: "Frameworks/Codex Framework.framework"),
+          withIntermediateDirectories: true
+        )
+        let plist: [String: Any] = [
+          "CFBundleIdentifier": "com.example.rebranded",
+          "CFBundlePackageType": "APPL",
+          "ElectronAsarIntegrity": ["Resources/app.asar": ["algorithm": "SHA256"]],
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try data.write(to: contents.appending(path: "Info.plist"))
+        #expect(FocusCapture.isElectronBundle(bundle))
+      }
     }
 
     @Test("a bundle URL that doesn't exist is not Electron")

@@ -16,9 +16,12 @@ struct TextShortcutsCard: View {
   @FocusState private var focus: Field?
   private let store = TextShortcutStore()
 
-  private var shortcuts: [TextShortcut] { store.shortcuts(decoding: raw) }
-
   var body: some View {
+    // Decoded once per redraw, which every keystroke in either field causes.
+    let shortcuts = store.shortcuts(decoding: raw)
+    // Every shortcut's match key: a phrase one of them holds is refused, as on
+    // the Mac, rather than silently replacing that shortcut.
+    let taken = takenKeys(in: shortcuts)
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
       Eyebrow("Text shortcuts")
       if !shortcuts.isEmpty {
@@ -29,7 +32,10 @@ struct TextShortcutsCard: View {
           }
         }
       }
-      addForm
+      addForm(
+        isTaken: TextShortcut.isTaken(trigger, by: taken),
+        canAdd: canAdd(to: shortcuts, takenKeys: taken)
+      )
       Text("Say the phrase anywhere in a dictation and Blurt types the full text instead. They stay on this phone.")
         .brandFootnote()
     }
@@ -38,8 +44,9 @@ struct TextShortcutsCard: View {
     .card()
   }
 
-  /// The two fields and the button that add a shortcut.
-  private var addForm: some View {
+  /// The two fields and the button that add a shortcut, with the note under
+  /// the phrase field while another shortcut already holds it.
+  private func addForm(isTaken: Bool, canAdd: Bool) -> some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appChipGap) {
       TextField("When I say… (my email)", text: $trigger)
         .textInputAutocapitalization(.never)
@@ -52,7 +59,12 @@ struct TextShortcutsCard: View {
           if clamped != value { trigger = clamped }
         }
         .brandInput()
-      takenNote
+      if isTaken {
+        Text("Another shortcut already uses this phrase.")
+          .bodyFont(DesignTokens.Typography.sizeCaption)
+          .foregroundStyle(BlurtBrand.errorOrange)
+          .fixedSize(horizontal: false, vertical: true)
+      }
       TextField("Type this (me@example.com)", text: $expansion, axis: .vertical)
         .lineLimit(1...4)  // literal-ok: the field's rows
         .textInputAutocapitalization(.never)
@@ -63,33 +75,29 @@ struct TextShortcutsCard: View {
           if clamped != value { expansion = clamped }
         }
         .brandInput()
-      Button("Add shortcut", action: add)
+      Button("Add shortcut") { add() }
         .buttonStyle(BrandButtonStyle())
         .disabled(!canAdd)
     }
   }
 
-  /// The note under the phrase field while another shortcut already holds it.
-  @ViewBuilder private var takenNote: some View {
-    if TextShortcut.isTaken(trigger, by: takenKeys) {
-      Text("Another shortcut already uses this phrase.")
-        .bodyFont(DesignTokens.Typography.sizeCaption)
-        .foregroundStyle(BlurtBrand.errorOrange)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-  }
-
   /// Every shortcut's match key: a phrase one of them holds is refused, as on
   /// the Mac, rather than silently replacing that shortcut.
-  private var takenKeys: Set<String> { Set(shortcuts.map { TextShortcut.matchKey(for: $0.trigger) }) }
+  private func takenKeys(in shortcuts: [TextShortcut]) -> Set<String> {
+    Set(shortcuts.map { TextShortcut.matchKey(for: $0.trigger) })
+  }
 
-  private var canAdd: Bool {
+  private func canAdd(to shortcuts: [TextShortcut], takenKeys: Set<String>) -> Bool {
     TextShortcut.canSave(trigger: trigger, expansion: expansion, otherKeys: takenKeys)
       && shortcuts.count < TextShortcutStore.shortcutLimit
   }
 
+  /// Checks against the current fields and store, not the `canAdd` the last
+  /// redraw captured: a second tap before the redraw would otherwise add an
+  /// empty shortcut.
   private func add() {
-    guard canAdd else {
+    let shortcuts = store.shortcuts(decoding: raw)
+    guard canAdd(to: shortcuts, takenKeys: takenKeys(in: shortcuts)) else {
       return
     }
     store.insertFirst(TextShortcut(trigger: trigger, expansion: expansion))

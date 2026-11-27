@@ -23,8 +23,6 @@ struct ReadyView: View {
   private static let idealHeight: CGFloat = 640
 
   var coordinator: AppCoordinator
-  @Environment(\.openSettings)
-  private var openSettings
   // Observed (not read once) so a change in the separate Settings window —
   // the dictation key, any key's action or mode — re-renders this window's
   // rows live (`ObservedKeyBindings`).
@@ -208,11 +206,13 @@ struct ReadyView: View {
       .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(activation.hint(for: .dictate))")
     } else {
       SettingRow(title: "Dictate", systemImage: TriggerKeyAction.dictate.systemImage) {
-        Button("Choose Key…") { openSettings() }
-          .buttonStyle(.link)
-          .help("Choose a key in Settings › Keys.")
-          .accessibilityLabel("Choose a dictation key")
-          .accessibilityHint("Opens Settings. Choose a key for Dictate in the Keys tab.")
+        SettingsLink {
+          Text("Choose Key…")
+        }
+        .buttonStyle(.link)
+        .help("Choose a key in Settings › Keys.")
+        .accessibilityLabel("Choose a dictation key")
+        .accessibilityHint("Opens Settings. Choose a key for Dictate in the Keys tab.")
       }
       // Contained, not ignored: the button has to stay reachable.
       .accessibilityElement(children: .contain)
@@ -276,9 +276,7 @@ struct ReadyView: View {
       .accessibilityIdentifier(UITestIdentifiers.libraryFilterMenu)
     }
     ToolbarItem {
-      Button {
-        openSettings()
-      } label: {
+      SettingsLink {
         Label("Settings", systemImage: "slider.horizontal.3")
       }
       .help("Settings")

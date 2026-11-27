@@ -58,58 +58,56 @@ struct LiveRecordingTests {
 
   @Test("a 48 kHz cycle comes out as 16 kHz PCM and lands in a playable AAC file")
   func mixWriterEndToEnd() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "MixWriterTests-\(UUID())")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let url = directory.appending(path: "mix.m4a")
-    let emitted = Mutex(0)
-    let writer = try MixWriter(url: url, inputRate: 48_000, maxFrames: 512, tapBuffers: 1) { pcm in
-      emitted.withLock { $0 += pcm.count }
-    }
-    // A second of audio in 480-frame cycles: a mono mic and a stereo tap.
-    var mic = [Float](repeating: 0.2, count: 480)
-    var tap = [Float](repeating: 0.1, count: 960)
-    let list = AudioBufferList.allocate(maximumBuffers: 2)
-    defer { unsafe free(list.unsafeMutablePointer) }
-    for _ in 0..<100 {
-      unsafe mic.withUnsafeMutableBytes { micBytes in
-        unsafe tap.withUnsafeMutableBytes { tapBytes in
-          unsafe list[0] = unsafe AudioBuffer(
-            mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress
-          )
-          unsafe list[1] = unsafe AudioBuffer(
-            mNumberChannels: 2, mDataByteSize: UInt32(tapBytes.count), mData: tapBytes.baseAddress
-          )
-          unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
+    try withTemporaryDirectory(named: "MixWriterTests") { directory in
+      let url = directory.appending(path: "mix.m4a")
+      let emitted = Mutex(0)
+      let writer = try MixWriter(url: url, inputRate: 48_000, maxFrames: 512, tapBuffers: 1) { pcm in
+        emitted.withLock { $0 += pcm.count }
+      }
+      // A second of audio in 480-frame cycles: a mono mic and a stereo tap.
+      var mic = [Float](repeating: 0.2, count: 480)
+      var tap = [Float](repeating: 0.1, count: 960)
+      let list = AudioBufferList.allocate(maximumBuffers: 2)
+      defer { unsafe free(list.unsafeMutablePointer) }
+      for _ in 0..<100 {
+        unsafe mic.withUnsafeMutableBytes { micBytes in
+          unsafe tap.withUnsafeMutableBytes { tapBytes in
+            unsafe list[0] = unsafe AudioBuffer(
+              mNumberChannels: 1, mDataByteSize: UInt32(micBytes.count), mData: micBytes.baseAddress
+            )
+            unsafe list[1] = unsafe AudioBuffer(
+              mNumberChannels: 2, mDataByteSize: UInt32(tapBytes.count), mData: tapBytes.baseAddress
+            )
+            unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
+          }
         }
       }
+      writer.close()
+      // One second at 16 kHz × 2 bytes, less what the resampler still holds.
+      #expect(abs(emitted.withLock { $0 } - 32_000) < 1_000)
+      let file = try AVAudioFile(forReading: url)
+      #expect(file.fileFormat.sampleRate == SystemAudioRecorder.outputSampleRate)
+      #expect(file.fileFormat.channelCount == 1)
+      #expect(file.length > 12_000)
     }
-    writer.close()
-    // One second at 16 kHz × 2 bytes, less what the resampler still holds.
-    #expect(abs(emitted.withLock { $0 } - 32_000) < 1_000)
-    let file = try AVAudioFile(forReading: url)
-    #expect(file.fileFormat.sampleRate == SystemAudioRecorder.outputSampleRate)
-    #expect(file.fileFormat.channelCount == 1)
-    #expect(file.length > 12_000)
   }
 
   @Test("after close, a late cycle is ignored")
   func writerIgnoresAfterClose() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "MixWriterTests-\(UUID())")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let emitted = Mutex(0)
-    let writer = try MixWriter(
-      url: directory.appending(path: "mix.m4a"), inputRate: 16_000, maxFrames: 256, tapBuffers: 1
-    ) { _ in
-      emitted.withLock { $0 += 1 }
+    try withTemporaryDirectory(named: "MixWriterTests") { directory in
+      let emitted = Mutex(0)
+      let writer = try MixWriter(
+        url: directory.appending(path: "mix.m4a"), inputRate: 16_000, maxFrames: 256, tapBuffers: 1
+      ) { _ in
+        emitted.withLock { $0 += 1 }
+      }
+      writer.close()
+      var mic = [Float](repeating: 0.2, count: 160)
+      unsafe withMonoList(&mic) { list in
+        unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
+      }
+      #expect(emitted.withLock { $0 } == 0)
     }
-    writer.close()
-    var mic = [Float](repeating: 0.2, count: 160)
-    unsafe withMonoList(&mic) { list in
-      unsafe writer.write(UnsafePointer(list.unsafeMutablePointer))
-    }
-    #expect(emitted.withLock { $0 } == 0)
   }
 
   /// `MixWriter.mix` over one buffer per `(channels, samples)` pair, in order.

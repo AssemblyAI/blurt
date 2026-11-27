@@ -37,9 +37,12 @@ struct PipelinePressContextTests {
 
   /// One dictation into `firstField` whose transcript is held until a later
   /// press's context has replaced the session's, then let through.
-  private static func dictateAcrossALaterPress(_ session: DictationSession, _ transcriber: GatedTranscriber) async {
+  private static func dictateAcrossALaterPress(
+    _ session: DictationSession,
+    _ transcriber: GatedTranscriber
+  ) async throws {
     await session.press()
-    while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
+    try await waitUntil("the press to read its field") { await session.pressContext?.targetSecurity == .ordinary }
     await session.release()
     await transcriber.waitUntilStarted()
     await session.installPressContext(laterPress())
@@ -48,7 +51,7 @@ struct PipelinePressContextTests {
   }
 
   @Test("the paste keeps its own press's caret context when another press's context is installed")
-  func pasteKeepsItsPressContext() async {
+  func pasteKeepsItsPressContext() async throws {
     let transcriber = GatedTranscriber(text: "thanks for the notes.")
     let injector = StubInjector()
     let session = makeSession(
@@ -58,7 +61,7 @@ struct PipelinePressContextTests {
       seams: testSeams(field: Self.firstField)
     )
 
-    await Self.dictateAcrossALaterPress(session, transcriber)
+    try await Self.dictateAcrossALaterPress(session, transcriber)
 
     #expect(await injector.inserted == ["thanks for the notes."])
     #expect(await injector.insertedPrior == ["Dear Sam,"])
@@ -66,7 +69,7 @@ struct PipelinePressContextTests {
   }
 
   @Test("a failed paste is logged against its own press when another press's context is installed")
-  func failedPasteLogsItsPressContext() async {
+  func failedPasteLogsItsPressContext() async throws {
     let log = RecordedLog()
     let transcriber = GatedTranscriber(text: "thanks for the notes.")
     let injector = StubInjector()
@@ -78,7 +81,7 @@ struct PipelinePressContextTests {
       seams: testSeams(field: Self.firstField, log: log)
     )
 
-    await Self.dictateAcrossALaterPress(session, transcriber)
+    try await Self.dictateAcrossALaterPress(session, transcriber)
 
     #expect(await session.phase == .failed(.accessibilityPermissionMissing))
     #expect(log.failureNames == [BlurtError.accessibilityPermissionMissing.diagnosticName])

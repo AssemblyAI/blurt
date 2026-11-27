@@ -20,10 +20,8 @@ struct MemoryLeakTests {
       let instance = await build()
       weakRef = instance
     }
-    let deadline = ContinuousClock.now + .seconds(30)
-    while weakRef != nil, ContinuousClock.now < deadline {
-      try? await Task.sleep(for: .milliseconds(5))  // wall-clock-ok: the poll itself, bounded only against a hang
-    }
+    // A timeout isn't rethrown: the expectation below names the survivor.
+    try? await waitUntil("\(name) to deallocate") { weakRef == nil }
     #expect(weakRef == nil, "\(name) was not deallocated — likely a retain cycle")
   }
 

@@ -11,10 +11,10 @@ public import Foundation
 /// `check-invariants.sh` exempts this file from the socket rule, and no other.
 ///
 /// Everything sent and read is documented: the `/v3/ws` endpoint, the raw key
-/// in `Authorization`, the `encoding`, `sample_rate` and `speaker_labels` query
-/// parameters, binary audio of 50–1000 ms a message, the `Begin`, `Turn` and
-/// `Termination` messages, and `{"type": "Terminate"}` to end. The speech
-/// model is the endpoint's default.
+/// in `Authorization`, the `encoding`, `sample_rate`, `speaker_labels`, and
+/// optional `speech_model` query parameters, binary audio of 50–1000 ms a
+/// message, the `Begin`, `Turn` and `Termination` messages, and
+/// `{"type": "Terminate"}` to end.
 public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// Where a session is in its one pass through life, in order. The socket
   /// lives in the phases that have one, so it can't outlive or predate them.
@@ -43,7 +43,8 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   }
 
   /// One server message — only the fields read. `Turn`'s are flattened into
-  /// `turn`; `Begin` and anything else are ignored.
+  /// `turn` and `Error`'s carry their message in `error`; `Begin` and
+  /// anything else carry neither.
   struct Event: Decodable {
     enum CodingKeys: String, CodingKey {
       case type
@@ -51,24 +52,34 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
       case transcript
       case endOfTurn = "end_of_turn"
       case speakerLabel = "speaker_label"
+      case error
     }
 
     let type: String
     let turn: RealtimeTurn?
+    let error: String?
 
     init(from decoder: any Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
       type = try container.decode(String.self, forKey: .type)
-      guard type == "Turn" else {
+      switch type {
+      case "Turn":
+        turn = RealtimeTurn(
+          order: try container.decode(Int.self, forKey: .turnOrder),
+          transcript: try container.decodeIfPresent(String.self, forKey: .transcript) ?? "",
+          isFinal: try container.decodeIfPresent(Bool.self, forKey: .endOfTurn) ?? false,
+          speaker: try container.decodeIfPresent(String.self, forKey: .speakerLabel)
+        )
+        error = nil
+
+      case "Error":
         turn = nil
-        return
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+
+      default:
+        turn = nil
+        error = nil
       }
-      turn = RealtimeTurn(
-        order: try container.decode(Int.self, forKey: .turnOrder),
-        transcript: try container.decodeIfPresent(String.self, forKey: .transcript) ?? "",
-        isFinal: try container.decodeIfPresent(Bool.self, forKey: .endOfTurn) ?? false,
-        speaker: try container.decodeIfPresent(String.self, forKey: .speakerLabel)
-      )
     }
   }
 
@@ -110,14 +121,23 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   private let decoder = JSONDecoder()
 
   /// A transcriber that will authenticate with `apiKey` against `url`; nothing
-  /// connects until `start`, or a `finish` with audio queued.
-  public init(apiKey: String, url: URL = RealtimeTranscriber.defaultURL, userAgent: String? = nil) {
+  /// connects until `start`, or a `finish` with audio queued. Pass
+  /// `speechModel` to override `/v3/ws`'s default model (for instance
+  /// `"assemblyai-stt-3-7-realtime"` for meeting recordings with live
+  /// `speaker_labels`).
+  public init(
+    apiKey: String, url: URL = RealtimeTranscriber.defaultURL, speechModel: String? = nil, userAgent: String? = nil
+  ) {
     var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    components?.queryItems = [
+    var queryItems = [
       URLQueryItem(name: "encoding", value: "pcm_s16le"),
       URLQueryItem(name: "sample_rate", value: String(Self.sampleRate)),
       URLQueryItem(name: "speaker_labels", value: "true"),
     ]
+    if let speechModel, !speechModel.isEmpty {
+      queryItems.append(URLQueryItem(name: "speech_model", value: speechModel))
+    }
+    components?.queryItems = queryItems
     var handshake = URLRequest(url: components?.url ?? url)
     // The header, not the `token` query parameter: that is for browsers,
     // which can't set one.
@@ -284,6 +304,15 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
         didTerminate = true
         releaseTerminationWait()
         turnFeed.finish()
+
+      case "Error":
+        // Streaming v3 follows every Error frame with a generic close reason
+        // ("See Error message for details"); surface the frame's text before
+        // the close overwrites it.
+        if let serverError = event.error, !serverError.isEmpty {
+          close(error: RealtimeError.connection(serverError))
+          return
+        }
 
       default:
         continue

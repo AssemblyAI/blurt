@@ -125,9 +125,9 @@ nonisolated extension BlurtShared {
 nonisolated extension SharedStore {
   // MARK: The records
 
-  package static var listeningState: ListeningState? {
+  package var listeningState: ListeningState? {
     get { read(ListeningState.self, forKey: BlurtShared.Key.listeningState) }
-    set {
+    nonmutating set {
       if let newValue {
         write(newValue, forKey: BlurtShared.Key.listeningState)
       } else {
@@ -136,9 +136,9 @@ nonisolated extension SharedStore {
     }
   }
 
-  package static var commandAck: CommandAck? {
+  package var commandAck: CommandAck? {
     get { read(CommandAck.self, forKey: BlurtShared.Key.ack) }
-    set {
+    nonmutating set {
       if let newValue {
         write(newValue, forKey: BlurtShared.Key.ack)
       } else {
@@ -147,18 +147,18 @@ nonisolated extension SharedStore {
     }
   }
 
-  package static var keyboardPresence: KeyboardPresenceRecord? {
+  package var keyboardPresence: KeyboardPresenceRecord? {
     read(KeyboardPresenceRecord.self, forKey: BlurtShared.Key.keyboardPresence)
   }
 
   /// Writes the record and signals it.
-  package static func publish(_ state: ListeningState) {
+  package func publish(_ state: ListeningState) {
     listeningState = state
     post(BlurtShared.Signal.state)
   }
 
   /// Writes the ack and signals it.
-  package static func acknowledge(_ ack: CommandAck) {
+  package func acknowledge(_ ack: CommandAck) {
     commandAck = ack
     post(BlurtShared.Signal.ack)
   }
@@ -169,7 +169,7 @@ nonisolated extension SharedStore {
   /// record landing in between is written over, and `OwnerWatchdog` gives its
   /// keyboard the beats to put it back. Returns whether it was written.
   @discardableResult
-  package static func writeKeyboardPresence(_ record: KeyboardPresenceRecord, ifOwnedBy owner: String? = nil) -> Bool {
+  package func writeKeyboardPresence(_ record: KeyboardPresenceRecord, ifOwnedBy owner: String? = nil) -> Bool {
     if let owner, let current = keyboardPresence, current.processID != owner {
       return false
     }
@@ -178,7 +178,7 @@ nonisolated extension SharedStore {
   }
 
   /// The keyboard process on screen now, if any.
-  package static func keyboardOnScreen(now: Date = Date()) -> KeyboardPresenceRecord? {
+  package func keyboardOnScreen(now: Date = Date()) -> KeyboardPresenceRecord? {
     guard let record = keyboardPresence, record.onScreen, record.isFresh(now: now) else {
       return nil
     }

@@ -12,84 +12,84 @@ import UIKit
 @Suite("Keyboard model: lifecycle and the app's signals", .serialized)
 @MainActor
 struct KeyboardLifecycleTests {
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   /// Polls until `condition` holds or `timeout` passes; true when it held. The
-  /// suite's shorter default over the shared `until` poll: these tests wait on
-  /// the model, which answers within a tick.
-  func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
+  /// shared `until` poll's generous bound: a Darwin signal's round trip hops to
+  /// the main actor, which other suites share now the bundle runs in parallel,
+  /// so 3 s stopped being enough. A passing test never waits it out; the
+  /// absence checks pass their own short timeout.
+  func eventually(_ timeout: Duration = .seconds(30), _ condition: () -> Bool) async -> Bool {
     await until(timeout, condition)
   }
 
   @Test("on screen, the keyboard writes its presence record and the older keys, and beats; gone, it says so")
   func heartbeat() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    SharedStore.autoDictate = false
-    let model = KeyboardRig().model
+    store.autoDictate = false
+    let model = KeyboardRig(store: store).model
     model.appeared()
-    let record = try #require(SharedStore.keyboardPresence)
+    let record = try #require(store.keyboardPresence)
     #expect(record.processID == KeyboardProcess.id && record.controllerID == model.controllerID)
     #expect(record.onScreen && record.pid == KeyboardModel.pid && record.isFresh())
-    #expect(SharedStore.keyboardInstance == KeyboardProcess.id)
-    #expect(SharedStore.keyboardSeenAt != nil)
+    #expect(store.keyboardInstance == KeyboardProcess.id)
+    #expect(store.keyboardSeenAt != nil)
     // The heartbeat's first beat lands on its own.
-    SharedStore.keyboardSeenAt = nil
-    #expect(await eventually { SharedStore.keyboardSeenAt != nil })
+    store.keyboardSeenAt = nil
+    #expect(await eventually { store.keyboardSeenAt != nil })
     model.disappeared()
-    #expect(SharedStore.keyboardPresence?.onScreen == false)
-    #expect(SharedStore.keyboardPresence?.processID == KeyboardProcess.id)
-    #expect(SharedStore.keyboardSeenAt == nil)
+    #expect(store.keyboardPresence?.onScreen == false)
+    #expect(store.keyboardPresence?.processID == KeyboardProcess.id)
+    #expect(store.keyboardSeenAt == nil)
   }
 
   @Test("leaving never clears another process's record, nor another controller's in this one, nor the older key")
   func presenceCompareAndWrite() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    SharedStore.autoDictate = false
-    let model = KeyboardRig().model
+    store.autoDictate = false
+    let model = KeyboardRig(store: store).model
     model.appeared()
     let other = KeyboardPresenceRecord(processID: "other-process", controllerID: "c", pid: 1, onScreen: true)
-    SharedStore.writeKeyboardPresence(other)
+    store.writeKeyboardPresence(other)
     model.disappeared()
-    #expect(SharedStore.keyboardPresence?.processID == "other-process")
-    #expect(SharedStore.keyboardPresence?.onScreen == true)
-    #expect(SharedStore.keyboardSeenAt != nil, "the older key is the record's, and the record is theirs")
+    #expect(store.keyboardPresence?.processID == "other-process")
+    #expect(store.keyboardPresence?.onScreen == true)
+    #expect(store.keyboardSeenAt != nil, "the older key is the record's, and the record is theirs")
     let sibling = KeyboardPresenceRecord(
       processID: KeyboardProcess.id, controllerID: "the-next-field", pid: KeyboardModel.pid, onScreen: true
     )
-    SharedStore.writeKeyboardPresence(sibling)
+    store.writeKeyboardPresence(sibling)
     model.disappeared()
-    #expect(SharedStore.keyboardPresence?.controllerID == "the-next-field")
-    #expect(SharedStore.keyboardPresence?.onScreen == true)
-    #expect(SharedStore.keyboardSeenAt != nil)
+    #expect(store.keyboardPresence?.controllerID == "the-next-field")
+    #expect(store.keyboardPresence?.onScreen == true)
+    #expect(store.keyboardSeenAt != nil)
     // The store's own rule: a write over another process's record, owned, is refused.
-    #expect(!SharedStore.writeKeyboardPresence(model.presence(onScreen: false), ifOwnedBy: "someone-else"))
-    #expect(SharedStore.keyboardPresence?.onScreen == true)
+    #expect(!store.writeKeyboardPresence(model.presence(onScreen: false), ifOwnedBy: "someone-else"))
+    #expect(store.keyboardPresence?.onScreen == true)
   }
 
   @Test("attached to its controller, the keyboard follows the app's phase, result, state and ack signals")
   func darwinSignals() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.before = "Hi"
-    let rig = KeyboardRig(proxy: proxy)
+    let rig = KeyboardRig(store: store, proxy: proxy)
     let model = rig.model
     let controller = UIInputViewController(nibName: nil, bundle: nil)
     model.attach(to: controller)
-    SharedStore.write(snapshot(.recording), forKey: BlurtShared.Key.phase)
-    SharedStore.post(BlurtShared.Signal.phase)
+    store.write(snapshot(.recording), forKey: BlurtShared.Key.phase)
+    store.post(BlurtShared.Signal.phase)
     #expect(await eventually { model.snapshot.state == .recording })
-    SharedStore.write(
+    store.write(
       DictationResult(id: UUID(), text: "there", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result
     )
-    SharedStore.post(BlurtShared.Signal.result)
+    store.post(BlurtShared.Signal.result)
     #expect(await eventually { proxy.before == "Hi there" })
     // The record closing reaches the model and the line.
-    KeyboardRig.listening(false)
-    SharedStore.post(BlurtShared.Signal.state)
+    KeyboardRig.listening(false, in: store)
+    store.post(BlurtShared.Signal.state)
     #expect(await eventually { !model.isListening && model.statusLine?.text == VoiceNotice.Copy.tapToOpen })
-    KeyboardRig.listening(true)
-    SharedStore.post(BlurtShared.Signal.state)
+    KeyboardRig.listening(true, in: store)
+    store.post(BlurtShared.Signal.state)
     #expect(await eventually { model.isListening })
     // A press answered over the ack signal.
     model.apply(snapshot(.idle))
@@ -98,16 +98,14 @@ struct KeyboardLifecycleTests {
       return
     }
     let dictation = UUID()
-    SharedStore.acknowledge(CommandAck(commandID: press.id, launchID: KeyboardRig.launch, outcome: .started(dictation)))
+    store.acknowledge(CommandAck(commandID: press.id, launchID: KeyboardRig.launch, outcome: .started(dictation)))
     #expect(await eventually { model.handshake.dictationID == dictation })
   }
 
   @Test("detached, nothing reaches the model: no observers, no heartbeat, no ticks, no controller")
   func detach() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    SharedStore.autoDictate = false
-    let model = KeyboardRig().model
+    store.autoDictate = false
+    let model = KeyboardRig(store: store).model
     // Up first, then attached: a controller outside a keyboard extension has
     // no Full Access to read, and the appearance would take its word for it.
     model.appeared()
@@ -117,16 +115,14 @@ struct KeyboardLifecycleTests {
     #expect(!model.observers.isEmpty && model.heartbeat != nil && !model.ticks.isEmpty)
     model.detach()
     #expect(model.observers.isEmpty && model.heartbeat == nil && model.ticks.isEmpty && model.controller == nil)
-    SharedStore.write(snapshot(.recording), forKey: BlurtShared.Key.phase)
-    SharedStore.post(BlurtShared.Signal.phase)
+    store.write(snapshot(.recording), forKey: BlurtShared.Key.phase)
+    store.post(BlurtShared.Signal.phase)
     #expect(!(await eventually(.milliseconds(300)) { model.snapshot.state == .recording }))
   }
 
   @Test("a notice lets go after its dwell, and a second read of the same snapshot does not bring it back")
   func noticeDwell() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let model = KeyboardRig().model
+    let model = KeyboardRig(store: store).model
     let clock = TestClock()
     model.clock = clock
     let pasted = snapshot(.pasted)
@@ -145,9 +141,7 @@ struct KeyboardLifecycleTests {
 
   @Test("an error's line outlives the ring's dwell and goes on the next tap")
   func heldError() async throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let model = KeyboardRig().model
+    let model = KeyboardRig(store: store).model
     let clock = TestClock()
     model.clock = clock
     let error = snapshot(.error, reason: .micSilent)
@@ -166,14 +160,12 @@ struct KeyboardLifecycleTests {
 
   @Test("the host app leaving ends a dictation this keyboard owns: a recording released, a mic coming up cancelled")
   func hostLeaving() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let recording = KeyboardRig()
+    let recording = KeyboardRig(store: store)
     let dictation = recording.latchRecording()
     recording.model.hostLeaving()
     #expect(recording.commands.sent.map(\.kind) == [.press, .release])
     #expect(recording.commands.sent.last?.dictationID == dictation)
-    let connecting = KeyboardRig()
+    let connecting = KeyboardRig(store: store)
     connecting.model.tapMic()
     let coming = UUID()
     connecting.answer(.started(coming))
@@ -183,17 +175,17 @@ struct KeyboardLifecycleTests {
     // Words being made, another keyboard's dictation (the finger down over it
     // already released it), and a press unanswered are left to the app and
     // its watchdog.
-    let processing = KeyboardRig()
+    let processing = KeyboardRig(store: store)
     let made = processing.latchRecording()
     processing.model.apply(snapshot(.processing, dictation: made))
     processing.model.hostLeaving()
     #expect(processing.commands.sent.map(\.kind) == [.press])
-    let foreign = KeyboardRig()
+    let foreign = KeyboardRig(store: store)
     foreign.model.apply(snapshot(.recording, dictation: UUID()))
     foreign.model.micDown()
     foreign.model.hostLeaving()
     #expect(foreign.commands.sent.map(\.kind) == [.release])
-    let pressing = KeyboardRig()
+    let pressing = KeyboardRig(store: store)
     pressing.model.tapMic()
     pressing.model.hostLeaving()
     #expect(pressing.commands.sent.map(\.kind) == [.press])
@@ -201,18 +193,16 @@ struct KeyboardLifecycleTests {
 
   @Test("the saved check clears after its dwell and takes the chip for that word with it")
   func termSavedDwell() async {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.selected = "Rizz"
-    let model = KeyboardRig(proxy: proxy).model
+    let model = KeyboardRig(store: store, proxy: proxy).model
     let clock = TestClock()
     model.clock = clock
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
     model.addSelectedTerm()
     #expect(model.termSavedAt != nil)
-    #expect(SharedStore.keyTerms == ["Rizz"])
+    #expect(store.keyTerms == ["Rizz"])
     await clock.waitUntilSleeping(for: .seconds(KeyboardModel.termNoticeDwell))
     clock.advance(by: .seconds(KeyboardModel.termNoticeDwell))
     #expect(await eventually { model.termSavedAt == nil })
@@ -222,28 +212,24 @@ struct KeyboardLifecycleTests {
 
   @Test("the phone's word list reaches the app: written, stamped, and only re-read once it is old")
   func lexicon() throws {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     let entries = [
       LexiconEntry(userInput: "Neil Bisht", documentText: "Neil Bisht"),
       LexiconEntry(userInput: "omw", documentText: "On my way!"),
     ]
     let before = Date()
-    KeyboardModel.store(entries)
+    KeyboardModel.handOver(entries, to: store)
     let after = Date()
-    let stored = SharedStore.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon)
+    let stored = store.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon)
     #expect(stored?.map(\.documentText) == ["Neil Bisht", "On my way!"])
     #expect(stored?.map(\.isName) == [true, false])
     // Stamped by the store itself, however long the call took.
-    let refreshed = try #require(SharedStore.lexiconRefreshedAt)
+    let refreshed = try #require(store.lexiconRefreshedAt)
     #expect(before...after ~= refreshed)
   }
 
   @Test("opening the app walks the responder chain to the application: setup without Full Access, start with it")
   func openApp() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let model = KeyboardModel()
+    let model = KeyboardModel(store: store)
     // No controller: nothing to walk.
     var opened: [URL] = []
     model.urlOpener = { opened.append($1) }

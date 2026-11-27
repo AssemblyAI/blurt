@@ -57,7 +57,7 @@ struct MainView: View {
       ConsentView { Task { await coordinator.grantConsent() } }
     }
     .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) { pack in
-      ImportTermsView(pack: pack)
+      ImportTermsView(pack: pack, store: coordinator.store)
     }
     .alert(
       "Couldn't read that list",

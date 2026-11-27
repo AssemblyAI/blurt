@@ -51,28 +51,17 @@ if ! TEST_RUNNER_BLURT_PROBE_ARGS="$FACE" xcodebuild test -project "$REPO_ROOT/A
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$WORK/shot.xcresult" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet; then
   # Say why, from the result bundle, before it goes.
-  xcrun xcresulttool get test-results tests --path "$WORK/shot.xcresult" 2>/dev/null | python3 -c '
+  xcrun xcresulttool get test-results summary --path "$WORK/shot.xcresult" 2>/dev/null | python3 -c '
 import json, sys
-def walk(node):
-    if isinstance(node, dict):
-        if node.get("nodeType") == "Failure Message": print("ios-keyboard-shot:", node.get("name"))
-        for child in node.get("children", []): walk(child)
-    elif isinstance(node, list):
-        for child in node: walk(child)
-walk(json.load(sys.stdin).get("testNodes", []))
+for failure in json.load(sys.stdin).get("testFailures", []):
+    print("ios-keyboard-shot:", failure.get("testName", "?"), "-", failure.get("failureText", "?"))
 ' || true
   exit 1
 fi
-xcrun xcresulttool export attachments --path "$WORK/shot.xcresult" --output-path "$WORK/attachments" >/dev/null
-python3 - "$WORK/attachments" "$OUT" <<'PY'
-import json, os, shutil, sys
-attachments, out = sys.argv[1], sys.argv[2]
-manifest = json.load(open(os.path.join(attachments, "manifest.json")))
-for test in manifest:
-    for a in test.get("attachments", []):
-        if a["suggestedHumanReadableName"].startswith("blurt-keyboard"):
-            shutil.copy(os.path.join(attachments, a["exportedFileName"]), out)
-            print(f"ios-keyboard-shot: {out}")
-            sys.exit(0)
-sys.exit("ios-keyboard-shot: no screenshot in the result bundle")
-PY
+ios_export_attachments "$WORK/shot.xcresult" "$WORK"
+if [ ! -f "$WORK/blurt-keyboard.png" ]; then
+  echo "ios-keyboard-shot: no screenshot in the result bundle" >&2
+  exit 1
+fi
+cp "$WORK/blurt-keyboard.png" "$OUT"
+echo "ios-keyboard-shot: $OUT"

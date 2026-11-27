@@ -20,7 +20,7 @@ import corpus
 import live
 import voicearena
 import voicearena_baseline as vb
-from candidates import PRIOR_WINNER
+from candidates import PRIOR_WINNER, SMART_WINNER
 from conftest import clip_url, va_row
 
 
@@ -205,8 +205,8 @@ def test_save_json_merges_with_what_another_run_wrote(tmp_path):
     path = tmp_path / "deep" / "judge.json"
     vb._save_json(path, {"a": 1})
     vb._save_json(path, {"b": 2})  # a second run that never saw "a"
-    assert vb._load_json(path) == {"a": 1, "b": 2}
-    assert vb._load_json(tmp_path / "absent.json") == {}
+    assert voicearena.load_json(path) == {"a": 1, "b": 2}
+    assert voicearena.load_json(tmp_path / "absent.json") == {}
 
 
 # --------------------------------------------------------------------------
@@ -245,7 +245,7 @@ def test_transcribe_all_caches_per_clip_and_reads_the_cache_back(monkeypatch, ca
         "llm_error": None,
     }
     cache = vb._cache_dir() / f"voicearena-run-smart-{vb._sha('Clean it.')}.json"
-    assert vb._load_json(cache) == first
+    assert voicearena.load_json(cache) == first
     assert "Transcribing 2 clip(s) (smart)" in capsys.readouterr().out
 
     assert vb.transcribe_all(rows, "Clean it.", "smart", "key", workers=2) == first
@@ -426,7 +426,7 @@ def test_main_scores_buckets_and_writes_the_table(run_main, tmp_path):
     out_csv = tmp_path / "va.csv"
     code, out, calls = run_main(["--out", str(out_csv)])
     assert code == 0
-    assert {c["instruction"] for c in calls} == {PRIOR_WINNER}
+    assert {c["instruction"] for c in calls} == {SMART_WINNER}
     assert "3 clips" not in out and "2 clips, dictation.assemblyai.com, smart" in out
     assert "shipped instruction" in out
     assert "(1 clip(s) the judge never answered are left out)" in out
@@ -459,6 +459,12 @@ def test_main_with_no_instruction_and_a_limit(run_main):
     ]
     assert "service default (no instruction)" in out
     assert "left out" not in out and "Wrote" not in out
+
+
+def test_main_uses_the_fast_instruction_in_fast_mode(run_main):
+    code, _, calls = run_main(["--rewrite-mode", "fast", "--limit", "1"])
+    assert code == 0
+    assert [(call["instruction"], call["mode"]) for call in calls] == [(PRIOR_WINNER, None)]
 
 
 def test_main_sends_an_instruction_file_stripped(run_main, tmp_path):

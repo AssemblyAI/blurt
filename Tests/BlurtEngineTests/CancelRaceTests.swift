@@ -49,13 +49,13 @@ struct CancelRaceTests {
   }
 
   @Test("a submitted cancel during transcribing is spent there, not on the next press")
-  func submittedCancelDuringTranscribingIsSpent() async {
+  func submittedCancelDuringTranscribingIsSpent() async throws {
     let stt = GatedTranscriber(text: "Summarize this.")
     let (session, _) = await parkedTranscribing(stt)
     // The submitted door records the request before its turn (`requestCancel`).
     // Read-aloud submits exactly this when a press lands while an ask transcribes.
     session.submit(.cancel)
-    while await session.phase != .cancelled { await Task.yield() }
+    try await waitUntil("the submitted cancel to land") { await session.phase == .cancelled }
     await stt.allowToFinish()
     await session.awaitPipeline()
 

@@ -19,7 +19,7 @@ struct CancelledPasteLogTests {
   )
 
   @Test("a password field's transcript stays withheld when the next press lands mid-paste")
-  func nextPressDoesNotUnwithholdTheLog() async {
+  func nextPressDoesNotUnwithholdTheLog() async throws {
     let log = RecordedLog()
     let reads = Counter()
     var seams = testSeams(log: log)
@@ -35,13 +35,17 @@ struct CancelledPasteLogTests {
     )
 
     await session.press()
-    while await session.pressContext?.targetSecurity != .secure { await Task.yield() }
+    try await waitUntil("the first press to read a password field") {
+      await session.pressContext?.targetSecurity == .secure
+    }
     await session.release()
     await injector.waitUntilInsertEntered()
     await session.cancel()
     // The retry, accepted at once because `.cancelled` is terminal.
     await session.press()
-    while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
+    try await waitUntil("the retry to read an ordinary field") {
+      await session.pressContext?.targetSecurity == .ordinary
+    }
 
     await injector.allowInsertToFinish()
     await session.awaitPipeline()

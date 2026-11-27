@@ -18,15 +18,12 @@ struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss)
   private var dismiss
-  @State private var autoDictate = SharedStore.autoDictate
-  @State private var windowMinutes = SharedStore.windowMinutes
-  @State private var airPodsMic = SharedStore.airPodsMic
   @State private var showsKeyEntry = false
   @State private var confirmsStatsReset = false
   @State private var showsTypingTest = false
   @State private var showsSetupSteps = false
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-  @State private var keyboardSeen = SharedStore.keyboardEverSeen
+  @State private var keyboardSeen: Bool
   @Environment(\.scenePhase)
   private var scenePhase
   @AppStorage(TypingSpeed.defaultsKey)
@@ -34,6 +31,12 @@ struct SettingsView: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
+  // The App Group's settings, read and written in place, as the keyboard and
+  // the listening window read them (`SharedStore`'s getters keep these
+  // defaults) — in the coordinator's store, so bound in `init`.
+  @AppStorage private var autoDictate: Bool
+  @AppStorage private var windowMinutes: Int
+  @AppStorage private var airPodsMic: Bool
 
   var body: some View {
     NavigationStack {
@@ -107,7 +110,6 @@ struct SettingsView: View {
   private var keyboardSection: some View {
     Section {
       Toggle("Hands-free", isOn: $autoDictate)
-        .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
     } header: {
       Eyebrow("Keyboard")
     } footer: {
@@ -121,18 +123,16 @@ struct SettingsView: View {
   private var listeningSection: some View {
     Section {
       Picker("Keep listening for", selection: $windowMinutes) {
-        Text("5 minutes").tag(5)
-        Text("15 minutes").tag(15)
-        Text("1 hour").tag(60)
+        ForEach([5, 15, 60], id: \.self) { minutes in
+          Text(KeepOpen.duration(minutes: minutes)).tag(minutes)
+        }
         Text("Until I stop it").tag(0)
       }
-      .onChange(of: windowMinutes) { _, value in
-        SharedStore.windowMinutes = value
+      .onChange(of: windowMinutes) {
         // The window that is open takes the new length, not only the next one.
         coordinator.windowMinutesChanged()
       }
       Toggle("Use AirPods mic", isOn: $airPodsMic)
-        .onChange(of: airPodsMic) { _, value in SharedStore.airPodsMic = value }
     } header: {
       Eyebrow("Listening")
     } footer: {
@@ -200,9 +200,20 @@ struct SettingsView: View {
     }
   }
 
+  init(coordinator: DictationCoordinator) {
+    self.coordinator = coordinator
+    let store = coordinator.store
+    _keyboardSeen = State(initialValue: store.keyboardEverSeen)
+    _autoDictate = AppStorage(wrappedValue: false, BlurtShared.Key.autoDictate, store: store.defaults)
+    _windowMinutes = AppStorage(
+      wrappedValue: SharedStore.defaultWindowMinutes, BlurtShared.Key.windowMinutes, store: store.defaults
+    )
+    _airPodsMic = AppStorage(wrappedValue: false, BlurtShared.Key.airPodsMic, store: store.defaults)
+  }
+
   private func refreshSetup() {
     microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
-    keyboardSeen = SharedStore.keyboardEverSeen
+    keyboardSeen = coordinator.store.keyboardEverSeen
     coordinator.apiKey.refreshStatus()
   }
 }

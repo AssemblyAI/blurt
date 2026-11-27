@@ -250,10 +250,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// frames appear will see it.
   func meteredPowerDB() -> Float {
     let channels = output.connection(with: .audio)?.audioChannels ?? []
-    guard !channels.isEmpty else {
-      return -160
-    }
-    return channels.reduce(-Float.infinity) { max($0, $1.averagePowerLevel) }
+    return channels.map(\.averagePowerLevel).max() ?? -160
   }
 
   /// End capture and report how many bytes it produced, releasing the device.

@@ -12,7 +12,8 @@ final class WindowRig {
   let audio = FakeAudioSession()
   let tasks = FakeBackgroundTasks()
   let idle: FakeIdle
-  let clock = TestClock()
+  /// The window's clock, and the one a press's `startDelay` runs on.
+  let clock: TestClock
   let app = AppStateBox()
   let window: ListeningWindow
   private(set) var endings: [Bool] = []
@@ -20,13 +21,25 @@ final class WindowRig {
   /// The last record the window published.
   var state: ListeningState? { window.state }
 
-  init(closeDelay: Duration = .zero, startDelay: Duration = .zero, closingDelay: Duration = .zero) {
-    let fake = FakeListeningSource(closeDelay: closeDelay, startDelay: startDelay, ledger: ledger)
+  init(
+    store: SharedStore, closeDelay: Duration = .zero, startDelay: Duration = .zero, closingDelay: Duration = .zero
+  ) {
+    let virtualClock = TestClock()
+    clock = virtualClock
+    let fake = FakeListeningSource(
+      closeDelay: closeDelay, startDelay: startDelay, clock: virtualClock, ledger: ledger
+    )
     self.source = fake
     idle = FakeIdle(closingDelay: closingDelay, ledger: ledger)
     let box = app
     window = ListeningWindow(
-      source: fake, audioSession: audio, appState: { box.state }, backgroundTasks: tasks, clock: clock, idle: idle
+      store: store,
+      source: fake,
+      audioSession: audio,
+      appState: { box.state },
+      backgroundTasks: tasks,
+      clock: virtualClock,
+      idle: idle
     )
     window.onEndingUtterance = { [weak self] keepWords in self?.endings.append(keepWords) }
   }

@@ -74,9 +74,12 @@ Look at the changes (default to the working diff via `git diff` and
 - **An automatic window close ends the session before the feed:** the release has
   to find the audio, so `ListeningWindow.onClosingOnItsOwn` is awaited before
   `source.close()`.
-- **`BlurtiOSTests` run serially** — they swap the global `SharedStore.override`;
-  an async test suspended mid-await must not see another suite's. Flag a change
-  that re-enables parallel testing for that bundle.
+- **`BlurtiOSTests` run in parallel** — `SharedStore` is injected and each test
+  builds its own (`SharedStore.scratch()`, Darwin signals under its own prefix).
+  Flag any new process-global a test can reach (a `static var`, a shared
+  `Mutex`, `UserDefaults.standard`, `UIPasteboard.general` read back, a bare
+  Darwin name instead of `store.observe`/`store.post`), and any read of
+  `SharedStore.live` outside the composition roots.
 
 ## How to report
 

@@ -182,9 +182,13 @@ struct DictationSessionContextTests {
       await session.press()
       await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
       clock.advance(by: DictationSession.contextWaitBudget)
-      while await transcriber.receivedContexts.count < press { await Task.yield() }
+      try await waitUntil("press \(press)'s request to go out") {
+        await transcriber.receivedContexts.count >= press
+      }
       hung.signal()
-      while await session.pressContext?.targetSecurity != .ordinary { await Task.yield() }
+      try await waitUntil("press \(press)'s field to read as ordinary") {
+        await session.pressContext?.targetSecurity == .ordinary
+      }
       await session.release()
       await session.waitForIdle()
     }
@@ -204,7 +208,7 @@ struct DictationSessionContextTests {
   }
 
   @Test("a secure capture that lands after the upload's budget is still honored")
-  func lateSecureCaptureStillSuppressesHistory() async {
+  func lateSecureCaptureStillSuppressesHistory() async throws {
     // The regression the config-first switch opened. `startUpload` cannot wait
     // past `contextWaitBudget` for the AX read without holding the audio back,
     // and that budget now runs against a read that has only had the mic
@@ -234,11 +238,11 @@ struct DictationSessionContextTests {
     // decided until that child runs. Wait for the request to actually open
     // before unblocking the read, or a fast capture queue can win the race and
     // the request goes out primed after all.
-    while await transcriber.receivedContexts.isEmpty { await Task.yield() }
+    try await waitUntil("the request to go out") { await !transcriber.receivedContexts.isEmpty }
     // Only now let the read finish. Waiting on the box rather than sleeping, so
     // this asserts the recovery instead of racing the capture queue.
     gate.signal()
-    while await session.pressContext?.resolved == nil { await Task.yield() }
+    try await waitUntil("the press's context to resolve") { await session.pressContext?.resolved != nil }
 
     await session.release()
     await session.waitForIdle()

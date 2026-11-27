@@ -5,7 +5,8 @@ import CoreFoundation
 /// The handler runs on whichever thread the system delivers on and is
 /// `@Sendable` for that reason; hop to the main actor inside it when the work
 /// is UI. A class rather than a token so `deinit` can deregister — a listener
-/// left behind outlives its owner, since the system holds the callback.
+/// left behind outlives its owner, since the system holds the callback. Made
+/// through `SharedStore.observe`, which names it under the store's prefix.
 package nonisolated final class DarwinObserver: Sendable {
   private let name: String
   private let handler: @Sendable () -> Void

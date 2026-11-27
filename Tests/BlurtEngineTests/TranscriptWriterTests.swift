@@ -19,9 +19,9 @@ struct TranscriptWriterTests {
 
   /// A store in a fresh directory, removed when `body` returns.
   private func withStore(_ body: (TranscriptStore) async throws -> Void) async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "TranscriptWriterTests-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    try await body(TranscriptStore(url: directory.appending(path: "history.json")))
+    try await withTemporaryDirectory(named: "TranscriptWriterTests") { directory in
+      try await body(TranscriptStore(url: directory.appending(path: "history.json")))
+    }
   }
 
   @Test("an older list queued before the write made on quitting never lands after it")

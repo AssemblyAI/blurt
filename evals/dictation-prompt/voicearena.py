@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from pathlib import Path
 
@@ -40,8 +39,17 @@ DATASET = "VoiceArena/Dictation_Dataset"
 
 def cache_path() -> Path:
     """Where transcripts persist between runs — outside the repo, like any HF cache."""
-    root = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    return Path(root) / "blurt-evals" / "voicearena-stt.json"
+    import corpus  # noqa: PLC0415 — corpus imports this module
+
+    return corpus.cache_root() / "blurt-evals" / "voicearena-stt.json"
+
+
+def load_json(path: Path) -> dict:
+    """A JSON cache file's contents, or `{}` when it is missing or unreadable."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 def cache_key(row: dict) -> str:
@@ -112,10 +120,7 @@ def transcripts(rows: list[dict], api_key: str | None, path: Path | None = None)
     measures without saying so.
     """
     path = path or cache_path()
-    try:
-        cached: dict[str, str] = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        cached = {}
+    cached: dict[str, str] = load_json(path)
 
     missing = [row for row in rows if cache_key(row) not in cached]
     if missing and not api_key:

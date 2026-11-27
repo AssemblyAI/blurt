@@ -30,7 +30,7 @@ extension DictationCoordinator {
     // Every way to the microphone comes through here — the switch, the
     // keyboard's `blurt://start`, and the app coming to the front — so this
     // one gate covers them all.
-    needsConsent = !AIConsent.isGranted()
+    needsConsent = !AIConsent.isGranted(in: defaults)
     guard !needsConsent else {
       return
     }
@@ -47,13 +47,13 @@ extension DictationCoordinator {
   /// turned it off — a session comes on by itself, so using the Blurt
   /// keyboard needs no switch (`SessionAutoStart`).
   func startSessionIfReady() async {
-    let turnedOff = SessionAutoStart.isTurnedOff()
+    let turnedOff = SessionAutoStart.isTurnedOff(in: defaults)
     window.foregrounded(turnedOff: turnedOff)
     guard
       SessionAutoStart.shouldStart(
         windowOpen: window.isOn,
         hasKey: apiKey.hasAPIKey,
-        consented: AIConsent.isGranted(),
+        consented: AIConsent.isGranted(in: defaults),
         micGranted: AVAudioApplication.shared.recordPermission == .granted,
         turnedOff: turnedOff
       )
@@ -66,20 +66,20 @@ extension DictationCoordinator {
   /// The switch turned on: the user asked for a session, so Blurt goes back to
   /// turning one on by itself.
   func turnSessionOn() async {
-    SessionAutoStart.setTurnedOff(false)
+    SessionAutoStart.setTurnedOff(false, in: defaults)
     await startListening()
   }
 
   /// The switch turned off: closed now, and left off until the user asks again.
   func turnSessionOff() {
-    SessionAutoStart.setTurnedOff(true)
+    SessionAutoStart.setTurnedOff(true, in: defaults)
     stopListening()
   }
 
   /// The user agreed in `ConsentView`: record it and carry on opening the
   /// window they asked for.
   func grantConsent() async {
-    AIConsent.grant()
+    AIConsent.grant(in: defaults)
     needsConsent = false
     await startListening()
   }
@@ -147,7 +147,7 @@ extension DictationCoordinator {
       returnHost = host
     }
     // The keyboard's mic asked for a session: that undoes an earlier off.
-    SessionAutoStart.setTurnedOff(false)
+    SessionAutoStart.setTurnedOff(false, in: defaults)
     Task { await startListening() }
   }
 
