@@ -211,4 +211,34 @@ struct RealtimeTranscriberTests {
     }
     #expect(!server.terminated)
   }
+
+  @Test("server Error frames surface their message instead of the close placeholder")
+  func errorFrameSurfacesServerMessage() async throws {
+    let server = try await FakeRealtimeServer.start(
+      behavior: .errorFrame(
+        message: "User Input Validation Error: bad audio",
+        closeReason: "See Error message for details"
+      )
+    )
+    defer { server.stop() }
+    let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
+    await transcriber.start()
+    await transcriber.send(Data(count: 3_200))
+
+    var caught: (any Error)?
+    do {
+      for try await _ in transcriber.turns {
+        // Wait for the server Error frame to end the stream.
+      }
+    } catch {
+      caught = error
+    }
+    #expect(caught as? RealtimeError == .connection("User Input Validation Error: bad audio"))
+    let event = try JSONDecoder().decode(
+      RealtimeTranscriber.Event.self,
+      from: Data(#"{"type":"Error","error_code":3006,"error":"Too many sessions"}"#.utf8)
+    )
+    #expect(event.error == "Too many sessions")
+    #expect(event.turn == nil)
+  }
 }
