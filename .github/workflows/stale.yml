@@ -1,0 +1,63 @@
+name: stale
+
+# Nudges, then closes, issues and PRs nobody has touched in a while, so the open
+# lists stay a list of live work. Any comment, push or label change resets the
+# clock and removes the `stale` label; closing is one click to undo.
+#
+# Never touched: draft PRs (a parked prototype is deliberate), and anything
+# labelled `pinned` (keep open regardless), `security`, or `accepted` (a request
+# we've agreed to do, waiting on capacity rather than on its author).
+
+on:
+  schedule:
+    # Daily, off the hour so it doesn't queue behind every other :00 cron.
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: stale
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # actions: write lets the action delete the cache it keeps its progress in
+      # between runs; without it every run restarts from the oldest item.
+      actions: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          stale-issue-label: stale
+          stale-pr-label: stale
+          days-before-issue-stale: 60
+          days-before-issue-close: 14
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          exempt-draft-pr: true
+          exempt-issue-labels: pinned,security,accepted
+          exempt-pr-labels: pinned,security
+          close-issue-reason: not_planned
+          stale-issue-message: >
+            This issue has had no activity for 60 days, so it's been marked stale.
+            It will close in 14 days unless there's new activity — a comment with
+            more detail, or a note that it still affects you on the latest Blurt,
+            keeps it open.
+          close-issue-message: >
+            Closing after 14 more days without activity. If this still happens on
+            the latest Blurt, comment with your macOS and Blurt versions and it
+            can be reopened.
+          stale-pr-message: >
+            This PR has had no activity for 30 days, so it's been marked stale. It
+            will close in 14 days unless it's updated. If it's waiting on a
+            review, say so in a comment; if it's parked on purpose, convert it to
+            a draft.
+          close-pr-message: >
+            Closing after 14 more days without activity. The branch is untouched,
+            so it can be reopened whenever work resumes.
+          operations-per-run: 100

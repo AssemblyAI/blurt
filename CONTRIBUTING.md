@@ -159,11 +159,20 @@ let CI on `macos-26` answer that.
   KeyboardKit — are allowlisted and exactly pinned in `check.sh`).
 - Write a clear description of what changed and why.
 
-Every PR that touches code gets an **installable dev build**: CI builds
-`Blurt.app` from your branch and a bot comments a download link, so a reviewer
-can try the change rather than imagine it. The build is ad-hoc signed and not
-notarized, so it needs its quarantine flag cleared, and its permissions granted
-once per build — the comment spells out the commands.
+There is no per-PR installable build — CI can't sign one that macOS will grant
+permissions to (see `AGENTS.md`). To try a PR, check out its branch and run
+`scripts/dev-build.sh`.
+
+A few bots keep the tracker tidy:
+
+- **labeler** labels each PR by the areas it touches (`engine`, `mac`, `ios`,
+  `ci`, `docs`, `release`, `evals`).
+- **stale** marks an issue after 60 quiet days, or a PR after 30, and closes it
+  14 days later. Any comment or push resets the clock. Draft PRs and anything
+  labelled `pinned`, `security` or `accepted` (issues) are never touched — make
+  a PR a draft if you're parking it on purpose.
+- **lock-threads** locks issues and PRs closed and quiet for 180 days; open a
+  new issue rather than reviving an old one.
 
 ## Reporting bugs and ideas
 
