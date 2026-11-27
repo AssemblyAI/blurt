@@ -40,12 +40,18 @@
         return how
       }
 
-      #expect(try await run(.pressElement(id("button", "Reply"))) == "AXPress")
+      // Each press's answer is held before it is checked, so a failure prints
+      // what the performer did instead ("click: AXPress refused", say): with
+      // the call inside the macro, a CI run that missed this press logged no
+      // value, and the fixture never recorded it (run 46015518999).
+      let reply = try await run(.pressElement(id("button", "Reply")))
+      #expect(reply == "AXPress")
       #expect(try await fixture.state { $0.pressed == ["Reply"] }.pressed == ["Reply"])
       // A native app's press is trusted even when nothing it reads changes —
       // checked, a Send whose window stays put was pressed twice, and so was
       // every key of Calculator's (`SystemVoiceCommandPerformer.checksPress`).
-      #expect(try await run(.pressElement(id("button", "Send"))) == "AXPress")
+      let send = try await run(.pressElement(id("button", "Send")))
+      #expect(send == "AXPress")
       #expect(try await fixture.state { $0.pressed.count == 2 }.pressed == ["Reply", "Send"])
 
       await #expect(throws: VoiceCommandError.refused("press Delete")) {
