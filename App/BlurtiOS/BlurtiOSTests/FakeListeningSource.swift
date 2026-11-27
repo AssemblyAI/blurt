@@ -20,8 +20,11 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   private let openFlag = Atomic<Bool>(false)
   /// How long `close()` takes, so a reopen can land while the source is closing.
   private let closeDelay: Duration
-  /// How long a press's `start()` takes to deliver its first frame.
+  /// How long a press's `start()` takes to deliver its first frame, on `clock`.
   private let startDelay: Duration
+  /// The virtual clock `startDelay` runs on: the start holds until the test
+  /// advances it, so a test sees `.connecting` however slowly it polls.
+  private let clock: TestClock
   private let ledger: Ledger
   let events: AsyncStream<SourceEvent>
   let eventSink: AsyncStream<SourceEvent>.Continuation
@@ -35,9 +38,15 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   /// No meter: the fake captures nothing to measure.
   var levels: AsyncStream<Float> { AsyncStream { $0.finish() } }
 
-  init(closeDelay: Duration = .zero, startDelay: Duration = .zero, ledger: Ledger = Ledger()) {
+  init(
+    closeDelay: Duration = .zero,
+    startDelay: Duration = .zero,
+    clock: TestClock = TestClock(),
+    ledger: Ledger = Ledger()
+  ) {
     self.closeDelay = closeDelay
     self.startDelay = startDelay
+    self.clock = clock
     self.ledger = ledger
     (events, eventSink) = AsyncStream<SourceEvent>.makeStream()
   }
@@ -72,8 +81,7 @@ nonisolated final class FakeListeningSource: ListeningSource, @unchecked Sendabl
   func start() async throws -> AsyncStream<Data> {
     tally.withLock { $0.started += 1 }
     guard isOpen else { throw BlurtError.audioCaptureFailed(underlying: ListeningSourceFailure.windowClosed) }
-    // wall-clock-ok: a delay the test asks for, modelling a slow close; zero by default
-    if startDelay > .zero { try await Task.sleep(for: startDelay) }
+    if startDelay > .zero { try await clock.sleep(for: startDelay) }
     return AsyncStream { $0.finish() }
   }
 

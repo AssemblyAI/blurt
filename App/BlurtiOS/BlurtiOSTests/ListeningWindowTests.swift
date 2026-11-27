@@ -170,6 +170,11 @@ struct ListeningWindowTests {
     store.windowMinutes = 1
     rig.window.windowMinutesChanged()
     #expect(await until { (rig.state?.windowUntil ?? .distantFuture) < long })
+    // The record can show the shorter end before the expiry is parked on the
+    // clock; advancing ahead of it wakes nothing, and the window never closes.
+    // Just under a minute (`scheduleExpiry` measures from `Date()`), which no
+    // other timer here comes near: the heartbeat's 5 s, the poll's 50 ms.
+    #expect(await until { rig.clock.sleepingFor.contains { $0 > .seconds(30) && $0 <= .seconds(60) } })
     rig.clock.advance(by: .seconds(61))
     #expect(await until { rig.state?.window == .closed })
     #expect(rig.state?.reason == .sessionOff)

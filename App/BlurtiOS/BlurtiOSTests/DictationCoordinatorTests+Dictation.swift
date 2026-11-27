@@ -83,6 +83,9 @@ extension DictationCoordinatorTests {
     #expect(connecting.answers == press.id && connecting.command == press.id)
     #expect(connecting.dictation == DictationRef(id: dictation, ownerProcessID: Self.keyboard))
     #expect(connecting.recordingSince == nil && connecting.launchID == rig.window.launchID)
+    // The start holds on the rig's clock until it is parked and stepped past.
+    #expect(await until { rig.clock.sleepingFor.contains(.milliseconds(200)) })
+    rig.clock.advance(by: .milliseconds(200))
     #expect(await until { self.published?.state == .recording })
     let recording = try #require(published)
     #expect(recording.answers == press.id && recording.dictation?.id == dictation)
