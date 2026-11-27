@@ -18,7 +18,8 @@
 # survivors need judgement (some are equivalent mutants — a change that genuinely
 # cannot alter behaviour, which no test can be expected to catch). A required gate
 # that reports unactionable failures is a gate people learn to skip. Run this by
-# hand, and treat survivors as a to-do list.
+# hand, and treat survivors as a to-do list. CI runs it daily
+# (.github/workflows/mutate.yml) and opens a pull request for what survives.
 #
 # Usage:
 #   scripts/mutate.sh                       # all mutants in the default target set
@@ -145,7 +146,7 @@ while [ $# -gt 0 ]; do
       ;;
     -h | --help)
       # The whole header block is the help text; keep this range in step with it.
-      sed -n '2,38p' "$0"
+      sed -n '2,39p' "$0"
       exit 0
       ;;
     *)
