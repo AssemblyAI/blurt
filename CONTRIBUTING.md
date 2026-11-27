@@ -167,8 +167,10 @@ A few bots keep the tracker tidy:
 
 - **labeler** labels each PR by the areas it touches (`engine`, `mac`, `ios`,
   `ci`, `docs`, `release`, `evals`).
-- **stale** marks an issue after 60 quiet days, or a PR after 30, and closes it
-  30 days later. Any comment or push resets the clock. Draft PRs and anything
+- **stale** is deliberately quick. It marks an issue after 14 quiet days and
+  closes it 14 days later, and marks a PR after 14 and closes it 7 days later.
+  An issue labelled `needs-info` is marked after 7 days and closed 3 days
+  later. Any comment or push resets the clock. Draft PRs and anything
   labelled `pinned`, `security` or `accepted` (issues) are never touched — make
   a PR a draft if you're parking it on purpose.
 - **lock-threads** locks issues and PRs closed and quiet for 60 days; open a
