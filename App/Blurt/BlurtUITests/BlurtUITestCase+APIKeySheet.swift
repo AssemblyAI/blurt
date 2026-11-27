@@ -21,9 +21,20 @@ extension BlurtUITestCase {
   ) -> XCUIElement {
     let button = settings.buttons[identifier]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
+    let hittable = button.wait(for: \.isHittable, toEqual: true, timeout: 10)
+    if !hittable {
+      // Settings in front of the app's own windows, the button inside it, and
+      // still covered (run 46025331730): what covers it is outside the app, so
+      // the whole screen is kept, and whether the app is the active one.
+      let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      screen.name = "screen with \(identifier) covered"
+      screen.lifetime = .keepAlways
+      add(screen)
+    }
     XCTAssertTrue(
-      button.wait(for: \.isHittable, toEqual: true, timeout: 10),
-      "API key row button (\(identifier)) is covered (at \(button.frame)); windows, front first: \(windowFrames())"
+      hittable,
+      "API key row button (\(identifier)) is covered (at \(button.frame)); app state \(app.state.rawValue) "
+        + "(4 = in front); windows, front first: \(windowFrames())"
     )
     button.click()
     let sheet = settings.sheets.firstMatch
