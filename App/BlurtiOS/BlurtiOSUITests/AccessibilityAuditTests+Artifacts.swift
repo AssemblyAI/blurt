@@ -11,6 +11,16 @@ extension AccessibilityAuditTests {
   /// as the audit names it.
   static let predictionCell = "TUIPredictionViewCell"
 
+  /// The consent sheet's "Sent to AssemblyAI" rows, by their exact text
+  /// (`ConsentView`): what `isKnownArtifact` excuses "text clipped" on, and
+  /// nothing else on the sheet.
+  static let consentDisclosures: Set = [
+    "Your voice while you dictate",
+    "The text just before your cursor",
+    "Your recent dictations",
+    "Your key terms, including contact names",
+  ]
+
   /// The audit findings the type's comment explains, and nothing broader.
   static func isKnownArtifact(
     _ issue: XCUIAccessibilityAuditIssue,
@@ -47,7 +57,8 @@ extension AccessibilityAuditTests {
     }
     let isTextField = [.textField, .secureTextField].contains(element.elementType)
     let isProfessionalChip = element.elementType == .staticText && element.label == "Professional"
-    return issue.auditType == .textClipped && (isTextField || isProfessionalChip)
+    let isConsentDisclosure = element.elementType == .staticText && consentDisclosures.contains(element.label)
+    return issue.auditType == .textClipped && (isTextField || isProfessionalChip || isConsentDisclosure)
   }
 
   /// One line: what the audit says, and the element it says it about.

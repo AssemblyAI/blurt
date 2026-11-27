@@ -9,6 +9,11 @@ import Testing
 /// records the handshake and every binary message, answers the first audio
 /// with a partial and a final turn, and answers Terminate with Termination.
 final class FakeRealtimeServer: Sendable {
+  enum Behavior: Sendable {
+    case normal
+    case errorFrame(message: String, closeReason: String)
+  }
+
   private struct Log {
     var authorization: String?
     var chunkSizes: [Int] = []
@@ -23,6 +28,7 @@ final class FakeRealtimeServer: Sendable {
 
   private let listener: NWListener
   private let recorder: Recorder
+  private let behavior: Behavior
   private let queue = DispatchQueue(label: "FakeRealtimeServer")
 
   var url: URL { URL(string: "ws://127.0.0.1:\(listener.port?.rawValue ?? 0)/v3/ws") ?? URL(filePath: "/") }
@@ -30,12 +36,13 @@ final class FakeRealtimeServer: Sendable {
   var chunkSizes: [Int] { recorder.log.withLock { $0.chunkSizes } }
   var terminated: Bool { recorder.log.withLock { $0.terminated } }
 
-  private init(listener: NWListener, recorder: Recorder) {
+  private init(listener: NWListener, recorder: Recorder, behavior: Behavior) {
     self.listener = listener
     self.recorder = recorder
+    self.behavior = behavior
   }
 
-  static func start() async throws -> FakeRealtimeServer {
+  static func start(behavior: Behavior = .normal) async throws -> FakeRealtimeServer {
     let handshakeRecorder = Recorder()
     let handshakeQueue = DispatchQueue(label: "FakeRealtimeServer.handshake")
     let websocket = NWProtocolWebSocket.Options()
@@ -48,7 +55,9 @@ final class FakeRealtimeServer: Sendable {
     let parameters = NWParameters.tcp
     parameters.defaultProtocolStack.applicationProtocols.insert(websocket, at: 0)
     parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
-    let server = FakeRealtimeServer(listener: try NWListener(using: parameters), recorder: handshakeRecorder)
+    let server = FakeRealtimeServer(
+      listener: try NWListener(using: parameters), recorder: handshakeRecorder, behavior: behavior
+    )
     server.listener.newConnectionHandler = { [weak server] connection in server?.serve(connection) }
     await withCheckedContinuation { (ready: CheckedContinuation<Void, Never>) in
       let resumed = Mutex(false)
@@ -90,14 +99,7 @@ final class FakeRealtimeServer: Sendable {
           return entry.chunkSizes.count == 1
         }
         if first {
-          send(
-            #"{"type":"Turn","turn_order":0,"transcript":"hello","end_of_turn":false,"speaker_label":"A"}"#,
-            on: connection
-          )
-          send(
-            #"{"type":"Turn","turn_order":0,"transcript":"Hello.","end_of_turn":true,"speaker_label":"A"}"#,
-            on: connection
-          )
+          respondToFirstAudio(on: connection)
         }
 
       case .text where String(data: data, encoding: .utf8)?.contains("Terminate") == true:
@@ -111,9 +113,38 @@ final class FakeRealtimeServer: Sendable {
     }
   }
 
+  private func respondToFirstAudio(on connection: NWConnection) {
+    switch behavior {
+    case .normal:
+      send(
+        #"{"type":"Turn","turn_order":0,"transcript":"hello","end_of_turn":false,"speaker_label":"A"}"#,
+        on: connection
+      )
+      send(
+        #"{"type":"Turn","turn_order":0,"transcript":"Hello.","end_of_turn":true,"speaker_label":"A"}"#,
+        on: connection
+      )
+
+    case let .errorFrame(message, closeReason):
+      if let payload = try? JSONEncoder().encode(["type": "Error", "error": message]),
+        let text = String(data: payload, encoding: .utf8)
+      {
+        send(text, on: connection)
+      }
+      close(reason: closeReason, on: connection)
+    }
+  }
+
   private func send(_ text: String, on connection: NWConnection) {
     let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
     let context = NWConnection.ContentContext(identifier: "text", metadata: [metadata])
     connection.send(content: Data(text.utf8), contentContext: context, isComplete: true, completion: .idempotent)
+  }
+
+  private func close(reason: String, on connection: NWConnection) {
+    let metadata = NWProtocolWebSocket.Metadata(opcode: .close)
+    metadata.closeCode = .applicationCode(3_006)
+    let context = NWConnection.ContentContext(identifier: "close", metadata: [metadata])
+    connection.send(content: Data(reason.utf8), contentContext: context, isComplete: true, completion: .idempotent)
   }
 }

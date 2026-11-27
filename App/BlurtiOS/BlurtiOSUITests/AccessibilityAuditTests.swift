@@ -49,6 +49,15 @@ import XCTest
 ///   cleared "Ultracasual"; the audit still predicts a clip for the longest
 ///   name. Named here rather than ignored by kind, so any other chip or any
 ///   other text that clips still fails.
+/// - "text clipped" on the consent sheet's four "Sent to AssemblyAI" rows at
+///   AX XXXL, by their text (`consentDisclosures`): the audit raises it on
+///   "The text just before your cursor" wherever the row sits — it only ever
+///   passed when a fling left the row under the bar, where it is excused
+///   anyway (#447's fixed drag put it mid-screen) — while its own screenshot shows
+///   the row whole — three lines, the icon set inline with the first, as a
+///   list lays out a label at accessibility sizes. The rows already wrap to
+///   full height (`WrappingLabelStyle`). Named, so any other text on the
+///   sheet that clips still fails.
 ///
 /// A default-size "Dynamic Type unsupported" is checked rather than taken on
 /// the audit's word (`ScalingCheck`): it fails only if the same text is no
