@@ -17,9 +17,11 @@ struct KeyboardLifecycleTests {
   let store = SharedStore.scratch()
 
   /// Polls until `condition` holds or `timeout` passes; true when it held. The
-  /// suite's shorter default over the shared `until` poll: these tests wait on
-  /// the model, which answers within a tick.
-  func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
+  /// shared `until` poll's generous bound: a Darwin signal's round trip hops to
+  /// the main actor, which other suites share now the bundle runs in parallel,
+  /// so 3 s stopped being enough. A passing test never waits it out; the
+  /// absence checks pass their own short timeout.
+  func eventually(_ timeout: Duration = .seconds(30), _ condition: () -> Bool) async -> Bool {
     await until(timeout, condition)
   }
 

@@ -89,9 +89,11 @@ fi
 ios_wait_booted "$UDID"
 # In parallel, as project.yml's scheme says: each test builds its own App
 # Group (`SharedStore.scratch()`), so none reads another's records.
+# The status is held, not acted on, so a red run still prints why below.
+test_status=0
 xcodebuild test-without-building "${XCODEBUILD_ARGS[@]}" -destination "platform=iOS Simulator,id=$UDID" \
   -resultBundlePath "$RESULTS" \
-  -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}"
+  -collect-test-diagnostics never 2>&1 | "${PRETTY[@]}" || test_status=$?
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
@@ -102,6 +104,7 @@ for f in d.get("testFailures", []):
 ' || true
 echo "results: $RESULTS"
 echo "build log: $BUILD_LOG"
+[ "$test_status" -eq 0 ] || exit "$test_status"
 
 [ -n "$SANITIZER" ] && exit 0
 
