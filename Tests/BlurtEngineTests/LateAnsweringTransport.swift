@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Testing
 
 @testable import AssemblyAI
@@ -7,15 +6,20 @@ import Testing
 
 /// A gateway that ignores cancellation: it waits for `release()`, then answers
 /// 200 anyway, the way a response already in flight lands after a stop.
+///
+/// A `Gate` rather than a polled flag: the request records its arrival, which
+/// the test awaits, then parks until released — and `AsyncGate.wait()` not
+/// answering cancellation is exactly the deafness this fake stands for.
 final class LateAnsweringTransport: GatewayStub {
-  private let state = Mutex((asked: false, released: false))
-  var asked: Bool { state.withLock { $0.asked } }
+  private let gate = Gate()
 
-  func release() { state.withLock { $0.released = true } }
+  /// Returns once the request has arrived.
+  func waitUntilAsked() async { await gate.waitUntilEntered() }
+
+  func release() { gate.allowToFinish() }
 
   func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    state.withLock { $0.asked = true }
-    while !state.withLock({ $0.released }) { await Task.yield() }
+    await gate.enter()
     return try ok(request, completion("Say something here."))
   }
 }

@@ -98,29 +98,11 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
     // which traps. The store never produces one; this guards new callers.
     self.rate = rate.isFinite && rate > 0 ? rate : 1
     self.state = Mutex(State(schedule: PCMSchedule(sampleRate: sampleRate, rate: self.rate)))
-    var description = AudioStreamBasicDescription(
-      mSampleRate: Float64(sampleRate),
-      mFormatID: kAudioFormatLinearPCM,
-      mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
-      mBytesPerPacket: 2,
-      mFramesPerPacket: 1,
-      mBytesPerFrame: 2,
-      mChannelsPerFrame: 1,
-      mBitsPerChannel: 16,
-      mReserved: 0
+    // Signed 16-bit packed mono, little-endian as the host is: the TTS wire format.
+    let wire = AVAudioFormat(
+      commonFormat: .pcmFormatInt16, sampleRate: Double(sampleRate), channels: 1, interleaved: true
     )
-    var formatDescription: CMAudioFormatDescription?
-    unsafe CMAudioFormatDescriptionCreate(
-      allocator: kCFAllocatorDefault,
-      asbd: &description,
-      layoutSize: 0,
-      layout: nil,
-      magicCookieSize: 0,
-      magicCookie: nil,
-      extensions: nil,
-      formatDescriptionOut: &formatDescription
-    )
-    self.format = formatDescription
+    self.format = wire?.formatDescription
     renderer.audioTimePitchAlgorithm = .timeDomain
     synchronizer.addRenderer(renderer)
   }

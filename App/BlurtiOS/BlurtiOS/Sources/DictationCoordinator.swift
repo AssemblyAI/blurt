@@ -3,7 +3,6 @@ import BlurtEngine
 import BlurtiOSCore
 import Foundation
 import Observation
-import Synchronization
 import UIKit
 
 /// The one place the engine is composed for the iPhone app — the role
@@ -21,9 +20,8 @@ import UIKit
 @MainActor
 @Observable
 final class DictationCoordinator {
-  /// Who pressed last and what their field held, until the session accepts
-  /// the press (`claimPress`). A press the session refuses — one arriving while
-  /// a dictation is still in flight — must not take over that dictation's words.
+  /// A press and the field it came from, as `DictationHandoff` holds it:
+  /// pending until the session takes it, then the dictation's.
   nonisolated struct Press: Sendable {
     /// The field the press came from.
     var address = ResultAddress()
@@ -42,22 +40,16 @@ final class DictationCoordinator {
   /// most this long after `BlurtShared.ownerWatchdog` has passed since its
   /// last beat (DESIGN.md). The `keyboard` signal asks at once besides.
   static let watchdogTick: Duration = .seconds(2)
-  nonisolated static let pendingPress = Mutex(Press())
-  /// The press that started the dictation in flight: its keyboard, for the
-  /// words to go back to, and what that keyboard saw around the cursor, read
-  /// by the engine's context seam — and cleared once used, so nothing from
-  /// another app's field primes a later request.
-  nonisolated static let claimedPress = Mutex(Press())
-  /// Contact names, parsed once per lexicon refresh rather than on the press.
-  nonisolated private static let lexiconNames = Mutex<[String]>([])
-  /// The words the session just delivered, waiting to be counted. The stats are
-  /// recorded on the main actor when the dictation's terminal phase renders —
-  /// after its recording has been timed, and in the same place a reset runs —
-  /// rather than on the session's actor, where neither ordering holds.
-  nonisolated private static let deliveredText = Mutex<String?>(nil)
-
   let window: ListeningWindow
   let apiKey: APIKeyModel
+  /// The App Group the keyboard is reached through: the window's, so the two
+  /// can't write to different ones.
+  let store: SharedStore
+  /// This process's own defaults, apart from the App Group: consent, the
+  /// session switch's off, the stats.
+  @ObservationIgnored let defaults: UserDefaults
+  /// The presses and words the session's seams read off the main actor.
+  @ObservationIgnored let handoff: DictationHandoff
   private(set) var phase: PipelinePhase = .idle
   private(set) var recent = RecentDictations()
   private(set) var level: Float = 0
@@ -142,9 +134,6 @@ final class DictationCoordinator {
   @ObservationIgnored private(set) var recordingSince: Date?
   @ObservationIgnored private var lastSpokenSeconds: Double = 0
 
-  /// `transcriber`, `clock` and `now` are seams for the tests, which drive a
-  /// press through the real session against a stub transcript, a clock they
-  /// advance and an instant they hold; the app keeps the defaults.
   /// The time the keyboard's presence is judged against — by a press's
   /// decision, the owner's watchdog and the words' delivery — so a test's
   /// "seen 11 s ago" stays 11 s however slowly the run goes.
@@ -159,9 +148,16 @@ final class DictationCoordinator {
   /// `ListeningSourceFailure` is `CaptureFailureWording`.
   var overlay: OverlayUIState { phase.overlayState }
 
+  /// The window — and with it the App Group (`store`) — and this process's
+  /// `defaults` are the composition root's to pass: `.live` and `.standard`
+  /// in the app, a scratch suite of each in a test. `transcriber`, `clock`
+  /// and `now` are seams for the tests, which drive a press through the real
+  /// session against a stub transcript, a clock they advance and an instant
+  /// they hold; the app keeps the defaults.
   init(
+    window: ListeningWindow,
+    defaults: UserDefaults,
     apiKey: APIKeyModel = APIKeyModel(),
-    window: ListeningWindow = ListeningWindow(),
     transcriber: any TranscriberProtocol = AssemblyAITranscriber(),
     clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { Date() },
@@ -170,6 +166,10 @@ final class DictationCoordinator {
   ) {
     self.window = window
     self.apiKey = apiKey
+    self.store = window.store
+    self.defaults = defaults
+    let seams = DictationHandoff(store: window.store)
+    handoff = seams
     self.clock = clock
     self.now = now
     self.appState = appState
@@ -186,14 +186,15 @@ final class DictationCoordinator {
       // coordinator's clock and judges presence by its `now`, as the
       // watchdog does.
       injector: KeyboardRelayInjector(
-        presser: { Self.claimedPress.withLock { $0.stopAddress ?? $0.address } },
+        store: window.store,
+        presser: { seams.claimedPress.withLock { $0.stopAddress ?? $0.address } },
         clock: clock,
         now: now
       ),
-      keyTermsProvider: { Self.keyTerms() },
+      keyTermsProvider: { seams.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { text, ring in
-        Self.deliveredText.withLock { $0 = text }
+        seams.deliveredText.withLock { $0 = text }
         continuation.yield(ring)
       },
       // The keyboard is the only thing that can see the field: the press
@@ -202,23 +203,12 @@ final class DictationCoordinator {
       // `frontmost` runs only for a press the session accepts, first thing, so
       // that is where the press's keyboard and field text become the dictation's.
       hostFocusCapture: DictationSession.HostFocusCapture(
-        frontmost: { Self.claimPress() }, field: { Self.fieldContext() }
+        frontmost: { seams.claimPress() }, field: { seams.fieldContext() }
       )
     )
     window.onEndingUtterance = { [weak self] keepWords in await self?.endUtterance(keepWords: keepWords) }
     window.onStateChanged = { [weak self] _ in self?.clearError() }
     window.onRecord = { [weak self] record in self?.recordPublished(record) }
-  }
-
-  /// The user's own key terms (from the App Group, where the keyboard adds
-  /// them on the spot), then the contact names the keyboard read off the
-  /// phone, deduplicated case-insensitively. `KeyTerms` fits the list
-  /// to the request's caps (100 terms, 2048 bytes), first entries first, which
-  /// is why the typed terms lead.
-  nonisolated static func keyTerms() -> [String] {
-    // Not through the comma-separated form: a contact called "Smith, John"
-    // is one name, and the engine takes an array.
-    KeyTermList.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
   }
 
   func start() {
@@ -232,13 +222,13 @@ final class DictationCoordinator {
     // from here for as long as the process does.
     window.start()
     observers = [
-      DarwinObserver(name: BlurtShared.Signal.command) { [weak self] in
+      store.observe(BlurtShared.Signal.command) { [weak self] in
         Task { @MainActor in self?.handleCommand() }
       },
-      DarwinObserver(name: BlurtShared.Signal.keyboard) { [weak self] in
+      store.observe(BlurtShared.Signal.keyboard) { [weak self] in
         Task { @MainActor in self?.tickWatchdog() }
       },
-      DarwinObserver(name: BlurtShared.Signal.lexicon) { [weak self] in
+      store.observe(BlurtShared.Signal.lexicon) { [weak self] in
         Task { @MainActor in self?.reloadLexicon() }
       },
     ]
@@ -250,9 +240,9 @@ final class DictationCoordinator {
   // MARK: - Key terms
 
   private func reloadLexicon() {
-    let entries = SharedStore.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon) ?? []
+    let entries = store.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon) ?? []
     let names = entries.filter(\.isName).map(\.documentText)
-    Self.lexiconNames.withLock { $0 = names }
+    handoff.lexiconNames.withLock { $0 = names }
     lexiconNameCount = names.count
   }
 
@@ -296,12 +286,12 @@ final class DictationCoordinator {
     // Delivery always comes before the paste and its terminal phase, and the
     // phases render in order, so the dictation's words are waiting by now.
     if phase.isTerminal,
-      let text = Self.deliveredText.withLock({ text in
+      let text = handoff.deliveredText.withLock({ text in
         defer { text = nil }
         return text
       })
     {
-      DictationStats.record(text, spokenFor: lastSpokenSeconds)
+      DictationStats.record(text, spokenFor: lastSpokenSeconds, in: defaults)
     }
     // A press's start that failed is the window's news too: the source is
     // lost until the next foreground (a refused background start), or until

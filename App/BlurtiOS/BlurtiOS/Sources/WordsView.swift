@@ -20,7 +20,7 @@ struct WordsView: View {
           SettingsButton(action: showSettings)
         }
         .frame(height: DesignTokens.Metrics.appHeaderHeight)
-        KeyTermsCard(contactNames: coordinator.lexiconNameCount)
+        KeyTermsCard(store: coordinator.store, contactNames: coordinator.lexiconNameCount)
         TextShortcutsCard()
       }
       .padding(.horizontal, DesignTokens.Metrics.appPagePad)

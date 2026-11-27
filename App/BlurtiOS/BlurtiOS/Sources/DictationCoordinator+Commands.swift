@@ -31,60 +31,30 @@ extension DictationCoordinator {
     return ResultAddress(command)
   }
 
-  // MARK: The press the session takes
-
-  /// The session accepted a press: the last one asked for becomes the
-  /// dictation's, and is no longer pending. Nil, as the frontmost app: there is
-  /// none to paste into on the iPhone; the words go back to the keyboard.
-  ///
-  /// The stop's recipient is kept, not replaced: a quick release can be
-  /// accepted (`handleCommand`) before the session gets here, and it already
-  /// names where this dictation's words go. Nothing stale can be in it — it is
-  /// cleared when the last dictation ended, before any new press is accepted.
-  nonisolated static func claimPress() -> CapturedFocus? {
-    let press = pendingPress.withLock { pending in
-      defer { pending = Press() }
-      return pending
-    }
-    claimedPress.withLock { claimed in
-      claimed.address = press.address
-      claimed.context = press.context
-    }
-    return nil
-  }
-
-  /// What the keyboard saw around the cursor on the press in flight, once.
-  nonisolated static func fieldContext() -> FocusedFieldContext {
-    claimedPress.withLock { press in
-      defer { press.context = .empty }
-      return press.context
-    }
-  }
-
   /// A command landed (`Signal.command`): decided, acknowledged, and — when
   /// the router says so — submitted to the session. Decided on the window as
   /// it is this instant (`ListeningWindow.liveState`), never on the record it
   /// last wrote: a press that lands while the window is closing is refused,
   /// not promised a microphone on its way out.
   func handleCommand() {
-    guard let command = SharedStore.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) else {
+    guard let command = store.read(KeyboardCommand.self, forKey: BlurtShared.Key.command) else {
       return
     }
     // The command is consumed: nothing re-reads it, and the text it carried
     // from the user's field doesn't sit in the group container.
-    SharedStore.remove(forKey: BlurtShared.Key.command)
+    store.remove(forKey: BlurtShared.Key.command)
     let decision = CommandRouter.route(
       CommandRouter.Input(
         command: command,
         state: window.liveState,
         phase: routerPhase,
         inFlight: inFlight,
-        onScreen: SharedStore.keyboardOnScreen(now: now())?.processID,
+        onScreen: store.keyboardOnScreen(now: now())?.processID,
         answered: answered,
         launchID: window.launchID
       )
     )
-    SharedStore.acknowledge(decision.ack)
+    store.acknowledge(decision.ack)
     if decision.remember { remember(command.id, decision.ack.outcome) }
     log(command, decision)
     guard let submit = decision.submit else {
@@ -97,12 +67,12 @@ extension DictationCoordinator {
 
     case .release:
       stopAccepted = inFlight?.id
-      Self.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
+      handoff.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
       session.submit(.release)
 
     case .cancel:
       stopAccepted = inFlight?.id
-      Self.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
+      handoff.claimedPress.withLock { $0.stopAddress = Self.stopAddress(command, decision) }
       session.submit(.cancel)
     }
   }
@@ -110,7 +80,7 @@ extension DictationCoordinator {
   /// The router accepted a press: it becomes the pending one, with the field
   /// it was made in, and the session starts a dictation for it.
   private func submitPress(_ command: KeyboardCommand, dictation newDictation: UUID, owner: String?) {
-    Self.pendingPress.withLock { pending in
+    handoff.pendingPress.withLock { pending in
       pending = Press(
         address: ResultAddress(command),
         // A password field's flag is what keeps its words out of Recent
@@ -186,7 +156,7 @@ extension DictationCoordinator {
   /// the log line.
   func tickWatchdog() {
     guard let inFlight, watchdogReleased != inFlight.id, stopAccepted != inFlight.id,
-      OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: SharedStore.keyboardPresence, now: now())
+      OwnerWatchdog.shouldRelease(inFlight: inFlight, presence: store.keyboardPresence, now: now())
     else {
       return
     }
@@ -227,7 +197,7 @@ extension DictationCoordinator {
     inFlight = nil
     answers = nil
     stopAccepted = nil
-    Self.claimedPress.withLock { $0.stopAddress = nil }
+    handoff.claimedPress.withLock { $0.stopAddress = nil }
   }
 }
 

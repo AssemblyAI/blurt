@@ -63,30 +63,3 @@ struct StatusLineText: View {
 /// ProMotion — would only burn energy), so it tracks that one number instead of
 /// duplicating it behind a comment that could go stale.
 let overlayAnimationInterval = MicCapture.meterIntervalSeconds
-
-extension View {
-  /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so the
-  /// view eases through the dim point instead of bouncing off it. With
-  /// `animated` false (Reduce Motion) the view renders untouched.
-  ///
-  /// Lives here rather than beside its one remaining caller (`ReadyView`'s
-  /// Listening glyph) because it's the overlay's breathing curve — the pill's
-  /// own uses moved to the orb's ring sweep, and the main window borrows the
-  /// cadence deliberately so the two windows' motion matches.
-  @ViewBuilder
-  func pulsingOpacity(period: Double, minOpacity: Double, animated: Bool) -> some View {
-    if animated {
-      TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
-        self.opacity(
-          MeterBarGeometry.breathingOpacity(
-            time: timeline.date.timeIntervalSinceReferenceDate,
-            period: period,
-            minOpacity: minOpacity
-          )
-        )
-      }
-    } else {
-      self
-    }
-  }
-}

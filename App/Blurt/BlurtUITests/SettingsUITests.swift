@@ -105,13 +105,11 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(add.isEnabled)
 
     enhanced.click()
-    let off = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == false"), object: mode)
-    XCTAssertEqual(XCTWaiter.wait(for: [off], timeout: 5), .completed, "Switching off should disable the mode")
+    XCTAssertTrue(mode.wait(for: \.isEnabled, toEqual: false, timeout: 5), "Switching off should disable the mode")
     XCTAssertFalse(add.isEnabled, "Switching off should disable adding a style")
 
     enhanced.click()
-    let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: mode)
-    XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 5), .completed, "Switching on should re-enable the mode")
+    XCTAssertTrue(mode.wait(for: \.isEnabled, toEqual: true, timeout: 5), "Switching on should re-enable the mode")
     XCTAssertTrue(add.isEnabled, "Switching on should re-enable adding a style")
   }
 

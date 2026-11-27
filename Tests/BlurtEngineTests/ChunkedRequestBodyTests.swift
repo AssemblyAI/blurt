@@ -63,7 +63,7 @@ struct ChunkedRequestBodyTests {
     // than the pre-flight `checkCancellation`. Bytes in the pipe prove it: the
     // chunk is far larger than the pipe, so once any of it is written the writer
     // is past that check and can only finish by waiting for space.
-    while !body.input.hasBytesAvailable { await Task.yield() }
+    try await waitUntil("the writer to fill the pipe") { body.input.hasBytesAvailable }
     writer.cancel()
 
     await #expect(throws: CancellationError.self) { try await writer.value }

@@ -34,6 +34,9 @@ struct TypingTestView: View {
   @State private var phase = Phase.ready
   @State private var input = ""
   @State private var best = TypingSpeed.best()
+  /// One per second of the final stretch: each change is a thump. Only ever
+  /// counts up, so a restart never plays one.
+  @State private var thumps = 0
   @FocusState private var isTyping: Bool
 
   var body: some View {
@@ -66,6 +69,22 @@ struct TypingTestView: View {
     .page()
     .onAppear { isTyping = true }
     .task(id: phase.startDate) { await runClock() }
+    // A word submitted: a tap when it was right, the error buzz when not. A
+    // restart empties the list, and a shrinking list plays nothing.
+    .sensoryFeedback(trigger: test.outcomes.count) { old, new in
+      guard new > old else {
+        return nil
+      }
+      return test.outcomes.last == true ? .impact(weight: .light) : .error
+    }
+    .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: thumps)
+    // Only on the way into the results: "Try again" going back to ready is silent.
+    .sensoryFeedback(trigger: phase) { _, new in
+      guard case .finished = new else {
+        return nil
+      }
+      return .success
+    }
   }
 
   // MARK: - The sprint
@@ -122,7 +141,7 @@ struct TypingTestView: View {
         dynamicTypeSize.isAccessibilitySize
         ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
       layout {
-        Text(String(format: "%.1f", remaining))
+        Text(remaining, format: .number.precision(.fractionLength(1)))
           .monoFont(DesignTokens.Typography.sizeTypingClock, weight: .bold)
           .monospacedDigit()
           .foregroundStyle(isFinalStretch ? BlurtBrand.errorOrange : BlurtBrand.text)
@@ -176,11 +195,8 @@ struct TypingTestView: View {
     guard !word.isEmpty else {
       return
     }
-    if test.submit(word) {
-      UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    } else {
-      UINotificationFeedbackGenerator().notificationOccurred(.error)
-    }
+    // The feedback follows `test.outcomes` (`.sensoryFeedback` in `body`).
+    test.submit(word)
   }
 
   /// Runs once per sprint: waits out the clock, thumps through the final
@@ -196,7 +212,7 @@ struct TypingTestView: View {
       guard !Task.isCancelled else {
         return
       }
-      UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 1)
+      thumps += 1
       try? await Task.sleep(for: .seconds(1))
     }
     guard !Task.isCancelled else {
@@ -211,7 +227,6 @@ struct TypingTestView: View {
     best = TypingSpeed.best()
     isTyping = false
     input = ""
-    UINotificationFeedbackGenerator().notificationOccurred(.success)
     phase = .finished(wordsPerMinute: wordsPerMinute, accuracy: test.accuracy, result: result)
   }
 
@@ -257,11 +272,11 @@ extension TypingTestView {
     return VStack(alignment: .leading, spacing: DesignTokens.Metrics.typingResultGap) {
       headline(rounded: rounded, rank: rank, result: result)
 
-      Eyebrow("\(Int((accuracy * 100).rounded()))% accuracy")
+      Eyebrow("\(accuracy.formatted(.percent.precision(.fractionLength(0)))) accuracy")
 
       Text(
         speedup >= 1.5
-          ? "\(talking) That's \(String(format: "%.1f", speedup))× you."
+          ? "\(talking) That's \(speedup.formatted(.number.precision(.fractionLength(1))))× you."
           : "\(talking) Honestly, you might not need us."
       )
       .bodyFont(DesignTokens.Typography.sizeBody)

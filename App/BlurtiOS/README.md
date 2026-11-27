@@ -105,6 +105,13 @@ number in `DESIGN.md` › The two processes has one in `SessionContractNumbersTe
 it off its named constant and greps the table for the constant's name beside the value the code
 holds, so the table and the code cannot drift apart silently.
 
+The tests run in parallel. Nothing reaches the App Group through a global: `SharedStore` is handed
+to every type that reads it (`.live` only in `BlurtiOSApp` and the keyboard's
+`KeyboardViewController`), and each test builds its own with `SharedStore.scratch()` — a suite of
+its own, its Darwin signals under its own prefix — so no test sees another's records or hears its
+signals. A test that would share anything else (the coordinator's process defaults, the relay's
+pasteboard) injects that too.
+
 The suite holds the same gates as the engine's: warnings are errors, a plain run fails when
 `BlurtiOSCore` drops below the engine's own line-coverage floor (`MIN_IOS_COVERAGE`, 88%, in the
 script — raise it as coverage grows, never lower it to land a change), and CI's `ios-sanitizers`

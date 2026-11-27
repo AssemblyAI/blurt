@@ -1,5 +1,6 @@
 #if os(macOS)
   import AVFoundation
+  import Accelerate
   import CoreAudio
   import Foundation
   import os
@@ -150,13 +151,16 @@
           unsafe (out + frames).initialize(repeating: 0, count: count - frames)
           frames = count
         }
-        for frame in 0..<count {
-          var sum: Float = 0
-          for channel in 0..<channels { unsafe sum += data[frame * channels + channel] }
-          unsafe out[frame] += sum / sourceChannels
+        // Each channel, strided out of the interleaved buffer, scaled by its
+        // share of the source and added into `out` in place.
+        var share = 1 / sourceChannels
+        for channel in 0..<channels {
+          unsafe vDSP_vsma(data + channel, channels, &share, out, 1, out, 1, vDSP_Length(count))
         }
       }
-      for index in 0..<frames { unsafe out[index] = unsafe min(max(out[index], -1), 1) }
+      var lowest: Float = -1
+      var highest: Float = 1
+      unsafe vDSP_vclip(out, 1, &lowest, &highest, out, 1, vDSP_Length(frames))
       return frames
     }
 

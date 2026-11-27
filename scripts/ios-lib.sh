@@ -68,6 +68,28 @@ for pin in json.load(open(sys.argv[1]))["pins"]:
   return 1
 }
 
+# ios_export_attachments RESULT DIR → exports the result bundle RESULT's
+# attachments into DIR/attachments and copies each to DIR under the name it was
+# attached with: XCTest suggests "blurt-keyboard_0_<uuid>.png" (the name, a
+# counter, an id), which lands as DIR/blurt-keyboard.png. A bundle with no
+# attachments copies nothing.
+ios_export_attachments() {
+  xcrun xcresulttool export attachments --path "$1" --output-path "$2/attachments" >/dev/null
+  python3 - "$2" <<'PY'
+import json, os, shutil, sys
+d = sys.argv[1]
+try:
+    manifest = json.load(open(os.path.join(d, "attachments", "manifest.json")))
+except FileNotFoundError:
+    sys.exit(0)
+for test in manifest:
+    for a in test.get("attachments", []):
+        human = a["suggestedHumanReadableName"]
+        name = human.split("_")[0] + os.path.splitext(human)[1]
+        shutil.copy(os.path.join(d, "attachments", a["exportedFileName"]), os.path.join(d, name))
+PY
+}
+
 # ios_pick_device NAME → prints "udid<TAB>name" for the available simulator
 # called NAME on the newest iOS runtime, else for whichever iPhone this Mac
 # (or CI runner) has; prints nothing if there is none. BLURT_SIM_RUNTIME

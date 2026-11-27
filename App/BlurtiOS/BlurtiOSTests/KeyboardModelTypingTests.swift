@@ -4,9 +4,13 @@ import Testing
 
 @Suite("Keyboard model: typing rules")
 struct KeyboardModelTypingTests {
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   @Test("the term field takes the keys instead of the host; closed, its keys do nothing")
   func termField() {
-    let (model, proxy) = typingModel(before: "yo ")
+    let (model, proxy) = typingModel(store, before: "yo ")
     model.termType("x")
     model.termSpace()
     model.termDelete()
@@ -28,7 +32,7 @@ struct KeyboardModelTypingTests {
 
   @Test("a space in the term is one between words: never first, never a run")
   func termSpace() {
-    let (model, _) = typingModel()
+    let (model, _) = typingModel(store)
     model.beginAddingTerm()
     model.termSpace()
     #expect(model.termDraft?.isEmpty == true)
@@ -44,25 +48,23 @@ struct KeyboardModelTypingTests {
 
   @Test("return saves the term; with nothing typed it closes the field and saves nothing")
   func termReturn() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let (model, _) = typingModel()
+    let (model, _) = typingModel(store)
     model.hasFullAccess = true
     model.beginAddingTerm()
     model.termReturn()
     #expect(model.termDraft == nil)
-    #expect(SharedStore.keyTerms.isEmpty)
+    #expect(store.keyTerms.isEmpty)
     model.beginAddingTerm()
     model.termType("R")
     model.termType("i")
     model.termReturn()
     #expect(model.termDraft == nil)
-    #expect(SharedStore.keyTerms == ["Ri"])
+    #expect(store.keyTerms == ["Ri"])
   }
 
   @Test("a selection seeds the term and is replaced on save")
   func termFromSelection() {
-    let (model, proxy) = typingModel(before: "he said ", selected: "riz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "riz")
     model.beginAddingTerm()
     #expect(model.termDraft == "riz")
     model.termType("z")
@@ -73,7 +75,7 @@ struct KeyboardModelTypingTests {
 
   @Test("typing that reached the host field while the term is open moves into the term")
   func hardwareTypingClaimed() {
-    let (model, proxy) = typingModel(before: "yo ")
+    let (model, proxy) = typingModel(store, before: "yo ")
     model.beginAddingTerm()
     // A hardware key is one character per change.
     proxy.before = "yo R"
@@ -104,15 +106,13 @@ struct KeyboardModelTypingTests {
 
   @Test("a highlighted word is the chip; one tap adds it as it stands and leaves the text alone")
   func addSelectedTerm() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
     #expect(!model.selectedTermIsKnown)
     model.addSelectedTerm()
-    #expect(SharedStore.keyTerms == ["Rizz"])
+    #expect(store.keyTerms == ["Rizz"])
     #expect(model.selectedTermIsKnown)
     #expect(model.termSavedAt != nil)
     #expect(model.termDraft == nil)
@@ -120,15 +120,14 @@ struct KeyboardModelTypingTests {
     #expect(proxy.selected == "Rizz")
     // A second tap adds nothing twice.
     model.addSelectedTerm()
-    #expect(SharedStore.keyTerms == ["Rizz"])
+    #expect(store.keyTerms == ["Rizz"])
   }
 
-  @Test("a word already in the key terms is known on selection; clearing the highlight takes the chip away")
+  @Test(
+    "a word already in the key terms is known on selection; clearing the highlight takes the chip away")
   func knownSelection() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    SharedStore.addKeyTerm("rizz")
-    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
+    store.addKeyTerm("rizz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
@@ -141,7 +140,7 @@ struct KeyboardModelTypingTests {
 
   @Test("no chip without Full Access, or for a selection that is no term")
   func noChip() {
-    let (model, proxy) = typingModel(before: "", selected: "Rizz")
+    let (model, proxy) = typingModel(store, before: "", selected: "Rizz")
     model.contextChanged()
     #expect(model.selectedTerm == nil)
     model.hasFullAccess = true
@@ -150,17 +149,16 @@ struct KeyboardModelTypingTests {
     #expect(model.selectedTerm == nil)
   }
 
-  @Test("holding the chip opens the field with the word; saving puts the + back though the word stays highlighted")
+  @Test(
+    "holding the chip opens the field with the word; saving puts the + back though the word stays highlighted")
   func chipToField() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let (model, proxy) = typingModel(before: "he said ", selected: "riz")
+    let (model, proxy) = typingModel(store, before: "he said ", selected: "riz")
     model.hasFullAccess = true
     model.contextChanged()
     model.beginAddingTerm()
     #expect(model.termDraft == "riz")
     model.saveTerm()
-    #expect(SharedStore.keyTerms == ["riz"])
+    #expect(store.keyTerms == ["riz"])
     #expect(proxy.before == "he said ")
     #expect(proxy.selected == "riz")
     #expect(model.selectedTerm == nil)

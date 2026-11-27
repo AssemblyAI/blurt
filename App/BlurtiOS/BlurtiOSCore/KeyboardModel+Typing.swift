@@ -18,20 +18,10 @@ extension KeyboardModel {
   /// not a check to glance at.
   package static let termsFullDwell: TimeInterval = 2.5
 
-  /// Whether `term` would be a new key term with the list already holding
-  /// `KeyTerms.termCap`: a request sends only the first that many, the user's
-  /// own first, so one added past them would show its check and never be sent.
-  /// A list already over the cap (an import may take it there) is left as it
-  /// is; only adding to it is refused.
-  package static func termListIsFull(adding term: String) -> Bool {
-    let terms = SharedStore.keyTerms
-    return terms.count >= KeyTerms.termCap && !KeyTermList.contains(term, in: terms)
-  }
-
   /// A selection as a key term: trimmed, on one line, short enough to be a
   /// name or a phrase. Nil when it is none of those, or nothing is selected.
   /// Never one with a comma: the list is stored comma-separated
-  /// (`SharedStore.keyTerms`), so "Acme, Inc" would come back as two terms —
+  /// (`store.keyTerms`), so "Acme, Inc" would come back as two terms —
   /// the chip's one tap would add "Acme" and "Inc", call the phrase known,
   /// and offer it again as new the next time it was highlighted.
   package static func termCandidate(from selected: String?) -> String? {
@@ -41,6 +31,16 @@ extension KeyboardModel {
       return nil
     }
     return trimmed
+  }
+
+  /// Whether `term` would be a new key term with the list already holding
+  /// `KeyTerms.termCap`: a request sends only the first that many, the user's
+  /// own first, so one added past them would show its check and never be sent.
+  /// A list already over the cap (an import may take it there) is left as it
+  /// is; only adding to it is refused.
+  package func termListIsFull(adding term: String) -> Bool {
+    let terms = store.keyTerms
+    return terms.count >= KeyTerms.termCap && !KeyTermList.contains(term, in: terms)
   }
 
   /// A character typed while the term field is open goes into the term, not
@@ -103,7 +103,7 @@ extension KeyboardModel {
       dismissedSelection = nil
     }
     selectedTerm = term
-    selectedTermIsKnown = KeyTermList.contains(term, in: SharedStore.keyTerms)
+    selectedTermIsKnown = KeyTermList.contains(term, in: store.keyTerms)
   }
 
   /// The chip: the highlighted word goes into Blurt's key terms as it stands
@@ -120,11 +120,11 @@ extension KeyboardModel {
       dismissSelection()
       return
     }
-    guard !Self.termListIsFull(adding: term) else {
+    guard !termListIsFull(adding: term) else {
       noteTermListFull()
       return
     }
-    SharedStore.addKeyTerm(term)
+    store.addKeyTerm(term)
     selectedTermIsKnown = true
     noteTermSaved(thenDismissChip: true)
   }
@@ -183,11 +183,11 @@ extension KeyboardModel {
     }
     // The field stays open with what was typed: the user can cancel, or make
     // room in Blurt and come back to it.
-    guard !Self.termListIsFull(adding: draft) else {
+    guard !termListIsFull(adding: draft) else {
       noteTermListFull()
       return
     }
-    SharedStore.addKeyTerm(draft)
+    store.addKeyTerm(draft)
     // Out of the mode before touching the text, so the field's own change
     // notification can't read the replacement as typing to claim.
     let original = termDraftFromSelection

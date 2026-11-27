@@ -124,32 +124,20 @@ struct AssemblyAIAccountTests {
     #expect(sessions.session?.refreshToken == "rt-1")
   }
 
-  @Test("a refused refresh or exchange ends the connection here: key and session go")
-  func renewalRefused() async throws {
-    for refuseRefresh in [true, false] {
-      let freshServer = SignInServer()
-      let freshKeys = InMemoryAPIKeyStore()
-      let freshSessions = SignInStore.inMemory()
-      let testClock = clock
-      let account = AssemblyAIAccount(
-        configuration: testOAuthConfiguration,
-        apiKey: APIKeyModel(keyStore: freshKeys) { _ in .valid },
-        store: freshSessions,
-        transport: freshServer.transport
-      ) { testClock.now }
-      let auth = try #require(account.beginSignIn())
-      let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))
-      _ = await account.completeSignIn(auth, callback: callback)
-
-      freshServer.state.withLock { state in
-        if refuseRefresh { state.tokenStatus = 400 } else { state.exchangeStatus = 401 }
-      }
-      freshKeys.save(nil)  // no key stored makes renewal due right away
-      await account.renewIfDue()
-      #expect(account.status == .signedOut)
-      #expect(freshSessions.session == nil)
-      #expect(freshKeys.current == nil)
+  @Test(
+    "a refused refresh or exchange ends the connection here: key and session go",
+    arguments: [true, false]
+  )
+  func renewalRefused(refuseRefresh: Bool) async throws {
+    let account = try await signedIn()
+    server.state.withLock { state in
+      if refuseRefresh { state.tokenStatus = 400 } else { state.exchangeStatus = 401 }
     }
+    keyStore.save(nil)  // no key stored makes renewal due right away
+    await account.renewIfDue()
+    #expect(account.status == .signedOut)
+    #expect(sessions.session == nil)
+    #expect(keyStore.current == nil)
   }
 
   @Test("an unreachable server during renewal changes nothing")

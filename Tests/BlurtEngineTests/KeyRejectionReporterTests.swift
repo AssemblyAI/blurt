@@ -38,18 +38,16 @@ struct KeyRejectionReporterTests {
     }
   }
 
-  @Test("a 401 or the API's invalid-key 404 is reported and rethrown as is")
-  func rejected() async {
-    for status in [401, 404] {
-      let (reported, error) = await run(.failure(.http(status: status, message: "Invalid API key")))
-      #expect(reported == 1, "status \(status)")
-      guard case .http(let thrown, let message)? = error as? AssemblyAIError else {
-        Issue.record("status \(status): \(String(describing: error))")
-        continue
-      }
-      #expect(thrown == status)
-      #expect(message == "Invalid API key")
+  @Test("a 401 or the API's invalid-key 404 is reported and rethrown as is", arguments: [401, 404])
+  func rejected(status: Int) async {
+    let (reported, error) = await run(.failure(.http(status: status, message: "Invalid API key")))
+    #expect(reported == 1)
+    guard case .http(let thrown, let message)? = error as? AssemblyAIError else {
+      Issue.record("expected AssemblyAIError.http, got \(String(describing: error))")
+      return
     }
+    #expect(thrown == status)
+    #expect(message == "Invalid API key")
   }
 
   @Test("other failures and successes aren't reported")

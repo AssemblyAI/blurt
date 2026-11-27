@@ -192,37 +192,7 @@ struct MeterBarGeometryTests {
     #expect(abs(gap(animated: true) - gap(animated: false)) > 0.001)
   }
 
-  // MARK: - breathing opacity
-
-  @Test("breathing opacity starts full, dips to the floor, and returns")
-  func breathingOpacityCurve() {
-    let period = 1.8
-    let floor = 0.55
-    // Raised cosine: 1 at t=0, the floor at the half period, back to 1 at the end.
-    #expect(abs(MeterBarGeometry.breathingOpacity(time: 0, period: period, minOpacity: floor) - 1) < 0.0001)
-    #expect(
-      abs(
-        MeterBarGeometry.breathingOpacity(time: period / 2, period: period, minOpacity: floor)
-          - floor
-      ) < 0.0001)
-    #expect(
-      abs(MeterBarGeometry.breathingOpacity(time: period, period: period, minOpacity: floor) - 1)
-        < 0.0001)
-  }
-
-  @Test("breathing opacity never leaves the floor...1 band")
-  func breathingOpacityStaysInBand() {
-    // Both call sites' settings: the REC dot (1.2 s / 0.4) and the "Transcribing…"
-    // label (1.8 s / 0.55). Anything below the floor would make the 10 pt cyan
-    // illegible at the trough; anything above 1 is an invalid opacity.
-    for (period, floor) in [(1.2, 0.4), (1.8, 0.55)] {
-      for time in stride(from: 0.0, through: 5.0, by: 0.05) {
-        let o = MeterBarGeometry.breathingOpacity(time: time, period: period, minOpacity: floor)
-        #expect(o >= floor - 0.0001)
-        #expect(o <= 1 + 0.0001)
-      }
-    }
-  }
+  // MARK: - rotation
 
   @Test("rotation sweeps one full turn per period and wraps")
   func rotationSweepsOneTurnPerPeriod() {

@@ -50,24 +50,15 @@ xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme Bl
   -only-testing:BlurtiOSProbe/AppleKeyboardProbe -only-testing:BlurtiOSProbe/BlurtKeyboardProbe \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$OUT/parity.xcresult" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet
-xcrun xcresulttool export attachments --path "$OUT/parity.xcresult" --output-path "$OUT/attachments" >/dev/null
+ios_export_attachments "$OUT/parity.xcresult" "$OUT"
 
 SCALE="$(ios_device_scale "$UDID")"
 python3 - "$OUT" "$TOLERANCE" "$NAME" "$SCALE" "$REPO_ROOT" <<'PY'
-import json, os, shutil, subprocess, sys
+import json, os, subprocess, sys
 
 out, tolerance, device, scale, root = sys.argv[1], float(sys.argv[2]), sys.argv[3], int(sys.argv[4]), sys.argv[5]
-manifest = json.load(open(os.path.join(out, "attachments", "manifest.json")))
-found = {}
-for test in manifest:
-    for a in test.get("attachments", []):
-        # "apple-geometry-light_0_<uuid>.json": the name, then a counter and an id.
-        human = a["suggestedHumanReadableName"]
-        name = human.split("_")[0] + os.path.splitext(human)[1]
-        src = os.path.join(out, "attachments", a["exportedFileName"])
-        dst = os.path.join(out, name)
-        shutil.copy(src, dst)
-        found[name] = dst
+# ios_export_attachments put each attachment at OUT/<its name>.
+found = {name: os.path.join(out, name) for name in os.listdir(out) if os.path.isfile(os.path.join(out, name))}
 
 # The same key under the two keyboards' names: Apple's labels on the left,
 # the names KeyboardKit's buttons carry on the right (first match wins).

@@ -12,7 +12,7 @@ extension KeyboardModel {
   }
 
   package func phaseChanged() {
-    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else {
+    guard let current = store.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else {
       return
     }
     apply(current.isStale(now: now()) ? .idle : current)
@@ -64,7 +64,7 @@ extension KeyboardModel {
   }
 
   package func resultArrived() {
-    guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) else {
+    guard let result = store.read(DictationResult.self, forKey: BlurtShared.Key.result) else {
       return
     }
     guard result.id != lastResultID else {
@@ -94,7 +94,7 @@ extension KeyboardModel {
     // Taken out of the store once inserted, so no other keyboard process —
     // each host app runs its own — can insert the same words again; the app
     // watches for this removal to know the words landed.
-    SharedStore.remove(forKey: BlurtShared.Key.result)
+    store.remove(forKey: BlurtShared.Key.result)
     // Joined against the live text before the cursor, not the press-time
     // snapshot: the user may have typed since.
     let inserted = InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput)

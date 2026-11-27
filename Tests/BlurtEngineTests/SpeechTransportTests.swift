@@ -164,11 +164,11 @@ struct SpeechTransportTests {
     let reading = Task { try await speaker.speak("Read this.", style: .standard, onLevel: nil) }
     // Cancelled mid-body: once the first audio has reached the sink, rather
     // than a fixed moment after the request started that a slow run can miss.
-    while sink.chunks.isEmpty { await Task.yield() }
+    try await waitUntil("the first audio to reach the sink") { !sink.chunks.isEmpty }
     reading.cancel()
     await #expect(throws: CancellationError.self) { try await reading.value }
-    // Unbounded, as the suite's time limit bounds it: a request left
-    // synthesizing fails there, and a slow URLSession teardown doesn't.
-    while !ScriptedSpeechProtocol.stopped { await Task.yield() }
+    // Bounded only against a hang: a request left synthesizing fails here, and
+    // a slow URLSession teardown, which takes nowhere near 30 s, doesn't.
+    try await waitUntil("URLSession to stop the request") { ScriptedSpeechProtocol.stopped }
   }
 }

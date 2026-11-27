@@ -27,7 +27,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-PATTERN='Task\.sleep\(|Thread\.sleep|usleep\(|ContinuousClock\(\)|SuspendingClock\(\)'
+# A bare `sleep(` counts as well as `usleep(`, but not a method of that name
+# (`clock.sleep(`, `Task.sleep(` has its own entry) or a declaration of one: a
+# test clock's `func sleep(until:)` is the thing that replaces the wait.
+PATTERN='Task\.sleep\(|Thread\.sleep|usleep\(|(^|[^[:alnum:]_.])sleep\(|ContinuousClock\(\)|SuspendingClock\(\)'
+DECLARATION='func[[:space:]]+sleep\('
 SCOPE=(
   'Tests/*.swift'
   'App/Blurt/BlurtUITests/*.swift'
@@ -63,13 +67,13 @@ waits() {
 unmarked() {
   # The pattern goes in through the environment: `awk -v` would process its
   # backslashes, turning `\.` into "any character" on one awk and not another.
-  PAT="$PATTERN" awk '
-    BEGIN { pat = ENVIRON["PAT"] }
+  PAT="$PATTERN" DECL="$DECLARATION" awk '
+    BEGIN { pat = ENVIRON["PAT"]; decl = ENVIRON["DECL"] }
     FNR == 1 { above = 0 }
     {
       line = $0
       comment = (line ~ /^[[:space:]]*(\/\/|\*|\/\*)/)
-      if (line ~ pat && line !~ /wall-clock-ok:/ && !above && !comment) {
+      if (line ~ pat && line !~ decl && line !~ /wall-clock-ok:/ && !above && !comment) {
         print FILENAME ":" FNR ":" line
       }
       above = (comment && line ~ /wall-clock-ok:/)
@@ -90,11 +94,15 @@ try await Task.sleep(for: .seconds(3))  // wall-clock-ok: marks only itself
 try await Task.sleep(for: .seconds(4))
 // try await Task.sleep(for: .seconds(5))
 let clock = ContinuousClock()
+sleep(1)
+usleep(100_000)
+try await clock.sleep(for: .seconds(1))
+func sleep(until deadline: Instant, tolerance _: Duration?) async throws {
 SWIFT
   got="$(unmarked "$dir/Waits.swift" | cut -d: -f2)"
-  want="$(printf '%s\n' 5 7)"
+  want="$(printf '%s\n' 5 7 8 9)"
   if [ "$got" = "$want" ]; then
-    echo "  ok   flags unmarked waits; a marker covers its own line or the one below a comment"
+    echo "  ok   flags unmarked waits, bare sleep( included; a marker covers its own line or the one below a comment"
   else
     echo "  FAIL flagged lines '$(echo "$got" | tr '\n' ' ')', expected '$(echo "$want" | tr '\n' ' ')'" >&2
     failed=1

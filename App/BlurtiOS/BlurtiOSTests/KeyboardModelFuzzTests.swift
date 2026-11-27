@@ -45,13 +45,15 @@ struct KeyboardModelFuzzTests {
     mutating func coin() -> Bool { next().isMultiple(of: 2) }
   }
 
+  /// This test's own App Group: a fresh scratch suite each test, since
+  /// Swift Testing runs every test on a new instance of the suite.
+  let store = SharedStore.scratch()
+
   @Test(
     "ten thousand random events never leave the model in a stale or contradictory state", arguments: [1, 2, 3, 4, 5])
   func fuzz(seed: UInt64) {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     var random = Random(state: seed &* 7_919)
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
     model.appeared()
     var trace: [Event] = []
@@ -122,7 +124,7 @@ struct KeyboardModelFuzzTests {
       #expect(candidate?.caseInsensitiveCompare(term) == .orderedSame, "chip for a word not highlighted — \(context)")
       if model.selectedTermIsKnown {
         #expect(
-          SharedStore.keyTerms.contains { $0.caseInsensitiveCompare(term) == .orderedSame },
+          store.keyTerms.contains { $0.caseInsensitiveCompare(term) == .orderedSame },
           "known chip for an unknown word — \(context)")
       }
     } else {
@@ -155,17 +157,15 @@ struct KeyboardModelFuzzTests {
       commands.sent.allSatisfy { $0.keyboard == KeyboardProcess.id && $0.controllerID == model.controllerID },
       "command from another keyboard — \(context)")
     // A result is never left in the store once it was inserted here.
-    if let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) {
+    if let pending = store.read(DictationResult.self, forKey: BlurtShared.Key.result) {
       #expect(pending.id != model.lastResultID, "inserted result still in the store — \(context)")
     }
   }
 
   @Test("from any state, an appearance is a clean keyboard that can dictate")
   func recovers() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
     var random = Random(state: 42)
-    let rig = KeyboardRig()
+    let rig = KeyboardRig(store: store)
     let (model, commands) = (rig.model, rig.commands)
     // The wall clock, not the rig's held one: `appDies` ages the record by
     // `Date()`, so over the run's rounds only a clock that moves with it sees
@@ -173,7 +173,7 @@ struct KeyboardModelFuzzTests {
     model.now = { Date() }
     // Hands-free off: a tap must be the press here, not the stop of one the
     // appearance started.
-    SharedStore.autoDictate = false
+    store.autoDictate = false
     model.appeared()
     // A controller in a window for the hop to walk to the application —
     // attached only around the tap: an appearance would read Full Access off
@@ -191,8 +191,8 @@ struct KeyboardModelFuzzTests {
       model.disappeared()
       drive(rig, .deadline, &random)
       if let dictation = model.handshake.dictationID { model.apply(snapshot(.pasted, dictation: dictation)) }
-      SharedStore.write(snapshot(.idle), forKey: BlurtShared.Key.phase)
-      KeyboardRig.listening(true)
+      store.write(snapshot(.idle), forKey: BlurtShared.Key.phase)
+      KeyboardRig.listening(true, in: store)
       model.hasFullAccess = true
       model.appeared()
       #expect(model.termDraft == nil, "field open after an appearance (round \(round))")
@@ -237,7 +237,7 @@ struct KeyboardModelFuzzTests {
     _ random: inout Random
   ) {
     let model = rig.model
-    KeyboardRig.record(.open, micLive: true, age: ListeningState.lease + 1)
+    KeyboardRig.record(.open, in: store, micLive: true, age: ListeningState.lease + 1)
     model.stateChanged()
     if model.handshake.stopID != nil {
       drive(rig, .deadline, &random)

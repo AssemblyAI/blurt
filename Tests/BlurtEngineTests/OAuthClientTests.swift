@@ -180,6 +180,10 @@ struct OAuthClientTests {
   @Test("an expiry with fractional seconds parses; a missing or odd one is nil")
   func expiryParsing() {
     #expect(OAuthClient.date(from: "2026-11-01T00:00:00.500Z") == Date(timeIntervalSince1970: 1_793_491_200.5))
+    // A numeric offset and microseconds, as Python's isoformat() writes them.
+    #expect(OAuthClient.date(from: "2026-11-01T01:00:00+01:00") == Date(timeIntervalSince1970: 1_793_491_200))
+    let micro = OAuthClient.date(from: "2026-11-01T00:00:00.123456+00:00")
+    #expect(micro.map { abs($0.timeIntervalSince1970 - 1_793_491_200.123) < 0.001 } == true)
     #expect(OAuthClient.date(from: "soon") == nil)
   }
 

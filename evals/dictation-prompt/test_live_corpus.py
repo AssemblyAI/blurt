@@ -20,9 +20,9 @@ import time
 import types
 import urllib.error
 import urllib.request
+import wave
 from collections.abc import Callable
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
@@ -37,7 +37,7 @@ from conftest import clip_url, config_of, http_error, va_row
 # Shared fakes
 # --------------------------------------------------------------------------
 
-#: What the fake `afconvert` writes after the 44-byte WAV header.
+#: The sample frames the fake `afconvert` writes into its WAV.
 PCM = b"\x01\x02\x03\x04"
 
 
@@ -50,7 +50,11 @@ def commands(monkeypatch) -> list[list[str]]:
         assert check and capture_output
         seen.append(command)
         if command[0] == "afconvert":
-            Path(command[-1]).write_bytes(b"H" * 44 + PCM)
+            with wave.open(command[-1], "wb") as writer:
+                writer.setnchannels(1)
+                writer.setsampwidth(2)
+                writer.setframerate(16000)
+                writer.writeframes(PCM)
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(subprocess, "run", fake_run)

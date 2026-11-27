@@ -116,14 +116,10 @@ func makeSession(
 }
 
 /// Waits for the fixture's mic to start: a hand-back press has opened it, so a
-/// release now ends a recording rather than racing the press. Up to 30 s, as
-/// `waitUntil`: the bound only catches a hang, and a stalled runner outlasts 5 s.
+/// release now ends a recording rather than racing the press. `waitUntil`'s
+/// hang-sized bound: a stalled runner outlasts 5 s.
 func waitForMicStart(_ fixture: SessionFixture) async throws {
-  let deadline = ContinuousClock.now + .seconds(30)
-  while await fixture.mic.startCalls == 0, ContinuousClock.now < deadline {
-    // wall-clock-ok: the poll's own tick; the loop is bounded only against a hang
-    try await Task.sleep(for: .milliseconds(5))
-  }
+  try await waitUntil("the fixture's mic to start") { await fixture.mic.startCalls > 0 }
 }
 
 /// Feeds `fixture`'s session phases to `router`, returning the wiring for the
