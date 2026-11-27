@@ -9,37 +9,38 @@ extension BlurtUITestCase {
   /// `identifier` picks the row button by its state: "Connect…" before a key
   /// exists, "Change…" once one is stored.
   ///
-  /// Waits for the button to be hittable, not just to exist: as the first test
-  /// of a run, `testCancelDiscardsKeyEditAndKeepsRow` found Connect… present
-  /// but covered on every attempt. A covered Settings row is raised again with
-  /// ⌘, (as `openSettingsWindow` does), and a row still covered fails naming
-  /// every window's frame, so the next miss says what was on top.
+  /// Waits for the button to be hittable, not just to exist. As the first test
+  /// of a run, `testCancelDiscardsKeyEditAndKeepsRow` found Connect… covered by
+  /// macOS's "Keystroke Receiving" prompt, which the app's real key tap raised
+  /// at launch (PR #451's screenshot); the app makes no real tap under UI
+  /// testing now (`DictationKeyTap.ensureRunning`), so nothing raises the row a
+  /// second time here. A row still covered fails naming the app's state and
+  /// every window front first, with a screenshot of the whole screen.
   func openKeyEditor(
     _ settings: XCUIElement,
     via identifier: String = UITestIdentifiers.apiKeyConnect
   ) -> XCUIElement {
     let button = settings.buttons[identifier]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
-    let hittable = button.wait(for: \.isHittable, toEqual: true, timeout: 5)
-    if !hittable, settings.title != UITestIdentifiers.mainWindowTitle {
-      app.typeKey(",", modifierFlags: .command)
+    let hittable = button.wait(for: \.isHittable, toEqual: true, timeout: 10)
+    if !hittable {
+      // What covers it is outside the app's own windows when Settings is in
+      // front and the button inside it (a system prompt, last time), so the
+      // whole screen is kept, and whether the app is the active one.
+      let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      screen.name = "screen with \(identifier) covered"
+      screen.lifetime = .keepAlways
+      add(screen)
     }
     XCTAssertTrue(
-      button.wait(for: \.isHittable, toEqual: true, timeout: 10),
-      "API key row button (\(identifier)) is covered (at \(button.frame)); windows: \(windowFrames())"
+      hittable,
+      "API key row button (\(identifier)) is covered (at \(button.frame)); app state \(app.state.rawValue) "
+        + "(4 = in front); windows, front first: \(windowFrames())"
     )
     button.click()
     let sheet = settings.sheets.firstMatch
     XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The API key sheet should open")
     return sheet
-  }
-
-  /// Every app window's title and frame, for a failure message.
-  private func windowFrames() -> String {
-    (0..<app.windows.count)
-      .map { app.windows.element(boundBy: $0) }
-      .map { "\($0.title) \($0.frame)" }
-      .joined(separator: "; ")
   }
 
   /// Types into the sheet's key field. The field is focused on open, but a click

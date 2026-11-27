@@ -183,7 +183,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       // test runner can't grant real TCC permissions, so readiness never flips and
       // the pill would never appear. Building it here lets the live pipeline drive
       // the pill through `render(_:)` exactly as it does in production — the key
-      // tap's `ensureRunning()` simply no-ops without Accessibility trust, and the
+      // tap's `ensureRunning()` makes no real tap under UI testing (creating one
+      // raises the Input Monitoring prompt; see `DictationKeyTap`), and the
       // wizard's not-ready poll leaves this pill in place (it only hides on a
       // ready→not-ready *transition*, which never occurs here).
       if UITestMode.isActive {

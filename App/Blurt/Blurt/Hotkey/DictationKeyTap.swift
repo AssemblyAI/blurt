@@ -64,9 +64,9 @@ final class DictationKeyTap {
   private let reference = ContinuousClock.now
 
   /// Keeps the `tapCreate`-failure log to once per process: the install retry
-  /// rides the lifetime permission poll, so a persistently failing create (e.g.
-  /// the UI-test all-granted permissions stub) would otherwise log the same
-  /// error every tick, forever. The retry itself stays silent.
+  /// rides the lifetime permission poll, so a persistently failing create
+  /// would otherwise log the same error every tick, forever. The retry itself
+  /// stays silent.
   private var hasLoggedInstallFailure = false
 
   /// `nonisolated(unsafe)` so the nonisolated `deinit` can read it: written only
@@ -125,6 +125,17 @@ final class DictationKeyTap {
   @discardableResult
   func ensureRunning() -> Bool {
     refreshBinding()
+    #if UITEST_HOOKS
+      // Under UI testing no real tap is made: the suite drives this gate
+      // through `simulatePressForTesting`, and `CGEvent.tapCreate` for key
+      // events without Input Monitoring raises macOS's "Keystroke Receiving"
+      // prompt — which opened over Settings at launch and covered its
+      // Connect… button in the first test of every CI run (PR #451's
+      // screenshot). The binding above is all the simulated presses need.
+      if UITestMode.isActive {
+        return false
+      }
+    #endif
     if let tap {
       CGEvent.tapEnable(tap: tap, enable: true)
       return true
