@@ -69,7 +69,7 @@ final class SystemAudioSession: AudioSessionControlling {
     try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
     try session.setActive(true)
     applyPreferredInput()
-    Self.log.notice("audio session active; airPodsMic=\(store.airPodsMic)")
+    Self.log.notice("audio session active; airPodsMic=\(self.store.airPodsMic)")
   }
 
   func deactivate() throws {
