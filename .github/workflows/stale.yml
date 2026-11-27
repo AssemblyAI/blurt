@@ -36,28 +36,28 @@ jobs:
           stale-issue-label: stale
           stale-pr-label: stale
           days-before-issue-stale: 60
-          days-before-issue-close: 14
+          days-before-issue-close: 30
           days-before-pr-stale: 30
-          days-before-pr-close: 14
+          days-before-pr-close: 30
           exempt-draft-pr: true
           exempt-issue-labels: pinned,security,accepted
           exempt-pr-labels: pinned,security
           close-issue-reason: not_planned
           stale-issue-message: >
             This issue has had no activity for 60 days, so it's been marked stale.
-            It will close in 14 days unless there's new activity — a comment with
+            It will close in 30 days unless there's new activity — a comment with
             more detail, or a note that it still affects you on the latest Blurt,
             keeps it open.
           close-issue-message: >
-            Closing after 14 more days without activity. If this still happens on
+            Closing after 30 more days without activity. If this still happens on
             the latest Blurt, comment with your macOS and Blurt versions and it
             can be reopened.
           stale-pr-message: >
             This PR has had no activity for 30 days, so it's been marked stale. It
-            will close in 14 days unless it's updated. If it's waiting on a
+            will close in 30 days unless it's updated. If it's waiting on a
             review, say so in a comment; if it's parked on purpose, convert it to
             a draft.
           close-pr-message: >
-            Closing after 14 more days without activity. The branch is untouched,
+            Closing after 30 more days without activity. The branch is untouched,
             so it can be reopened whenever work resumes.
           operations-per-run: 100
