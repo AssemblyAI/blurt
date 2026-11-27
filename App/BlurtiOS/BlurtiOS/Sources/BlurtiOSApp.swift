@@ -72,7 +72,16 @@ struct BlurtiOSApp: App {
 
   private var home: some View {
     RootView(coordinator: coordinator)
-      .task { await start() }
+      .task {
+        await start()
+        #if DEBUG
+          // The consent sheet over home, as turning a session on raises it, for
+          // the audits without that tap: the first tap after a fresh install's
+          // launch can land before the app takes touches, and the switch stays
+          // off (PR #451's merge-queue recording).
+          if CommandLine.arguments.contains("-BlurtAskConsent") { coordinator.needsConsent = true }
+        #endif
+      }
   }
 
   /// The composition root, and the first thing that runs: the engine's identity

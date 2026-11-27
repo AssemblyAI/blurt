@@ -86,6 +86,13 @@ final class AccessibilityAuditTests: XCTestCase {
   /// name the findings carry.
   private var textSize: (arguments: [String], name: String) = ([], "default text")
 
+  /// The cold first launch, once, before any test (`warmFirstLaunch`). XCTest
+  /// calls this on the main thread.
+  override nonisolated static func setUp() {
+    super.setUp()
+    MainActor.assumeIsolated { warmFirstLaunch() }
+  }
+
   override func setUp() async throws {
     try await super.setUp()
     continueAfterFailure = false
@@ -140,14 +147,13 @@ final class AccessibilityAuditTests: XCTestCase {
 
   func testConsent() throws {
     try atEachTextSize {
-      launchHome()
-      let session = app.switches.firstMatch
-      scrollTo(session)
-      session.tap()
-      XCTAssertTrue(
-        app.buttons["Not now"].waitForExistence(timeout: 10),
-        "Turning a session on should ask consent (\(Self.missedTapReport(session, in: app)))"
-      )
+      // Raised at launch over home (`-BlurtAskConsent`), as turning a session
+      // on raises it: the suite audits the sheet, not the switch, and a tap on
+      // the switch just after a fresh install's launch could land before the
+      // app took touches, leaving it off with no sheet (PR #451's queue run).
+      launch("-BlurtUITestKey", "-SetupFinished", "YES", "-BlurtAskConsent")
+      let notNow = app.buttons["Not now"]
+      XCTAssertTrue(notNow.waitForExistence(timeout: 10), "-BlurtAskConsent should raise the consent sheet")
       try auditScrolling("consent sheet")
     }
   }
@@ -314,14 +320,23 @@ final class AccessibilityAuditTests: XCTestCase {
   /// places, so "unchanged since the last drag" isn't enough.) Each drag runs
   /// from low on the screen, clear of the tab bar, most of the way up: a
   /// fixed distance, so every run audits the same pages (`drag`).
+  ///
+  /// A screen still scrolling after `maxPages` fails rather than stopping
+  /// quietly: the cap once cut Settings short at the largest text size, so
+  /// its last rows were never on screen to be measured there, and a default-
+  /// size finding about them that `ScalingCheck` would have cleared failed.
   private func auditScrolling(_ screen: String) throws {
+    let maxPages = 48
     try audit(screen)
     var seen: Set = [screenTexts()]
-    for page in 2...24 {
-      Self.drag(app, by: -app.frame.height * 0.6, from: 0.8)
-      guard seen.insert(screenTexts()).inserted else { break }
+    for page in 2...maxPages {
+      Self.drag(app, by: -app.frame.height * 0.7, from: 0.85)
+      guard seen.insert(screenTexts()).inserted else {
+        return
+      }
       try audit("\(screen), page \(page)")
     }
+    XCTFail("[\(screen) (\(textSize.name))] still scrolling after \(maxPages) pages; its end was never audited")
   }
 
   /// Every text on screen and where it is, from one snapshot: unchanged by a
@@ -346,6 +361,9 @@ final class AccessibilityAuditTests: XCTestCase {
   }
 
   private func audit(_ screen: String) throws {
+    // Never mid-change: the audit reads the whole hierarchy, and a screen
+    // still laying out (a launch, a keyboard coming up) is when it timed out.
+    _ = screenTexts()
     let name = "\(screen) (\(textSize.name))"
     // What was audited, beside what it raised, in the result bundle.
     let shot = XCTAttachment(screenshot: app.screenshot())
