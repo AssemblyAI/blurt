@@ -43,7 +43,8 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   }
 
   /// One server message — only the fields read. `Turn`'s are flattened into
-  /// `turn`; `Begin` and anything else are ignored.
+  /// `turn` and `Error`'s carry their message in `error`; `Begin` and
+  /// anything else carry neither.
   struct Event: Decodable {
     enum CodingKeys: String, CodingKey {
       case type
@@ -51,24 +52,34 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
       case transcript
       case endOfTurn = "end_of_turn"
       case speakerLabel = "speaker_label"
+      case error
     }
 
     let type: String
     let turn: RealtimeTurn?
+    let error: String?
 
     init(from decoder: any Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
       type = try container.decode(String.self, forKey: .type)
-      guard type == "Turn" else {
+      switch type {
+      case "Turn":
+        turn = RealtimeTurn(
+          order: try container.decode(Int.self, forKey: .turnOrder),
+          transcript: try container.decodeIfPresent(String.self, forKey: .transcript) ?? "",
+          isFinal: try container.decodeIfPresent(Bool.self, forKey: .endOfTurn) ?? false,
+          speaker: try container.decodeIfPresent(String.self, forKey: .speakerLabel)
+        )
+        error = nil
+
+      case "Error":
         turn = nil
-        return
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+
+      default:
+        turn = nil
+        error = nil
       }
-      turn = RealtimeTurn(
-        order: try container.decode(Int.self, forKey: .turnOrder),
-        transcript: try container.decodeIfPresent(String.self, forKey: .transcript) ?? "",
-        isFinal: try container.decodeIfPresent(Bool.self, forKey: .endOfTurn) ?? false,
-        speaker: try container.decodeIfPresent(String.self, forKey: .speakerLabel)
-      )
     }
   }
 
@@ -284,6 +295,15 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
         didTerminate = true
         releaseTerminationWait()
         turnFeed.finish()
+
+      case "Error":
+        // Streaming v3 follows every Error frame with a generic close reason
+        // ("See Error message for details"); surface the frame's text before
+        // the close overwrites it.
+        if let message = event.error, !message.isEmpty {
+          close(error: RealtimeError.connection(message))
+          return
+        }
 
       default:
         continue
