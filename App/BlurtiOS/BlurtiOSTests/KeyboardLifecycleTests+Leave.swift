@@ -39,11 +39,15 @@ extension KeyboardLifecycleTests {
     #expect(store.keyboardPresence?.onScreen == true)
     #expect(store.keyboardSeenAt != nil)
     #expect(!(await eventually(.milliseconds(300)) { posts.seen > 1 }))
+    // Asked as of the record's own stamp, not the wall clock: the rule under
+    // test is the on-screen owner, and a slow runner (a sanitizer, the suites
+    // in parallel) can age the record past the watchdog's bound by itself.
+    let presence = store.keyboardPresence
     #expect(
       !OwnerWatchdog.shouldRelease(
         inFlight: DictationRef(id: dictation, ownerProcessID: KeyboardProcess.id),
-        presence: store.keyboardPresence,
-        now: Date()
+        presence: presence,
+        now: presence?.seenAt ?? Date()
       ))
     rig.answer(.stopped(dictation))
     #expect(model.leaving == nil)
