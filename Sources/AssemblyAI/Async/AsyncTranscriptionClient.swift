@@ -7,10 +7,10 @@ public import Foundation
 ///
 /// Every path, header and field below is one the reference documents:
 /// `POST /v2/upload` (raw bytes in, `upload_url` out), `POST /v2/transcript`
-/// (`audio_url`, `speaker_labels`), `GET /v2/transcript/{id}` (`status`, `text`,
-/// `utterances`, `error`). The speech model and language are left to the
-/// API's defaults: `speech_models` defaults to the current models, and
-/// language detection runs whenever no language is set.
+/// (`audio_url`, `speaker_labels`, optional `speech_models`),
+/// `GET /v2/transcript/{id}` (`status`, `text`, `utterances`, `error`). By
+/// default, `speech_models` and language are omitted so callers choose any
+/// explicit `speechModels` while leaving language detection enabled.
 public struct AsyncTranscriptionClient: Sendable {
   /// Where a transcription has got to, for the caller's progress line.
   public enum Phase: Sendable, Equatable {
@@ -44,17 +44,20 @@ public struct AsyncTranscriptionClient: Sendable {
   private let transport: any HTTPTransport
   private let userAgent: String?
   private let pollInterval: Duration
+  private let speechModels: [String]
 
   public init(
     baseURL: URL = Self.defaultBaseURL,
     transport: any HTTPTransport = URLSession.shared,
     userAgent: String? = nil,
-    pollInterval: Duration = Self.pollInterval
+    pollInterval: Duration = Self.pollInterval,
+    speechModels: [String] = []
   ) {
     self.baseURL = baseURL
     self.transport = transport
     self.userAgent = userAgent
     self.pollInterval = pollInterval
+    self.speechModels = speechModels
   }
 
   /// A failure worth one more try: a dropped or unreachable connection, a 5xx,
@@ -133,7 +136,7 @@ public struct AsyncTranscriptionClient: Sendable {
       apiKey: apiKey,
       userAgent: userAgent,
       timeout: 60,
-      body: TranscriptRequest(audioURL: audioURL, speakerLabels: true)
+      body: TranscriptRequest(audioURL: audioURL, speakerLabels: true, speechModels: speechModels)
     )
     // Retried only when the API certainly created nothing: a submit that may
     // have landed (a timeout, a 5xx) is a second billed transcript if repeated.
