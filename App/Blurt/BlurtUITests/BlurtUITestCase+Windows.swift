@@ -11,7 +11,11 @@ extension BlurtUITestCase {
   /// focus, and it's sent even when Settings is already open: that raises it
   /// over the harness a test clicked since, rather than driving its toolbar
   /// from behind. Unlike the harness, Settings opens frontmost via ⌘,, so its
-  /// controls are hittable without closing the other windows.
+  /// controls are hittable without closing the other windows — and this waits
+  /// until it is the front window, not only until it exists: as the first test
+  /// of a run, Settings existed behind another window and its rows were
+  /// covered (`openKeyEditor`). One ⌘,, never a second to raise it: a Settings
+  /// window that stays behind fails here, naming the windows front to back.
   @discardableResult
   func openSettingsWindow(timeout: TimeInterval = 10) -> XCUIElement {
     let paneTitles = [
@@ -29,10 +33,28 @@ extension BlurtUITestCase {
       settings.waitForExistence(timeout: timeout),
       "Settings window did not open after ⌘,"
     )
+    // `app.windows` lists front to back, so its first is the one in front.
+    let inFront = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "title IN %@", paneTitles),
+      object: app.windows.firstMatch
+    )
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [inFront], timeout: timeout),
+      .completed,
+      "Settings opened but isn't in front; windows, front first: \(windowFrames())"
+    )
     guard settings.title != UITestIdentifiers.generalSettingsTab else {
       return settings
     }
     return selectSettingsTab(settings, named: UITestIdentifiers.generalSettingsTab)
+  }
+
+  /// Every app window's title and frame, front to back, for a failure message.
+  func windowFrames() -> String {
+    (0..<app.windows.count)
+      .map { app.windows.element(boundBy: $0) }
+      .map { "\($0.title) \($0.frame)" }
+      .joined(separator: "; ")
   }
 
   /// Selects a Settings pane (a `TabView` tab in the preferences toolbar) by its
