@@ -96,7 +96,7 @@ struct ProtocolTests {
     // onto the timeout copies it out.
     let polls = Int(.seconds(KeyboardRelayInjector.deliveryTimeout) / KeyboardRelayInjector.deliveryPoll)
     for _ in 0..<polls {
-      await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
+      #expect(await parked(on: clock, for: KeyboardRelayInjector.deliveryPoll))
       #expect(store.read(DictationResult.self, forKey: BlurtShared.Key.result)?.text == "late words")
       #expect(clipboard.isEmpty)
       clock.advance(by: KeyboardRelayInjector.deliveryPoll)
@@ -170,7 +170,7 @@ private func takeResult(from store: SharedStore, stepping clock: TestClock) asyn
   }
   let pending = store.read(DictationResult.self, forKey: BlurtShared.Key.result)
   store.remove(forKey: BlurtShared.Key.result)
-  await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
+  #expect(await parked(on: clock, for: KeyboardRelayInjector.deliveryPoll))
   clock.advance(by: KeyboardRelayInjector.deliveryPoll)
   return pending
 }

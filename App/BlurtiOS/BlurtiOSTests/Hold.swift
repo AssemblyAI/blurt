@@ -7,7 +7,9 @@ import Synchronization
 /// main actor could miss the moment entirely and wait out its `until`.
 ///
 /// One-shot: once `release()` has run, every `wait()`, then or later, returns
-/// at once.
+/// at once. A parked `wait()` ignores cancellation, so a test that holds a
+/// step must release it on every path, its failures included — `#expect` and
+/// `until` never end a test early, which is why the release can follow them.
 nonisolated final class Hold: Sendable {
   private struct State {
     var released = false

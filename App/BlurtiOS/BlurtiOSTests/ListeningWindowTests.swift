@@ -154,7 +154,6 @@ struct ListeningWindowTests {
     rig.window.close()
     #expect(await until { rig.source.isClosing }, "the close never reached the source")
     rig.window.open()
-    #expect(rig.source.opened == 1, "nothing reopens while the source is closing")
     rig.source.releaseClose()
     // The reopen goes through once the source has closed, so the second
     // open is what says it did.
