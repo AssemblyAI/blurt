@@ -11,10 +11,6 @@ import Testing
 /// reads back, and the Terminate → Termination close.
 @Suite("Realtime transcriber")
 struct RealtimeTranscriberTests {
-  private static func queryItems(of transcriber: RealtimeTranscriber) throws -> Set<URLQueryItem> {
-    Set(URLComponents(url: try #require(transcriber.request.url), resolvingAgainstBaseURL: false)?.queryItems ?? [])
-  }
-
   /// A fake server, a transcriber pointed at it, and the transcriber's turns.
   private struct Connection {
     let server: FakeRealtimeServer
@@ -34,6 +30,10 @@ struct RealtimeTranscriberTests {
     let transcriber = RealtimeTranscriber(apiKey: "key", url: server.url)
     await transcriber.send(Data(count: 3_200))  // before start: no socket yet
     return transcriber
+  }
+
+  private static func queryItems(of transcriber: RealtimeTranscriber) throws -> Set<URLQueryItem> {
+    Set(URLComponents(url: try #require(transcriber.request.url), resolvingAgainstBaseURL: false)?.queryItems ?? [])
   }
 
   private func connect() async throws -> Connection {
