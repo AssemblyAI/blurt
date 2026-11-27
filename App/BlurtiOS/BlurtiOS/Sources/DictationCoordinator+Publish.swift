@@ -1,6 +1,5 @@
 import BlurtEngine
 import BlurtiOSCore
-import Foundation
 
 // MARK: - The phase, written for the keyboard
 //

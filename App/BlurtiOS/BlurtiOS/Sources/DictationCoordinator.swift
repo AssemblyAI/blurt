@@ -128,7 +128,9 @@ final class DictationCoordinator {
   @ObservationIgnored var stopAccepted: UUID?
   /// A recording is in flight, as the window was told.
   @ObservationIgnored private var utteranceOpen = false
-  /// Time since the meter last published, on `clock` (`stopwatch(on:)`).
+  /// Starts a stopwatch on `clock` (`stopwatches(on:)`).
+  @ObservationIgnored private let startStopwatch: () -> () -> Duration
+  /// Time since the meter last published, on `clock`.
   @ObservationIgnored private var sinceLevelPublish: () -> Duration
   /// When the recording in progress started (the keyboard's countdown reads
   /// it off the phase), and how long the last one ran.
@@ -172,7 +174,9 @@ final class DictationCoordinator {
     let seams = DictationHandoff(store: window.store)
     handoff = seams
     self.clock = clock
-    sinceLevelPublish = Self.stopwatch(on: clock)
+    let stopwatch = Self.stopwatches(on: clock)
+    startStopwatch = stopwatch
+    sinceLevelPublish = stopwatch()
     self.now = now
     self.appState = appState
     self.hostReturner = hostReturner
@@ -213,13 +217,16 @@ final class DictationCoordinator {
     window.onRecord = { [weak self] record in self?.recordPublished(record) }
   }
 
-  /// How long it has been on `clock` since this call, read each time the
-  /// result is called: the meter's throttle times itself on the injected clock
-  /// rather than the device's, as every other timer here does. Generic, so the
-  /// instant it keeps is the clock's own type.
-  private static func stopwatch<C: Clock>(on clock: C) -> () -> Duration where C.Duration == Duration {
-    let start = clock.now
-    return { start.duration(to: clock.now) }
+  /// A maker of stopwatches on `clock`: each call starts one, which reads how
+  /// long it has been on `clock` since. The meter's throttle times itself on
+  /// the injected clock rather than the device's, as every other timer here
+  /// does. Generic, so the instant a stopwatch keeps is the clock's own type;
+  /// made once, in `init`, where the `any Clock` opens into it.
+  private static func stopwatches<C: Clock>(on clock: C) -> () -> () -> Duration where C.Duration == Duration {
+    {
+      let start = clock.now
+      return { start.duration(to: clock.now) }
+    }
   }
 
   func start() {
@@ -336,7 +343,7 @@ final class DictationCoordinator {
         // The keyboard redraws its meter from these; ~12 Hz is plenty for a pill
         // and keeps the shared-defaults writes off the capture path's back.
         guard sinceLevelPublish() > .milliseconds(80) else { continue }
-        sinceLevelPublish = Self.stopwatch(on: clock)
+        sinceLevelPublish = startStopwatch()
         publish(.recording)
       }
     }
