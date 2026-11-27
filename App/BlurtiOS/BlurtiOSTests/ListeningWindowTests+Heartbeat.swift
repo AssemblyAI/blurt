@@ -27,8 +27,8 @@ extension ListeningWindowTests {
       return
     }
     #expect(beat.window == .closed && beat.reason == .sessionOff && !beat.micLive)
-    #expect(beat.leaseUntil > launched.leaseUntil && beat.leaseUntil > Date())
-    #expect(beat.notReady(now: Date()) == .sessionOff, "off, never suspended")
+    #expect(beat.leaseUntil > launched.leaseUntil && beat.leaseUntil > rig.now)
+    #expect(beat.notReady(now: rig.now) == .sessionOff, "off, never suspended")
     #expect(store.listeningState == beat)
     #expect(rig.source.opened == 0 && rig.audio.activated == 0, "a beat opens nothing")
   }
@@ -57,7 +57,7 @@ extension ListeningWindowTests {
     #expect(await rig.beat())
     #expect(await until { (rig.state?.sequence ?? 0) > closed })
     #expect(rig.state?.window == .closed && rig.state?.reason == .sessionOff && rig.state?.micLive == false)
-    #expect(rig.state?.notReady(now: Date()) == .sessionOff)
+    #expect(rig.state?.notReady(now: rig.now) == .sessionOff)
   }
 
   @Test("start is once: a second call neither republishes nor doubles the beat")

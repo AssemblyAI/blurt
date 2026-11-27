@@ -58,10 +58,13 @@ extension ListeningWindowTests {
 
   @Test("a hop over an interrupted window waits for the idle mode to let go before the next source opens")
   func hopWaitsForTheIdleMode() async {
-    let rig = WindowRig(store: store, closingDelay: .milliseconds(200))
+    let rig = WindowRig(store: store, holdsClosing: true)
     await rig.opened()
     await rig.interrupted()
     rig.window.open()
+    #expect(await until { rig.idle.isClosing }, "the hop never asked the idle mode to let go")
+    #expect(rig.ledger.lines == ["source.open", "idle.closing"], "the source waits for the idle mode")
+    rig.idle.releaseClosing()
     #expect(await until { rig.source.opened == 2 && rig.state?.window == .open })
     #expect(rig.ledger.lines == ["source.open", "idle.closing", "idle.closed", "source.close", "source.open"])
     #expect(rig.idle.closed == 1 && rig.idle.opened == 2 && rig.idle.generation == 2)

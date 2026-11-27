@@ -22,7 +22,7 @@ extension DictationCoordinator {
       state: PhaseSnapshot.State(state),
       message: PhaseSnapshot.message(for: state),
       level: Double(level),
-      at: Date(),
+      at: now(),
       command: lastCommandID,
       reason: reason,
       answers: answers,

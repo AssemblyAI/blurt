@@ -168,7 +168,7 @@ extension ListeningWindow {
   /// Replaces the expiry timer; a date already past fires at once.
   private func scheduleExpiry(_ date: Date, _ generation: Machine.Generation) {
     expiry?.cancel()
-    let delay = date.timeIntervalSinceNow
+    let delay = date.timeIntervalSince(now())
     guard delay > 0 else {
       expiry = nil
       feed(.expired(generation))

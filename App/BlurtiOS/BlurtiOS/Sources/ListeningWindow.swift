@@ -59,6 +59,10 @@ final class ListeningWindow {
   /// window's interruption task.
   @ObservationIgnored let backgroundTasks: any BackgroundTasking
   @ObservationIgnored let clock: any Clock<Duration>
+  /// The time the window's records are stamped with and its expiry is
+  /// measured from: the device's in the app, and in a test one that moves
+  /// with `clock`, so a one-minute expiry sleeps exactly a minute on it.
+  @ObservationIgnored let now: @Sendable () -> Date
   @ObservationIgnored let idle: any IdleMode
   @ObservationIgnored private(set) var machine: Machine
   /// The last record published: what the keyboard reads, and what the home
@@ -102,7 +106,7 @@ final class ListeningWindow {
   /// publish (an opening's record lands once the source has opened). A
   /// command is routed on this, so a press is never promised a window the
   /// machine already knows is closing.
-  var liveState: ListeningState { machine.current(now: Date()) }
+  var liveState: ListeningState { machine.current(now: now()) }
 
   /// The Picture in Picture keeper, when that is the idle mode: its source
   /// layer has to be in the view hierarchy for the window to start.
@@ -115,6 +119,7 @@ final class ListeningWindow {
     appState: @escaping () -> UIApplication.State,
     backgroundTasks: any BackgroundTasking,
     clock: any Clock<Duration>,
+    now: @escaping @Sendable () -> Date,
     idle: any IdleMode,
     launchID: UUID = UUID()
   ) {
@@ -124,6 +129,7 @@ final class ListeningWindow {
     self.appState = appState
     self.backgroundTasks = backgroundTasks
     self.clock = clock
+    self.now = now
     self.idle = idle
     self.launchID = launchID
     machine = Machine(
@@ -161,6 +167,7 @@ final class ListeningWindow {
       appState: applicationState,
       backgroundTasks: SystemBackgroundTasks(),
       clock: ContinuousClock(),
+      now: { Date() },
       idle: IdleModes.production(appState: applicationState)
     )
   }
@@ -247,7 +254,7 @@ final class ListeningWindow {
     switch input {
     case .event(let event):
       let from = machine.state
-      let effects = machine.handle(event, now: Date())
+      let effects = machine.handle(event, now: now())
       if machine.state != from { logTransition(from: from, to: machine.state, on: event) }
       // A resume is the end of whatever interruption the session announced,
       // whether or not its `.ended` arrived: the source's own word on the
@@ -256,7 +263,7 @@ final class ListeningWindow {
       await run(effects)
 
     case .heartbeat:
-      await run(heartbeatEffects(now: Date()))
+      await run(heartbeatEffects(now: now()))
     }
   }
 

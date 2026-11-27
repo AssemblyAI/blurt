@@ -20,13 +20,20 @@ final class WindowRig {
   /// The last record the window published.
   var state: ListeningState? { window.state }
 
+  /// The window's time: when the rig was built, moved on only by `clock`, so
+  /// a timer measured against it sleeps exactly its interval on the clock and
+  /// a record's stamps age only when the test steps it.
+  var now: Date { window.now() }
+
   init(
-    store: SharedStore, closeDelay: Duration = .zero, holdsStart: Bool = false, closingDelay: Duration = .zero
+    store: SharedStore, holdsClose: Bool = false, holdsStart: Bool = false, holdsClosing: Bool = false
   ) {
-    let fake = FakeListeningSource(closeDelay: closeDelay, holdsStart: holdsStart, ledger: ledger)
+    let fake = FakeListeningSource(holdsClose: holdsClose, holdsStart: holdsStart, ledger: ledger)
     self.source = fake
-    idle = FakeIdle(closingDelay: closingDelay, ledger: ledger)
+    idle = FakeIdle(holdsClosing: holdsClosing, ledger: ledger)
     let box = app
+    let ticks = clock
+    let built = Date()
     window = ListeningWindow(
       store: store,
       source: fake,
@@ -34,6 +41,7 @@ final class WindowRig {
       appState: { box.state },
       backgroundTasks: tasks,
       clock: clock,
+      now: { built.addingTimeInterval(ticks.now.offset / .seconds(1)) },
       idle: idle
     )
     window.onEndingUtterance = { [weak self] keepWords in self?.endings.append(keepWords) }
