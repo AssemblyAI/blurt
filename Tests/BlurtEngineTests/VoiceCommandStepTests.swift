@@ -106,15 +106,16 @@ struct VoiceCommandStepTests {
       maxSteps: 10,
       listed: [.init(id: 1, kind: "slider", label: "Volume")]
     )
-    // From 1e15 up a whole number is no longer spelled through Int(_:), which
-    // overflows not far past it; Double(_:) reads that spelling back the same.
+    // From 1e15 up a whole number is spelled as the Double it is, not through
+    // Int(_:), which overflows not far past it; Double(_:) reads it back the same.
     #expect(
       steps == [
-        .setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40"), .setValue(element: 1, value: "1e+15"),
+        .setValue(element: 1, value: "0.5"), .setValue(element: 1, value: "40"),
+        .setValue(element: 1, value: "1000000000000000.0"),
       ]
     )
     #expect(Double("0.5") == 0.5)
-    #expect(Double("1e+15") == 1e15)
+    #expect(Double("1000000000000000.0") == 1e15)
   }
 
   @Test("a chord is any modifiers and exactly one key, by any of their names")
