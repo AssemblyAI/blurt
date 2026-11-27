@@ -213,7 +213,8 @@ evals/                       offline decision support — the repo's only Python
                              runs them again under TSan and ASan)
                              release-bump.yml (version bump) + release.yml (sign +
                              publish), codeql.yml; check.yml's lint job runs check.sh --lint-only
-                             so lint findings land in minutes
+                             so lint findings land in minutes; tracker bots: stale.yml,
+                             lock-threads.yml, labeler.yml (rules in .github/labeler.yml)
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 AGENTS.md / ARCHITECTURE.md  this guide / how each part works (read the part you are changing)
 ```
