@@ -47,9 +47,12 @@ jobs:
     runs-on: macos-26
     # An iPhone mutant is an incremental xcodebuild and a simulator run of
     # BlurtiOSTests: 86–113 s each on the first run (2026-11-27), against ~13 s
-    # for an engine one. Six shards of ~40 took 56–100 min, too near this
-    # limit; ten of ~25 leave it room (mutate.sh prints each shard's estimate).
-    timeout-minutes: ${{ matrix.suite == 'ios' && 100 || 60 }}
+    # for an engine one. Six shards of ~40 took 56–100 min, too near the old
+    # 100-min limit; ten of ~25 took 41–86 min, the spread being the runner:
+    # its suite baseline ran 66–177 s, and a mutant that hangs the suite costs
+    # five baselines. 150 leaves a slow runner room (mutate.sh prints each
+    # shard's estimate).
+    timeout-minutes: ${{ matrix.suite == 'ios' && 150 || 60 }}
     strategy:
       fail-fast: false
       matrix:
