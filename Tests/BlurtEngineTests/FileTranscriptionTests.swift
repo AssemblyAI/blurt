@@ -67,8 +67,6 @@ struct FileTranscriptionTests {
 
   @Test("FileTranscriber selects assemblyai-stt-3-7 with universal-2 fallback while the SDK stays defaultless")
   func fileTranscriberSpeechModels() async throws {
-    let url = try scratchAudioFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let bodies = Mutex<[Data]>([])
     let transport = FakeHTTPTransport { request in
       if request.url?.path == "/v2/upload" {
@@ -78,13 +76,15 @@ struct FileTranscriptionTests {
       return (200, json(["id": "t1", "status": "completed", "text": "Hi."]))
     }
     let client = FileTranscriber.client(transport: transport, pollInterval: .zero)
-    _ = try await FileTranscriber(client: client) { "key" }.transcribe(fileAt: url)
     let explicit = AsyncTranscriptionClient(
       transport: transport,
       pollInterval: .zero,
       speechModels: ["universal-2"]
     )
-    _ = try await explicit.transcribe(fileAt: url, apiKey: "key")
+    try await withScratchAudioFile { url in
+      _ = try await FileTranscriber(client: client) { "key" }.transcribe(fileAt: url)
+      _ = try await explicit.transcribe(fileAt: url, apiKey: "key")
+    }
     let sent = try bodies.withLock { $0 }.map { raw in
       try #require(try JSONSerialization.jsonObject(with: raw) as? [String: Any])["speech_models"] as? [String]
     }
