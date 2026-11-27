@@ -111,7 +111,7 @@ struct DictationCoordinatorReturnTests {
     #expect(bench.returns.hosts.isEmpty)
     // The cap is a task: advance only once it has parked on the clock, or the
     // advance lands first and the sleeper it meant to wake waits forever.
-    await bench.rig.clock.waitUntilSleeping(for: .seconds(BlurtShared.hopReturnCap))
+    #expect(await parked(on: bench.rig.clock, for: .seconds(BlurtShared.hopReturnCap)))
     bench.rig.clock.advance(by: .seconds(BlurtShared.hopReturnCap))
     #expect(await until { bench.returns.hosts == [Self.messages] })
     #expect(bench.coordinator.returnHost == nil)
@@ -123,7 +123,7 @@ struct DictationCoordinatorReturnTests {
     let bench = await hopped(expectsKeeper: true)
     let coordinator = bench.coordinator
     // The cap parked first, so its going is the cancel's doing.
-    await bench.rig.clock.waitUntilSleeping(for: cap)
+    #expect(await parked(on: bench.rig.clock, for: cap))
     coordinator.sceneLeft()
     #expect(coordinator.returnHost == nil && coordinator.returnCap == nil && !coordinator.startedFromKeyboard)
     #expect(!bench.rig.clock.sleepingFor.contains(cap), "the cap is off the clock")
@@ -132,7 +132,7 @@ struct DictationCoordinatorReturnTests {
 
     // A window seen and then closed: the open did not hold.
     let later = await hopped(expectsKeeper: true)
-    await later.rig.clock.waitUntilSleeping(for: cap)
+    #expect(await parked(on: later.rig.clock, for: cap))
     await later.rig.closed()
     #expect(later.coordinator.returnHost == nil)
     #expect(!later.rig.clock.sleepingFor.contains(cap), "the cap is off the clock")

@@ -72,7 +72,8 @@ struct KeyboardRig {
     in store: SharedStore,
     micLive: Bool = false,
     reason: FailureReason? = nil,
-    age: TimeInterval = 0
+    age: TimeInterval = 0,
+    now: Date = Date()
   ) {
     store.listeningState = ListeningState(
       launchID: launch,
@@ -80,7 +81,7 @@ struct KeyboardRig {
       window: window,
       micLive: micLive,
       reason: reason,
-      writtenAt: Date().addingTimeInterval(-age)
+      writtenAt: now.addingTimeInterval(-age)
     )
   }
 

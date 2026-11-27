@@ -16,7 +16,7 @@
     /// A timed fault's delay on its `TestClock` (`timed`, `step`): one second
     /// of virtual time, so the fault waits on the test rather than on a runner
     /// that may stall for longer than `next` waits. (A whole second, because
-    /// `waitUntilSleeping` matches the deadline exactly.)
+    /// `parked(on:for:)` matches the deadline exactly.)
     private static let delay = Duration.seconds(1)
 
     /// The next event, or nil if none arrives in time — a failed test, not a hung one.
@@ -49,7 +49,7 @@
 
     /// Fires the fault's next sleep, once it has actually parked on the clock.
     private static func step(_ clock: TestClock) async {
-      await clock.waitUntilSleeping(for: delay)
+      #expect(await parked(on: clock, for: delay))
       clock.advance(by: delay)
     }
 

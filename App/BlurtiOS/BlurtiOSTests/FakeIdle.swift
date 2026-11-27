@@ -2,8 +2,9 @@
 @testable import BlurtiOSCore
 
 /// A held idle mode that counts its hooks, keeps the source and the
-/// generation it was given, and takes `closingDelay` to let go — as a keeper
-/// on its way out would.
+/// generation it was given, and with `holdsClosing` lets go only on
+/// `releaseClosing()` — as a keeper on its way out would, for as long as the
+/// test needs to see what the window does meanwhile.
 @MainActor
 final class FakeIdle: IdleMode {
   let kind = ListeningState.Idle.held
@@ -16,14 +17,17 @@ final class FakeIdle: IdleMode {
   private(set) var ended = 0
   /// The window this mode was last armed for.
   private(set) var generation: ListeningWindowMachine.Generation = 0
-  private let closingDelay: Duration
+  private let holdsClosing: Bool
+  private let closingHold = Hold()
   private let ledger: Ledger
   private var source: (any ListeningSource)?
 
   var isLive: Bool { source?.isOpen ?? false }
+  /// Whether a held `windowClosing` is parked: the mode is letting go.
+  var isClosing: Bool { closingHold.isHolding }
 
-  init(closingDelay: Duration = .zero, ledger: Ledger = Ledger()) {
-    self.closingDelay = closingDelay
+  init(holdsClosing: Bool = false, ledger: Ledger = Ledger()) {
+    self.holdsClosing = holdsClosing
     self.ledger = ledger
   }
 
@@ -33,6 +37,9 @@ final class FakeIdle: IdleMode {
     opened += 1
   }
 
+  /// Lets a held `windowClosing` finish, now or whenever it gets there.
+  func releaseClosing() { closingHold.release() }
+
   func utteranceWillBegin() { began += 1 }
 
   func utteranceDidEnd() { ended += 1 }
@@ -41,8 +48,7 @@ final class FakeIdle: IdleMode {
     closing += 1
     ledger.note("idle.closing")
     source = nil
-    // wall-clock-ok: a delay the test asks for, modelling a slow close; zero by default
-    if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
+    if holdsClosing { await closingHold.wait() }
     closed += 1
     ledger.note("idle.closed")
   }

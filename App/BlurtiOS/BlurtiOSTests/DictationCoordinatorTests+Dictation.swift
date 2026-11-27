@@ -21,8 +21,8 @@ extension DictationCoordinatorTests {
 
   /// A coordinator listening, with a key saved and `keyboard` on screen —
   /// the state a press records from.
-  func listening(startDelay: Duration = .zero) async -> (DictationCoordinator, WindowRig) {
-    let (coordinator, rig) = coordinator(startDelay: startDelay)
+  func listening(holdsStart: Bool = false) async -> (DictationCoordinator, WindowRig) {
+    let (coordinator, rig) = coordinator(holdsStart: holdsStart)
     coordinator.start()
     coordinator.apiKey.save("key")
     #expect(await rig.opened())
@@ -63,14 +63,14 @@ extension DictationCoordinatorTests {
     }
     let result = store.read(DictationResult.self, forKey: BlurtShared.Key.result)
     store.remove(forKey: BlurtShared.Key.result)
-    await clock.waitUntilSleeping(for: KeyboardRelayInjector.deliveryPoll)
+    #expect(await parked(on: clock, for: KeyboardRelayInjector.deliveryPoll))
     clock.advance(by: KeyboardRelayInjector.deliveryPoll)
     return result
   }
 
   @Test("an accepted press: started(d), owned by the keyboard that pressed, and every phase names it")
   func acceptedPress() async throws {
-    let (coordinator, rig) = await listening(startDelay: .milliseconds(200))
+    let (coordinator, rig) = await listening(holdsStart: true)
     let press = command(.press)
     send(press, to: coordinator)
     let dictation = try #require(coordinator.inFlight?.id)
@@ -83,9 +83,7 @@ extension DictationCoordinatorTests {
     #expect(connecting.answers == press.id && connecting.command == press.id)
     #expect(connecting.dictation == DictationRef(id: dictation, ownerProcessID: Self.keyboard))
     #expect(connecting.recordingSince == nil && connecting.launchID == rig.window.launchID)
-    // The start holds on the rig's clock until it is parked and stepped past.
-    #expect(await until { rig.clock.sleepingFor.contains(.milliseconds(200)) })
-    rig.clock.advance(by: .milliseconds(200))
+    rig.source.releaseStart()
     #expect(await until { self.published?.state == .recording })
     let recording = try #require(published)
     #expect(recording.answers == press.id && recording.dictation?.id == dictation)
@@ -178,7 +176,7 @@ extension DictationCoordinatorTests {
     // keyboard is fresh enough to take the words: they go to the clipboard.
     onScreen(Self.keyboard, age: SharedStore.presenceWindow + 1)
     // The watchdog is a task: advance only once it has parked on the clock.
-    await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
+    #expect(await parked(on: rig.clock, for: DictationCoordinator.watchdogTick))
     rig.clock.advance(by: DictationCoordinator.watchdogTick)
     #expect(await until { coordinator.watchdogReleased == dictation })
     #expect(rig.tasks.begun.filter { $0 == DictationCoordinator.releaseTask }.count == 1)
@@ -202,9 +200,9 @@ extension DictationCoordinatorTests {
     coordinator.tickWatchdog()
     #expect(coordinator.watchdogReleased == nil)
     // Its own tick too: once it has parked for the next, this one has run.
-    await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
+    #expect(await parked(on: rig.clock, for: DictationCoordinator.watchdogTick))
     rig.clock.advance(by: DictationCoordinator.watchdogTick)
-    await rig.clock.waitUntilSleeping(for: DictationCoordinator.watchdogTick)
+    #expect(await parked(on: rig.clock, for: DictationCoordinator.watchdogTick))
     #expect(coordinator.watchdogReleased == nil)
     #expect(!rig.tasks.begun.contains(DictationCoordinator.releaseTask))
     let result = await takeResult(stepping: rig.clock)

@@ -27,11 +27,12 @@ struct DictationCoordinatorTests {
   let frozenNow = Date()
 
   /// A coordinator over a rig's window, transcribing offline and ticking on
-  /// the rig's clock. `startDelay` holds a press's start, so `.connecting`
-  /// can be seen; `closeDelay` holds the source's close, so a press can land
-  /// while the window is closing.
-  func coordinator(startDelay: Duration = .zero, closeDelay: Duration = .zero) -> (DictationCoordinator, WindowRig) {
-    let rig = WindowRig(store: store, closeDelay: closeDelay, startDelay: startDelay)
+  /// the rig's clock. `holdsStart` holds a press's start until the test calls
+  /// `rig.source.releaseStart()`, so `.connecting` can be seen; `holdsClose`
+  /// holds the source's close until `rig.source.releaseClose()`, so a press can
+  /// land while the window is closing.
+  func coordinator(holdsStart: Bool = false, holdsClose: Bool = false) -> (DictationCoordinator, WindowRig) {
+    let rig = WindowRig(store: store, holdsClose: holdsClose, holdsStart: holdsStart)
     let frozen = frozenNow
     let heldNow: @Sendable () -> Date = { frozen }
     let coordinator = DictationCoordinator(
@@ -118,18 +119,19 @@ struct DictationCoordinatorTests {
   @Test(
     "a press while the window is closing is refused on the window as it is, never promised the mic on its way out")
   func pressWhileClosing() async {
-    let (coordinator, rig) = coordinator(closeDelay: .milliseconds(400))
+    let (coordinator, rig) = coordinator(holdsClose: true)
     coordinator.start()
     coordinator.apiKey.save("key")
     #expect(await rig.opened())
     rig.window.close()
-    #expect(await until { rig.window.liveState.window == .closing })
+    #expect(await until { rig.source.isClosing && rig.window.liveState.window == .closing })
     let press = command(.press)
     send(press, to: coordinator)
     #expect(store.commandAck?.commandID == press.id)
     #expect(store.commandAck?.outcome == .notListening(.sessionOff))
     #expect(coordinator.inFlight == nil && coordinator.answers == nil)
     #expect(rig.source.started == 0, "nothing submitted")
+    rig.source.releaseClose()
     #expect(await until { rig.state?.window == .closed })
     #expect(coordinator.phase == .idle)
   }

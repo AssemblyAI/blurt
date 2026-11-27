@@ -128,7 +128,10 @@ final class DictationCoordinator {
   @ObservationIgnored var stopAccepted: UUID?
   /// A recording is in flight, as the window was told.
   @ObservationIgnored private var utteranceOpen = false
-  @ObservationIgnored private var lastLevelPublish = ContinuousClock.now
+  /// Starts a stopwatch on `clock` (`stopwatches(on:)`).
+  @ObservationIgnored private let startStopwatch: () -> () -> Duration
+  /// Time since the meter last published, on `clock`.
+  @ObservationIgnored private var sinceLevelPublish: () -> Duration
   /// When the recording in progress started (the keyboard's countdown reads
   /// it off the phase), and how long the last one ran.
   @ObservationIgnored private(set) var recordingSince: Date?
@@ -171,6 +174,9 @@ final class DictationCoordinator {
     let seams = DictationHandoff(store: window.store)
     handoff = seams
     self.clock = clock
+    let stopwatch = Self.stopwatches(on: clock)
+    startStopwatch = stopwatch
+    sinceLevelPublish = stopwatch()
     self.now = now
     self.appState = appState
     self.hostReturner = hostReturner
@@ -209,6 +215,18 @@ final class DictationCoordinator {
     window.onEndingUtterance = { [weak self] keepWords in await self?.endUtterance(keepWords: keepWords) }
     window.onStateChanged = { [weak self] _ in self?.clearError() }
     window.onRecord = { [weak self] record in self?.recordPublished(record) }
+  }
+
+  /// A maker of stopwatches on `clock`: each call starts one, which reads how
+  /// long it has been on `clock` since. The meter's throttle times itself on
+  /// the injected clock rather than the device's, as every other timer here
+  /// does. Generic, so the instant a stopwatch keeps is the clock's own type;
+  /// made once, in `init`, where the `any Clock` opens into it.
+  private static func stopwatches<C: Clock>(on clock: C) -> () -> () -> Duration where C.Duration == Duration {
+    {
+      let start = clock.now
+      return { start.duration(to: clock.now) }
+    }
   }
 
   func start() {
@@ -273,13 +291,13 @@ final class DictationCoordinator {
     if phase == .recording {
       if !utteranceOpen {
         utteranceOpen = true
-        recordingSince = Date()
+        recordingSince = now()
         window.utteranceStarted()
       }
     } else if utteranceOpen {
       // The recording is over; how long it ran is kept for the stats.
       utteranceOpen = false
-      if let since = recordingSince { lastSpokenSeconds = Date().timeIntervalSince(since) }
+      if let since = recordingSince { lastSpokenSeconds = now().timeIntervalSince(since) }
       window.utteranceEnded()
     }
     if phase.isTerminal { recordingSince = nil }
@@ -324,8 +342,8 @@ final class DictationCoordinator {
         level = value
         // The keyboard redraws its meter from these; ~12 Hz is plenty for a pill
         // and keeps the shared-defaults writes off the capture path's back.
-        guard lastLevelPublish.duration(to: ContinuousClock.now) > .milliseconds(80) else { continue }
-        lastLevelPublish = ContinuousClock.now
+        guard sinceLevelPublish() > .milliseconds(80) else { continue }
+        sinceLevelPublish = startStopwatch()
         publish(.recording)
       }
     }
