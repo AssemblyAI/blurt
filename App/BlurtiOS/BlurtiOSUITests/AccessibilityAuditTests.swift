@@ -86,6 +86,13 @@ final class AccessibilityAuditTests: XCTestCase {
   /// name the findings carry.
   private var textSize: (arguments: [String], name: String) = ([], "default text")
 
+  /// The cold first launch, once, before any test (`warmFirstLaunch`). XCTest
+  /// calls this on the main thread.
+  override nonisolated static func setUp() {
+    super.setUp()
+    MainActor.assumeIsolated { warmFirstLaunch() }
+  }
+
   override func setUp() async throws {
     try await super.setUp()
     continueAfterFailure = false
@@ -354,6 +361,9 @@ final class AccessibilityAuditTests: XCTestCase {
   }
 
   private func audit(_ screen: String) throws {
+    // Never mid-change: the audit reads the whole hierarchy, and a screen
+    // still laying out (a launch, a keyboard coming up) is when it timed out.
+    _ = screenTexts()
     let name = "\(screen) (\(textSize.name))"
     // What was audited, beside what it raised, in the result bundle.
     let shot = XCTAttachment(screenshot: app.screenshot())
