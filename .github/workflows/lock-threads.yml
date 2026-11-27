@@ -1,15 +1,16 @@
 name: lock-threads
 
-# Locks issues and PRs that have been closed and quiet for 60 days. A comment on
-# a long-closed thread notifies nobody useful and usually describes a different
+# Locks issues and PRs that have been closed and quiet for 7 days. A comment on
+# a closed thread notifies nobody useful and usually describes a different
 # problem on a newer Blurt; locking points people at a fresh issue instead
 # (the bug template asks for the versions such a report needs). Collaborators
 # can still comment on, or unlock, a locked thread.
 
 on:
   schedule:
-    # Weekly, Sunday 05:41 UTC.
-    - cron: "41 5 * * 0"
+    # Daily, 05:41 UTC: with a 7-day window, weekly would let threads sit
+    # unlocked for up to two weeks.
+    - cron: "41 5 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -29,8 +30,8 @@ jobs:
       - uses: dessant/lock-threads@89ae32b08ed1a541efecbab17912962a5e38981c # v6.0.2
         with:
           process-only: issues, prs
-          issue-inactive-days: 60
-          pr-inactive-days: 60
+          issue-inactive-days: 7
+          pr-inactive-days: 7
           exclude-any-issue-labels: pinned, security
           issue-lock-reason: resolved
           pr-lock-reason: resolved

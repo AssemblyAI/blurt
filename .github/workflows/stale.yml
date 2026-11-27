@@ -10,7 +10,7 @@ name: stale
 #
 #   issues       stale after 14 quiet days, closed 14 days later (28 in all)
 #   needs-info   stale after 7 quiet days, closed 3 days later (10 in all)
-#   PRs          stale after 14 quiet days, closed 7 days later (21 in all)
+#   PRs          stale after 7 quiet days, closed 7 days later (14 in all)
 #
 # Never touched: draft PRs (a parked prototype is deliberate), and anything
 # labelled `pinned` (keep open regardless), `security`, or `accepted` (a request
@@ -69,7 +69,7 @@ jobs:
           stale-pr-label: stale
           days-before-issue-stale: 14
           days-before-issue-close: 14
-          days-before-pr-stale: 14
+          days-before-pr-stale: 7
           days-before-pr-close: 7
           exempt-draft-pr: true
           exempt-issue-labels: pinned,security,accepted
@@ -85,7 +85,7 @@ jobs:
             the latest Blurt, comment with your macOS and Blurt versions and it
             can be reopened.
           stale-pr-message: >
-            This PR has had no activity for 14 days, so it's been marked stale. It
+            This PR has had no activity for 7 days, so it's been marked stale. It
             will close in 7 days unless it's updated. If it's waiting on a
             review, say so in a comment; if it's parked on purpose, convert it to
             a draft.
