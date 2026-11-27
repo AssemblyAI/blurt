@@ -139,6 +139,45 @@ struct STTPromptTests {
     #expect(STTPrompt.text(context: context) == "Ship it.\nShip it. Then follow up.")
   }
 
+  @Test("a history entry inside a longer word is still sent")
+  func keepsHistoryThatIsOnlyTheTailOfALongerWord() {
+    // "he" dictated as one utterance, while the field in front of the caret ends
+    // in "the" — the same letters, but no paste ever happened here: a paste can
+    // only follow whitespace, abut an opener, or open the field, and the match
+    // here follows "t". Both utterances belong on the wire.
+    let context = TranscriptionContext(
+      appName: "Slack",
+      priorText: "the",
+      recentTranscripts: ["he"]
+    )
+    #expect(STTPrompt.text(context: context) == "he\nthe")
+  }
+
+  @Test("a paste abutting an opener still collapses")
+  func dedupesPasteAbuttingAnOpener() {
+    // The user typed the bracket and then dictated: the paste abutted the opener
+    // with no separator (InsertionSeparator's opener case), so the field really
+    // does carry this utterance and the history entry is spoken for.
+    let context = TranscriptionContext(
+      appName: "Slack",
+      priorText: "call me (maybe",
+      recentTranscripts: ["maybe"]
+    )
+    #expect(STTPrompt.text(context: context) == "call me (maybe")
+  }
+
+  @Test("a paste at the very start of the field still collapses")
+  func dedupesPasteThatOpenedTheField() {
+    // The first dictation into an empty field carries no separator at all, so a
+    // match with nothing before it is the paste, not a coincidence.
+    let context = TranscriptionContext(
+      appName: "Slack",
+      priorText: "cat",
+      recentTranscripts: ["cat"]
+    )
+    #expect(STTPrompt.text(context: context) == "cat")
+  }
+
   @Test("a history deeper than the cap is fitted, keeping the newest")
   func fitsTheCharacterCapKeepingTheNewest() {
     // 40 entries of ~200 characters is well past 4096, so most must go. There is no
