@@ -1,3 +1,4 @@
+import BlurtAssemblyAI
 import Foundation
 import Network
 import Synchronization
@@ -10,6 +11,10 @@ import Testing
 /// reads back, and the Terminate → Termination close.
 @Suite("Realtime transcriber")
 struct RealtimeTranscriberTests {
+  private static func queryItems(of transcriber: RealtimeTranscriber) throws -> Set<URLQueryItem> {
+    Set(URLComponents(url: try #require(transcriber.request.url), resolvingAgainstBaseURL: false)?.queryItems ?? [])
+  }
+
   /// A fake server, a transcriber pointed at it, and the transcriber's turns.
   private struct Connection {
     let server: FakeRealtimeServer
@@ -50,11 +55,8 @@ struct RealtimeTranscriberTests {
     for try await turn in turns { received.append(turn) }
 
     #expect(server.authorization == "key")
-    let query = Set(
-      URLComponents(url: try #require(transcriber.request.url), resolvingAgainstBaseURL: false)?.queryItems ?? []
-    )
     #expect(
-      query == [
+      try Self.queryItems(of: transcriber) == [
         URLQueryItem(name: "encoding", value: "pcm_s16le"), URLQueryItem(name: "sample_rate", value: "16000"),
         URLQueryItem(name: "speaker_labels", value: "true"),
       ])
@@ -62,6 +64,25 @@ struct RealtimeTranscriberTests {
     #expect(server.chunkSizes == [32_000, RealtimeTranscriber.minimumChunkBytes])
     #expect(server.terminated)
     #expect(received == Self.helloTurns)
+  }
+
+  @Test("speechModel and Blurt's factory select the requested /v3/ws model")
+  func speechModelQuery() throws {
+    let explicit = RealtimeTranscriber(
+      apiKey: "key", url: URL(literal: "ws://127.0.0.1:9/v3/ws"), speechModel: "assemblyai-stt-3-7-realtime"
+    )
+    #expect(
+      try Self.queryItems(of: explicit)
+        .contains(URLQueryItem(name: "speech_model", value: "assemblyai-stt-3-7-realtime"))
+    )
+
+    let blurt = RealtimeTranscriber.blurt(apiKey: "key")
+    #expect(
+      try Self.queryItems(of: blurt) == [
+        URLQueryItem(name: "encoding", value: "pcm_s16le"), URLQueryItem(name: "sample_rate", value: "16000"),
+        URLQueryItem(name: "speaker_labels", value: "true"),
+        URLQueryItem(name: "speech_model", value: "assemblyai-stt-3-7-realtime"),
+      ])
   }
 
   @Test("audio sent before the socket opens waits, and is sent once it does")

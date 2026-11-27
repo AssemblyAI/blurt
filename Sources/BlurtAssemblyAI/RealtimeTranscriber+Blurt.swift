@@ -2,9 +2,15 @@ public import AssemblyAI
 public import BlurtEngine
 
 extension RealtimeTranscriber {
-  /// A session as Blurt opens one: the user's key and Blurt's User-Agent.
+  /// AssemblyAI's notetaker streaming model (`assemblyai-stt-3-7-realtime`),
+  /// built for meeting recordings and live `speaker_labels` rather than the
+  /// voice-agent default.
+  static let speechModel = "assemblyai-stt-3-7-realtime"
+
+  /// A session as Blurt opens one: the user's key, the notetaker streaming
+  /// model, and Blurt's User-Agent.
   public static func blurt(apiKey: String) -> RealtimeTranscriber {
-    RealtimeTranscriber(apiKey: apiKey, userAgent: UserAgent.current)
+    RealtimeTranscriber(apiKey: apiKey, speechModel: speechModel, userAgent: UserAgent.current)
   }
 }
 

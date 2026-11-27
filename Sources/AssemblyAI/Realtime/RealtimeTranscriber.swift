@@ -11,10 +11,10 @@ public import Foundation
 /// `check-invariants.sh` exempts this file from the socket rule, and no other.
 ///
 /// Everything sent and read is documented: the `/v3/ws` endpoint, the raw key
-/// in `Authorization`, the `encoding`, `sample_rate` and `speaker_labels` query
-/// parameters, binary audio of 50–1000 ms a message, the `Begin`, `Turn` and
-/// `Termination` messages, and `{"type": "Terminate"}` to end. The speech
-/// model is the endpoint's default.
+/// in `Authorization`, the `encoding`, `sample_rate`, `speaker_labels`, and
+/// optional `speech_model` query parameters, binary audio of 50–1000 ms a
+/// message, the `Begin`, `Turn` and `Termination` messages, and
+/// `{"type": "Terminate"}` to end.
 public actor RealtimeTranscriber: LiveTranscriptionSession {
   /// Where a session is in its one pass through life, in order. The socket
   /// lives in the phases that have one, so it can't outlive or predate them.
@@ -110,14 +110,23 @@ public actor RealtimeTranscriber: LiveTranscriptionSession {
   private let decoder = JSONDecoder()
 
   /// A transcriber that will authenticate with `apiKey` against `url`; nothing
-  /// connects until `start`, or a `finish` with audio queued.
-  public init(apiKey: String, url: URL = RealtimeTranscriber.defaultURL, userAgent: String? = nil) {
+  /// connects until `start`, or a `finish` with audio queued. Pass
+  /// `speechModel` to override `/v3/ws`'s default model (for instance
+  /// `"assemblyai-stt-3-7-realtime"` for meeting recordings with live
+  /// `speaker_labels`).
+  public init(
+    apiKey: String, url: URL = RealtimeTranscriber.defaultURL, speechModel: String? = nil, userAgent: String? = nil
+  ) {
     var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    components?.queryItems = [
+    var queryItems = [
       URLQueryItem(name: "encoding", value: "pcm_s16le"),
       URLQueryItem(name: "sample_rate", value: String(Self.sampleRate)),
       URLQueryItem(name: "speaker_labels", value: "true"),
     ]
+    if let speechModel, !speechModel.isEmpty {
+      queryItems.append(URLQueryItem(name: "speech_model", value: speechModel))
+    }
+    components?.queryItems = queryItems
     var handshake = URLRequest(url: components?.url ?? url)
     // The header, not the `token` query parameter: that is for browsers,
     // which can't set one.
