@@ -753,10 +753,12 @@ and survivors need judgement (an _equivalent_ mutant cannot change behaviour, so
 it), and a required gate that reports unactionable failures is one people learn to skip. The `mutate`
 workflow (`.github/workflows/mutate.yml`) runs the whole set daily on `main`, and from the Actions tab
 on demand: it splits the mutants across eight macOS runners (`--shard K/N`), and its `report` job
-lists every survivor and goes red while any remain. On the daily run its `fix` job hands the survivors
-to Claude (claude-code-action, `ANTHROPIC_API_KEY` secret), which adds the assertion that kills each
-one — or `// mutate-ok: <reason>` for a provably equivalent mutant — and opens a pull request labelled
-`mutation-testing`, at most one open at a time. Review it like any other: a test that pins an
+lists every survivor and goes red while any remain. The daily run also keeps one open issue labelled
+`mutation-testing` listing the latest survivors, rewritten each run and closed by the first run with
+none. Its `fix` job hands the survivors to Claude (claude-code-action, `ANTHROPIC_API_KEY` secret),
+which adds the assertion that kills each one — or `// mutate-ok: <reason>` for a provably equivalent
+mutant — and opens a pull request labelled `mutation-testing`, linked from the issue, at most one open
+at a time. Review it like any other: a test that pins an
 implementation detail rather than behaviour is worse than the survivor. It never runs on pull requests.
 
 **Swift Testing traps that CI has caught more than once.** Nothing here can be typechecked without a
