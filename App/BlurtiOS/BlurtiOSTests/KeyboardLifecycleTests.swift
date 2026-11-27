@@ -215,7 +215,7 @@ struct KeyboardLifecycleTests {
       LexiconEntry(userInput: "omw", documentText: "On my way!"),
     ]
     let before = Date()
-    KeyboardModel(store: store).handOver(entries)
+    KeyboardModel.handOver(entries, to: store)
     let after = Date()
     let stored = store.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon)
     #expect(stored?.map(\.documentText) == ["Neil Bisht", "On my way!"])

@@ -378,9 +378,10 @@ schemes:
         # In parallel: nothing the tests touch is shared. The App Group is
         # injected (`SharedStore`), and each test builds its own
         # (`SharedStore.scratch()`, its Darwin signals prefixed with its own
-        # name); the coordinator's presses, its process defaults and the
-        # relay's pasteboard are per instance too. A test that needs a global
-        # again injects it instead of turning this off.
+        # name); the coordinator's presses and its process defaults are per
+        # instance too. Coordinator tests still write UIPasteboard.general but
+        # never read it back. A test that needs a global again injects it
+        # instead of turning this off.
         - name: BlurtiOSTests
           parallelizable: true
   BlurtiOSProbe:

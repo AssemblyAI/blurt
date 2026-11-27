@@ -11,8 +11,9 @@ extension KeyboardModel {
   }
 
   /// Hands the word list to the app: written to the App Group, stamped, and
-  /// signalled, so the next dictation spells the names right.
-  func handOver(_ entries: [LexiconEntry]) {
+  /// signalled, so the next dictation spells the names right. Static over the
+  /// store, so a reply that lands after the keyboard closed still delivers.
+  static func handOver(_ entries: [LexiconEntry], to store: SharedStore) {
     store.write(entries, forKey: BlurtShared.Key.lexicon)
     store.lexiconRefreshedAt = Date()
     store.post(BlurtShared.Signal.lexicon)
@@ -30,13 +31,13 @@ extension KeyboardModel {
     // closure here traps), while the lexicon's entries are main-actor in
     // Swift's eyes. So: take the callback anywhere, hand the immutable lexicon
     // over, and read it on the main actor.
-    controller?.requestSupplementaryLexicon { @Sendable [weak self] lexicon in
+    controller?.requestSupplementaryLexicon { @Sendable [store] lexicon in
       let handoff = LexiconHandoff(lexicon)
       Task { @MainActor in
         let entries = handoff.lexicon.entries.map { entry in
           LexiconEntry(userInput: entry.userInput, documentText: entry.documentText)
         }
-        self?.handOver(entries)
+        Self.handOver(entries, to: store)
       }
     }
   }
