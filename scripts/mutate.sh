@@ -29,6 +29,13 @@
 #   scripts/mutate.sh --shard 2/6           # every 6th mutant from the 2nd (CI)
 #   scripts/mutate.sh --results out.tsv     # one "outcome<TAB>file<TAB>line<TAB>from<TAB>to" row per mutant
 #   scripts/mutate.sh --strict              # exit 3 if any mutant survives
+#   scripts/mutate.sh --suite ios           # the iPhone core (BlurtiOSCore) on a simulator
+#   scripts/mutate.sh --print-targets       # the suite's default target list, one per line
+#
+# Two suites. `engine` (the default) mutates the Swift package's sources and runs
+# `swift test`; `ios` mutates BlurtiOSCore and runs BlurtiOSTests on a simulator
+# through xcodebuild, the way scripts/ios-test.sh does, at ~5x the cost per
+# mutant. With --files and no --suite, the suite follows the files' paths.
 #
 # A line ending `// mutate-ok: <reason>` is exempt — for equivalent mutants only
 # (a change that provably cannot alter behaviour), matching check-portability.sh.
@@ -92,10 +99,45 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/FocusCapture/PasteTarget.swift"
 )
 
+# The iPhone core's decision-making files: the press handshake between the
+# keyboard and the app, the listening window's state machine, the command
+# router, and the state, notice and stats rules the keyboard and Home show —
+# Foundation only, every line reachable from BlurtiOSTests. Not the
+# KeyboardModel extensions (UIKit, driven through the text proxy) or the App
+# Group and Darwin-notification plumbing (SharedStore, DarwinObserver), whose
+# lines say "nothing reaches this from a unit test", not "nothing asserts it".
+DEFAULT_IOS_TARGETS=(
+  "App/BlurtiOS/BlurtiOSCore/PressHandshake.swift"
+  "App/BlurtiOS/BlurtiOSCore/PressHandshake+Stop.swift"
+  "App/BlurtiOS/BlurtiOSCore/PressHandshake+Types.swift"
+  "App/BlurtiOS/BlurtiOSCore/ListeningWindowMachine.swift"
+  "App/BlurtiOS/BlurtiOSCore/ListeningWindowMachine+Moves.swift"
+  "App/BlurtiOS/BlurtiOSCore/ListeningWindowMachine+Types.swift"
+  "App/BlurtiOS/BlurtiOSCore/ListeningState.swift"
+  "App/BlurtiOS/BlurtiOSCore/CommandRouter.swift"
+  "App/BlurtiOS/BlurtiOSCore/KeyboardCommand.swift"
+  "App/BlurtiOS/BlurtiOSCore/BlurtShared+SessionContract.swift"
+  "App/BlurtiOS/BlurtiOSCore/PhaseSnapshot.swift"
+  "App/BlurtiOS/BlurtiOSCore/VoiceState.swift"
+  "App/BlurtiOS/BlurtiOSCore/VoiceNotice.swift"
+  "App/BlurtiOS/BlurtiOSCore/HomeStatus.swift"
+  "App/BlurtiOS/BlurtiOSCore/DictationStats.swift"
+  "App/BlurtiOS/BlurtiOSCore/StatFormat.swift"
+  "App/BlurtiOS/BlurtiOSCore/TypingSpeed.swift"
+  "App/BlurtiOS/BlurtiOSCore/Bounce.swift"
+  "App/BlurtiOS/BlurtiOSCore/KeepOpen.swift"
+  "App/BlurtiOS/BlurtiOSCore/OwnerWatchdog.swift"
+  "App/BlurtiOS/BlurtiOSCore/SessionAutoStart.swift"
+  "App/BlurtiOS/BlurtiOSCore/AIConsent.swift"
+)
+IOS_PREFIX="App/BlurtiOS/"
+
 MAX_MUTANTS=0 # 0 = no cap
 SHARD_INDEX=1
 SHARD_COUNT=1
 LIST_ONLY=0
+PRINT_TARGETS=0
+SUITE=""
 STRICT=0
 RESULTS=""
 TARGETS=()
@@ -144,9 +186,24 @@ while [ $# -gt 0 ]; do
       LIST_ONLY=1
       shift
       ;;
+    --suite)
+      SUITE="${2:?--suite needs engine or ios}"
+      case "$SUITE" in
+        engine | ios) ;;
+        *)
+          echo "error: --suite wants engine or ios, got '$SUITE'" >&2
+          exit 2
+          ;;
+      esac
+      shift 2
+      ;;
+    --print-targets)
+      PRINT_TARGETS=1
+      shift
+      ;;
     -h | --help)
       # The whole header block is the help text; keep this range in step with it.
-      sed -n '2,39p' "$0"
+      sed -n '2,46p' "$0"
       exit 0
       ;;
     *)
@@ -156,7 +213,36 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "${#TARGETS[@]}" -gt 0 ] || TARGETS=("${DEFAULT_TARGETS[@]}")
+# --files without --suite: the files say which suite. A mix can't run under
+# one test command, so it is refused rather than half-tested.
+if [ -z "$SUITE" ] && [ "${#TARGETS[@]}" -gt 0 ]; then
+  ios_files=0
+  for f in "${TARGETS[@]}"; do
+    case "$f" in "$IOS_PREFIX"*) ios_files=$((ios_files + 1)) ;; esac
+  done
+  if [ "$ios_files" -eq "${#TARGETS[@]}" ]; then
+    SUITE=ios
+  elif [ "$ios_files" -eq 0 ]; then
+    SUITE=engine
+  else
+    echo "error: --files mixes iPhone ($IOS_PREFIX) and engine files; run each suite on its own" >&2
+    exit 2
+  fi
+fi
+SUITE="${SUITE:-engine}"
+
+if [ "${#TARGETS[@]}" -eq 0 ]; then
+  if [ "$SUITE" = ios ]; then
+    TARGETS=("${DEFAULT_IOS_TARGETS[@]}")
+  else
+    TARGETS=("${DEFAULT_TARGETS[@]}")
+  fi
+fi
+
+if [ "$PRINT_TARGETS" -eq 1 ]; then
+  printf '%s\n' "${TARGETS[@]}"
+  exit 0
+fi
 
 for f in "${TARGETS[@]}"; do
   [ -f "$f" ] || {
@@ -237,12 +323,22 @@ enumerate() {
   python3 - "$@" <<'PY'
 import sys
 
-# from -> to, tried in this order. Longest-first within a prefix family (">=" before
-# ">") is not needed because the bare "<" / ">" swaps are deliberately absent: Swift
-# spells returns as "->" and generics as "<T>", so mutating a lone angle bracket
-# mostly yields code that doesn't compile — an invalid mutant costs a full build to
-# learn nothing. Same reasoning excludes "+"/"-" (unary, string concat, and Duration
-# arithmetic all overload them).
+# from -> to, tried in this order. Two families.
+#
+# Negations (`>=` -> `<`, `==` -> `!=`, ...) invert a decision; nearly any test
+# that sees both outcomes kills them. Boundaries (`>=` -> `>`, `<` -> `<=`, ...)
+# move it by one, which is the off-by-one a test that only checks the far sides
+# never notices — the more valuable half.
+#
+# The angle brackets and arithmetic are matched only with a space on each side.
+# Swift requires a binary operator's whitespace to be the same on both sides
+# (`a<b` or `a < b`, never `a <b`), swift-format always spaces them, and generics
+# (`Array<Int>`), returns (`->`), unary minus (`-x`) and ranges (`..<`) never
+# take a space on both sides — so " < " is always a comparison and " - " always
+# a subtraction. A bare "<" / "-" would mostly mutate generics and returns into
+# code that doesn't compile: a full build to learn nothing. " + " is still out:
+# string concatenation overloads it, and the 5x-more-common string case would
+# drown the arithmetic one in invalid or equivalent mutants.
 OPERATORS = [
     ("&&", "||"),
     ("||", "&&"),
@@ -250,13 +346,30 @@ OPERATORS = [
     ("!=", "=="),
     (">=", "<"),
     ("<=", ">"),
+    (" >= ", " > "),
+    (" <= ", " < "),
+    (" > ", " >= "),
+    (" < ", " <= "),
+    (" - ", " + "),
+    (" -= ", " += "),
+    (" += 1", " -= 1"),
+    (" * ", " / "),
+    (" / ", " * "),
     ("min(", "max("),
     ("max(", "min("),
     (".first", ".last"),
     (".last", ".first"),
     ("true", "false"),
     ("false", "true"),
+    # Dropping a prefix `!` (see NEGATION_BEFORE below): a missing negation.
+    ("!", ""),
 ]
+
+# A prefix `!` is a negation only where an operand can start: after one of these
+# (or at the start of the line) and before an identifier, `(` or `.`. That rules
+# out `!=`, a force unwrap (`x!`, `f()!`, `a[0]!`), `try!` and `as!`.
+NEGATION_BEFORE = set(" \t([{,:=&|?")
+NEGATION_AFTER = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_($.")
 
 # Word-ish operators must not match inside an identifier (`trueValue`, `isFalse`).
 IDENT = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
@@ -349,6 +462,18 @@ for path in sys.argv[1:]:
                 if hit < 0:
                     break
                 pos = hit + 1
+                if frm == "!":
+                    line = lines[idx]
+                    at = start + hit
+                    before = line[at - 1] if at > 0 else " "
+                    after = line[at + 1] if at + 1 < len(line) else ""
+                    if before not in NEGATION_BEFORE or after not in NEGATION_AFTER:
+                        continue
+                if frm[-1].isdigit():
+                    # " += 1" must not match " += 10".
+                    end_at = start + hit + len(frm)
+                    if end_at < len(lines[idx]) and lines[idx][end_at] in IDENT:
+                        continue
                 if frm in WORDY:
                     before = segment[hit - 1] if hit > 0 else ""
                     after_at = hit + len(frm)
@@ -410,7 +535,7 @@ run_bounded() {
       sleep 1
       kill -KILL -- "-$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
-      reap_orphaned_xctest
+      reap_after_timeout
       return 124
     fi
     sleep 1
@@ -419,6 +544,62 @@ run_bounded() {
   local status=0
   wait "$pid" || status=$?
   return "$status"
+}
+
+# What "build" and "test" mean for each suite. The engine is a Swift package;
+# the iPhone core builds and tests only through its Xcode project, on a
+# simulator, with ios-test.sh's recipe (scripts/ios-lib.sh) minus the coverage
+# instrumentation, which would only slow every mutant down. Parallel testing is
+# off for the iPhone suite: xcodebuild runs parallel tests on simulator clones,
+# and a mutant that hangs the suite would leave those clones booted when the
+# deadline kills it. One simulator, one runner, one thing to clean up.
+IOS_HOST_APP="com.assemblyai.blurt.iphone"
+ios_setup() {
+  # shellcheck source=scripts/release-lib.sh
+  source "$REPO_ROOT/scripts/release-lib.sh"
+  # shellcheck source=scripts/ios-lib.sh
+  source "$REPO_ROOT/scripts/ios-lib.sh"
+  ios_require_device mutate
+  echo "simulator: $NAME"
+  ios_boot_async "$UDID"
+  ios_generate_project
+  IOS_MUTATE_DERIVED="$IOS_DERIVED-mutate"
+  ios_resolve_packages "$IOS_MUTATE_DERIVED"
+  IOS_ARGS=(-project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS
+    -derivedDataPath "$IOS_MUTATE_DERIVED" "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage NO)
+}
+suite_build() {
+  if [ "$SUITE" = ios ]; then
+    xcodebuild build-for-testing -quiet "${IOS_ARGS[@]}" "${IOS_SIM_BUILD[@]}"
+  else
+    swift build --build-tests
+  fi
+}
+suite_test() {
+  if [ "$SUITE" = ios ]; then
+    xcodebuild test-without-building -quiet "${IOS_ARGS[@]}" \
+      -destination "platform=iOS Simulator,id=$UDID" -only-testing:BlurtiOSTests \
+      -parallel-testing-enabled NO -collect-test-diagnostics never
+  else
+    swift test
+  fi
+}
+# After a deadline kill: the engine's orphan is an xctest process (see
+# reap_orphaned_xctest); the iPhone's is the host app still running the tests
+# on the simulator, which the next mutant's run would otherwise queue behind.
+reap_after_timeout() {
+  reap_orphaned_xctest
+  if [ "$SUITE" = ios ]; then
+    xcrun simctl terminate "$UDID" "$IOS_HOST_APP" >/dev/null 2>&1 || true
+  fi
+}
+# Display form of an operator: the spaces that pin " < " to a comparison are
+# matching detail, and an empty replacement (a dropped `!`) needs a word.
+show_op() {
+  local op="$1"
+  op="${op#"${op%%[! ]*}"}"
+  op="${op%"${op##*[! ]}"}"
+  printf '%s' "${op:-(dropped)}"
 }
 
 LIST="$WORK/mutants.tsv"
@@ -438,20 +619,24 @@ if [ "$MAX_MUTANTS" -gt 0 ] && [ "$TOTAL" -gt "$MAX_MUTANTS" ]; then
 fi
 
 if [ "$LIST_ONLY" -eq 1 ]; then
-  awk -F'\t' '{ printf "%s:%s  %s -> %s\n", $1, $2, $4, $5 }' "$LIST"
+  awk -F'\t' '{ printf "%s:%s  %s -> %s\n", $1, $2, show($4), show($5) }
+    function show(op) { gsub(/^ +| +$/, "", op); return op == "" ? "(dropped)" : op }' "$LIST"
   echo "$TOTAL mutants across ${#TARGETS[@]} files"
   exit 0
 fi
 
-echo "==> baseline (the suite must be green before a mutant means anything)"
+if [ "$SUITE" = ios ]; then ios_setup; fi
+
+echo "==> baseline: $SUITE suite (it must be green before a mutant means anything)"
 # Without this, a suite that is already red reports every mutant as killed — a
 # perfect score that measures nothing.
-if ! swift build --build-tests >/dev/null 2>&1; then
+if ! suite_build >/dev/null 2>&1; then
   echo "error: baseline build failed — fix that first" >&2
   exit 1
 fi
+if [ "$SUITE" = ios ]; then ios_wait_booted "$UDID"; fi
 BASELINE_START=$SECONDS
-if ! swift test >/dev/null 2>&1; then
+if ! suite_test >/dev/null 2>&1; then
   echo "error: baseline suite is red — fix that first, or every mutant reports killed" >&2
   exit 1
 fi
@@ -462,7 +647,10 @@ if [ -z "$TEST_DEADLINE_SECONDS" ]; then
 fi
 echo "baseline green (suite ${BASELINE_SECONDS}s; per-mutant deadline ${TEST_DEADLINE_SECONDS}s)"
 
-echo "==> $TOTAL mutants (~7s each, so roughly $(((TOTAL * 7 + 59) / 60)) min)"
+# The estimate: an engine mutant is ~7 s (an incremental build and a ~1 s
+# suite); an iPhone one is its incremental build plus the measured suite.
+if [ "$SUITE" = ios ]; then PER_MUTANT=$((BASELINE_SECONDS + 20)); else PER_MUTANT=7; fi
+echo "==> $TOTAL mutants (~${PER_MUTANT}s each, so roughly $(((TOTAL * PER_MUTANT + 59) / 60)) min)"
 
 KILLED=0
 SURVIVED=0
@@ -474,18 +662,20 @@ SURVIVORS="$WORK/survivors.txt"
 # the progress lines above.
 if [ -n "$RESULTS" ]; then : >"$RESULTS"; fi
 record() {
-  if [ -n "$RESULTS" ]; then printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$file" "$line" "$frm" "$to" >>"$RESULTS"; fi
+  if [ -n "$RESULTS" ]; then printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$file" "$line" "$shown_frm" "$shown_to" >>"$RESULTS"; fi
 }
 
 INDEX=0
 # fd 3 so `swift test` inheriting stdin can't consume the mutant list.
 while IFS=$'\t' read -r file line col frm to <&3; do
   INDEX=$((INDEX + 1))
-  printf '[%d/%d] %s:%s  %s -> %s  ' "$INDEX" "$TOTAL" "$file" "$line" "$frm" "$to"
+  shown_frm="$(show_op "$frm")"
+  shown_to="$(show_op "$to")"
+  printf '[%d/%d] %s:%s  %s -> %s  ' "$INDEX" "$TOTAL" "$file" "$line" "$shown_frm" "$shown_to"
 
   apply_mutant "$file" "$line" "$col" "$frm" "$to"
 
-  if ! run_bounded "$BUILD_DEADLINE_SECONDS" swift build --build-tests; then
+  if ! run_bounded "$BUILD_DEADLINE_SECONDS" suite_build; then
     # The mutant doesn't compile. Counted separately, never as killed: a build
     # error is the compiler objecting, not a test, and folding it into the kill
     # count is how a mutation score flatters itself.
@@ -494,17 +684,17 @@ while IFS=$'\t' read -r file line col frm to <&3; do
     record invalid
   else
     TEST_STATUS=0
-    run_bounded "$TEST_DEADLINE_SECONDS" swift test || TEST_STATUS=$?
+    run_bounded "$TEST_DEADLINE_SECONDS" suite_test || TEST_STATUS=$?
     case "$TEST_STATUS" in
       0)
         SURVIVED=$((SURVIVED + 1))
-        printf '%s:%s\t%s -> %s\n' "$file" "$line" "$frm" "$to" >>"$SURVIVORS"
+        printf '%s:%s\t%s -> %s\n' "$file" "$line" "$shown_frm" "$shown_to" >>"$SURVIVORS"
         echo "SURVIVED"
         record survived
         # Under GitHub Actions, an annotation pins the survivor to its line in
         # the run's summary and in any diff that touches it.
         if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-          echo "::warning file=$file,line=$line,title=Mutant survived::$frm -> $to changed behaviour and no test failed"
+          echo "::warning file=$file,line=$line,title=Mutant survived::$shown_frm -> $shown_to changed behaviour and no test failed"
         fi
         ;;
       124)

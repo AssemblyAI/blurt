@@ -747,19 +747,32 @@ operator in a source file, re-runs the suite, and reports whether anything notic
 instead of chasing the coverage number: the engine is near its line-coverage ceiling (the remainder is
 Accessibility/TCC/CGEvent code no CI process can run), so the useful question is no longer "did this
 line execute?" but "is it _asserted_?" — a surviving mutant is a behaviour change no test objected
-to. Its default target list is the files already at or near 100% coverage, which is exactly where the
-coverage number has nothing left to say. It stays out of `check.sh` deliberately: a run is minutes,
-and survivors need judgement (an _equivalent_ mutant cannot change behaviour, so no test can catch
-it), and a required gate that reports unactionable failures is one people learn to skip. The `mutate`
-workflow (`.github/workflows/mutate.yml`) runs the whole set daily on `main`, and from the Actions tab
-on demand: it splits the mutants across eight macOS runners (`--shard K/N`), and its `report` job
-lists every survivor and goes red while any remain. The daily run also keeps one open issue labelled
-`mutation-testing` listing the latest survivors, rewritten each run and closed by the first run with
-none. Its `fix` job hands the survivors to Claude (claude-code-action, `ANTHROPIC_API_KEY` secret),
-which adds the assertion that kills each one — or `// mutate-ok: <reason>` for a provably equivalent
-mutant — and opens a pull request labelled `mutation-testing`, linked from the issue, at most one open
-at a time. Review it like any other: a test that pins an
-implementation detail rather than behaviour is worse than the survivor. It never runs on pull requests.
+to. Its default target lists are the files already at or near 100% coverage, which is exactly where
+the coverage number has nothing left to say. It stays out of `check.sh` deliberately: a run is
+minutes, and survivors need judgement (an _equivalent_ mutant cannot change behaviour, so no test can
+catch it), and a required gate that reports unactionable failures is one people learn to skip.
+
+- **What it mutates.** Negations (`==` → `!=`, `&&` → `||`, `true` → `false`, a dropped prefix `!`)
+  and, more valuable, boundaries (`>=` → `>`, `<` → `<=`), which catch the off-by-one a test of only
+  the far sides misses, plus spaced arithmetic (`-` → `+`, `*` → `/`, `+= 1` → `-= 1`). Angle
+  brackets and arithmetic match only with a space each side: Swift requires a binary operator's
+  spacing to match on both sides, and generics, `->`, unary minus and `..<` never have it.
+- **Two suites.** `engine` (the default) mutates `DEFAULT_TARGETS` and runs `swift test`;
+  `--suite ios` mutates `DEFAULT_IOS_TARGETS` in `BlurtiOSCore` and runs `BlurtiOSTests` on a
+  simulator, about 5× the cost per mutant. `--files` picks the suite from the paths.
+- **New targets.** `scripts/mutate-candidates.sh [--suite ios]` runs the suite with coverage and
+  lists files at ≥ 95% line coverage, with mutants to try, that are in neither list. Add each, or
+  mark it `// mutate-not-target: <reason>` so it stops being suggested.
+- **On CI.** The `mutate` workflow (`.github/workflows/mutate.yml`) runs both suites daily on `main`,
+  and from the Actions tab on demand: eight engine and six iPhone macOS runners (`--shard K/N`), a
+  `report` job that scores each suite and goes red while any mutant survives, and a `candidates`
+  job. The daily run keeps one open issue labelled `mutation-testing` listing the latest survivors and
+  candidates, rewritten each run and closed by the first complete run with neither. Its `fix` job
+  hands the survivors to Claude (claude-code-action, `ANTHROPIC_API_KEY` secret), which adds the
+  assertion that kills each one — or `// mutate-ok: <reason>` for a provably equivalent mutant — and
+  opens a pull request labelled `mutation-testing`, linked from the issue, at most one open at a
+  time. Review it like any other: a test that pins an implementation detail rather than behaviour is
+  worse than the survivor. It never runs on pull requests.
 
 **Swift Testing traps that CI has caught more than once.** Nothing here can be typechecked without a
 macOS toolchain, so when you're writing tests from a Linux / web sandbox these are the ones that cost

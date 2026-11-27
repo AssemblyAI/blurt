@@ -523,8 +523,9 @@ fi
 # targets: the script was dead for weeks until someone next ran it by hand. `--list`
 # validates every target and enumerates the mutants without building or testing,
 # so it is cheap enough for every run. Pure text + python, so --portable too.
+# Both suites: the iPhone list (`--suite ios`) rots the same way.
 check_mutation_targets() {
-  bash scripts/mutate.sh --list >/dev/null
+  bash scripts/mutate.sh --list >/dev/null && bash scripts/mutate.sh --suite ios --list >/dev/null
 }
 run_check "mutation targets exist (mutate.sh --list)" check_mutation_targets
 
