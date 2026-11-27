@@ -171,7 +171,7 @@ A few bots keep the tracker tidy:
   30 days later. Any comment or push resets the clock. Draft PRs and anything
   labelled `pinned`, `security` or `accepted` (issues) are never touched — make
   a PR a draft if you're parking it on purpose.
-- **lock-threads** locks issues and PRs closed and quiet for 180 days; open a
+- **lock-threads** locks issues and PRs closed and quiet for 60 days; open a
   new issue rather than reviving an old one.
 
 ## Reporting bugs and ideas

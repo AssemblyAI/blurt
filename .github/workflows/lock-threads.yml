@@ -1,6 +1,6 @@
 name: lock-threads
 
-# Locks issues and PRs that have been closed and quiet for 180 days. A comment on
+# Locks issues and PRs that have been closed and quiet for 60 days. A comment on
 # a long-closed thread notifies nobody useful and usually describes a different
 # problem on a newer Blurt; locking points people at a fresh issue instead
 # (the bug template asks for the versions such a report needs). Collaborators
@@ -29,8 +29,8 @@ jobs:
       - uses: dessant/lock-threads@89ae32b08ed1a541efecbab17912962a5e38981c # v6.0.2
         with:
           process-only: issues, prs
-          issue-inactive-days: 180
-          pr-inactive-days: 180
+          issue-inactive-days: 60
+          pr-inactive-days: 60
           exclude-any-issue-labels: pinned, security
           issue-lock-reason: resolved
           pr-lock-reason: resolved
