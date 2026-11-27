@@ -9,7 +9,7 @@ import UIKit
 /// go and the error line it leaves, the host app leaving, the word list
 /// handed to the app, and the responder walk that brings the app forward.
 /// Leaving with a stop out is in `KeyboardLifecycleTests+Leave.swift`.
-@Suite("Keyboard model: lifecycle and the app's signals")
+@Suite("Keyboard model: lifecycle and the app's signals", .serialized)
 @MainActor
 struct KeyboardLifecycleTests {
   /// This test's own App Group: a fresh scratch suite each test, since

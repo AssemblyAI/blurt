@@ -5,7 +5,7 @@ import UIKit
 
 @testable import BlurtiOSCore
 
-@Suite("The two-process contract")
+@Suite("The two-process contract", .serialized)
 @MainActor
 struct ProtocolTests {
   /// This test's own App Group: a fresh scratch suite each test, since

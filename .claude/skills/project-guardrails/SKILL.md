@@ -266,5 +266,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   at the composition roots (`BlurtiOSApp`, `KeyboardViewController`), `SharedStore.scratch()` in
   every test (its own suite, its own Darwin signal names). That is what lets `BlurtiOSTests` run in
   parallel. No `static var override` to swap, no `nonisolated(unsafe) static var` in the iPhone
-  code (mechanized), and no going back to serial: a test that shares other state injects it.
+  code (mechanized), and no going back to serial: a test that shares other state injects it. The
+  suites driving the real window, coordinator or keyboard model keep `.serialized` (their own tests
+  only): the bundle is main-actor by default, and their polled waits starve each other at once.
 - The full list, with every number, is `App/BlurtiOS/DESIGN.md`.

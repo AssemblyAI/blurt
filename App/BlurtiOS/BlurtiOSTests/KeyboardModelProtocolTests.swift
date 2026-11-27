@@ -4,7 +4,7 @@ import Testing
 
 @testable import BlurtiOSCore
 
-@Suite("Keyboard model: the mic, the phase and results")
+@Suite("Keyboard model: the mic, the phase and results", .serialized)
 @MainActor
 struct KeyboardModelProtocolTests {
   /// This test's own App Group: a fresh scratch suite each test, since

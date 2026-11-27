@@ -8,7 +8,7 @@ import Testing
 /// command carries, and the term field closing a live dictation. The latch
 /// over another keyboard's dictation, the stop and the record's changes are
 /// in `KeyboardModelLatchTests.swift`.
-@Suite("Keyboard model: the handshake and the app's answers")
+@Suite("Keyboard model: the handshake and the app's answers", .serialized)
 @MainActor
 struct KeyboardModelGateTests {
   /// A settable clock for `KeyboardModel.now`.

@@ -8,7 +8,7 @@ import UIKit
 
 /// The way back after the keyboard's hop: when the coordinator asks iOS for
 /// the host app, and when it does not (`HopReturn`, `HostReturn`).
-@Suite("Dictation coordinator: the hop's return")
+@Suite("Dictation coordinator: the hop's return", .serialized)
 @MainActor
 struct DictationCoordinatorReturnTests {
   final class Returns {

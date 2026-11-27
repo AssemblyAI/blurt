@@ -11,7 +11,7 @@ import UIKit
 /// sequence that made it. This is the "nothing is ever left stale" check: a
 /// state the model can be driven into and not out of shows up here as a
 /// broken invariant. The event table is in `KeyboardModelFuzzTests+Drive.swift`.
-@Suite("Keyboard model: random transition sequences")
+@Suite("Keyboard model: random transition sequences", .serialized)
 @MainActor
 struct KeyboardModelFuzzTests {
   /// One event the fuzz can send. Phases come as the app would publish

@@ -8,7 +8,7 @@ import Testing
 /// session and its background tasks for each thing that happens, and the
 /// record it leaves for the keyboard at every step. The rules themselves are
 /// `ListeningWindowMachineTests`; this is the wiring.
-@Suite("Listening window")
+@Suite("Listening window", .serialized)
 @MainActor
 struct ListeningWindowTests {
   /// This test's own App Group: a fresh scratch suite each test, since

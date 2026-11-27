@@ -10,7 +10,7 @@ import Testing
 /// The router's rows are `CommandRouterTests`; this is the ack path around it.
 /// A press the session does take, and what follows it, is
 /// `DictationCoordinatorTests+Dictation.swift`.
-@Suite("Dictation coordinator")
+@Suite("Dictation coordinator", .serialized)
 @MainActor
 struct DictationCoordinatorTests {
   /// The words every stub transcript carries.

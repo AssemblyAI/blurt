@@ -6,7 +6,7 @@ import Testing
 /// The latch over a dictation this keyboard didn't start, the stop and its
 /// timing, the × and the record's changes, driven through the model. The
 /// press and its answers are in `KeyboardModelGateTests.swift`.
-@Suite("Keyboard model: the latch, the stop and the record")
+@Suite("Keyboard model: the latch, the stop and the record", .serialized)
 @MainActor
 struct KeyboardModelLatchTests {
   /// This test's own App Group: a fresh scratch suite each test, since

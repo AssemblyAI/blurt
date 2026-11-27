@@ -96,6 +96,9 @@ xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | pyth
 import json, sys
 d = json.load(sys.stdin)
 print("ios-test:", d.get("passedTests", "?"), "passed,", d.get("failedTests", "?"), "failed,", d.get("skippedTests", 0), "skipped")
+# Why each failure failed: xcbeautify prints only the test names.
+for f in d.get("testFailures", []):
+    print("  FAILED", f.get("testName", "?") + ":", f.get("failureText", "?"))
 ' || true
 echo "results: $RESULTS"
 echo "build log: $BUILD_LOG"

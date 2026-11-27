@@ -381,7 +381,10 @@ schemes:
         # name); the coordinator's presses and its process defaults are per
         # instance too. Coordinator tests still write UIPasteboard.general but
         # never read it back. A test that needs a global again injects it
-        # instead of turning this off.
+        # instead of turning this off. The suites that drive the real window,
+        # coordinator or keyboard model stay `.serialized`: the target is
+        # main-actor by default, so their polled waits all share one thread,
+        # and a few dozen at once starved each other past their 30 s bounds.
         - name: BlurtiOSTests
           parallelizable: true
   BlurtiOSProbe:
