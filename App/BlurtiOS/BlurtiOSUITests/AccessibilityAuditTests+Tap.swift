@@ -1,7 +1,6 @@
 import XCTest
 
-/// Driving the screen by touch: the one way the audits scroll, and what a tap
-/// that didn't take leaves behind.
+/// Driving the screen by touch: the one way the audits scroll.
 extension AccessibilityAuditTests {
   /// Drags the page by `distance` points (negative scrolls down the page),
   /// from `start` (a fraction of the screen's height) at a slow, fixed speed,
@@ -19,15 +18,5 @@ extension AccessibilityAuditTests {
       withVelocity: .slow,
       thenHoldForDuration: 0.3
     )
-  }
-
-  /// What the screen held when a tap's result never came, for the failure's
-  /// message: the control's state and any alert over the app. The log shows a
-  /// failure's first line, so it is the one place every reader sees.
-  static func missedTapReport(_ control: XCUIElement, in app: XCUIApplication) -> String {
-    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    let alerts = (app.alerts.allElementsBoundByIndex + springboard.alerts.allElementsBoundByIndex).map(\.label)
-    return "control exists \(control.exists), hittable \(control.isHittable), value \(control.value ?? "none"); "
-      + "alerts \(alerts); sheets \(app.sheets.count)"
   }
 }
