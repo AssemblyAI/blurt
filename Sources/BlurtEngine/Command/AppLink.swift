@@ -21,10 +21,14 @@ enum AppLink {
       let items = URLComponents(
         url: url,
         resolvingAgainstBaseURL: false  // mutate-ok: step URLs are absolute, nothing to resolve
-      )?.queryItems
-      let rawQuery = items?.first { $0.name == "q" }?.value
-      // A form-encoded "+" is a space, which `URLComponents` leaves as it is.
-      guard let query = rawQuery?.replacingOccurrences(of: "+", with: " "), query.split(separator: " ").count <= 3
+      )?.percentEncodedQueryItems
+      // Form decoding, in order: a "+" is a space *before* percent-decoding, so
+      // the raw item is the one to read. `queryItems` decodes first, and a "+"
+      // swap after that cannot tell a form space from a literal plus — a search
+      // for "c++" (`q=c%2B%2B`) came back as "c  ".
+      guard let encoded = items?.first(where: { $0.name == "q" })?.value,
+        let query = encoded.replacingOccurrences(of: "+", with: " ").removingPercentEncoding,
+        query.split(separator: " ").count <= 3
       else {
         return nil
       }
