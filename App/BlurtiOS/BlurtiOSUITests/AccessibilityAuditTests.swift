@@ -43,10 +43,15 @@ import XCTest
 /// - "text clipped" on a single-line text field: a `UITextField` scrolls its
 ///   text sideways rather than wrapping, by design, so a long placeholder at
 ///   AX XXXL runs past the edge the way it does in Apple's own apps.
-/// Nothing is excused by name: the "Professional" preset chip and the consent
-/// sheet's "Sent to AssemblyAI" rows were, until their layouts were fixed
-/// (`PresetChip` draws its name unshrunk at accessibility sizes;
-/// `WrappingLabelStyle` lays its icon and title out itself).
+/// Nothing is excused by name. The consent sheet's "Sent to AssemblyAI" rows
+/// were, until `WrappingLabelStyle` laid out their icon and title itself; the
+/// "Professional" preset chip was, and is now measured instead:
+///
+/// A largest-size "text clipped" on plain text is checked rather than taken
+/// on the audit's word (`ClipCheck`): it fails unless the text is fully on
+/// screen, inside the element that holds it, with room beside it. The audit
+/// predicts a clip at AX XXXL for the longest word on a chip that draws it
+/// whole, since the app's scaled fixed-size face hides that the text scales.
 ///
 /// A default-size "Dynamic Type unsupported" is checked rather than taken on
 /// the audit's word (`ScalingCheck`): it fails only if the same text is no
@@ -372,6 +377,10 @@ final class AccessibilityAuditTests: XCTestCase {
       let finding = "[\(name)] \(issue.line)"
       if let element = issue.unscaled, element.exists {
         scaling.hold(finding, about: element, in: app, within: screenArea)
+      } else if let element = issue.clipped, element.exists {
+        if let measured = ClipCheck.clipped(element, in: app, within: screenArea) {
+          found.append("\(finding) \(measured)")
+        }
       } else {
         found.append(finding)
       }
