@@ -34,6 +34,27 @@ public enum InsertionSeparator {
   /// hashtag.
   private static let wordStartOpeners: Set<Character> = ["\"", "'", "#"]
 
+  /// Characters that close or punctuate what precedes them, so a dictation
+  /// *starting* with one joins the prior text with no space: `say hello` + a
+  /// dictated `.` pastes `say hello.`, not `say hello .`. Mirrors `openers` —
+  /// the same bind, from the other side — and is conservative the same way:
+  /// only characters that essentially never lead a new sentence or token.
+  private static let closers: Set<Character> = [
+    ".",
+    ",",
+    ";",
+    ":",
+    "!",
+    "?",
+    ")",
+    "]",
+    "}",
+    "%",
+    "\u{201D}",
+    "\u{2019}",
+    "\u{00BB}",
+  ]
+
   // periphery:ignore - public for the iOS keyboard (App/BlurtiOS), which the Mac scan doesn't index.
   /// Joins `text` to whatever precedes the caret with exactly one separating space,
   /// so consecutive dictations don't run together. Prepends a *leading* space only
@@ -59,6 +80,9 @@ public enum InsertionSeparator {
       return text
     }
     guard let first = text.first, !first.isWhitespace else {
+      return text
+    }
+    guard !closers.contains(first) else {
       return text
     }
     guard !endsInOpener(priorText) else {
