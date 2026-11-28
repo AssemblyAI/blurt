@@ -43,21 +43,10 @@ import XCTest
 /// - "text clipped" on a single-line text field: a `UITextField` scrolls its
 ///   text sideways rather than wrapping, by design, so a long placeholder at
 ///   AX XXXL runs past the edge the way it does in Apple's own apps.
-/// - "text clipped" on the style editor's "Professional" preset chip at AX
-///   XXXL, by name: its screenshot shows the word whole, on a chip with the
-///   row to itself and room to narrow (`PresetChip`), and the same changes
-///   cleared "Ultracasual"; the audit still predicts a clip for the longest
-///   name. Named here rather than ignored by kind, so any other chip or any
-///   other text that clips still fails.
-/// - "text clipped" on the consent sheet's four "Sent to AssemblyAI" rows at
-///   AX XXXL, by their text (`consentDisclosures`): the audit raises it on
-///   "The text just before your cursor" wherever the row sits — it only ever
-///   passed when a fling left the row under the bar, where it is excused
-///   anyway (#447's fixed drag put it mid-screen) — while its own screenshot shows
-///   the row whole — three lines, the icon set inline with the first, as a
-///   list lays out a label at accessibility sizes. The rows already wrap to
-///   full height (`WrappingLabelStyle`). Named, so any other text on the
-///   sheet that clips still fails.
+/// Nothing is excused by name: the "Professional" preset chip and the consent
+/// sheet's "Sent to AssemblyAI" rows were, until their layouts were fixed
+/// (`PresetChip` draws its name unshrunk at accessibility sizes;
+/// `WrappingLabelStyle` lays its icon and title out itself).
 ///
 /// A default-size "Dynamic Type unsupported" is checked rather than taken on
 /// the audit's word (`ScalingCheck`): it fails only if the same text is no

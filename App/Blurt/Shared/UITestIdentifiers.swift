@@ -150,7 +150,7 @@ enum UITestIdentifiers {
   /// a projection of `MenuBarStatus`). Both sides name them from here for the same
   /// reason as `defaultCannedTranscript`: they're compared as strings, so a rename
   /// on one side alone still compiles and every assertion instead burns its full
-  /// `waitForLabel` timeout — three times over, once per xctestplan retry.
+  /// `waitForLabel` timeout.
   static let statusIdle = "idle"
   static let statusRecording = "recording"
   static let statusTranscribing = "transcribing"

@@ -333,9 +333,9 @@ targets:
         basedOnDependencyAnalysis: false
     scheme:
       testPlans:
-        # Blurt.xctestplan runs the BlurtUITests suite with retry-on-failure (a
-        # flaky UI test gets up to 3 attempts before it's a real failure) and
-        # keeps screenshots/attachments even on success, so a CI failure has the
+        # Blurt.xctestplan runs the BlurtUITests suite once, with no retry (a
+        # failure is a failure, fixed at its cause), and keeps
+        # screenshots/attachments even on success, so a CI failure has the
         # UI state attached to the .xcresult. Engine coverage + the sanitizer
         # passes stay on the SPM `swift test` path in check.sh (SPM tests aren't
         # xcodebuild targets, so a test plan can't run them).

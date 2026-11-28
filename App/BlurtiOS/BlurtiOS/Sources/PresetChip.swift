@@ -26,9 +26,12 @@ struct PresetChip: View {
         // where each chip has the row to itself, as many as the name needs.
         Text(preset.name).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)  // literal-ok: one line
           .fixedSize(horizontal: false, vertical: true)
-          // A one-word name can't wrap: past the chip's width it narrows a
-          // little rather than losing its last letters.
-          .minimumScaleFactor(0.8)  // literal-ok: a fifth smaller at most
+          // In a third of the row a one-word name can't wrap: past the chip's
+          // width it narrows a little rather than losing its last letters. At
+          // an accessibility size the chip has the row to itself and the name
+          // is drawn at its full size: text shrunk to fit is what the audit
+          // reports as clipped ("Professional" at AX XXXL).
+          .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.8)  // literal-ok: a fifth smaller at most
       }
       .bodyFont(DesignTokens.Typography.sizeCaption, bold: true)
       .padding(.vertical, DesignTokens.Metrics.appChipPadY)
