@@ -12,6 +12,17 @@ struct ScreenReadTests {
     labels.map { ScreenSnapshot.Entry(node: TinyNode.button($0), kind: "button", label: $0) }
   }
 
+  /// A window of `tabs` buttons ("Tab 1"…) around a page (holding one button,
+  /// "Inside") whose own walk listed 140 links ("Link 1"…), listed together.
+  private func pagedListing(tabs: Int) -> (entries: [ScreenSnapshot.Entry<TinyNode>], incomplete: Bool) {
+    let page = TinyNode("AXWebArea", children: [.button("Inside")])
+    let window = TinyNode("AXWindow", children: (1...tabs).map { TinyNode.button("Tab \($0)") } + [page])
+    let pageEntries = entries((1...140).map { "Link \($0)" })
+    return ScreenRead.listing(
+      window: window, webArea: page, page: (pageEntries, false), same: { $0 === $1 }, shouldStop: { false }
+    )
+  }
+
   @Test("a web control borrows its <label>'s title, ahead of that label's description")
   func borrowsTheLabelsTitle() {
     let label = TinyNode("AXStaticText", title: "Email", description: "Your work address")
@@ -48,6 +59,16 @@ struct ScreenReadTests {
     )
     #expect(ScreenRead.largest(role: "AXWebArea", in: window) === big)
     #expect(ScreenRead.largest(role: "AXWebArea", in: TinyNode("AXWindow", children: [TinyNode("AXWebArea")])) == nil)
+  }
+
+  @Test("largest is by area, not shape, and of two the same size the first read wins")
+  func largestByAreaFirstOnTies() {
+    let square = TinyNode("AXWebArea", frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+    let strip = TinyNode("AXWebArea", frame: CGRect(x: 0, y: 0, width: 90, height: 10))
+    #expect(ScreenRead.largest(role: "AXWebArea", in: TinyNode("AXWindow", children: [square, strip])) === square)
+    let first = TinyNode("AXWebArea", frame: CGRect(x: 0, y: 0, width: 50, height: 50))
+    let twin = TinyNode("AXWebArea", frame: CGRect(x: 60, y: 0, width: 50, height: 50))
+    #expect(ScreenRead.largest(role: "AXWebArea", in: TinyNode("AXWindow", children: [first, twin])) === first)
   }
 
   @Test("a walk that reaches the end is complete; one cut short by its cap says so, and never un-says it")
@@ -103,15 +124,19 @@ struct ScreenReadTests {
 
   @Test("the page is skipped in the window's walk, and a page cut to fit the slots marks the listing incomplete")
   func listingSharesSlotsWithThePage() {
-    let page = TinyNode("AXWebArea", children: [.button("Inside")])
-    let window = TinyNode("AXWindow", children: (1...20).map { TinyNode.button("Tab \($0)") } + [page])
-    let pageEntries = entries((1...140).map { "Link \($0)" })
-    let listing = ScreenRead.listing(
-      window: window, webArea: page, page: (pageEntries, false), same: { $0 === $1 }, shouldStop: { false }
-    )
+    let listing = pagedListing(tabs: 20)
     #expect(listing.entries.count == ScreenContext.maxElements)
     #expect(listing.entries.prefix(20).allSatisfy { $0.label.hasPrefix("Tab ") })
     #expect(!listing.entries.contains { $0.label == "Inside" })
+    #expect(listing.incomplete)
+  }
+
+  @Test("a window with more than its slots still leaves the page its whole share")
+  func listingBusyWindowLeavesThePageItsShare() {
+    let listing = pagedListing(tabs: 120)
+    #expect(listing.entries.count == ScreenContext.maxElements)
+    #expect(listing.entries.count { $0.label.hasPrefix("Tab ") } == ScreenContext.maxElements - ScreenSnapshot.webShare)
+    #expect(listing.entries.count { $0.label.hasPrefix("Link ") } == ScreenSnapshot.webShare)
     #expect(listing.incomplete)
   }
 

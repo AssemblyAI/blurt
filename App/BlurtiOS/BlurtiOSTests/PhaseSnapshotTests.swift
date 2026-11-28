@@ -30,6 +30,16 @@ struct PhaseSnapshotTests {
     }
   }
 
+  @Test("a phase goes stale only past its instant, not at it")
+  func staleOnlyPastTheInstant() {
+    // From the reference date, so each instant is exact in a Date.
+    let at = Date(timeIntervalSinceReferenceDate: 0)
+    let notice = PhaseSnapshot(state: .pasted, message: nil, level: 0, at: at)
+    #expect(!notice.isStale(now: at.addingTimeInterval(PhaseSnapshot.noticeStaleAfter)))
+    let inFlight = PhaseSnapshot(state: .recording, message: nil, level: 0, at: at)
+    #expect(!inFlight.isStale(now: at.addingTimeInterval(PhaseSnapshot.inFlightStaleAfter)))
+  }
+
   @Test("the dwell matches the design: 1.2 s pasted, 2 s copied and error, none otherwise")
   func dwell() {
     #expect(snapshot(.pasted, ageSeconds: 0).noticeDwellSeconds == 1.2)

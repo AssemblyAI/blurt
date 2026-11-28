@@ -181,10 +181,14 @@ extension FocusCapture {
       return nil
     }
     let upto: Substring
-    if caret >= 0, caret <= full.utf16.count,
+    if caret >= 0,
+      caret <= full.utf16.count,  // mutate-ok: a caret at the very end takes the whole string by either branch
       let offset = full.utf16.index(full.utf16.startIndex, offsetBy: caret, limitedBy: full.utf16.endIndex)
     {
-      let index = offset.samePosition(in: full) ?? full.indices.last { $0 < offset } ?? full.startIndex
+      let index =
+        offset.samePosition(in: full)
+        ?? full.indices.last { $0 < offset }  // mutate-ok: offset is mid-character here; no character starts at it
+        ?? full.startIndex
       upto = full[..<index]
     } else {
       upto = full[...]
@@ -196,7 +200,7 @@ extension FocusCapture {
   /// Caps `text` at `maxChars` characters (used to bound window titles / labels
   /// so an oddly long one can't dominate the context budget).
   static func clip(_ text: String?, to maxChars: Int) -> String? {
-    guard let text, text.count > maxChars else {
+    guard let text, text.count > maxChars else {  // mutate-ok: at exactly maxChars the prefix is the whole text
       return text
     }
     return String(text.prefix(maxChars))

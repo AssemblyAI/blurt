@@ -50,6 +50,35 @@ struct ProtocolTests {
     #expect(!store.isListening(now: now))
   }
 
+  @Test("a lease ends at its instant: a press then would not record, and says suspended")
+  func leaseEndsAtItsInstant() {
+    let record = ListeningState(
+      launchID: UUID(), sequence: 1, window: .open, micLive: true, writtenAt: Date(timeIntervalSinceReferenceDate: 0)
+    )
+    // A record that says nothing of an utterance has none, nor of the mic a live one.
+    #expect(!record.utterance)
+    #expect(!ListeningState(launchID: UUID(), sequence: 0, window: .open).micLive)
+    #expect(record.notReady(now: record.leaseUntil.addingTimeInterval(-1)) == nil)
+    #expect(record.notReady(now: record.leaseUntil) == .suspended)
+  }
+
+  @Test("a command is fresh until its window's instant, not at it")
+  func commandFreshUntilItsInstant() {
+    let sent = Date(timeIntervalSinceReferenceDate: 0)
+    let command = KeyboardCommand(
+      id: UUID(), kind: .press, priorText: nil, selectedText: nil, sentAt: sent, keyboard: nil
+    )
+    #expect(command.isFresh(now: sent.addingTimeInterval(BlurtShared.commandFreshnessWindow - 1)))
+    #expect(!command.isFresh(now: sent.addingTimeInterval(BlurtShared.commandFreshnessWindow)))
+  }
+
+  @Test("only a blurt URL to the start host is a start link")
+  func startLinks() throws {
+    #expect(BlurtShared.isStart(BlurtShared.startURL(reason: .sessionOff)))
+    #expect(!BlurtShared.isStart(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed)))
+    #expect(!BlurtShared.isStart(try #require(URL(string: "https://\(BlurtShared.startHost)"))))
+  }
+
   @Test("the lease outlasts two missed app heartbeats and is never open-ended")
   func leaseRatio() {
     #expect(ListeningState.lease > 2 * SharedStore.appHeartbeatInterval)

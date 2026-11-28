@@ -22,6 +22,12 @@ struct AppNotesTests {
     #expect(names("open slackware docs", app: "Finder").isEmpty)
   }
 
+  @Test("a name with a digit in it is one word: a command naming it isn't split at the digit")
+  func digitsStayInTheName() {
+    let note = AppNote(names: ["App2"], text: "Its notes.")
+    #expect(AppNotes.notes(for: "switch to app2 now", in: ScreenContext(appName: nil), from: [note]) == [note])
+  }
+
   @Test("notes ride the user turn, after the window and before the command; none, nothing")
   func prompt() {
     let turn = VoiceCommandPlanner.prompt("new tab", context: ScreenContext(appName: "Terminal"), fence: "f")

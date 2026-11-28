@@ -35,6 +35,18 @@ struct OverlayPlacementScreenTests {
     #expect(frame == second)
   }
 
+  @Test("the display holding most of the panel is measured by area, not by its overlap's shape")
+  func largerShareIsByArea() {
+    // 40×40 (1 600 pt²) on the left one, a wider but shorter 60×20 (1 200 pt²)
+    // on the right one.
+    let left = CGRect(x: 0, y: 0, width: 140, height: 1_000)
+    let right = CGRect(x: 140, y: 120, width: 1_000, height: 1_000)
+    let frame = OverlayPlacement.visibleFrame(
+      for: CGPoint(x: 100, y: 100), panelSize: CGSize(width: 100, height: 40), among: [left, right], fallback: right
+    )
+    #expect(frame == left)
+  }
+
   @Test("an origin on no connected display falls back to the active one")
   func staleOriginFallsBack() {
     let frame = OverlayPlacement.visibleFrame(

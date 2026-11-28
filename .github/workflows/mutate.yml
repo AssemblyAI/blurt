@@ -1,19 +1,39 @@
 name: mutate
 
 # Mutation testing (scripts/mutate.sh) on CI, sharded across macOS runners so the
-# whole default target set finishes in one sitting instead of a laptop afternoon.
+# whole default target set finishes in one sitting instead of a laptop afternoon:
+# eight shards for the engine (`swift test`) and ten for the iPhone core
+# (BlurtiOSTests on a simulator). The `candidates` job lists well-covered files
+# that are in neither target list (scripts/mutate-candidates.sh).
 # Not a required check and not part of `check`: survivors need judgement (see the
-# script's header). Run it by hand from the Actions tab; the `report` job lists
-# every survivor and goes red while any remain, so a green run means every viable
-# mutant was killed.
+# script's header). It runs daily on `main` and by hand from the Actions tab; the
+# `report` job lists every survivor and goes red while any remain, so a green run
+# means every viable mutant was killed.
+#
+# On the daily run, the `issue` job keeps one open issue (label
+# `mutation-testing`) listing the latest survivors and candidates, and closes it
+# when a run finds neither. The survivors also go to the `fix` job: Claude (claude-code-action)
+# writes the assertion that kills each one — or, for a provably equivalent
+# mutant, the `// mutate-ok: <reason>` exemption — and the job opens a pull
+# request with the result, which then goes through `check` and review like any
+# other change. It needs the `ANTHROPIC_API_KEY` secret and the Claude GitHub App
+# on the repo, and skips with a notice without the secret.
 
 on:
+  schedule:
+    # Daily, 09:17 UTC (01:17 Pacific): a quiet hour for the macOS runner pool.
+    - cron: "17 9 * * *"
   workflow_dispatch:
     inputs:
       files:
         description: "Space-separated target files (empty = mutate.sh's default set)"
         required: false
         default: ""
+      suite:
+        description: "Which suite's shards to run (ignored when files are given)"
+        type: choice
+        options: [all, engine, ios]
+        default: all
 
 concurrency:
   group: mutate-${{ github.ref }}
@@ -25,13 +45,113 @@ permissions:
 jobs:
   shard:
     runs-on: macos-26
-    timeout-minutes: 60
+    # An iPhone mutant is an incremental xcodebuild and a simulator run of
+    # BlurtiOSTests: 86–113 s each on the first run (2026-11-27), against ~13 s
+    # for an engine one. Six shards of ~40 took 56–100 min, too near the old
+    # 100-min limit; ten of ~25 took 41–86 min, the spread being the runner:
+    # its suite baseline ran 66–177 s, and a mutant that hangs the suite costs
+    # five baselines. 150 leaves a slow runner room (mutate.sh prints each
+    # shard's estimate).
+    timeout-minutes: ${{ matrix.suite == 'ios' && 150 || 60 }}
     strategy:
       fail-fast: false
       matrix:
-        # Keep `count` equal to the number of entries in `index`.
-        index: [1, 2, 3, 4, 5, 6, 7, 8]
-        count: [8]
+        # Keep each suite's `count` equal to its number of entries.
+        include:
+          - { suite: engine, index: 1, count: 8 }
+          - { suite: engine, index: 2, count: 8 }
+          - { suite: engine, index: 3, count: 8 }
+          - { suite: engine, index: 4, count: 8 }
+          - { suite: engine, index: 5, count: 8 }
+          - { suite: engine, index: 6, count: 8 }
+          - { suite: engine, index: 7, count: 8 }
+          - { suite: engine, index: 8, count: 8 }
+          - { suite: ios, index: 1, count: 10 }
+          - { suite: ios, index: 2, count: 10 }
+          - { suite: ios, index: 3, count: 10 }
+          - { suite: ios, index: 4, count: 10 }
+          - { suite: ios, index: 5, count: 10 }
+          - { suite: ios, index: 6, count: 10 }
+          - { suite: ios, index: 7, count: 10 }
+          - { suite: ios, index: 8, count: 10 }
+          - { suite: ios, index: 9, count: 10 }
+          - { suite: ios, index: 10, count: 10 }
+    steps:
+      # A dispatch can ask for one suite, or name files (which belong to one);
+      # the other suite's shards then finish at once with no results.
+      - name: Decide whether this shard runs
+        id: wanted
+        env:
+          SUITE: ${{ matrix.suite }}
+          WANT: ${{ inputs.suite || 'all' }}
+          FILES: ${{ inputs.files }}
+        run: |
+          want="$WANT"
+          if [ -n "${FILES:-}" ]; then
+            case "$FILES" in App/BlurtiOS/*) want=ios ;; *) want=engine ;; esac
+          fi
+          if [ "$want" = all ] || [ "$want" = "$SUITE" ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice::$SUITE shard skipped (this run is for $want)"
+          fi
+
+      - name: Checkout blurt
+        if: steps.wanted.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Show toolchain
+        if: steps.wanted.outputs.run == 'true'
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install the iPhone build's tools
+        if: steps.wanted.outputs.run == 'true' && matrix.suite == 'ios'
+        run: brew install xcodegen
+
+      - name: Run mutate.sh
+        if: steps.wanted.outputs.run == 'true'
+        working-directory: blurt
+        env:
+          SUITE: ${{ matrix.suite }}
+          SHARD: ${{ matrix.index }}/${{ matrix.count }}
+          FILES: ${{ inputs.files }}
+          # As check.yml's iPhone jobs: a new simulator rather than the image's,
+          # and the build kept in the runner's temp directory.
+          BLURT_SIM_FRESH: "1"
+          BLURT_DERIVED_DATA: ${{ runner.temp }}/BlurtiOS
+        # No --strict here: every shard finishes and uploads, and `report`
+        # decides red/green over the whole set. The per-mutant test deadline
+        # scales from this runner's own baseline run (see mutate.sh).
+        run: |
+          args=(--suite "$SUITE" --shard "$SHARD" --results mutate-results.tsv)
+          if [ -n "${FILES:-}" ]; then args+=(--files "$FILES"); fi
+          scripts/mutate.sh "${args[@]}"
+
+      - name: Upload shard results
+        if: always() && steps.wanted.outputs.run == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutate-shard-${{ matrix.suite }}-${{ matrix.index }}
+          path: blurt/mutate-results.tsv
+          if-no-files-found: warn
+
+  # Files that look ready to be targets but aren't: well covered, with mutants
+  # to try (scripts/mutate-candidates.sh). A suggestion list for a person, shown
+  # in the run summary and the survivors issue — never added automatically,
+  # because full coverage doesn't make a syscall wrapper a useful target.
+  candidates:
+    if: github.event_name == 'schedule' || inputs.files == ''
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [engine, ios]
     steps:
       - name: Checkout blurt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,36 +159,33 @@ jobs:
           path: blurt
           persist-credentials: false
 
-      - name: Show toolchain
-        run: |
-          xcodebuild -version
-          swift --version
+      - name: Install the iPhone build's tools
+        if: matrix.suite == 'ios'
+        run: brew install xcodegen xcbeautify
 
-      - name: Run mutate.sh
+      - name: List candidates
         working-directory: blurt
         env:
-          SHARD: ${{ matrix.index }}/${{ matrix.count }}
-          FILES: ${{ inputs.files }}
-        # No --strict here: every shard finishes and uploads, and `report`
-        # decides red/green over the whole set. The per-mutant test deadline
-        # scales from this runner's own baseline run (see mutate.sh).
+          SUITE: ${{ matrix.suite }}
+          BLURT_SIM_FRESH: "1"
+          BLURT_DERIVED_DATA: ${{ runner.temp }}/BlurtiOS
         run: |
-          args=(--shard "$SHARD" --results mutate-results.tsv)
-          if [ -n "${FILES:-}" ]; then args+=(--files "$FILES"); fi
-          scripts/mutate.sh "${args[@]}"
+          scripts/mutate-candidates.sh --suite "$SUITE" --out "candidates-$SUITE.md"
+          { echo "## Mutation-target candidates ($SUITE)"; echo; cat "candidates-$SUITE.md"; } >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Upload shard results
-        if: always()
+      - name: Upload candidates
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: mutate-shard-${{ matrix.index }}
-          path: blurt/mutate-results.tsv
+          name: mutate-candidates-${{ matrix.suite }}
+          path: blurt/candidates-${{ matrix.suite }}.md
           if-no-files-found: warn
 
   report:
     needs: shard
     if: always()
     runs-on: ubuntu-latest
+    outputs:
+      survived: ${{ steps.report.outputs.survived }}
     steps:
       - name: Download shard results
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -78,19 +195,33 @@ jobs:
 
       # Each row: outcome, file, line, from, to (mutate.sh --results).
       - name: Report survivors
+        id: report
         env:
           SHARD_RESULT: ${{ needs.shard.result }}
         run: |
           cat shards/*/mutate-results.tsv >all.tsv 2>/dev/null || : >all.tsv
-          count() { awk -F'\t' -v o="$1" '$1 == o' all.tsv | wc -l | tr -d ' '; }
-          killed=$(count killed); timeout=$(count timeout)
-          survived=$(count survived); invalid=$(count invalid)
+          # count OUTCOME [SUITE]: rows with that outcome, in that suite's files
+          # (the iPhone's are under App/BlurtiOS/), or in all of them.
+          count() {
+            awk -F'\t' -v o="$1" -v s="${2:-}" '$1 == o && (s == "" ||
+              (s == "ios") == (index($2, "App/BlurtiOS/") == 1))' all.tsv | wc -l | tr -d ' '
+          }
+          row() {
+            local k t v i
+            k=$(count killed "$2"); t=$(count timeout "$2"); v=$(count survived "$2"); i=$(count invalid "$2")
+            local scored=$((k + t + v)) score="–"
+            if [ "$scored" -gt 0 ]; then score="$(((k + t) * 100 / scored))%"; fi
+            echo "| $1 | $score | $((k + t)) | $t | $v | $i |"
+          }
+          survived=$(count survived)
           {
             echo "## Mutation testing"
             echo
-            echo "| killed | of which by timeout | survived | invalid (excluded) |"
-            echo "| --- | --- | --- | --- |"
-            echo "| $((killed + timeout)) | $timeout | $survived | $invalid |"
+            echo "| suite | score | killed | of which by timeout | survived | invalid (excluded) |"
+            echo "| --- | --- | --- | --- | --- | --- |"
+            row engine engine
+            row iPhone ios
+            row "**total**" ""
             if [ "$survived" -gt 0 ]; then
               echo
               echo "### Survivors"
@@ -100,6 +231,8 @@ jobs:
               echo '```'
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "survived=$survived" >>"$GITHUB_OUTPUT"
+          awk -F'\t' '$1 == "survived"' all.tsv | sort >survivors.tsv
           if [ "$SHARD_RESULT" != "success" ]; then
             echo "::error::a shard did not finish ($SHARD_RESULT) — the counts above are partial"
             exit 1
@@ -107,4 +240,285 @@ jobs:
           if [ "$survived" -gt 0 ]; then
             echo "::error::$survived mutant(s) survived"
             exit 1
+          fi
+
+      # For the `fix` job. Uploaded even when the step above goes red — a red
+      # report with every shard finished is exactly the case `fix` exists for.
+      - name: Upload survivors
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutate-survivors
+          path: survivors.tsv
+          if-no-files-found: ignore
+
+  # Daily runs only: keep one open issue, labelled `mutation-testing`, holding
+  # the latest survivors and target candidates — the place to look, whether or
+  # not `fix` can open a PR (no API key, a fix PR already open, Claude changed
+  # nothing). Each run rewrites its body; a complete run with no survivors and
+  # no candidates closes it. A partial run (a shard or a candidates job failed)
+  # updates it with a warning but never closes it: mutants that went unrun are
+  # not mutants killed. GITHUB_TOKEN is enough here — nothing needs to trigger
+  # off an issue edit.
+  issue:
+    needs: [shard, report, candidates]
+    if: >-
+      always() && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+      && needs.report.outputs.survived != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    outputs:
+      number: ${{ steps.sync.outputs.number }}
+    steps:
+      - name: Download survivors
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mutate-survivors
+          path: mutate
+
+      - name: Download candidates
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mutate-candidates-*
+          path: mutate
+          merge-multiple: true
+
+      - name: Open, update or close the issue
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SURVIVED: ${{ needs.report.outputs.survived }}
+          SHARD_RESULT: ${{ needs.shard.result }}
+          CANDIDATES_RESULT: ${{ needs.candidates.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          number=$(gh issue list --repo "$REPO" --state open --label mutation-testing \
+            --json number --jq '.[0].number // empty')
+          today=$(date -u +%Y-%m-%d)
+          # Candidate rows are the Markdown table lines naming a file.
+          candidates=$(cat mutate/candidates-*.md 2>/dev/null | grep -c '^| `' || true)
+          complete=true
+          if [ "$SHARD_RESULT" != "success" ] || [ "$CANDIDATES_RESULT" != "success" ]; then complete=false; fi
+          if [ "$SURVIVED" = "0" ] && [ "$candidates" = "0" ]; then
+            if [ "$complete" = true ] && [ -n "$number" ]; then
+              gh issue close "$number" --repo "$REPO" --reason completed \
+                --comment "The $today run killed every mutant and found no new targets: $RUN_URL"
+            fi
+            exit 0
+          fi
+          gh label create mutation-testing --repo "$REPO" --color c5def5 \
+            --description "Opened by the daily mutate workflow" 2>/dev/null || true
+          body="$RUNNER_TEMP/issue-body.md"
+          {
+            echo "The daily mutation run on $today: **$SURVIVED** surviving mutant(s), **$candidates**"
+            echo "file(s) that look ready to be targets. See \`AGENTS.md\` › Mutation testing."
+            echo
+            echo "Run: $RUN_URL"
+            if [ "$complete" != true ]; then
+              echo
+              echo "> [!WARNING]"
+              echo "> Part of the run did not finish (shards: $SHARD_RESULT, candidates: $CANDIDATES_RESULT),"
+              echo "> so these lists are partial."
+            fi
+            if [ "$SURVIVED" != "0" ]; then
+              echo
+              echo "## Surviving mutants"
+              echo
+              echo "Each is a behaviour change no test objected to. The \`fix\` job's pull request,"
+              echo "when it opens one, is linked below."
+              echo
+              echo "| File:line | Mutation |"
+              echo "| --- | --- |"
+              # Capped well under the issue body's 65 536-character limit.
+              awk -F'\t' 'NR <= 300 { gsub(/\|/, "\\|", $4); gsub(/\|/, "\\|", $5);
+                printf "| `%s:%s` | `%s` → `%s` |\n", $2, $3, $4, $5 }' mutate/survivors.tsv
+              if [ "$SURVIVED" -gt 300 ]; then echo; echo "…and $((SURVIVED - 300)) more in the run's summary."; fi
+            fi
+            if [ "$candidates" != "0" ]; then
+              echo
+              echo "## Target candidates"
+              echo
+              echo "Well covered, with mutants to try, and in neither target list. Judge each:"
+              echo "add it, or mark it \`// mutate-not-target: <reason>\` so it stops being suggested."
+              for f in mutate/candidates-*.md; do
+                if grep -q '^| `' "$f"; then echo; cat "$f"; fi
+              done
+            fi
+            echo
+            echo "This issue is rewritten by each daily run and closed by the first complete run"
+            echo "with no survivors and no candidates."
+          } >"$body"
+          title="Mutation testing: $SURVIVED survivor(s), $candidates candidate(s) ($today)"
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "$REPO" --title "$title" --body-file "$body"
+          else
+            url=$(gh issue create --repo "$REPO" --title "$title" --body-file "$body" --label mutation-testing)
+            number="${url##*/}"
+          fi
+          echo "number=$number" >>"$GITHUB_OUTPUT"
+
+  # Daily runs only: turn the survivors into a pull request. Only when every
+  # shard finished (a partial run's "survivors" are real, but the set is not the
+  # whole picture, and the next day's run is cheap), and not while an earlier
+  # fix PR is still open — that one may already kill some of today's survivors,
+  # and two PRs editing the same test files would conflict.
+  #
+  # The PR is opened with the Claude GitHub App's token (the action's
+  # `github_token` output), not GITHUB_TOKEN: events from GITHUB_TOKEN start no
+  # workflows, so a PR opened with it would never get its `check` run (see
+  # release-bump.yml). It never pushes to `main`; the PR merges through the
+  # queue like anything else.
+  fix:
+    needs: [shard, report, issue]
+    if: >-
+      always() && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+      && needs.shard.result == 'success' && needs.report.outputs.survived != ''
+      && needs.report.outputs.survived != '0'
+    runs-on: macos-26
+    # Claude re-runs the suite under each of its candidate tests (mutate.sh
+    # --files), so this is the slow job: ~1 minute of test per mutant tried.
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      pull-requests: write
+      # To link the PR from the survivors issue.
+      issues: write
+      # The action exchanges an OIDC token for the Claude GitHub App's token.
+      id-token: write
+    steps:
+      - name: Skip while a fix PR is open
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          n=$(gh pr list --repo "$REPO" --state open --label mutation-testing --json number --jq length)
+          echo "count=$n" >>"$GITHUB_OUTPUT"
+          if [ "$n" -gt 0 ]; then
+            echo "::notice::a mutation-testing PR is already open; not opening another"
+          fi
+
+      - name: Check for the API key
+        id: key
+        if: steps.open.outputs.count == '0'
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "present=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice::no ANTHROPIC_API_KEY secret; survivors are listed in the report job only"
+          fi
+
+      - name: Checkout blurt
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Download survivors
+        if: steps.key.outputs.present == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mutate-survivors
+          path: ${{ runner.temp }}/mutate
+
+      - name: Install the linters and the iPhone build's tools
+        if: steps.key.outputs.present == 'true'
+        run: brew install swiftlint xcodegen xcbeautify
+
+      - name: Write the killing tests
+        id: claude
+        if: steps.key.outputs.present == 'true'
+        uses: anthropics/claude-code-action@9eb012b6d0900c2b9eede65ee1758cec4d2973e9 # v1.0.270
+        env:
+          SURVIVORS: ${{ runner.temp }}/mutate/survivors.tsv
+          PR_BODY: ${{ runner.temp }}/mutate/pr-body.md
+          BLURT_DERIVED_DATA: ${{ runner.temp }}/BlurtiOS
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: >-
+            --max-turns 200
+            --allowedTools "Read,Edit,Write,Glob,Grep,Skill,Bash(swift build:*),Bash(swift test:*),Bash(scripts/mutate.sh:*),Bash(scripts/ios-test.sh:*),Bash(xcrun swift-format:*),Bash(swiftlint lint:*),Bash(git diff:*),Bash(git status:*),Bash(cat:*)"
+          prompt: |
+            You are in the Blurt repository, checked out at ./blurt (work from there).
+            The daily mutation-testing run (scripts/mutate.sh) found mutants that
+            survived: each is a behaviour change no test objected to. The list is
+            in the file named by $SURVIVORS, one tab-separated row per mutant:
+            outcome, file, line, from, to.
+
+            First read blurt/AGENTS.md (in particular "Mutation testing" and the
+            Swift Testing traps after it) and invoke the `project-guardrails` skill.
+
+            For each survivor:
+            1. Read the source line and the existing tests for that file.
+            2. If the mutant can change behaviour, add the assertion that catches
+               it — in the existing test file for that source file, in its style,
+               testing behaviour through the public or internal API. Never change
+               production code to make a mutant die.
+            3. Only if the mutant is provably equivalent (no input can tell the
+               two apart), append `// mutate-ok: <the reason>` to that source
+               line. Be strict: "no test exercises this" is not equivalence.
+            4. Verify: `scripts/mutate.sh --files <that source file>` must report
+               the mutant killed (or no longer listed, for mutate-ok). It picks
+               the suite from the path, and an iPhone file (App/BlurtiOS/) runs
+               on a simulator, ~5x slower — verify those per file, not per mutant.
+
+            Two suites, two test homes. Engine files (Sources/) are tested in
+            Tests/ with `swift test`. iPhone files (App/BlurtiOS/BlurtiOSCore/)
+            are tested in App/BlurtiOS/BlurtiOSTests/ with scripts/ios-test.sh;
+            a new test file there needs no project edit (the project is
+            generated from App/BlurtiOS/project.yml, which takes the folder).
+
+            Run swift-format (`xcrun swift-format format -i --configuration
+            .swift-format <file>`) and `swiftlint lint --strict` on every Swift
+            file you change, then once at the end the suites you touched —
+            `swift test` and/or scripts/ios-test.sh; each must pass.
+            Do not commit, push or open a pull request — a later step does that.
+
+            Finally write a pull-request description to the file named by $PR_BODY:
+            a one-paragraph summary, then one bullet per survivor with
+            `file:line from -> to`, what you did (test added, or mutate-ok and
+            why), and the test's name. List any survivor you could not resolve
+            and why.
+
+      - name: Open the pull request
+        if: steps.key.outputs.present == 'true'
+        working-directory: blurt
+        env:
+          GH_TOKEN: ${{ steps.claude.outputs.github_token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_BODY: ${{ runner.temp }}/mutate/pr-body.md
+          ISSUE: ${{ needs.issue.outputs.number }}
+          ISSUE_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "::warning::Claude made no change; survivors are in the report job"
+            exit 0
+          fi
+          branch="mutate/fix-$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git commit -m "Kill surviving mutants from the daily mutation run" -m "Run: $RUN_URL"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/$branch"
+          [ -s "$PR_BODY" ] || echo "Tests for the mutants that survived the daily mutation run." >"$PR_BODY"
+          printf '\n\nFrom the daily mutate run: %s\n' "$RUN_URL" >>"$PR_BODY"
+          # "Refs", not "Fixes": the issue closes when a run finds nothing left,
+          # not when this merges (it may not resolve every survivor).
+          if [ -n "${ISSUE:-}" ]; then printf 'Refs #%s\n' "$ISSUE" >>"$PR_BODY"; fi
+          gh label create mutation-testing --repo "$REPO" --color c5def5 \
+            --description "Opened by the daily mutate workflow" 2>/dev/null || true
+          pr=$(gh pr create --repo "$REPO" --base main --head "$branch" \
+            --title "Kill surviving mutants ($(date -u +%Y-%m-%d))" \
+            --body-file "$PR_BODY" --label mutation-testing)
+          if [ -n "${ISSUE:-}" ]; then
+            GH_TOKEN="$ISSUE_TOKEN" gh issue comment "$ISSUE" --repo "$REPO" --body "Fix PR: $pr"
           fi

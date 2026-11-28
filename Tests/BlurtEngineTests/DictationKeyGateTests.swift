@@ -53,6 +53,10 @@ struct DictationKeyGateTests {
       ]
     ),
     Scenario(
+      name: "a quick tap a minute in still latches: the hold is timed from the press, not from zero",
+      steps: [.init(.down(.seconds(60))), .init(.up(.milliseconds(60_200)), .latch)]
+    ),
+    Scenario(
       name: "a second tap while latched stops recording",
       steps: [
         .init(.down(.seconds(0))), .init(.up(.milliseconds(200))),

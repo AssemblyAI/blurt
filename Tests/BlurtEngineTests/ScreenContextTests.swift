@@ -151,6 +151,9 @@ struct ScreenContextTests {
     #expect(line?.hasPrefix(#"[108] row "Harden Control Your Mac and log every command"#) == true)
     #expect(ScreenContext.shortened(message).count == ScreenContext.labelCap)
     #expect(ScreenContext.shortened("Reply") == "Reply")
+    // Exactly the cap fits whole: no ellipsis for a label that needed no cut.
+    let atCap = String(repeating: "a", count: ScreenContext.labelCap)
+    #expect(ScreenContext.shortened(atCap) == atCap)
   }
 
   @Test("with no window read, only the app goes to the planner")

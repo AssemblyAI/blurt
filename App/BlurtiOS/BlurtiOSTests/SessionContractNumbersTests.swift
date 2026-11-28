@@ -231,7 +231,7 @@ struct SessionContractNumbersTests {
   }
 
   @Test("hop URLs: every reason rides the start link and comes back out of it")
-  func hops() {
+  func hops() throws {
     #expect(FailureReason.allCases.count == 13)
     #expect(BlurtShared.fullAccessNeed == "fullAccess")
     for reason in FailureReason.allCases {
@@ -239,6 +239,9 @@ struct SessionContractNumbersTests {
       #expect(BlurtShared.isStart(url) && BlurtShared.hopReason(url) == reason, "\(reason)")
     }
     #expect(BlurtShared.hopReason(BlurtShared.startURL(reason: nil)) == nil)
+    // A field given twice is read from its first.
+    let twice = try #require(URL(string: "blurt://start?reason=sessionOff&reason=opening"))
+    #expect(BlurtShared.hopReason(twice) == .sessionOff)
     #expect(BlurtShared.isSetup(BlurtShared.setupURL(need: BlurtShared.fullAccessNeed)))
     // The host rides along when the keyboard knows it, and reads back out.
     let fromMessages = BlurtShared.startURL(reason: .sessionOff, host: "com.apple.MobileSMS")

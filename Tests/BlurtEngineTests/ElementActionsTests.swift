@@ -210,6 +210,20 @@ struct ElementActionsTests {
     #expect(throws: VoiceCommandError.refused("choose Move to Trash")) { try anywhere("Move to Trash") }
   }
 
+  @Test("the search for a misplaced item stops once `limit` entries are read")
+  func menuAnywhereLimit() throws {
+    let menus = Menu(
+      title: nil,
+      children: [Menu(title: "Format", children: [Menu(title: "Bigger")]), Menu(title: "View")]
+    )
+    func anywhere(limit: Int) throws -> Menu? {
+      try ElementActions.menuItem(named: "Bigger", from: menus, entries: \.children, title: \.title, limit: limit)
+    }
+    // The bar's two menus are two entries read; the item is one level further.
+    #expect(try anywhere(limit: 3)?.title == "Bigger")
+    #expect(try anywhere(limit: 2) == nil)
+  }
+
   @Test("a destructive menu item is refused by the title it matched, not only the title asked for")
   func menuDestructive() throws {
     #expect(throws: VoiceCommandError.refused("choose File › move to trash")) {

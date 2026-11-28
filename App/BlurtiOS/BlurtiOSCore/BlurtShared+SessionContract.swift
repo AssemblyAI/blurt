@@ -118,7 +118,8 @@ nonisolated extension BlurtShared {
   }
 
   private static func query(_ url: URL, _ name: String) -> String? {
-    URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)  // mutate-ok: an absolute URL has no base
+    return components?.queryItems?.first { $0.name == name }?.value
   }
 }
 

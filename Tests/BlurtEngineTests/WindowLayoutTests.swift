@@ -62,6 +62,27 @@ struct WindowLayoutTests {
     #expect(below == CGRect(x: 1_000, y: 1_800, width: 200, height: 200))
   }
 
+  @Test("next display measures the place from the display it leaves, wherever that display is")
+  func nextDisplayFromAnOffsetDisplay() {
+    let left = CGRect(x: 0, y: 0, width: 1_000, height: 1_000)
+    let right = CGRect(x: 1_000, y: 0, width: 1_000, height: 1_000)
+    // Halfway across the room it has to move in on the right one: halfway on the left one.
+    let moved = WindowLayout.onNextDisplay(CGRect(x: 1_250, y: 0, width: 500, height: 500), displays: [right, left])
+    #expect(moved == CGRect(x: 250, y: 0, width: 500, height: 500))
+  }
+
+  @Test("next display puts a window as wide or as tall as its display at the next one's edge")
+  func nextDisplayFromAFullSpan() {
+    let small = CGRect(x: 0, y: 0, width: 1_000, height: 1_000)
+    let big = CGRect(x: 1_000, y: 0, width: 2_000, height: 1_500)
+    // As wide as its display, hanging off its right side: no room to move in, so the next one's left edge.
+    let wide = WindowLayout.onNextDisplay(CGRect(x: 200, y: 0, width: 1_000, height: 500), displays: [small, big])
+    #expect(wide == CGRect(x: 1_000, y: 0, width: 1_000, height: 500))
+    // As tall as its display, hanging off its bottom: likewise the next one's top.
+    let tall = WindowLayout.onNextDisplay(CGRect(x: 0, y: 200, width: 500, height: 1_000), displays: [small, big])
+    #expect(tall == CGRect(x: 1_000, y: 0, width: 500, height: 1_000))
+  }
+
   @Test("with overlapping frames the first display listed that holds the window's centre is the one it leaves")
   func nextDisplayOverlap() {
     let first = CGRect(x: 0, y: 0, width: 1_000, height: 1_000)

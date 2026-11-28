@@ -55,6 +55,7 @@ struct DictationStatsTests {
   @Test("counts compact past four digits; durations read largest unit first, skipping zeros")
   func formats() {
     #expect(StatFormat.count(9_999) == 9_999.formatted())
+    #expect(StatFormat.count(10_000) == 10_000.formatted(.number.notation(.compactName)))
     #expect(StatFormat.count(12_000) == 12_000.formatted(.number.notation(.compactName)))
     #expect(StatFormat.durationParts(.zero).map(\.unit) == ["sec"])
     let parts = StatFormat.durationParts(.seconds(3_600 + 25 * 60 + 45))

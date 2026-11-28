@@ -66,6 +66,32 @@ struct PressHandshakeTests {
     #expect(ticks == [.nothing])
   }
 
+  @Test("the deadline is an instant: an answer there is late, and a tick there refuses the press")
+  func deadlineIsExact() {
+    // From the reference date, so the deadline's instant is exact in a Date.
+    let sent = Date(timeIntervalSinceReferenceDate: 0)
+    let due = sent.addingTimeInterval(BlurtShared.pressDeadline)
+    func pressed(_ handshake: inout PressHandshake) -> UUID {
+      _ = handshake.handle(Fixture.micDown(), now: sent)
+      let id = UUID()
+      _ = handshake.handle(.pressSent(id: id, at: sent), now: sent)
+      return id
+    }
+    var answered = PressHandshake()
+    let id = pressed(&answered)
+    let late = answered.handle(Fixture.ack(.started(UUID()), for: id), now: due)
+    #expect(late == [.resetGate, .show(.unanswered)])
+    var ticked = PressHandshake()
+    _ = pressed(&ticked)
+    let refused = ticked.handle(.tick(now: due), now: due)
+    #expect(refused == [.resetGate, .show(.unanswered)])
+    // And the one resend is due at the retry delay's instant, not after it.
+    var waiting = PressHandshake()
+    let waitingID = pressed(&waiting)
+    let retry = sent.addingTimeInterval(waiting.retryDelay)
+    #expect(waiting.handle(.tick(now: retry), now: retry) == [.resendPress(id: waitingID)])
+  }
+
   @Test("ack started → owned; the ack for another command is ignored")
   func started() {
     var handshake = PressHandshake()

@@ -84,7 +84,7 @@ package nonisolated struct Bounce: Equatable, Sendable {
     // Back the start off from the moment both axes reach a wall together: the
     // first wall at or past the drift, minus the drift.
     func axis(_ travel: CGFloat) -> Axis {
-      guard travel > 0 else {
+      guard travel > 0 else {  // mutate-ok: an axis with no room is never read past its own travel > 0 checks
         return Axis(travel: 0, start: 0)
       }
       let wall = max(1, (drift / travel).rounded(.up))
@@ -111,7 +111,10 @@ package nonisolated struct Bounce: Equatable, Sendable {
   /// axis within `tolerance` of one of its own? Counted once both have
   /// touched, so the tally and the flare never run ahead of the picture.
   private func cornersHit(byDrift drift: CGFloat) -> (Int, Corner?) {
-    guard x.travel > 0, y.travel > 0, speed > 0 else {
+    guard x.travel > 0,  // mutate-ok: with no room on x, x.hits is 0 and the guard below returns the same
+      y.travel > 0,  // mutate-ok: with no room on y, y's wall reads NaN or ∞ and no corner passes the loop's guard
+      speed > 0
+    else {
       return (0, nil)
     }
     var count = 0

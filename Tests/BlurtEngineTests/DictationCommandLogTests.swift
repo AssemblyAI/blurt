@@ -22,6 +22,19 @@ struct DictationCommandLogTests {
     }
   }
 
+  @Test("a key that types no character is logged by the instruction's name for it, never an alias")
+  func namedKeysAreSpelledAsTheInstructionSpellsThem() {
+    // "enter", "backspace" and "esc" are accepted from a plan but never written
+    // back: the log and the eval corpus spell the key as the instruction does.
+    #expect(KeyChord("enter")?.spelled == "return")
+    #expect(KeyChord("cmd+esc")?.spelled == "cmd+escape")
+    #expect(KeyChord("backspace")?.spelled == "delete")
+    #expect(KeyChord("shift+tab")?.spelled == "shift+tab")
+    #expect(KeyChord("f5")?.spelled == "f5")
+    // A code with no name is logged by its number.
+    #expect(KeyChord(modifiers: [], key: .code(0x00)).spelled == "key 0")
+  }
+
   @Test("an entry holds what was said, the screen, the plan with each element's label, and how it ended")
   func entry() {
     let steps: [VoiceCommandStep] = [

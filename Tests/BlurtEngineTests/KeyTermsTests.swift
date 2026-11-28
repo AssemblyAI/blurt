@@ -61,6 +61,12 @@ struct KeyTermsTests {
     #expect(KeyTerms.fitted(["Blurt", huge, "LeMUR"]) == ["Blurt"])
   }
 
+  @Test("a term that exactly fills what's left of the cap is kept")
+  func termFillingTheCapExactlyIsKept() {
+    let rest = String(repeating: "k", count: KeyTerms.characterCap - "Blurt".utf8.count)
+    #expect(KeyTerms.fitted(["Blurt", rest]) == ["Blurt", rest])
+  }
+
   @Test("a list under the byte cap is still cut to the documented term cap")
   func termCountIsCappedIndependently() {
     // The reachable one, and the reason `termCap` exists: 150 four-byte terms
