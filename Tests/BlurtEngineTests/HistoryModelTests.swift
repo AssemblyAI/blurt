@@ -51,6 +51,21 @@ struct HistoryModelTests {
     #expect(entry.plainText == nil)
   }
 
+  @Test("replacing a transcript clears cached transform results while keeping the custom request")
+  func replaceClearsResults() {
+    var entry = SavedTranscript(
+      kind: .recording,
+      date: .now,
+      text: "Draft.",
+      results: ["summary": "Old summary.", "custom": "Old answer."],
+      customRequest: "Summarize decisions."
+    )
+    entry.replaceTranscript("Speaker A: Shipped.\n\nSpeaker B: Confirmed.", plain: "Shipped.\n\nConfirmed.")
+    #expect(entry.results.isEmpty)
+    #expect(entry.customRequest == "Summarize decisions.")
+    #expect(entry.plainText == "Shipped.\n\nConfirmed.")
+  }
+
   @Test("an answer is titled by its text and keeps its request")
   func answerTitle() {
     let answer = SavedTranscript(kind: .readAloud, date: .now, text: "It's Friday.", request: "When do we ship?")

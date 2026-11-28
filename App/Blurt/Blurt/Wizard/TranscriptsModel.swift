@@ -201,6 +201,21 @@ final class TranscriptsModel {
     fullTurns = entry.isTranscript ? SpeakerTurn.parse(entry.text) : []
   }
 
+  /// Refreshes the open sheet after diarization replaces a live transcript:
+  /// cancels in-flight transforms so they cannot write stale results back,
+  /// clears cached ones, and reloads the active view.
+  func refreshReplacedTranscript(of entry: SavedTranscript) {
+    tasks.values.forEach { $0.cancel() }
+    tasks = [:]
+    for facet in TranscriptFacet.allCases where facet != .full && facet != .plain { contents[facet] = nil }
+    showTranscript(of: entry)
+    if selection == .plain, entry.plainText == nil {
+      selection = .full
+    } else if selection != .full, selection != .plain {
+      select(selection)
+    }
+  }
+
   /// Saves a new transcript at the top of the history, opens it, and asks for
   /// its title.
   func add(_ entry: SavedTranscript) {
