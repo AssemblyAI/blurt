@@ -10,8 +10,6 @@
   ],
   "defaultOptions" : {
     "codeCoverage" : true,
-    "testRepetitionMode" : "retryOnFailure",
-    "maximumTestRepetitions" : 3,
     "uiTestingScreenshotsLifetime" : "keepAlways",
     "userAttachmentLifetime" : "keepAlways"
   },

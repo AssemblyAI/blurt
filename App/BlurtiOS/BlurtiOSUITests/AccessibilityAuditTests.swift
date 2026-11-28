@@ -43,21 +43,15 @@ import XCTest
 /// - "text clipped" on a single-line text field: a `UITextField` scrolls its
 ///   text sideways rather than wrapping, by design, so a long placeholder at
 ///   AX XXXL runs past the edge the way it does in Apple's own apps.
-/// - "text clipped" on the style editor's "Professional" preset chip at AX
-///   XXXL, by name: its screenshot shows the word whole, on a chip with the
-///   row to itself and room to narrow (`PresetChip`), and the same changes
-///   cleared "Ultracasual"; the audit still predicts a clip for the longest
-///   name. Named here rather than ignored by kind, so any other chip or any
-///   other text that clips still fails.
-/// - "text clipped" on the consent sheet's four "Sent to AssemblyAI" rows at
-///   AX XXXL, by their text (`consentDisclosures`): the audit raises it on
-///   "The text just before your cursor" wherever the row sits — it only ever
-///   passed when a fling left the row under the bar, where it is excused
-///   anyway (#447's fixed drag put it mid-screen) — while its own screenshot shows
-///   the row whole — three lines, the icon set inline with the first, as a
-///   list lays out a label at accessibility sizes. The rows already wrap to
-///   full height (`WrappingLabelStyle`). Named, so any other text on the
-///   sheet that clips still fails.
+/// Nothing is excused by name. The consent sheet's "Sent to AssemblyAI" rows
+/// were, until `WrappingLabelStyle` laid out their icon and title itself; the
+/// "Professional" preset chip was, and is now measured instead:
+///
+/// A largest-size "text clipped" on plain text is checked rather than taken
+/// on the audit's word (`ClipCheck`): it fails unless the text is fully on
+/// screen, inside the element that holds it, with room beside it. The audit
+/// predicts a clip at AX XXXL for the longest word on a chip that draws it
+/// whole, since the app's scaled fixed-size face hides that the text scales.
 ///
 /// A default-size "Dynamic Type unsupported" is checked rather than taken on
 /// the audit's word (`ScalingCheck`): it fails only if the same text is no
@@ -383,6 +377,10 @@ final class AccessibilityAuditTests: XCTestCase {
       let finding = "[\(name)] \(issue.line)"
       if let element = issue.unscaled, element.exists {
         scaling.hold(finding, about: element, in: app, within: screenArea)
+      } else if let element = issue.clipped, element.exists {
+        if let measured = ClipCheck.clipped(element, in: app, within: screenArea) {
+          found.append("\(finding) \(measured)")
+        }
       } else {
         found.append(finding)
       }

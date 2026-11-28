@@ -41,9 +41,9 @@ set -o pipefail
 # DerivedData). The Developer ID cert still isn't required: the app target's
 # "Install to /Applications" post-build script skips itself under the "-"
 # identity (see project.yml), so nothing tries to sign with it.
-# -testPlan Blurt: run under Blurt.xctestplan, which retries a failing UI test
-# (up to 3 attempts) so a flake isn't an immediate red, and keeps screenshots +
-# attachments on the .xcresult for debugging a genuine failure on CI.
+# -testPlan Blurt: run under Blurt.xctestplan, which runs each UI test once (a
+# failure is red, never retried) and keeps screenshots + attachments on the
+# .xcresult for debugging a failure on CI.
 # BLURT_UITEST_RESULTS names where that .xcresult goes (CI uploads it when the
 # job fails); unset, xcodebuild keeps it in DerivedData as usual. xcodebuild
 # refuses to write over an existing bundle, so a stale one is removed first.
