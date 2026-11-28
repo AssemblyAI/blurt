@@ -73,7 +73,11 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
       return nil
     }
     if url.isFileURL {
-      defer { if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) } }
+      let accessing = url.startAccessingSecurityScopedResource()
+      defer {
+        if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
+        if accessing { url.stopAccessingSecurityScopedResource() }
+      }
       guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= fileCap,
         let data = try? Data(contentsOf: url), let pack = try? JSONDecoder().decode(Self.self, from: data)
       else {
@@ -98,8 +102,8 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
       return nil
     }
     return Self(
-      name: String(name.prefix(Self.lengthCap)),
-      from: from.map { String($0.prefix(Self.lengthCap)) },
+      name: name.trimmedNonEmpty().map { String($0.prefix(Self.lengthCap)) } ?? "Shared key terms",
+      from: from.trimmedNonEmpty().map { String($0.prefix(Self.lengthCap)) },
       terms: keptTerms
     )
   }

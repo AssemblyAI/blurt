@@ -21,6 +21,23 @@ struct TermPackTests {
     #expect(TermPack.from(try #require(URL(string: "https://example.com/?add=a"))) == nil)
   }
 
+  @Test("blank name and sender fall back cleanly for both links and files")
+  func blankMetadataNormalizes() throws {
+    let url = try #require(URL(string: "blurt://terms?add=Blurt&name=%20%20&from="))
+    let fromLink = try #require(TermPack.from(url))
+    #expect(fromLink.name == "Shared key terms")
+    #expect(fromLink.from == nil)
+
+    let pack = TermPack(name: "  ", from: " \n ", terms: ["Blurt"])
+    let fileURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("blank-\(UUID().uuidString).blurtterms")
+    try JSONEncoder().encode(pack).write(to: fileURL)
+    defer { try? FileManager.default.removeItem(at: fileURL) }
+    let fromFile = try #require(TermPack.from(fileURL))
+    #expect(fromFile.name == "Shared key terms")
+    #expect(fromFile.from == nil)
+  }
+
   @Test("a .blurtterms file round-trips and is parsed by the key-term rules")
   func file() throws {
     let pack = TermPack(name: "Chat", from: "Neil", terms: ["Rizz", "rizz", " Blurt "])
