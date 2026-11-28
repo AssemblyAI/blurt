@@ -75,6 +75,29 @@ def test_injection_only_adds_tokens():
         assert alignment.substitutions == 0, produced
 
 
+def test_the_pronoun_i_keeps_its_capital_everywhere():
+    """A real transcript never writes a lone lowercase i — not mid-utterance, not in a
+    re-run filler — so the injector may not either. `i` here can only come from the
+    reference's own `I`/`I'm`, since nothing else in the fixture produces one."""
+    for seed in range(120):
+        for reference in ("I think I should leave now.", "I'm sure I mean well."):
+            produced = disfluent(reference, seed=seed, severity=1.0)
+            for token in produced.split():
+                shape = token.strip(",.!?;:\u2014-")
+                assert shape != "i" and not shape.startswith("i'"), produced
+
+
+def test_an_inserted_opener_still_drops_the_sentence_capital():
+    """The I-exemption is for the pronoun, not a reprieve for ordinary words."""
+    for seed in range(120):
+        produced, operations = inject("The cat sat there.", seed=seed, severity=1.0)
+        if "opener" in operations:
+            assert " The " not in f" {produced} ", produced
+            break
+    else:
+        raise AssertionError("no opener fired in 120 seeds at severity 1.0")
+
+
 def test_strip_formatting_removes_case_and_punctuation():
     text, operations = inject(SENTENCE, seed=2, severity=0.3, strip_formatting=True)
     assert text == text.lower()
