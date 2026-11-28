@@ -15,6 +15,9 @@ struct AppLinkTests {
     #expect(AppLink.name(in: url("https://www.slack.com/")) == "slack")
     #expect(AppLink.name(in: url("https://www.google.com/search?q=Slack")) == "Slack")
     #expect(AppLink.name(in: url("https://slack.com/pricing")) == nil)
+    // Form decoding order: "+" is a space *before* percent-decoding, so a literal
+    // plus arrives as %2B and survives — "c++" must not come back as "c  ".
+    #expect(AppLink.name(in: url("https://www.google.com/search?q=c%2B%2B")) == "c++")
     #expect(AppLink.name(in: url("https://www.google.com/search?q=how+to+open+threads+in+slack")) == nil)
     #expect(AppLink.name(in: url("https://docs.google.com")) == nil)
   }
