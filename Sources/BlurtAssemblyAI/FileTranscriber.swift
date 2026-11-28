@@ -51,7 +51,25 @@ public struct FileTranscriber: Sendable {
     guard SpeakerTurn.isMultiSpeaker(transcript.utterances.map(\.speaker)) else {
       return transcript.text ?? ""
     }
-    return SpeakerTurn.labelled(transcript.utterances.map { SpeakerTurn(speaker: $0.speaker, text: $0.text) })
+    return SpeakerTurn.labelled(merging(transcript.utterances))
+  }
+
+  /// The utterances as turns, consecutive same-speaker ones merged into one
+  /// paragraph — the shape `LiveTranscript` writes for the same run of speech,
+  /// so a transcript reads the same whether it was recorded live or uploaded
+  /// as a file. The API cuts an utterance at every pause, so one speaker's
+  /// unbroken turn otherwise lands as a run of one-line paragraphs the live
+  /// path never produces.
+  static func merging(_ utterances: [AsyncTranscript.Utterance]) -> [SpeakerTurn] {
+    var turns: [SpeakerTurn] = []
+    for utterance in utterances {
+      if let last = turns.last, last.speaker == utterance.speaker {
+        turns[turns.count - 1] = SpeakerTurn(speaker: last.speaker, text: last.text + " " + utterance.text)
+      } else {
+        turns.append(SpeakerTurn(speaker: utterance.speaker, text: utterance.text))
+      }
+    }
+    return turns
   }
 
   /// The transcript of the file at `url`. `onPhase` hears upload, then
