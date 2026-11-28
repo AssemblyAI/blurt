@@ -67,7 +67,7 @@ public enum DictationLog {
     /// Cleaned the way the engine cleans every list (`KeyTermList.normalized`);
     /// a provider with caps of its own fits it further on the way out
     /// (AssemblyAI's `KeyTerms.fitted`, which only trims past 100 terms or
-    /// 2048 bytes). Empty when none were sent, and `encode(to:)` then omits
+    /// 8000 bytes). Empty when none were sent, and `encode(to:)` then omits
     /// the key, matching how every absent field above is left out rather than
     /// written as `null`.
     let keyterms: [String]

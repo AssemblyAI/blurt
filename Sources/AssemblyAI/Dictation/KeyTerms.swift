@@ -24,16 +24,20 @@
 /// engine's `KeyTermList`); `fitted` keeps a clean list within the field's two
 /// caps, which the user's list is the one unbounded input able to breach.
 public enum KeyTerms {
-  /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
-  /// across every term. Measured here in **UTF-8 bytes**, the conservative reading — the
-  /// documented unit is "characters", which is unmeasured against the endpoint,
-  /// and bytes can only overestimate a multi-byte term's cost.
+  /// Cap the API places on `config.keyterms_prompt`: **8000** characters summed
+  /// across every term — the figure the reference states in each of its four
+  /// tellings ("Maximum 100 terms and 8000 characters in total": the dictation
+  /// route, the prompting guide, the quickstart, the buffered route), and the
+  /// one the first-party SDKs enforce client-side at the same value. Measured
+  /// here in **UTF-8 bytes**, the conservative reading — the documented unit is
+  /// "characters", which is unmeasured against the endpoint, and bytes can only
+  /// overestimate a multi-byte term's cost.
   ///
   /// Note this is the *boost* cap and a different number from the 4096 on
   /// `config.stt_prompt`. Reusing
   /// one cap's figure for the other field is how a whole-request 400 shipped once
   /// before.
-  public static let characterCap = 2_048
+  public static let characterCap = 8_000
 
   /// The *other* cap on the same field, and the one the byte budget above does
   /// not imply: at most **100 terms**, however short they are
