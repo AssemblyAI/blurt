@@ -234,7 +234,7 @@ extension TranscriptsModel {
       history[index].replaceTranscript(result.text, plain: result.plainText)
       save()
       let diarized = history[index]
-      if openEntry?.id == entry.id { showTranscript(of: diarized) }
+      if openEntry?.id == entry.id { refreshReplacedTranscript(of: diarized) }
       // The title so far came from the live transcript; title the better text.
       await applyTitle(to: diarized)
     }

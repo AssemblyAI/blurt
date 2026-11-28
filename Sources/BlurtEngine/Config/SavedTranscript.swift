@@ -127,9 +127,11 @@ public struct SavedTranscript: Codable, Identifiable, Equatable, Sendable {
   }
 
   /// Replaces the transcript with a better one (a recording's diarized pass),
-  /// keeping the plain text only where it differs, as `init` does.
+  /// keeping the plain text only where it differs, as `init` does, and
+  /// clearing cached transform results computed from the replaced text.
   public mutating func replaceTranscript(_ text: String, plain: String) {
     self.text = text
     plainText = plain == text ? nil : plain
+    results = [:]
   }
 }
