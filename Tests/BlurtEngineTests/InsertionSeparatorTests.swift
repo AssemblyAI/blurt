@@ -34,6 +34,36 @@ struct InsertionSeparatorTests {
       expected: "Second."
     ),
     Case(
+      name: "no separator before a dictated period: it closes the prior sentence",
+      text: ".",
+      prior: "say hello",
+      expected: "."
+    ),
+    Case(
+      name: "no separator before a comma-led continuation",
+      text: ", then",
+      prior: "well",
+      expected: ", then"
+    ),
+    Case(
+      name: "no separator before a closing bracket",
+      text: ")",
+      prior: "Call me (maybe",
+      expected: ")"
+    ),
+    Case(
+      name: "no separator before a percent sign",
+      text: "%",
+      prior: "100",
+      expected: "%"
+    ),
+    Case(
+      name: "a word-led paste still takes the space",
+      text: "(aside)",
+      prior: "hello",
+      expected: " (aside)"
+    ),
+    Case(
       name: "no leading space into an empty field (nil prior text)",
       text: "Second.",
       prior: nil,
