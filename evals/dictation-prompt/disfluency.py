@@ -67,6 +67,16 @@ def _word_shape(token: str) -> str:
     return token.strip(metrics.PUNCTUATION)
 
 
+def _mid_utterance(word: str) -> str:
+    """`word` lowercased for a mid-utterance repeat, except the pronoun `I` and its
+    contractions, which a real transcript capitalizes wherever they sit — inside a
+    re-run multi-word filler ("I mean") just as much as standing alone."""
+    return " ".join(
+        token if _word_shape(token) == "I" or _word_shape(token).startswith("I'") else token.lower()
+        for token in word.split()
+    )
+
+
 def _stutter(word: str, rng: random.Random) -> str | None:
     """`started` -> `st-`. Returns None for words too short to truncate audibly."""
     bare = _word_shape(word)
@@ -112,7 +122,7 @@ def inject(
         # mid-utterance, so lowercase it unless it looks like a proper noun
         # (all-caps or internally capitalized survives).
         first = tokens[0]
-        if first[:1].isupper() and not first[1:2].isupper():
+        if first[:1].isupper() and not first[1:2].isupper() and _mid_utterance(first) != first:
             tokens = [first[0].lower() + first[1:], *tokens[1:]]
 
     # Loop-invariant: the pool a false start borrows its abandoned word from
@@ -132,7 +142,7 @@ def inject(
                     bare = _word_shape(token)
                     applied = bool(bare)
                     if bare:
-                        out.append(bare.lower() if index else bare)
+                        out.append(_mid_utterance(bare) if index else bare)
                 case "stutter":
                     fragment = _stutter(token, rng)
                     applied = fragment is not None
@@ -153,7 +163,7 @@ def inject(
                     tail = out[-rng.randint(2, 3) :]
                     restart = [shape for shape in map(_word_shape, tail) if shape]
                     applied = bool(restart)
-                    out.extend(word.lower() for word in restart)
+                    out.extend(_mid_utterance(word) for word in restart)
                 case _:
                     # A new `Operation` without a case here fails mypy, not a run.
                     assert_never(operation)
